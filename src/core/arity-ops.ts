@@ -23,6 +23,8 @@ import {
 } from "./nullary-ops.js";
 import { cast } from "../shared.js";
 
+const EMPTY_ARGS: readonly unknown[] = [];
+
 export interface FluentArityHandlers<T, E, A extends readonly unknown[]> {
   withRetry: (policy?: RetryPolicy) => OpArity<T, E, A>;
   withTimeout: (timeoutMs: number) => OpArity<T, E | TimeoutError, A>;
@@ -54,6 +56,9 @@ export function makeFluentArityOp<T, E, A extends readonly unknown[]>(
   const self: OpArity<T, E, A> = cast(
     Object.assign(invoke, {
       run: (...args: A) => drive(invoke(...args), new AbortController().signal),
+      // Bridge `yield* op` runtime interop for ops produced from generic wrappers
+      // that erase nullary-ness at runtime but still resolve through `invoke()`.
+      [Symbol.iterator]: () => invoke(...cast<A>(EMPTY_ARGS))[Symbol.iterator](),
       withRetry: (policy?: RetryPolicy) => makeHandlers(self).withRetry(policy),
       withTimeout: (timeoutMs: number) => makeHandlers(self).withTimeout(timeoutMs),
       withSignal: (signal: AbortSignal) => makeHandlers(self).withSignal(signal),

@@ -1,6 +1,7 @@
 import { assert, describe, expect, test, vi } from "vitest";
 import { Op, TimeoutError, exponentialBackoff } from "./index.js";
 import { TaggedError, UnhandledException } from "./errors.js";
+import { Result } from "./result.js";
 import { resolveAfter } from "./test-utils.js";
 
 describe("public API (index)", () => {
@@ -158,6 +159,23 @@ describe("public API (index)", () => {
       assert(r.isOk(), "should be Ok");
       expect(r.value).toBe(11);
       expect(attempts).toBe(2);
+    });
+  });
+
+  describe("edge cases", () => {
+    test("generic helper returning Op(function*) can be yielded in raw .ts execution", async () => {
+      const parse = <T>(input: T) =>
+        Op(function* () {
+          return input;
+        });
+
+      const main = Op(function* () {
+        const parsed = yield* parse({ version: "1.2.3" });
+        return parsed;
+      });
+
+      const result = await main.run();
+      expect(result).toEqual(Result.ok({ version: "1.2.3" }));
     });
   });
 });

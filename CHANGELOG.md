@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - No entries yet.
 
+### Fixed
+
+- Fixed `yield*` interop for generic helpers returning `Op(function* () {})` in raw TypeScript execution by ensuring callable op wrappers expose an iterator path, so nullary helpers now compose without surfacing `Err(UnhandledException)`.
+
 ## [0.1.54] - 2026-05-06
 
 ### Added
