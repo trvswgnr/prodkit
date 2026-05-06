@@ -57,7 +57,8 @@ function concurrencyLimit(
 }
 
 type AllOpOk<Ops extends readonly AnyNullaryOp[]> = { [K in keyof Ops]: InferOpOk<Ops[K]> };
-type AllOpErr<Ops extends readonly AnyNullaryOp[]> = InferOpErr<Ops[number]> | UnhandledException;
+type AllOpErr<Ops extends readonly AnyNullaryOp[]> = InferOpErr<Ops[number]>;
+
 export function allOp<const Ops extends readonly AnyNullaryOp[]>(
   ops: Ops,
   concurrency?: number,
@@ -264,8 +265,21 @@ async function driveAllSettledUnbounded<T, E>(
   return results;
 }
 
+/**
+ * helper to check if any op in the list has an infallible error type
+ */
+type HasInfallibleOp<Ops extends readonly AnyNullaryOp[]> = Ops extends readonly [
+  infer Head extends AnyNullaryOp,
+  ...infer Tail extends readonly AnyNullaryOp[],
+]
+  ? [InferOpErr<Head>] extends [never]
+    ? true
+    : HasInfallibleOp<Tail>
+  : false;
+
 type AnyOpOk<Ops extends readonly AnyNullaryOp[]> = InferOpOk<Ops[number]>;
-type AnyOpErr<Ops extends readonly AnyNullaryOp[]> = ErrorGroup<InferOpErr<Ops[number]>>;
+type AnyOpErr<Ops extends readonly AnyNullaryOp[]> =
+  HasInfallibleOp<Ops> extends true ? never : ErrorGroup<InferOpErr<Ops[number]>>;
 
 export function anyOp<const Ops extends readonly AnyNullaryOp[]>(
   ops: Ops,

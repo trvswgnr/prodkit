@@ -129,6 +129,44 @@ describe("public API (index)", () => {
       });
       expect(p._tag).toBe("Op");
     });
+
+    test("yield* can consume a generic helper that returns Op(function*)", async () => {
+      type Parsed = { version: string };
+      const runTest = async (lift: (value: Parsed) => Op<Parsed, never, []>) => {
+        const program = Op(function* () {
+          const parsedValue = yield* lift({ version: "1.2.3" });
+          return parsedValue;
+        });
+
+        const result = await program.run();
+        expect(result).toEqual(Result.ok({ version: "1.2.3" }));
+      };
+
+      const fns = [
+        <T>(t: T) =>
+          Op(function* () {
+            return t;
+          }),
+        <T>(t: T) => Op.of(t),
+        <T>(t: T) => Op.of(Promise.resolve(t)),
+        <T>(t: T) => Op.empty.map(() => t),
+        <T>(t: T) => Op.try(() => t),
+        <T>(t: T) => Op.try(() => Promise.resolve(t)),
+        <T>(t: T) =>
+          Op.fail(null).recover(
+            (e): e is null => e === null,
+            () => t,
+          ),
+        <T>(t: T) => Op.empty.flatMap(() => Op.of(t)),
+        <T>(t: T) => Op.all([Op.of(t)]).map(([x]) => x),
+        <T>(t: T) => Op.allSettled([Op.of(t)]).map(([x]) => x.unwrap()),
+        <T>(t: T) => Op.settle(Op.of(t)).map((x) => x.unwrap()),
+        <T>(t: T) => Op.race([Op.of(t)]),
+        <T>(t: T) => Op.any([Op.fail(null), Op.of(t)]),
+      ];
+
+      await Promise.all(fns.map(runTest));
+    });
   });
 
   describe("Op combinators compose with withTimeout / withRetry", () => {
@@ -159,23 +197,6 @@ describe("public API (index)", () => {
       assert(r.isOk(), "should be Ok");
       expect(r.value).toBe(11);
       expect(attempts).toBe(2);
-    });
-  });
-
-  describe("edge cases", () => {
-    test("generic helper returning Op(function*) can be yielded in raw .ts execution", async () => {
-      const parse = <T>(input: T) =>
-        Op(function* () {
-          return input;
-        });
-
-      const main = Op(function* () {
-        const parsed = yield* parse({ version: "1.2.3" });
-        return parsed;
-      });
-
-      const result = await main.run();
-      expect(result).toEqual(Result.ok({ version: "1.2.3" }));
     });
   });
 });

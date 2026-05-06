@@ -211,6 +211,13 @@ describe("type inference contracts", () => {
     const anyOp = Op.any([Op.fail(1), Op.fail("two" as const)]);
     expectTypeOf(anyOp).toEqualTypeOf<Op<never, ErrorGroup<number | "two">, []>>();
 
+    const anyWithInfallible = Op.any([Op.fail(1), Op.of("ok" as const)]);
+    expectTypeOf(anyWithInfallible).toEqualTypeOf<Op<"ok", never, []>>();
+
+    const ops = [Op.fail(1), Op.of("ok" as const)];
+    const anyWithInfallible2 = Op.any(ops); // widened because not a tuple
+    expectTypeOf(anyWithInfallible2).toEqualTypeOf<Op<"ok", ErrorGroup<number>, []>>();
+
     const race = Op.race([Op.of(1), Op.fail("two" as const)]);
     const raceRun = race.run();
     expectTypeOf(raceRun).toEqualTypeOf<Promise<Result<number, "two" | UnhandledException>>>();
