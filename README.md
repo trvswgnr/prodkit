@@ -20,7 +20,7 @@ npm i @prodkit/op
 ```
 
 Runtime support for consumers: any JavaScript runtime with `Promise` and `AbortController`.
-For Node consumers specifically, this package is tested on Node `24.14.0`.
+For Node consumers specifically, this package supports Node `>=20` and is tested on Node `24.14.0`.
 
 This project is designed to be runtime-agnostic: no Node-specific APIs are required by the public
 operation model.
@@ -217,11 +217,26 @@ if the returned op fails, that failure propagates. `UnhandledException` bypasses
 
 ```ts
 const withErrorMetric = Op.try(
-  () => fetch("https://example.com/user/69")),
+  () => fetch("https://example.com/user/69"),
   (cause) => new FetchError({ cause }),
 ).tapErr((error) => {
   console.error("user lookup failed", error.message);
 });
+```
+
+### `.mapErr(f)`
+
+Transforms an op's typed error channel while preserving the success value and argument list.
+Use this when you want to normalize or enrich domain failures without restructuring into a
+generator.
+
+`UnhandledException` is part of the runtime channel and can also be mapped.
+
+```ts
+const normalizeFetchError = Op.try(
+  () => fetch("https://example.com/user/69"),
+  (cause) => new FetchError({ cause }),
+).mapErr((error) => (error instanceof FetchError ? new UserLookupError({ cause: error }) : error));
 ```
 
 ### `.recover(predicate, handler)`
@@ -423,9 +438,10 @@ const validate = Op(function* (name: string) {
 
 - `maxAttempts: 3`
 - `shouldRetry: () => true`
-- exponential backoff from `100ms` up to `1000ms`
+- exponential backoff from `1000ms` up to `30000ms` with full jitter (`1.0`)
 
 You can also build your own delay function with `exponentialBackoff({ base, max, jitter })`.
+`exponentialBackoff.DEFAULT` is the pre-built delay function used by the default retry policy.
 
 ```ts
 import { exponentialBackoff } from "@prodkit/op";
@@ -470,11 +486,12 @@ const bounded = await Op.all(fetchOps, 5).run(); // at most 5 active children
 
 ### `Op.allSettled(ops, concurrency?)`
 
-Waits for every op and returns a tuple of their `Result`s in input order. Never fails and does not
-short-circuit siblings on child failure.
+Waits for every op and returns a tuple of their `Result`s in input order. For valid inputs it does
+not fail and does not short-circuit siblings on child failure.
 
 Pass a positive integer `concurrency` to cap how many children run at once. Unlike `Op.all`,
 `Op.allSettled` keeps launching queued children after failures so every input gets a `Result`.
+If `concurrency` is not a positive integer, the run fails with `UnhandledException`.
 
 ```ts
 const r = await Op.allSettled([Op.of(1), Op.fail("nope")]).run();
@@ -489,15 +506,18 @@ Runs one op and returns its settled `Result` as a success value. This never fail
 useful for optional/best-effort reads where fallback logic should continue in the same generator.
 
 ```ts
-const settled = yield * Op.settle(loadPolicyVersion);
-const policy = settled.isOk() ? settled.value : "unknown";
+const loadPolicy = Op(function* () {
+  const settled = yield* Op.settle(loadPolicyVersion);
+  return settled.isOk() ? settled.value : "unknown";
+});
 ```
 
 ### `Op.any(ops)`
 
 Succeeds with the first op to succeed; remaining siblings are aborted. If every op fails,
 the combinator fails with `ErrorGroup` whose `errors` array holds each child failure
-in input index order. Empty input fails with an empty `ErrorGroup`.
+in input index order. Empty input fails with an empty `ErrorGroup` and the message
+`"Op.any requires at least one operation"`.
 
 ```ts
 import { ErrorGroup } from "@prodkit/op";
@@ -534,7 +554,7 @@ that demonstrates:
 Run the consumer-level checks:
 
 ```bash
-npm run examples:test:pack
+npm run examples:smoke:pack
 ```
 
 ## More examples
@@ -550,28 +570,29 @@ Prefer the tarball smoke test for release confidence (it validates the exact fil
 published):
 
 ```bash
-npm run examples:test:pack
+npm run examples:smoke:pack
 ```
 
 You can also validate alternative install paths:
 
 ```bash
 # install directly from GitHub repo
-npm run examples:test:github
+npm run examples:smoke:github
 
 # install from latest published npm package
-npm run examples:test:npm
+npm run examples:smoke:npm
 ```
 
 ## Scripts
 
 ```bash
-npm run test
-npm run typecheck
-npm run lint
-npm run build
-npm run bench
-npm run examples:test:pack
+npm run check               # full quality gate (typecheck, lint, format, build, tests, smoke checks)
+npm run test                # vitest suite
+npm run typecheck           # TypeScript type validation
+npm run lint                # static lint checks
+npm run build               # package build
+npm run bench               # benchmark harness
+npm run examples:smoke:pack # consumer install smoke test from npm pack tarball
 ```
 
 For benchmark baseline modes and contributor guidance, see `benchmarks/README.md`.

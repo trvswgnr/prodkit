@@ -99,7 +99,7 @@ Any intentional semantic change should include:
 - explicit test updates in `src/core.test.ts`, `src/lifecycle.test.ts`, and/or `src/combinators.test.ts`
 - an accompanying update to this document explaining the new invariant
 
-# Execution invariants
+## Operational notes and references
 
 If you change the scheduler, combinators, or policy wrappers, these are the behaviors worth
 holding steady. Stuff that reads like a micro-optimization can still blow up determinism or

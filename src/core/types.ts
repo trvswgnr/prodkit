@@ -50,14 +50,17 @@ export type Instruction<E> =
   | RegisterExitFinalizerInstruction;
 
 export interface WithRetry<T, E, A extends readonly unknown[]> {
+  /** Wraps the operation in retry policy logic. */
   withRetry(policy?: RetryPolicy): Op<T, E, A>;
 }
 
 export interface WithTimeout<T, E, A extends readonly unknown[]> {
+  /** Applies a timeout budget in milliseconds to the wrapped operation. */
   withTimeout(timeoutMs: number): Op<T, E | TimeoutError, A>;
 }
 
 export interface WithSignal<T, E, A extends readonly unknown[]> {
+  /** Binds an external abort signal to the wrapped operation run. */
   withSignal(signal: AbortSignal): Op<T, E, A>;
 }
 
@@ -67,6 +70,7 @@ export type ReleaseFn<T> = (value: T) => unknown;
 export type OpLifecycleHook = "enter" | "exit";
 
 export interface WithRelease<T, E, A extends readonly unknown[]> {
+  /** Registers release logic that runs after a successful value is produced. */
   withRelease(release: ReleaseFn<T>): Op<T, E, A>;
 }
 
@@ -78,36 +82,44 @@ export interface WithLifecycleHooks<T, E, A extends readonly unknown[]> {
 }
 
 export interface WithMap<T, E, A extends readonly unknown[]> {
+  /** Transforms the success value while preserving args and error channel. */
   map<U>(transform: (value: T) => U): Op<Awaited<U>, E, A>;
 }
 
 export interface WithMapErr<T, E, A extends readonly unknown[]> {
+  /** Transforms the tracked typed error channel while preserving success values. */
   mapErr<E2>(transform: (error: TrackedErr<E>) => E2): Op<T, E2, A>;
 }
 
 export interface WithFlatMap<T, E, A extends readonly unknown[]> {
+  /** Binds the success value into the next operation. */
   flatMap<U, E2>(bind: (value: T) => Op<U, E2, []>): Op<U, E | E2, A>;
 }
 
 export interface WithTap<T, E, A extends readonly unknown[]> {
+  /** Observes successful values without changing the success payload. */
   tap<R>(observe: (value: T) => R): Op<T, E | InferOpErr<R>, A>;
 }
 
 export interface WithTapErr<T, E, A extends readonly unknown[]> {
+  /** Observes tracked errors without changing the original success payload. */
   tapErr<R>(observe: (error: TrackedErr<E>) => R): Op<T, TrackedErr<E> | InferOpErr<R>, A>;
 }
 
 export type WithPredicateMethod<E> = { is: (value: unknown) => value is E };
 
 export interface WithRecover<T, E, A extends readonly unknown[]> {
+  /** Recovers selected typed failures into a fallback value or operation. */
   recover<ECaught extends TrackedErr<E>, R>(
     predicate: (error: TrackedErr<E>) => error is ECaught,
     handler: (error: ECaught) => R,
   ): Op<T | InferOpOk<R>, TrackedErr<E, ECaught> | InferOpErr<R>, A>;
+  /** Recovers typed failures selected by a tagged predicate method. */
   recover<ECaught extends TrackedErr<E>, R>(
     predicate: WithPredicateMethod<TrackedErr<ECaught>>,
     handler: (error: ECaught) => R,
   ): Op<T | InferOpOk<R>, TrackedErr<E, ECaught> | InferOpErr<R>, A>;
+  /** Recovers failures selected by a boolean predicate over the error value. */
   recover<R>(
     predicate: (error: TrackedErr<E>) => boolean,
     handler: (error: TrackedErr<E>) => R,
@@ -128,6 +140,7 @@ export interface OpNullary<T, E>
     WithTapErr<T, E, []>,
     WithRecover<T, E, []> {
   (): OpNullary<T, E>;
+  /** Executes the operation and returns a `Result` for this run. */
   run(): Promise<Result<T, E | UnhandledException>>;
   readonly _tag: "Op";
   [Symbol.iterator](): Generator<Instruction<E>, T, unknown>;
@@ -148,6 +161,7 @@ export interface OpArity<T, E, A extends readonly unknown[]>
     WithTapErr<T, E, A>,
     WithRecover<T, E, A> {
   (...args: A): Op<T, E, []>;
+  /** Executes the operation with runtime arguments and returns a `Result`. */
   run(...args: A): Promise<Result<T, E | UnhandledException>>;
 }
 

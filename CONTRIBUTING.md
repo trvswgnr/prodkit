@@ -54,24 +54,31 @@ Use a strict two-tier model so behavior has one clear home.
 - Public package entrypoint stays at `src/index.ts`.
 - Re-exports from dependencies must be explicit named exports in `src/index.ts` (never `export *`).
 - Internal runtime concerns are split into focused modules under `src/`:
-  - `core.ts` (core operation contracts and execution)
+  - `core/` (core operation contracts and execution runtime pieces)
   - `builders.ts` (primitive operation constructors)
   - `policies.ts` (retry, timeout, and signal policies)
   - `combinators.ts` (all/any/race combinators)
-  - `errors.ts`, `result.ts`, `typed.ts` (shared domain contracts)
+  - `errors.ts`, `result.ts`, `tagged.ts` (shared domain contracts)
+  - `shared.ts` (small shared type/runtime helpers)
+  - `test-utils.ts` (shared test helpers)
+  - `platform-globals.d.ts` (runtime-global typing support for tests/build)
 - Test layout follows intent:
   - `src/index.test.ts` for public API contract coverage
   - `src/errors.test.ts` for typed error contracts
   - `src/builders.test.ts` for operation builders, runtime composition, and builder type-inference contracts
   - `src/policies.test.ts` for retry/timeout/signal behavior
   - `src/core.test.ts` for core execution invariants
+  - `src/lifecycle.test.ts` for lifecycle/finalizer behavior
+  - `src/operators.test.ts` for fluent operator semantics
+  - `src/monad-laws.test.ts` for algebraic contract checks
+  - `src/types.test.ts` for compile-time type contracts
 
 You can run consumer install path checks directly:
 
 ```bash
-npm run examples:test:pack
-npm run examples:test:github
-npm run examples:test:npm
+npm run examples:smoke:pack
+npm run examples:smoke:github
+npm run examples:smoke:npm
 npm run test
 ```
 

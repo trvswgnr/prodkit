@@ -12,6 +12,13 @@ import { exponentialBackoff } from "./policies.js";
 
 const empty: _Op<void, never, []> = succeed(undefined);
 
+/**
+ * Runtime factory and namespace for building and composing operations.
+ *
+ * - Call `Op(function* (...) { ... })` to build generator-based operations.
+ * - Use static helpers (`Op.of`, `Op.fail`, `Op.try`, `Op.all`, `Op.any`, etc.) for common patterns.
+ * - Use `Op.run(op)` to execute a nullary operation value directly.
+ */
 export const Op = Object.assign(fromGenFn, {
   _tag: "OpFactory" as const,
   run: runOp,
@@ -44,5 +51,6 @@ export const Op = Object.assign(fromGenFn, {
 export type Op<T, E, A extends readonly unknown[]> = _Op<T, E, A>;
 
 export type { EnterContext, ExitContext, OpLifecycleHook };
+export type { BackoffOptions, RetryPolicy } from "./policies.js";
 
 export { TimeoutError, ErrorGroup, exponentialBackoff };
