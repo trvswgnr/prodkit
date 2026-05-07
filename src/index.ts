@@ -4,7 +4,7 @@ import { ErrorGroup, TimeoutError } from "./errors.js";
 import {
   type EnterContext,
   type ExitContext,
-  type Op as _Op,
+  type _Op,
   type OpLifecycleHook,
 } from "./core/types.js";
 import { runOp } from "./core/run-op.js";

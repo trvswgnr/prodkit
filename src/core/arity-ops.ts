@@ -4,7 +4,7 @@ import type {
   EnterFn,
   ExitFn,
   LifecycleFn,
-  Op,
+  _Op,
   OpArity,
   OpLifecycleHook,
   ReleaseFn,
@@ -42,12 +42,12 @@ export interface FluentArityHandlers<T, E, A extends readonly unknown[]> {
  *
  * @warning This function is UNSAFE and should be used only when the type is known to be correct
  */
-export function asArityOp<T, E, A extends readonly unknown[]>(op: Op<T, E, A>): OpArity<T, E, A> {
+export function asArityOp<T, E, A extends readonly unknown[]>(op: _Op<T, E, A>): OpArity<T, E, A> {
   return cast(op);
 }
 
 export function makeFluentArityOp<T, E, A extends readonly unknown[]>(
-  invoke: (...args: A) => Op<T, E, []>,
+  invoke: (...args: A) => _Op<T, E, []>,
   makeHandlers: (self: OpArity<T, E, A>) => FluentArityHandlers<T, E, A>,
 ): OpArity<T, E, A> {
   // SAFETY: `invoke` already has the runtime call signature `(...args: A) => Op<T, E, []>`.
@@ -76,7 +76,7 @@ export function makeFluentArityOp<T, E, A extends readonly unknown[]>(
               TimeoutError.is(error) ? error : transform(error),
             ),
         ),
-      flatMap: <U, E2>(bind: (value: T) => Op<U, E2, []>) =>
+      flatMap: <U, E2>(bind: (value: T) => _Op<U, E2, []>) =>
         liftArityOp(self, (resolved) => flatMapNullaryOp(resolved, bind)),
       tap: <R>(observe: (value: T) => R) =>
         liftArityOp(self, (resolved) => tapNullaryOp(resolved, observe)),
@@ -108,10 +108,10 @@ export function makeFluentArityOp<T, E, A extends readonly unknown[]>(
 
 export function liftArityOp<TIn, EIn, A extends readonly unknown[], TOut, EOut>(
   op: OpArity<TIn, EIn, A>,
-  mapNullary: (resolved: Op<TIn, EIn, []>) => Op<TOut, EOut, []>,
+  mapNullary: (resolved: _Op<TIn, EIn, []>) => _Op<TOut, EOut, []>,
   mapNullaryForTimeout?: (
-    resolved: Op<TIn, EIn | TimeoutError, []>,
-  ) => Op<TOut, EOut | TimeoutError, []>,
+    resolved: _Op<TIn, EIn | TimeoutError, []>,
+  ) => _Op<TOut, EOut | TimeoutError, []>,
 ): OpArity<TOut, EOut, A> {
   return makeFluentArityOp(
     (...args) => mapNullary(op(...args)),
