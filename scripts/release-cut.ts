@@ -1,44 +1,89 @@
 import { execSync } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import process from "node:process";
+import { Op } from "@prodkit/op";
+import * as v from "valibot";
+import { TaggedError } from "better-result";
 
-type BumpKind = "patch" | "minor" | "major";
+const logger = console;
 
-type PackageJson = {
-  version?: unknown;
-};
+class ParseError extends TaggedError("ParseError")<{
+  message?: string;
+  issues: v.BaseIssue<unknown>[];
+  input: unknown;
+}>() {}
+
+const parse = <S extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>>(
+  schema: S,
+  input: unknown,
+) =>
+  Op(function* () {
+    const result = v.safeParse(schema, input);
+    if (!result.success) {
+      return yield* Op.fail(new ParseError({ issues: result.issues, input }));
+    }
+    return result.output;
+  });
+class InvalidJsonError extends TaggedError("InvalidJsonError")<{
+  cause: unknown;
+  input: string;
+}>() {}
+const parseJson = (input: string) =>
+  Op.try(
+    () => JSON.parse(input) as unknown,
+    (cause) => new InvalidJsonError({ cause, input }),
+  );
+
+const BumpKind = v.union([v.literal("patch"), v.literal("minor"), v.literal("major")]);
+type BumpKind = v.InferOutput<typeof BumpKind>;
+
+const PackageJson = v.object({ version: v.pipe(v.string(), v.nonEmpty()) });
+type PackageJson = v.InferOutput<typeof PackageJson>;
 
 const NO_ENTRIES_PLACEHOLDER = "- No entries yet.";
 const UNRELEASED_HEADING = "## [Unreleased]";
 
-async function readUtf8(path: string): Promise<string> {
-  return readFile(new URL(path, import.meta.url), "utf8");
-}
+class FileError extends TaggedError("FileError")<{ cause: unknown; path: string }>() {}
 
-async function writeUtf8(path: string, content: string): Promise<void> {
-  return writeFile(new URL(path, import.meta.url), content, "utf8");
-}
+const readUtf8 = (path: string) =>
+  Op.try(
+    () => readFile(new URL(path, import.meta.url), "utf8"),
+    (cause) => new FileError({ cause, path }),
+  );
 
-function parseBumpKind(): BumpKind {
-  const arg = process.argv[2];
-  if (arg === "patch" || arg === "minor" || arg === "major") {
-    return arg;
+const writeUtf8 = (path: string, content: string) =>
+  Op.try(
+    (signal) => writeFile(new URL(path, import.meta.url), content, { encoding: "utf8", signal }),
+    (cause) => new FileError({ cause, path }),
+  );
+
+const parseBumpKind = Op(function* (arg: string) {
+  const result = v.safeParse(BumpKind, arg);
+  if (!result.success) {
+    return yield* new ParseError({
+      message: "usage: node ./scripts/release-cut.ts <patch|minor|major>",
+      issues: result.issues,
+      input: arg,
+    });
   }
+  return result.output;
+});
 
-  throw new Error("usage: node ./scripts/release-cut.ts <patch|minor|major>");
-}
-
-function parseVersion(value: string): [number, number, number] {
+const parseVersion = Op(function* (value: string) {
   const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value);
   if (!match) {
-    throw new Error(`unsupported version format: "${value}"`);
+    return yield* new ParseError({
+      message: `unsupported version format: "${value}"`,
+      issues: [],
+      input: value,
+    });
   }
 
-  return [Number(match[1]), Number(match[2]), Number(match[3])];
-}
+  return [Number(match[1]), Number(match[2]), Number(match[3])] as const;
+});
 
-function bumpVersion(current: string, kind: BumpKind): string {
-  const [major, minor, patch] = parseVersion(current);
+const bumpVersion = Op(function* (current: string, kind: BumpKind) {
+  const [major, minor, patch] = yield* parseVersion(current);
   if (kind === "major") {
     return `${major + 1}.0.0`;
   }
@@ -48,31 +93,34 @@ function bumpVersion(current: string, kind: BumpKind): string {
   }
 
   return `${major}.${minor}.${patch + 1}`;
-}
+});
 
-async function getCurrentVersion(): Promise<string> {
-  const raw = await readUtf8("../package.json");
-  const parsed = JSON.parse(raw) as PackageJson;
-  if (typeof parsed.version !== "string" || parsed.version.length === 0) {
-    throw new Error("package.json is missing a valid version string");
-  }
+const getCurrentVersion = Op(function* () {
+  const raw = yield* readUtf8("../package.json");
+  const parsedJson = yield* parseJson(raw);
+  const parsed = yield* parse(PackageJson, parsedJson);
 
   return parsed.version;
-}
+});
 
-function getReleaseDate(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+const getReleaseDate = Op.try(() => new Date().toISOString().slice(0, 10));
 
-function promoteUnreleased(changelog: string, nextVersion: string, releaseDate: string): string {
+class ChangelogError extends TaggedError("ChangelogError")<{ message: string }>() {}
+const promoteUnreleased = Op(function* (
+  changelog: string,
+  nextVersion: string,
+  releaseDate: string,
+) {
   const unreleasedStart = changelog.indexOf(UNRELEASED_HEADING);
   if (unreleasedStart === -1) {
-    throw new Error('CHANGELOG.md is missing "## [Unreleased]"');
+    return yield* new ChangelogError({ message: 'CHANGELOG.md is missing "## [Unreleased]"' });
   }
 
   const nextHeadingStart = changelog.indexOf("\n## [", unreleasedStart + UNRELEASED_HEADING.length);
   if (nextHeadingStart === -1) {
-    throw new Error('CHANGELOG.md must include at least one released section after "Unreleased"');
+    return yield* new ChangelogError({
+      message: 'CHANGELOG.md must include at least one released section after "Unreleased"',
+    });
   }
 
   const preamble = changelog.slice(0, unreleasedStart).trimEnd();
@@ -90,37 +138,44 @@ function promoteUnreleased(changelog: string, nextVersion: string, releaseDate: 
   const newReleaseSection = `## [${nextVersion}] - ${releaseDate}\n\n${releaseBody}`;
 
   return `${preamble}\n\n${newUnreleased}\n\n${newReleaseSection}\n\n${releasedSections}\n`;
-}
+});
 
-function run(command: string): void {
-  execSync(command, {
-    stdio: "inherit",
+class CommandError extends TaggedError("CommandError")<{ cause: unknown; command: string }>() {}
+const run = (command: string) =>
+  Op.try(
+    () => execSync(command, { stdio: "inherit" }),
+    (cause) => new CommandError({ cause, command }),
+  );
+
+const main = Op(function* () {
+  const bumpKind = yield* parseBumpKind(process.argv[2]);
+  const currentVersion = yield* getCurrentVersion();
+  const nextVersion = yield* bumpVersion(currentVersion, bumpKind);
+  const releaseDate = yield* getReleaseDate();
+
+  const changelog = yield* readUtf8("../CHANGELOG.md");
+  const updatedChangelog = yield* promoteUnreleased(changelog, nextVersion, releaseDate);
+  yield* writeUtf8("../CHANGELOG.md", updatedChangelog);
+
+  yield* run(`npm version ${bumpKind} --no-git-tag-version`);
+  yield* run("npm run fmt");
+  yield* run("npm run release:prepare");
+  yield* run("git add CHANGELOG.md package.json package-lock.json");
+  yield* run(`git commit -m "${nextVersion}"`);
+  yield* run(`git tag v${nextVersion}`);
+
+  return nextVersion;
+});
+
+main.run().then((result) => {
+  result.match({
+    ok: (nextVersion) => {
+      logger.info(`release cut complete: v${nextVersion}\n`);
+      logger.info("next step: npm run release:push\n");
+    },
+    err: (error) => {
+      logger.error(error);
+      process.exit(1);
+    },
   });
-}
-
-async function main(): Promise<void> {
-  const bumpKind = parseBumpKind();
-  const currentVersion = await getCurrentVersion();
-  const nextVersion = bumpVersion(currentVersion, bumpKind);
-  const releaseDate = getReleaseDate();
-
-  const changelog = await readUtf8("../CHANGELOG.md");
-  const updatedChangelog = promoteUnreleased(changelog, nextVersion, releaseDate);
-  await writeUtf8("../CHANGELOG.md", updatedChangelog);
-
-  run(`npm version ${bumpKind} --no-git-tag-version`);
-  run("npm run fmt");
-  run("npm run release:prepare");
-  run("git add CHANGELOG.md package.json package-lock.json");
-  run(`git commit -m "${nextVersion}"`);
-  run(`git tag v${nextVersion}`);
-
-  process.stdout.write(`release cut complete: v${nextVersion}\n`);
-  process.stdout.write("next step: npm run release:push\n");
-}
-
-main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`${message}\n`);
-  process.exit(1);
 });
