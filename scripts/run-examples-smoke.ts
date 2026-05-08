@@ -1,13 +1,22 @@
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { Op } from "@prodkit/op";
-import { TaggedError, matchError } from "better-result";
-import { createLogger } from "./utils.ts";
+import * as v from "valibot";
+import { TaggedError, matchErrorPartial } from "better-result";
+import {
+  createLogger,
+  getRepoRoot,
+  NonEmptyArray,
+  NonEmptyString,
+  parse,
+  parseJson,
+  readOwnObjectField,
+  readPackageJson,
+} from "./utils.ts";
 
-const logger = createLogger(import.meta.url);
+const logger = createLogger();
 
 /** Overrides {@link DEFAULT_SMOKE_TIMEOUT_MS}; must be a positive integer if set (milliseconds). */
 const SMOKE_TIMEOUT_MS_ENV = "OP_SMOKE_TIMEOUT_MS";
@@ -28,8 +37,6 @@ const UPSTREAM_MAIN_REF = "refs/heads/main";
 const VALID_MODES = ["pack", "github", "npm"] as const;
 type Mode = (typeof VALID_MODES)[number];
 const VALID_MODE_SET = new Set<string>(VALID_MODES);
-
-class SmokeRepoRootError extends TaggedError("SmokeRepoRootError")<{ message: string }>() {}
 
 class SmokeExecError extends TaggedError("SmokeExecError")<{
   command: string;
@@ -64,29 +71,7 @@ class SmokeCommandExitError extends TaggedError("SmokeCommandExitError")<{
   stderr?: string;
 }>() {}
 
-class SmokeAbortedError extends TaggedError("SmokeAbortedError")<{ message: string }>() {}
-
-function readOwnObjectField(value: unknown, key: string): unknown {
-  if (typeof value !== "object" || value === null) return undefined;
-  if (!Object.hasOwn(value, key)) return undefined;
-  return Reflect.get(value, key);
-}
-
-function readPackageJsonIfPresent(dir: string): unknown {
-  const packageJsonPath = path.join(dir, "package.json");
-  if (!existsSync(packageJsonPath)) return undefined;
-  try {
-    return JSON.parse(readFileSync(packageJsonPath, "utf8"));
-  } catch {
-    return undefined;
-  }
-}
-
-function readPackageNameIfPresent(dir: string): string | undefined {
-  const parsed = readPackageJsonIfPresent(dir);
-  const name = readOwnObjectField(parsed, "name");
-  return typeof name === "string" ? name : undefined;
-}
+class OperationAbortedError extends TaggedError("OperationAbortedError")<{ message: string }>() {}
 
 function collectRuntimeEntryLeaves(value: unknown, target: Set<string>): void {
   if (typeof value === "string") {
@@ -129,17 +114,12 @@ function collectRuntimeEntryLeaves(value: unknown, target: Set<string>): void {
   }
 }
 
-function parseNpmPackFilename(packJsonChunk: string): string | undefined {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(packJsonChunk);
-  } catch {
-    return undefined;
-  }
-  if (!Array.isArray(parsed) || parsed.length < 1) return undefined;
-  const filename = readOwnObjectField(parsed[0], "filename");
-  return typeof filename === "string" && filename.length > 0 ? filename : undefined;
-}
+const parseNpmPackFilename = Op(function* (packJsonChunk: string) {
+  const parsedJson = yield* parseJson(packJsonChunk);
+  const [head] = yield* parse(NonEmptyArray(v.object({ filename: NonEmptyString })), parsedJson);
+  const filename: NonEmptyString = head.filename;
+  return filename;
+});
 
 function collectJsonArrayChunks(text: string): string[] {
   const chunks: string[] = [];
@@ -190,16 +170,16 @@ function collectJsonArrayChunks(text: string): string[] {
   return chunks;
 }
 
-function parseNpmPackFilenameFromOutput(packOutput: string): string | undefined {
+const parseNpmPackFilenameFromOutput = Op(function* (packOutput: string) {
   const chunks = collectJsonArrayChunks(packOutput);
   for (let index = chunks.length - 1; index >= 0; index -= 1) {
     const chunk = chunks[index];
     if (chunk === undefined) continue;
-    const parsed = parseNpmPackFilename(chunk);
+    const parsed = yield* parseNpmPackFilename(chunk);
     if (parsed) return parsed;
   }
   return undefined;
-}
+});
 
 function formatSmokeExecInvocation(command: string, args: readonly string[]): string {
   return [command, ...args].map((word) => JSON.stringify(word)).join(" ");
@@ -345,26 +325,6 @@ function parseGitLsRemoteSha(output: string, ref: string): string | undefined {
   return undefined;
 }
 
-const getRepoRoot = Op(function* () {
-  let currentDir = path.dirname(fileURLToPath(import.meta.url));
-
-  while (true) {
-    const name = readPackageNameIfPresent(currentDir);
-    if (name === "@prodkit/op") {
-      return currentDir;
-    }
-
-    const parentDir = path.dirname(currentDir);
-    if (parentDir === currentDir) {
-      return yield* new SmokeRepoRootError({
-        message: 'Unable to locate repo root with package name "@prodkit/op"',
-      });
-    }
-
-    currentDir = parentDir;
-  }
-});
-
 class InvalidModeError extends TaggedError("InvalidModeError")<{ message: string }>() {
   constructor(mode: string | undefined) {
     const message = mode
@@ -388,8 +348,9 @@ const execOp = Op(function* (
   return yield* Op.try(
     (signal) => runCommand(command, args, cwd, capture, signal),
     (cause) => {
-      if (readOwnObjectField(cause, "name") === "AbortError") {
-        return new SmokeAbortedError({ message: "Operation aborted" });
+      const name = readOwnObjectField(cause, "name");
+      if (name === "AbortError") {
+        return new OperationAbortedError({ message: "Operation aborted" });
       }
       return new SmokeExecError({ command, args, cwd, cause: normalizeExecCause(cause) });
     },
@@ -414,7 +375,7 @@ const resolveUpstreamMainCommitSha = Op(function* (repoRoot: string) {
 
 const ensureInstalledPackageReady = Op(function* (examplesDir: string, sourceLabel: string) {
   const installedPkgDir = path.join(examplesDir, "node_modules", "@prodkit", "op");
-  const packageJson = readPackageJsonIfPresent(installedPkgDir);
+  const packageJson = yield* readPackageJson(path.join(installedPkgDir, "package.json"));
   const entryCandidates = new Set<string>(["./dist/index.mjs"]);
 
   const mainField = readOwnObjectField(packageJson, "main");
@@ -480,7 +441,7 @@ const installFromPack = Op(function* (repoRoot: string) {
   // --ignore-scripts: we just built above, and letting `prepare` run tsdown
   // again would pollute stdout (including ANSI escapes) and corrupt --json
   const packOutput = yield* execOp("npm", ["pack", "--json", "--ignore-scripts"], repoRoot, true);
-  const filename = parseNpmPackFilenameFromOutput(packOutput);
+  const filename = yield* parseNpmPackFilenameFromOutput(packOutput);
 
   const preview =
     packOutput.length > PACK_OUTPUT_PREVIEW
@@ -595,32 +556,22 @@ async function main() {
   smokeResult.match({
     ok: () => logger.info("Smoke test completed successfully"),
     err: (error) => {
-      matchError(error, {
-        SmokeAbortedError: () => {
-          logger.warn("Operation aborted");
-        },
-        SmokeExecError: (e) => {
-          logger.error(`exec - ${formatSmokeExecInvocation(e.command, e.args)} (cwd: ${e.cwd})`);
-          logger.error(
-            {
+      matchErrorPartial(
+        error,
+        {
+          SmokeExecError: (e) => {
+            logger.error(`exec - ${formatSmokeExecInvocation(e.command, e.args)} (cwd: ${e.cwd})`);
+            logger.error("Command failed", {
               message: e.cause.message,
               name: e.cause.name,
               code: e.cause.code,
               signal: e.cause.signal,
               status: e.cause.status,
-            },
-            "Command failed",
-          );
+            });
+          },
         },
-        SmokeRepoRootError: (e) => logger.error(`${e.message}`),
-        SmokePackOutputError: (e) => logger.error(`${e.message}`),
-        SmokeMissingDistError: (e) => logger.error(`${e.message}`),
-        SmokeSetupError: (e) => logger.error(`${e.message}`),
-        SmokeGithubRefResolveError: (e) => logger.error(`${e.message}`),
-        InvalidModeError: (e) => logger.error(`${e.message}`),
-        TimeoutError: (e) => logger.error(`${e.message}`),
-        UnhandledException: (e) => logger.error(e),
-      });
+        logger.error,
+      );
       process.exit(process.exitCode || 1);
     },
   });

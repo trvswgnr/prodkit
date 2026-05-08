@@ -11,7 +11,8 @@
     "strict": true,
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
-    "erasableSyntaxOnly": true
+    "erasableSyntaxOnly": true,
+    "noUncheckedIndexedAccess": true
   },
   "include": ["./*.ts"]
 }
