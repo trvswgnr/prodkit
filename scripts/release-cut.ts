@@ -7,32 +7,9 @@ import { TaggedError } from "better-result";
 
 const logger = console;
 
-class ParseError extends TaggedError("ParseError")<{
-  message?: string;
-  issues: v.BaseIssue<unknown>[];
-  input: unknown;
-}>() {}
-
-const parse = <S extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>>(
-  schema: S,
-  input: unknown,
-) =>
-  Op(function* () {
-    const result = v.safeParse(schema, input);
-    if (!result.success) {
-      return yield* Op.fail(new ParseError({ issues: result.issues, input }));
-    }
-    return result.output;
-  });
-class InvalidJsonError extends TaggedError("InvalidJsonError")<{
-  cause: unknown;
-  input: string;
-}>() {}
-const parseJson = (input: string) =>
-  Op.try(
-    () => JSON.parse(input) as unknown,
-    (cause) => new InvalidJsonError({ cause, input }),
-  );
+const NO_ENTRIES_PLACEHOLDER = "- No entries yet.";
+const NO_CHANGES_SECTION = "### Changed\n\n- No user-facing changes in this release.";
+const UNRELEASED_HEADING = "## [Unreleased]";
 
 const BumpKind = v.union([v.literal("patch"), v.literal("minor"), v.literal("major")]);
 type BumpKind = v.InferOutput<typeof BumpKind>;
@@ -40,114 +17,156 @@ type BumpKind = v.InferOutput<typeof BumpKind>;
 const PackageJson = v.object({ version: v.pipe(v.string(), v.nonEmpty()) });
 type PackageJson = v.InferOutput<typeof PackageJson>;
 
-const NO_ENTRIES_PLACEHOLDER = "- No entries yet.";
-const UNRELEASED_HEADING = "## [Unreleased]";
+class ParseError extends TaggedError("ParseError")<{
+  message?: string;
+  issues: v.BaseIssue<unknown>[];
+  input: unknown;
+}>() {}
+
+class InvalidJsonError extends TaggedError("InvalidJsonError")<{
+  cause: unknown;
+  input: string;
+}>() {}
+
+class ChangelogError extends TaggedError("ChangelogError")<{ message: string }>() {}
+
+class CommandError extends TaggedError("CommandError")<{ cause: unknown; command: string }>() {}
 
 class FileError extends TaggedError("FileError")<{ cause: unknown; path: string }>() {}
 
-const readUtf8 = (path: string) =>
-  Op.try(
-    () => readFile(new URL(path, import.meta.url), "utf8"),
-    (cause) => new FileError({ cause, path }),
-  );
+const main = Op(function* (dryRun: boolean) {
+  const dryRunPrefix = "[dry-run]";
 
-const writeUtf8 = (path: string, content: string) =>
-  Op.try(
-    (signal) => writeFile(new URL(path, import.meta.url), content, { encoding: "utf8", signal }),
-    (cause) => new FileError({ cause, path }),
-  );
-
-const parseBumpKind = Op(function* (arg: string) {
-  const result = v.safeParse(BumpKind, arg);
-  if (!result.success) {
-    return yield* new ParseError({
-      message: "usage: node ./scripts/release-cut.ts <patch|minor|major>",
-      issues: result.issues,
-      input: arg,
+  const info = (message: string) => Op.try(() => logger.info(message));
+  const parse = <S extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>>(
+    schema: S,
+    input: unknown,
+  ) =>
+    Op(function* () {
+      const result = v.safeParse(schema, input);
+      if (!result.success) {
+        return yield* Op.fail(new ParseError({ issues: result.issues, input }));
+      }
+      return result.output;
     });
-  }
-  return result.output;
-});
 
-const parseVersion = Op(function* (value: string) {
-  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value);
-  if (!match) {
-    return yield* new ParseError({
-      message: `unsupported version format: "${value}"`,
-      issues: [],
-      input: value,
-    });
-  }
+  const parseJson = (input: string) =>
+    Op.try(
+      () => JSON.parse(input) as unknown,
+      (cause) => new InvalidJsonError({ cause, input }),
+    );
 
-  return [Number(match[1]), Number(match[2]), Number(match[3])] as const;
-});
+  const readUtf8 = (path: string) =>
+    Op.try(
+      () => readFile(new URL(path, import.meta.url), "utf8"),
+      (cause) => new FileError({ cause, path }),
+    );
 
-const bumpVersion = Op(function* (current: string, kind: BumpKind) {
-  const [major, minor, patch] = yield* parseVersion(current);
-  if (kind === "major") {
-    return `${major + 1}.0.0`;
-  }
+  const writeUtf8 = (path: string, content: string) => {
+    if (dryRun) {
+      return info(`${dryRunPrefix} would write ${path}`);
+    }
 
-  if (kind === "minor") {
-    return `${major}.${minor + 1}.0`;
-  }
+    return Op.try(
+      (signal) => writeFile(new URL(path, import.meta.url), content, { encoding: "utf8", signal }),
+      (cause) => new FileError({ cause, path }),
+    );
+  };
 
-  return `${major}.${minor}.${patch + 1}`;
-});
+  const parseBumpKind = Op(function* (arg: string) {
+    const result = v.safeParse(BumpKind, arg);
+    if (!result.success) {
+      return yield* new ParseError({
+        message: "usage: node ./scripts/release-cut.ts <patch|minor|major>",
+        issues: result.issues,
+        input: arg,
+      });
+    }
+    return result.output;
+  });
 
-const getCurrentVersion = Op(function* () {
-  const raw = yield* readUtf8("../package.json");
-  const parsedJson = yield* parseJson(raw);
-  const parsed = yield* parse(PackageJson, parsedJson);
+  const parseVersion = Op(function* (value: string) {
+    const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value);
+    if (!match) {
+      return yield* new ParseError({
+        message: `unsupported version format: "${value}"`,
+        issues: [],
+        input: value,
+      });
+    }
 
-  return parsed.version;
-});
+    return [Number(match[1]), Number(match[2]), Number(match[3])] as const;
+  });
 
-const getReleaseDate = Op.try(() => new Date().toISOString().slice(0, 10));
+  const bumpVersion = Op(function* (current: string, kind: BumpKind) {
+    const [major, minor, patch] = yield* parseVersion(current);
+    if (kind === "major") {
+      return `${major + 1}.0.0`;
+    }
 
-class ChangelogError extends TaggedError("ChangelogError")<{ message: string }>() {}
-const promoteUnreleased = Op(function* (
-  changelog: string,
-  nextVersion: string,
-  releaseDate: string,
-) {
-  const unreleasedStart = changelog.indexOf(UNRELEASED_HEADING);
-  if (unreleasedStart === -1) {
-    return yield* new ChangelogError({ message: 'CHANGELOG.md is missing "## [Unreleased]"' });
-  }
+    if (kind === "minor") {
+      return `${major}.${minor + 1}.0`;
+    }
 
-  const nextHeadingStart = changelog.indexOf("\n## [", unreleasedStart + UNRELEASED_HEADING.length);
-  if (nextHeadingStart === -1) {
-    return yield* new ChangelogError({
-      message: 'CHANGELOG.md must include at least one released section after "Unreleased"',
-    });
-  }
+    return `${major}.${minor}.${patch + 1}`;
+  });
 
-  const preamble = changelog.slice(0, unreleasedStart).trimEnd();
-  const unreleasedBodyRaw = changelog
-    .slice(unreleasedStart + UNRELEASED_HEADING.length, nextHeadingStart)
-    .trim();
-  const releasedSections = changelog.slice(nextHeadingStart).trimStart();
+  const getCurrentVersion = Op(function* () {
+    const raw = yield* readUtf8("../package.json");
+    const parsedJson = yield* parseJson(raw);
+    const parsed = yield* parse(PackageJson, parsedJson);
 
-  const unreleasedBody = unreleasedBodyRaw.replace(NO_ENTRIES_PLACEHOLDER, "").trim();
-  const releaseBody = /- /m.test(unreleasedBody)
-    ? unreleasedBody
-    : "### Changed\n\n- No user-facing changes in this release.";
+    return parsed.version;
+  });
 
-  const newUnreleased = `${UNRELEASED_HEADING}\n\n### Added\n\n${NO_ENTRIES_PLACEHOLDER}`;
-  const newReleaseSection = `## [${nextVersion}] - ${releaseDate}\n\n${releaseBody}`;
+  const getReleaseDate = Op.try(() => new Date().toISOString().slice(0, 10));
 
-  return `${preamble}\n\n${newUnreleased}\n\n${newReleaseSection}\n\n${releasedSections}\n`;
-});
+  const promoteUnreleased = Op(function* (
+    changelog: string,
+    nextVersion: string,
+    releaseDate: string,
+  ) {
+    const unreleasedStart = changelog.indexOf(UNRELEASED_HEADING);
+    if (unreleasedStart === -1) {
+      return yield* new ChangelogError({ message: 'CHANGELOG.md is missing "## [Unreleased]"' });
+    }
 
-class CommandError extends TaggedError("CommandError")<{ cause: unknown; command: string }>() {}
-const run = (command: string) =>
-  Op.try(
-    () => execSync(command, { stdio: "inherit" }),
-    (cause) => new CommandError({ cause, command }),
-  );
+    const nextHeadingStart = changelog.indexOf(
+      "\n## [",
+      unreleasedStart + UNRELEASED_HEADING.length,
+    );
+    if (nextHeadingStart === -1) {
+      return yield* new ChangelogError({
+        message: 'CHANGELOG.md must include at least one released section after "Unreleased"',
+      });
+    }
 
-const main = Op(function* () {
+    const preamble = changelog.slice(0, unreleasedStart).trimEnd();
+    const unreleasedBodyRaw = changelog
+      .slice(unreleasedStart + UNRELEASED_HEADING.length, nextHeadingStart)
+      .trim();
+    const releasedSections = changelog.slice(nextHeadingStart).trimStart();
+
+    const unreleasedBody = unreleasedBodyRaw.replace(NO_ENTRIES_PLACEHOLDER, "").trim();
+    const releaseBody = /- /m.test(unreleasedBody) ? unreleasedBody : NO_CHANGES_SECTION;
+
+    const newUnreleased = `${UNRELEASED_HEADING}\n\n### Added\n\n${NO_ENTRIES_PLACEHOLDER}`;
+    const newReleaseSection = `## [${nextVersion}] - ${releaseDate}\n\n${releaseBody}`;
+
+    return `${preamble}\n\n${newUnreleased}\n\n${newReleaseSection}\n\n${releasedSections}\n`;
+  });
+
+  const run = (command: string) => {
+    if (dryRun) {
+      return info(`${dryRunPrefix} would run: ${command}`);
+    }
+
+    return Op.try(
+      () => execSync(command, { stdio: "inherit" }),
+      (cause) => new CommandError({ cause, command }),
+    );
+  };
+
   const bumpKind = yield* parseBumpKind(process.argv[2]);
   const currentVersion = yield* getCurrentVersion();
   const nextVersion = yield* bumpVersion(currentVersion, bumpKind);
@@ -164,18 +183,34 @@ const main = Op(function* () {
   yield* run(`git commit -m "${nextVersion}"`);
   yield* run(`git tag v${nextVersion}`);
 
-  return nextVersion;
+  if (dryRun) {
+    yield* info(`${dryRunPrefix} release cut simulation complete for v${nextVersion}`);
+  }
+
+  return { nextVersion, dryRun };
 });
 
-main.run().then((result) => {
-  result.match({
-    ok: (nextVersion) => {
-      logger.info(`release cut complete: v${nextVersion}\n`);
-      logger.info("next step: npm run release:push\n");
-    },
-    err: (error) => {
-      logger.error(error);
-      process.exit(1);
-    },
+main
+  .run(
+    // defaults to dry run to avoid accidental release cuts
+    Boolean(JSON.parse(process.env.DRY_RUN || "1")),
+  )
+  .then((result) => {
+    result.match({
+      ok: ({ nextVersion, dryRun }) => {
+        if (dryRun) {
+          logger.info(`dry run complete: v${nextVersion}\n`);
+          logger.info("no files, commits, or tags were changed\n");
+          logger.info("next step: run with DRY_RUN=0 to cut the release\n");
+          return;
+        }
+
+        logger.info(`release cut complete: v${nextVersion}\n`);
+        logger.info("next step: npm run release:push\n");
+      },
+      err: (error) => {
+        logger.error(error);
+        process.exit(1);
+      },
+    });
   });
-});
