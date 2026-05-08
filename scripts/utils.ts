@@ -31,12 +31,22 @@ export function createLogger(filepath?: string) {
   } as const;
 }
 
-export type IsUnknown<T> = unknown extends T ? ([T] extends [null] ? false : true) : false;
+type OwnPropertyValue<T, K extends PropertyKey> =
+  // if it's not an object, we don't know anything about the type
+  T extends object
+    ? T extends (...args: never[]) => unknown // it could actually be a function which overlaps with `object` type
+      ? unknown
+      : object extends T // or it could literally be the `object` type
+        ? unknown
+        : K extends keyof T // best case: we know the object type, and the property exists
+          ? T[K] // exact match, we know the type of the value
+          : undefined // not a key of the object, so definitely undefined
+    : unknown;
 
-export const readOwnObjectField = <T, K extends PropertyKey>(
+export const getOwnPropertyValue = <T, K extends PropertyKey>(
   value: T,
   key: K,
-): IsUnknown<T> extends true ? unknown : K extends keyof T ? T[K] : undefined => {
+): OwnPropertyValue<T, K> => {
   return (
     typeof value === "object" && value !== null && Object.hasOwn(value, key)
       ? Reflect.get(value, key)
@@ -44,6 +54,8 @@ export const readOwnObjectField = <T, K extends PropertyKey>(
   ) as never;
 };
 
+const x: object = () => {};
+const _y = getOwnPropertyValue(x, "length");
 export class InvalidJsonError extends TaggedError("InvalidJsonError")<{
   cause: SyntaxError;
   input: string;

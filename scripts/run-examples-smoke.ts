@@ -12,7 +12,7 @@ import {
   NonEmptyString,
   parse,
   parseJson,
-  readOwnObjectField,
+  getOwnPropertyValue,
   readPackageJson,
 } from "./utils.ts";
 
@@ -85,12 +85,12 @@ function collectRuntimeEntryLeaves(value: unknown, target: Set<string>): void {
   if (typeof value !== "object" || value === null) return;
 
   // types entries are non-runtime metadata and should not satisfy runtime artifact checks
-  const typeField = readOwnObjectField(value, "types");
-  const defaultField = readOwnObjectField(value, "default");
-  const importField = readOwnObjectField(value, "import");
-  const requireField = readOwnObjectField(value, "require");
-  const nodeField = readOwnObjectField(value, "node");
-  const browserField = readOwnObjectField(value, "browser");
+  const typeField = getOwnPropertyValue(value, "types");
+  const defaultField = getOwnPropertyValue(value, "default");
+  const importField = getOwnPropertyValue(value, "import");
+  const requireField = getOwnPropertyValue(value, "require");
+  const nodeField = getOwnPropertyValue(value, "node");
+  const browserField = getOwnPropertyValue(value, "browser");
 
   let sawRuntimeCondition = false;
   for (const runtimeCondition of [
@@ -267,11 +267,11 @@ function normalizeExecCause(cause: unknown): {
   }
 
   if (cause instanceof Error) {
-    const code = readOwnObjectField(cause, "code");
-    const signal = readOwnObjectField(cause, "signal");
-    const status = readOwnObjectField(cause, "status");
-    const stdout = readOwnObjectField(cause, "stdout");
-    const stderr = readOwnObjectField(cause, "stderr");
+    const code = getOwnPropertyValue(cause, "code");
+    const signal = getOwnPropertyValue(cause, "signal");
+    const status = getOwnPropertyValue(cause, "status");
+    const stdout = getOwnPropertyValue(cause, "stdout");
+    const stderr = getOwnPropertyValue(cause, "stderr");
     return {
       message: cause.message,
       name: cause.name,
@@ -348,7 +348,7 @@ const execOp = Op(function* (
   return yield* Op.try(
     (signal) => runCommand(command, args, cwd, capture, signal),
     (cause) => {
-      const name = readOwnObjectField(cause, "name");
+      const name = getOwnPropertyValue(cause, "name");
       if (name === "AbortError") {
         return new OperationAbortedError({ message: "Operation aborted" });
       }
@@ -378,15 +378,15 @@ const ensureInstalledPackageReady = Op(function* (examplesDir: string, sourceLab
   const packageJson = yield* readPackageJson(path.join(installedPkgDir, "package.json"));
   const entryCandidates = new Set<string>(["./dist/index.mjs"]);
 
-  const mainField = readOwnObjectField(packageJson, "main");
+  const mainField = getOwnPropertyValue(packageJson, "main");
   if (typeof mainField === "string" && mainField.length > 0) entryCandidates.add(mainField);
 
-  const moduleField = readOwnObjectField(packageJson, "module");
+  const moduleField = getOwnPropertyValue(packageJson, "module");
   if (typeof moduleField === "string" && moduleField.length > 0) entryCandidates.add(moduleField);
 
-  const exportsField = readOwnObjectField(packageJson, "exports");
-  if (readOwnObjectField(exportsField, ".") !== undefined) {
-    collectRuntimeEntryLeaves(readOwnObjectField(exportsField, "."), entryCandidates);
+  const exportsField = getOwnPropertyValue(packageJson, "exports");
+  if (getOwnPropertyValue(exportsField, ".") !== undefined) {
+    collectRuntimeEntryLeaves(getOwnPropertyValue(exportsField, "."), entryCandidates);
   } else {
     collectRuntimeEntryLeaves(exportsField, entryCandidates);
   }
