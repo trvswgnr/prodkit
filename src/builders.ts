@@ -1,6 +1,6 @@
 import { UnhandledException } from "./errors.js";
 import { makeFluentArityOp, onOp } from "./core/arity-ops.js";
-import { TrackedErr, type AnyExitFn, type Instruction, type OpArity } from "./core/types.js";
+import type { OnErrorReturn, TrackedErr, AnyExitFn, Instruction, OpArity } from "./core/types.js";
 import type { Op } from "./index.js";
 import { RegisterExitFinalizerInstruction, SuspendInstruction } from "./core/instructions.js";
 import { withRetryOp, withTimeoutOp, withSignalOp } from "./policies.js";
@@ -8,43 +8,11 @@ import { Result, type InferErr } from "./result.js";
 import {
   makeNullaryOp,
   createDefaultHooks,
-  isNullaryOp,
-  isOp,
   withCleanupNullaryOp,
+  coerceMapperToNullaryOp,
 } from "./core/nullary-ops.js";
-import { cast } from "./shared.js";
+import { cast, isAwaited } from "./shared.js";
 import { drive } from "./core/runtime.js";
-
-function isAwaited<T>(value: T | Promise<T>): value is Awaited<T> {
-  return !(value instanceof Promise);
-}
-
-function isGeneratorObject(
-  value: unknown,
-): value is Generator<Instruction<unknown>, unknown, unknown> {
-  if (typeof value !== "object" || value === null) return false;
-  if (!("next" in value) || typeof value.next !== "function") return false;
-  if (!("throw" in value) || typeof value.throw !== "function") return false;
-  if (!(Symbol.iterator in value) || typeof value[Symbol.iterator] !== "function") return false;
-  return true;
-}
-
-function coerceMapperToNullaryOp(value: unknown): Op<unknown, unknown, []> | undefined {
-  if (isNullaryOp(value)) return value;
-
-  if (isOp(value)) {
-    return cast(value());
-  }
-
-  if (!isGeneratorObject(value)) return undefined;
-
-  let generatorOp: Op<unknown, unknown, []>;
-  generatorOp = makeNullaryOp(
-    () => cast(value),
-    createDefaultHooks(() => generatorOp),
-  );
-  return generatorOp;
-}
 
 /**
  * Lifts a value into an operation that always completes successfully
@@ -103,9 +71,7 @@ export function defer(finalize: AnyExitFn): Op<void, never, []> {
  */
 export function _try<T, E = UnhandledException>(
   f: (signal: AbortSignal) => T,
-  onError?: (
-    e: unknown,
-  ) => E | Promise<E> | Op<E, unknown, []> | Generator<Instruction<unknown>, E, unknown>,
+  onError?: (e: unknown) => OnErrorReturn<E>,
 ): Op<Awaited<T>, TrackedErr<Awaited<E>>, []> {
   const op: Op<Awaited<T>, TrackedErr<Awaited<E>>, []> = makeNullaryOp(
     function* () {

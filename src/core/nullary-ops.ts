@@ -20,33 +20,31 @@ import type { Op } from "../index.js";
 import { RegisterExitFinalizerInstruction, SuspendInstruction } from "./instructions.js";
 import { drive } from "./runtime.js";
 import { runOp } from "./run-op.js";
-import { cast } from "../shared.js";
-
-const EMPTY_ARGS: [] = [];
-
-export const NULLARY_OP_SYMBOL = Symbol("NullaryOp");
-
-export function isOp(value: unknown): value is Op<unknown, unknown, readonly unknown[]> {
-  return typeof value === "function" && "_tag" in value && value._tag === "Op";
-}
-
-export function isNullaryOp(value: unknown): value is Op<unknown, unknown, []> {
-  return (
-    typeof value === "function" &&
-    Symbol.iterator in value &&
-    typeof value[Symbol.iterator] === "function" &&
-    NULLARY_OP_SYMBOL in value
-  );
-}
-
-function coerceToNullaryOp(value: unknown): Op<unknown, unknown, []> | undefined {
-  if (!isOp(value)) return undefined;
-  if (isNullaryOp(value)) return value;
-  return cast(value());
-}
+import {
+  cast,
+  coerceToNullaryOp,
+  EMPTY_ARGS,
+  isGeneratorObject,
+  isNullaryOp,
+  isOp,
+  NULLARY_OP_SYMBOL,
+} from "../shared.js";
 
 function conditionalPredicate<E>(pred: ((error: E) => boolean) | WithPredicateMethod<E>, error: E) {
   return "is" in pred ? pred.is(error) : pred(error);
+}
+
+export function coerceMapperToNullaryOp(value: unknown): Op<unknown, unknown, []> | undefined {
+  if (isNullaryOp(value)) return value;
+  if (isOp(value)) return cast(value());
+  if (!isGeneratorObject(value)) return undefined;
+
+  const generatorOp: Op<unknown, unknown, []> = makeNullaryOp(
+    () => cast(value),
+    createDefaultHooks(() => generatorOp),
+  );
+
+  return generatorOp;
 }
 
 function dispatchLifecycleNullary<T, E>(

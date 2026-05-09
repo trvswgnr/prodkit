@@ -5,8 +5,8 @@ import { TrackedErr, type Instruction, type OpArity } from "./core/types.js";
 import type { Op } from "./index.js";
 import { SuspendInstruction } from "./core/instructions.js";
 import { drive } from "./core/runtime.js";
-import { isNullaryOp, makeNullaryOp, createDefaultHooks } from "./core/nullary-ops.js";
-import { cast } from "./shared.js";
+import { makeNullaryOp, createDefaultHooks } from "./core/nullary-ops.js";
+import { cast, isNullaryOp } from "./shared.js";
 
 /** Retry policy for `op.withRetry(policy)`. */
 export interface RetryPolicy {

@@ -2,8 +2,8 @@ import type { TimeoutError, UnhandledException } from "../errors.js";
 import type { Err, Result } from "../result.js";
 import type { RetryPolicy } from "../policies.js";
 import type { RegisterExitFinalizerInstruction, SuspendInstruction } from "./instructions.js";
-import { NULLARY_OP_SYMBOL } from "./nullary-ops.js";
 import type { Op } from "../index.js";
+import type { NULLARY_OP_SYMBOL } from "../shared.js";
 
 export type TrackedErr<E, Excluded = never> = E extends UnhandledException
   ? never
@@ -178,3 +178,9 @@ export interface OpHooks<T, E> {
   /** Backs public `.on("exit", fn)` on ops built from these hooks. */
   registerExitFinalize: (finalize: ExitFn<T, E, []>) => Op<T, E, []>;
 }
+
+export type OnErrorReturn<E> =
+  | E
+  | Promise<E>
+  | Op<E, unknown, []>
+  | Generator<Instruction<unknown>, E, unknown>;
