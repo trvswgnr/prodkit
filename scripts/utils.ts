@@ -1,6 +1,6 @@
-import { basename } from "node:path";
+import { execFileSync } from "node:child_process";
+import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import { Op } from "@prodkit/op";
 import { TaggedError } from "better-result";
 import { existsSync, readFileSync, statSync } from "node:fs";
@@ -23,7 +23,7 @@ export const color = {
  * logger.info("Hello, world!");
  */
 export function createLogger(filepath?: string) {
-  const prefix = filepath ? `|${basename(filepath, ".ts")}| ` : "";
+  const prefix = filepath ? `|${path.basename(filepath, ".ts")}| ` : "";
   return {
     info: (...args: unknown[]) => consoleLogger.info(`${prefix}${color.cyan("[INFO]")}`, ...args),
     warn: (...args: unknown[]) => consoleLogger.warn(`${prefix}${color.yellow("[WARN]")}`, ...args),
@@ -54,8 +54,6 @@ export const getOwnPropertyValue = <T, K extends PropertyKey>(
   ) as never;
 };
 
-const x: object = () => {};
-const _y = getOwnPropertyValue(x, "length");
 export class InvalidJsonError extends TaggedError("InvalidJsonError")<{
   cause: SyntaxError;
   input: string;
@@ -111,36 +109,63 @@ export const parse = <S extends v.BaseSchema<unknown, unknown, v.BaseIssue<unkno
     return result.output;
   });
 
-export class FileNotFoundError extends TaggedError("FileNotFoundError")<{ path: string }>() {}
+export class NoEntError extends TaggedError("NoEntError")<{ path: string }>() {}
+
+export class FileError extends TaggedError("FileError")<{
+  type: "read" | "write";
+  cause: unknown;
+  path: string;
+}>() {}
+
+export const readFile = Op(function* (filepath: string, encoding?: BufferEncoding) {
+  encoding ??= "utf8";
+  return yield* Op.try(
+    (signal) => fs.readFile(new URL(filepath, import.meta.url), { encoding, signal }),
+    (cause) => new FileError({ type: "read", cause, path: filepath }),
+  );
+});
+
+export const writeFile = Op(function* (params: {
+  filepath: string | URL;
+  content: string;
+  encoding?: BufferEncoding;
+}) {
+  const { filepath, content, encoding = "utf8" } = params;
+  return yield* Op.try(
+    (signal) => fs.writeFile(filepath, content, { encoding, signal }),
+    (cause) => new FileError({ type: "write", cause, path: filepath.toString() }),
+  );
+});
 
 export const readPackageJson = Op(function* (filepath: string) {
-  if (!existsSync(filepath)) return yield* new FileNotFoundError({ path: filepath });
+  if (!existsSync(filepath)) return yield* new NoEntError({ path: filepath });
   if (statSync(filepath).isDirectory()) {
-    return yield* new FileNotFoundError({ path: filepath });
+    return yield* new NoEntError({ path: filepath });
   }
   const parsedJson = yield* parseJson(readFileSync(filepath, "utf8"));
   return yield* parse(PackageJson, parsedJson);
 });
 
-const hasGitFolder = (dir: string) => {
-  const gitFolderPath = path.join(dir, ".git");
-  return existsSync(gitFolderPath);
-};
-
-class FolderNotFoundError extends TaggedError("FolderNotFoundError")<{ message: string }>() {}
+let cachedRepoRoot: string | undefined = undefined;
 export const getRepoRoot = Op(function* () {
-  let currentDir = path.dirname(fileURLToPath(import.meta.url));
-
-  while (true) {
-    if (hasGitFolder(currentDir)) {
-      return currentDir;
-    }
-
-    const parentDir = path.dirname(currentDir);
-    if (parentDir === currentDir) {
-      return yield* new FolderNotFoundError({ message: "Unable to locate repo root" });
-    }
-
-    currentDir = parentDir;
+  if (cachedRepoRoot) return cachedRepoRoot;
+  const output = execFileSync("git", ["rev-parse", "--path-format=absolute", "--show-toplevel"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim();
+  if (!output) {
+    throw new Error("Expected to get the repo root from git, but got an empty output");
   }
+  if (!existsSync(output)) {
+    return yield* new NoEntError({ path: output });
+  }
+  cachedRepoRoot = output;
+  return output;
+});
+
+export const fromRepoRoot = Op(function* (relativePath: string) {
+  const repoRoot = yield* getRepoRoot();
+  const absolutePath = path.join(repoRoot, relativePath);
+  if (!existsSync(absolutePath)) return yield* new NoEntError({ path: absolutePath });
+  return absolutePath;
 });

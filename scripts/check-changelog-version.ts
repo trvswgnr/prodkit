@@ -1,54 +1,17 @@
-import { readFile } from "node:fs/promises";
 import process from "node:process";
 import { Op } from "@prodkit/op";
 import { TaggedError } from "better-result";
 import * as v from "valibot";
+import {
+  createLogger,
+  fromRepoRoot,
+  NonEmptyString,
+  parse,
+  readPackageJson,
+  readFile,
+} from "./utils.ts";
 
-const logger = console;
-
-const PackageJson = v.object({ version: v.pipe(v.string(), v.nonEmpty()) });
-type PackageJson = v.InferOutput<typeof PackageJson>;
-
-class InvalidJsonError extends TaggedError("ParseError")<{ cause: unknown; input: string }>() {}
-const parseJson = Op(function* (input: string) {
-  return yield* Op.try(
-    () => JSON.parse(input) as unknown,
-    (cause) => new InvalidJsonError({ cause, input }),
-  );
-});
-
-class ParseError extends TaggedError("ParseError")<{
-  issues: v.BaseIssue<unknown>[];
-  input: unknown;
-}>() {}
-const parse = <S extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>>(
-  schema: S,
-  input: unknown,
-) =>
-  Op(function* () {
-    const result = v.safeParse(schema, input);
-    if (!result.success) {
-      return yield* Op.fail(new ParseError({ issues: result.issues, input }));
-    }
-    return result.output;
-  });
-
-class InvalidFileError extends TaggedError("InvalidFileError")<{
-  cause: unknown;
-  path: string;
-}>() {}
-const readUtf8 = Op(function* (path: string) {
-  return yield* Op.try(
-    () => readFile(new URL(path, import.meta.url), "utf8"),
-    (cause) => new InvalidFileError({ cause, path }),
-  );
-});
-
-const getVersion = Op(function* () {
-  const raw = yield* readUtf8("../package.json");
-  const parsed = yield* parse(PackageJson, yield* parseJson(raw));
-  return parsed.version;
-});
+const logger = createLogger();
 
 function hasVersionHeading(changelog: string, version: string): boolean {
   const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -68,8 +31,12 @@ Add a heading like "## [${version}] - YYYY-MM-DD" before publishing.`;
 }
 
 const main = Op(function* () {
-  const version = yield* getVersion();
-  const changelog = yield* readUtf8("../CHANGELOG.md");
+  const packageJsonPath = yield* fromRepoRoot("package.json");
+  const packageJson = yield* readPackageJson(packageJsonPath);
+  const { version } = yield* parse(v.object({ version: NonEmptyString }), packageJson);
+
+  const changelogPath = yield* fromRepoRoot("CHANGELOG.md");
+  const changelog = yield* readFile(changelogPath);
 
   if (!hasVersionHeading(changelog, version)) {
     return yield* new MissingVersionHeadingError(version);

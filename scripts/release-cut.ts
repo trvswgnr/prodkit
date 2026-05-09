@@ -1,11 +1,13 @@
 import { execSync } from "node:child_process";
-import { readFile, writeFile } from "node:fs/promises";
 import process from "node:process";
 import { Op } from "@prodkit/op";
 import * as v from "valibot";
 import { TaggedError } from "better-result";
+import { createLogger, fromRepoRoot, readFile, writeFile } from "./utils.ts";
 
-const logger = console;
+const logger = createLogger();
+
+const DRY_RUN_PREFIX = "[dry-run]";
 
 const NO_ENTRIES_PLACEHOLDER = "- No entries yet.";
 const NO_CHANGES_SECTION = "### Changed\n\n- No user-facing changes in this release.";
@@ -32,12 +34,7 @@ class ChangelogError extends TaggedError("ChangelogError")<{ message: string }>(
 
 class CommandError extends TaggedError("CommandError")<{ cause: unknown; command: string }>() {}
 
-class FileError extends TaggedError("FileError")<{ cause: unknown; path: string }>() {}
-
 const main = Op(function* (dryRun: boolean) {
-  const dryRunPrefix = "[dry-run]";
-
-  const info = (message: string) => Op.try(() => logger.info(message));
   const parse = <S extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>>(
     schema: S,
     input: unknown,
@@ -56,23 +53,17 @@ const main = Op(function* (dryRun: boolean) {
       (cause) => new InvalidJsonError({ cause, input }),
     );
 
-  const readUtf8 = (path: string) =>
-    Op.try(
-      () => readFile(new URL(path, import.meta.url), "utf8"),
-      (cause) => new FileError({ cause, path }),
-    );
-
-  const writeUtf8 = (path: string, content: string) => {
+  const writeUtf8 = Op(function* (filepath: string, content: string) {
     if (dryRun) {
-      return info(`${dryRunPrefix} would write ${path}`);
+      logger.info(`${DRY_RUN_PREFIX} would write ${filepath}`);
+      return;
     }
-
-    return Op.try(
-      (signal) => writeFile(new URL(path, import.meta.url), content, { encoding: "utf8", signal }),
-      (cause) => new FileError({ cause, path }),
-    );
-  };
-
+    return yield* writeFile({
+      filepath: new URL(filepath, import.meta.url),
+      content,
+      encoding: "utf8",
+    });
+  });
   const parseBumpKind = Op(function* (arg: string | undefined) {
     const result = v.safeParse(BumpKind, arg);
     if (!result.success) {
@@ -112,7 +103,7 @@ const main = Op(function* (dryRun: boolean) {
   });
 
   const getCurrentVersion = Op(function* () {
-    const raw = yield* readUtf8("../package.json");
+    const raw = yield* readFile("../package.json");
     const parsedJson = yield* parseJson(raw);
     const parsed = yield* parse(PackageJson, parsedJson);
 
@@ -156,25 +147,27 @@ const main = Op(function* (dryRun: boolean) {
     return `${preamble}\n\n${newUnreleased}\n\n${newReleaseSection}\n\n${releasedSections}\n`;
   });
 
-  const run = (command: string) => {
+  const run = Op(function* (command: string) {
     if (dryRun) {
-      return info(`${dryRunPrefix} would run: ${command}`);
+      logger.info(`${DRY_RUN_PREFIX} would run: ${command}`);
+      return;
     }
 
-    return Op.try(
+    return yield* Op.try(
       () => execSync(command, { stdio: "inherit" }),
       (cause) => new CommandError({ cause, command }),
     );
-  };
+  });
 
   const bumpKind = yield* parseBumpKind(process.argv[2]);
   const currentVersion = yield* getCurrentVersion();
   const nextVersion = yield* bumpVersion(currentVersion, bumpKind);
   const releaseDate = yield* getReleaseDate();
+  const changelogPath = yield* fromRepoRoot("CHANGELOG.md");
 
-  const changelog = yield* readUtf8("../CHANGELOG.md");
+  const changelog = yield* readFile(changelogPath);
   const updatedChangelog = yield* promoteUnreleased(changelog, nextVersion, releaseDate);
-  yield* writeUtf8("../CHANGELOG.md", updatedChangelog);
+  yield* writeUtf8(changelogPath, updatedChangelog);
 
   yield* run(`npm version ${bumpKind} --no-git-tag-version`);
   yield* run("npm run fmt");
@@ -182,10 +175,6 @@ const main = Op(function* (dryRun: boolean) {
   yield* run("git add CHANGELOG.md package.json package-lock.json");
   yield* run(`git commit -m "${nextVersion}"`);
   yield* run(`git tag v${nextVersion}`);
-
-  if (dryRun) {
-    yield* info(`${dryRunPrefix} release cut simulation complete for v${nextVersion}`);
-  }
 
   return { nextVersion, dryRun };
 });
@@ -199,7 +188,7 @@ main
     result.match({
       ok: ({ nextVersion, dryRun }) => {
         if (dryRun) {
-          logger.info(`dry run complete: v${nextVersion}\n`);
+          logger.info(`${DRY_RUN_PREFIX} release cut simulation complete for v${nextVersion}`);
           logger.info("no files, commits, or tags were changed\n");
           logger.info("next step: run with DRY_RUN=0 to cut the release\n");
           return;

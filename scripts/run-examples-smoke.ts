@@ -7,13 +7,14 @@ import * as v from "valibot";
 import { TaggedError, matchErrorPartial } from "better-result";
 import {
   createLogger,
-  getRepoRoot,
+  fromRepoRoot,
   NonEmptyArray,
   NonEmptyString,
   parse,
   parseJson,
   getOwnPropertyValue,
   readPackageJson,
+  getRepoRoot,
 } from "./utils.ts";
 
 const logger = createLogger();
@@ -56,8 +57,6 @@ class SmokeExecError extends TaggedError("SmokeExecError")<{
 class SmokePackOutputError extends TaggedError("SmokePackOutputError")<{ message: string }>() {}
 
 class SmokeMissingDistError extends TaggedError("SmokeMissingDistError")<{ message: string }>() {}
-
-class SmokeSetupError extends TaggedError("SmokeSetupError")<{ message: string }>() {}
 
 class SmokeGithubRefResolveError extends TaggedError("SmokeGithubRefResolveError")<{
   message: string;
@@ -428,8 +427,9 @@ async function cleanupPackOutput(tarballPath: string) {
   await rm(tarballPath, { force: true });
 }
 
-const installFromPack = Op(function* (repoRoot: string) {
-  const examplesDir = path.join(repoRoot, "examples");
+const installFromPack = Op(function* () {
+  const repoRoot = yield* getRepoRoot();
+  const examplesDir = yield* fromRepoRoot("examples");
   yield* execOp("npm", ["run", "build"], repoRoot);
 
   // --ignore-scripts: we just built above, and letting `prepare` run tsdown
@@ -461,7 +461,9 @@ const installFromPack = Op(function* (repoRoot: string) {
   yield* installAndSmoke(examplesDir, tarballPath, "npm pack tarball");
 });
 
-const installFromGithub = Op(function* (repoRoot: string, examplesDir: string) {
+const installFromGithub = Op(function* () {
+  const repoRoot = yield* fromRepoRoot(".");
+  const examplesDir = yield* fromRepoRoot("examples");
   const commitSha = yield* resolveUpstreamMainCommitSha(repoRoot);
   logger.info(`github - resolved ${UPSTREAM_MAIN_REF} to ${commitSha}`);
   yield* installAndSmoke(
@@ -484,11 +486,7 @@ const resetExamplesInstall = Op(function* (examplesDir: string) {
 });
 
 const smoke = Op(function* (rawMode: string | undefined) {
-  const repoRoot = yield* getRepoRoot();
-  const examplesDir = path.join(repoRoot, "examples");
-  if (!existsSync(examplesDir)) {
-    return yield* new SmokeSetupError({ message: `examples directory not found: ${examplesDir}` });
-  }
+  const examplesDir = yield* fromRepoRoot("examples");
 
   const mode = yield* parseMode(rawMode);
 
@@ -504,10 +502,10 @@ const smoke = Op(function* (rawMode: string | undefined) {
 
   switch (mode) {
     case "pack":
-      yield* installFromPack(repoRoot);
+      yield* installFromPack();
       break;
     case "github":
-      yield* installFromGithub(repoRoot, examplesDir);
+      yield* installFromGithub();
       break;
     case "npm":
       yield* installFromNpm(examplesDir);

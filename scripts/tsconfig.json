@@ -5,14 +5,14 @@
     "moduleResolution": "NodeNext",
     "lib": ["ESNext"],
     "types": ["node"],
-    "baseUrl": ".",
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "strict": true,
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "erasableSyntaxOnly": true,
-    "noUncheckedIndexedAccess": true
+    "noUncheckedIndexedAccess": true,
+    "verbatimModuleSyntax": true
   },
   "include": ["./*.ts"]
 }
