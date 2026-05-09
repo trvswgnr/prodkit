@@ -269,9 +269,7 @@ export function flatMapNullaryOp<T, E, U, E2>(
       if (second.isErr()) return yield* second;
       return second.value;
     },
-    {
-      ...createDefaultHooks(() => mapped),
-    },
+    createDefaultHooks(() => mapped),
   );
 
   return mapped;

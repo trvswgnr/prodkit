@@ -117,9 +117,10 @@ function mapFluentOp<T, EIn, EOut, A extends readonly unknown[]>(
 function makePolicyNullaryOp<T, E>(
   gen: () => Generator<Instruction<E>, T, unknown>,
 ): Op<T, TrackedErr<E>, []> {
-  const self: Op<T, TrackedErr<E>, []> = makeNullaryOp(gen, {
-    ...createDefaultHooks(() => self),
-  });
+  const self: Op<T, TrackedErr<E>, []> = makeNullaryOp(
+    gen,
+    createDefaultHooks(() => self),
+  );
 
   return self;
 }

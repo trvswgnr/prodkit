@@ -10,9 +10,10 @@ import { cast } from "./shared.js";
 type AnyNullaryOp = Op<unknown, unknown, []>;
 
 function makeCombinatorOp<T, E>(gen: () => Generator<Instruction<E>, T, unknown>): Op<T, E, []> {
-  const self: Op<T, E, []> = makeNullaryOp(gen, {
-    ...createDefaultHooks(() => self),
-  });
+  const self: Op<T, E, []> = makeNullaryOp(
+    gen,
+    createDefaultHooks(() => self),
+  );
   return self;
 }
 

@@ -42,6 +42,15 @@ describe("type inference contracts", () => {
       Promise<Result<number, string | UnhandledException>>
     >();
 
+    const retryAsyncMapped = Op.try(
+      () => Promise.resolve(1),
+      async () => "mapped",
+    ).withRetry();
+    expectTypeOf(retryAsyncMapped).toEqualTypeOf<Op<number, string, []>>();
+    expectTypeOf(retryAsyncMapped.run()).toEqualTypeOf<
+      Promise<Result<number, string | UnhandledException>>
+    >();
+
     const timeout = Op(function* (id: string) {
       return id.length;
     }).withTimeout(10);

@@ -347,7 +347,7 @@ const execOp = Op(function* (
 ) {
   return yield* Op.try(
     (signal) => runCommand(command, args, cwd, capture, signal),
-    (cause) => {
+    async (cause) => {
       const name = getOwnPropertyValue(cause, "name");
       if (name === "AbortError") {
         return new OperationAbortedError({ message: "Operation aborted" });

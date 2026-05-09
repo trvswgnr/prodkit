@@ -138,6 +138,15 @@ describe("_try", () => {
     expect(result.error.cause).toBeInstanceOf(Error);
     expect(result.error.cause).toBe(error);
   });
+
+  test("awaits async onError mapper before returning Err", async () => {
+    const result = await _try(
+      () => Promise.reject("boom"),
+      async (error) => `mapped: ${String(error)}`,
+    ).run();
+    assert(result.isErr() === true, "should be Err");
+    expect(result.error).toBe("mapped: boom");
+  });
 });
 
 describe("gen", () => {

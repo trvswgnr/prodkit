@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - No entries yet.
 
+### Fixed
+
+- Fixed `Op.try` to await async `onError` mappers before emitting `Err`, so
+  rejection mapping no longer leaks a raw `Promise` into the error channel and
+  downstream tagged-error matching remains type- and runtime-consistent.
+
 ## [0.1.57] - 2026-05-07
 
 ### Added

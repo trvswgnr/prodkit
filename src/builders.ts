@@ -24,9 +24,7 @@ export function succeed<T>(value: T | Promise<T>): Op<Awaited<T>, never, []> {
     function* () {
       return value;
     },
-    {
-      ...createDefaultHooks(() => op),
-    },
+    createDefaultHooks(() => op),
   );
 
   return op;
@@ -40,9 +38,7 @@ export function fail<E>(value: E): Op<never, E, []> {
     function* () {
       return yield* Result.err(value);
     },
-    {
-      ...createDefaultHooks(() => op),
-    },
+    createDefaultHooks(() => op),
   );
 
   return op;
@@ -60,9 +56,7 @@ export function defer(finalize: AnyExitFn): Op<void, never, []> {
         Promise.resolve(finalize(ctx)).then(() => {}),
       );
     },
-    {
-      ...createDefaultHooks(() => op),
-    },
+    createDefaultHooks(() => op),
   );
   return op;
 }
@@ -72,25 +66,25 @@ export function defer(finalize: AnyExitFn): Op<void, never, []> {
  */
 export function _try<T, E = UnhandledException>(
   f: (signal: AbortSignal) => T,
-  onError?: (e: unknown) => E,
-): Op<Awaited<T>, TrackedErr<E>, []> {
-  const op: Op<Awaited<T>, TrackedErr<E>, []> = makeNullaryOp(
+  onError?: (e: unknown) => E | Promise<E>,
+): Op<Awaited<T>, TrackedErr<Awaited<E>>, []> {
+  const op: Op<Awaited<T>, TrackedErr<Awaited<E>>, []> = makeNullaryOp(
     function* () {
-      const result: Result<T, E> = yield* new SuspendInstruction((signal: AbortSignal) =>
-        Promise.resolve()
-          .then(() => f(signal))
-          .then(
-            (a) => Result.ok(a),
-            (cause) => Result.err(onError ? onError(cause) : new UnhandledException({ cause })),
-          ),
+      const result: Result<T, Awaited<E> | UnhandledException> = yield* new SuspendInstruction(
+        (signal: AbortSignal) =>
+          Promise.resolve()
+            .then(() => f(signal))
+            .then(
+              (a) => Result.ok(a),
+              async (cause) =>
+                Result.err(onError ? await onError(cause) : new UnhandledException({ cause })),
+            ),
       );
 
       if (result.isErr()) return yield* result;
       return result.value as Awaited<T>;
     },
-    {
-      ...createDefaultHooks(() => op),
-    },
+    createDefaultHooks(() => op),
   );
   return op;
 }
@@ -119,9 +113,10 @@ export function fromGenFn<Y extends Instruction<unknown>, T, A extends readonly 
   // instead of runtime function reflection or shape guessing in correctness paths
   const op = makeArityOp((...args: A) => {
     // TS cannot model `Generator<Y, T, unknown>` as the internal instruction-supertype without this bridge cast
-    const bound: Op<T, InferErr<Y>, []> = makeNullaryOp(() => cast<never>(f(...args)), {
-      ...createDefaultHooks(() => bound),
-    });
+    const bound: Op<T, InferErr<Y>, []> = makeNullaryOp(
+      () => cast<never>(f(...args)),
+      createDefaultHooks(() => bound),
+    );
     return bound;
   });
   // SAFETY: `makeArityOp` returns an OpArity<T, E, A>, so we need to cast it to an Op<T, E, A>
