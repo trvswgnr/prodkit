@@ -36,6 +36,7 @@ const logReleaseAbort = (reason: string, nextStep?: string, details?: string) =>
 
 const main = Op(function* (bumpKindArg: string | undefined) {
   const repoRoot = yield* fromRepoRoot(".");
+  const packageJsonPath = yield* fromRepoRoot("packages/op/package.json");
 
   const writeUtf8 = Op(function* (filepath: string, content: string) {
     return yield* writeFile({
@@ -83,12 +84,32 @@ const main = Op(function* (bumpKindArg: string | undefined) {
   });
 
   const getCurrentVersion = Op(function* () {
-    const packageJsonPath = yield* fromRepoRoot("packages/op/package.json");
     const raw = yield* readFile(packageJsonPath);
     const parsedJson = yield* parseJson(raw);
     const parsed = yield* parse(v.object({ version: NonEmptyString }), parsedJson);
 
     return parsed.version;
+  });
+
+  const setCurrentVersion = Op(function* (nextVersion: string) {
+    const raw = yield* readFile(packageJsonPath);
+    const parsedJson = yield* parseJson(raw);
+
+    if (
+      typeof parsedJson !== "object" ||
+      parsedJson === null ||
+      Array.isArray(parsedJson) ||
+      !Object.hasOwn(parsedJson, "version")
+    ) {
+      return yield* new ParseError({
+        message: "packages/op/package.json must be an object containing a version field",
+        issues: [],
+        input: parsedJson,
+      });
+    }
+
+    const nextPackageJson = { ...parsedJson, version: nextVersion };
+    yield* writeUtf8(packageJsonPath, `${JSON.stringify(nextPackageJson, null, 2)}\n`);
   });
 
   const getReleaseDate = Op.try(() => new Date().toISOString().slice(0, 10));
@@ -177,7 +198,7 @@ const main = Op(function* (bumpKindArg: string | undefined) {
   const updatedChangelog = yield* promoteUnreleased(changelog, nextVersion, releaseDate);
   yield* writeUtf8(changelogPath, updatedChangelog);
 
-  yield* run(`pnpm --filter @prodkit/op pkg set version=${nextVersion}`);
+  yield* setCurrentVersion(nextVersion);
   yield* run("pnpm run fmt");
   yield* run("pnpm --filter @prodkit/op run release:prepare");
   yield* run("git add packages/op/CHANGELOG.md packages/op/package.json");
@@ -196,10 +217,12 @@ main
         logger.info("next step: pnpm --filter @prodkit/op run release:push\n");
       },
       err: (error) => {
+        let handledKnownError = false;
         matchErrorPartial(
           error,
           {
             DirtyWorktreeError: (e) => {
+              handledKnownError = true;
               logReleaseAbort(
                 "git worktree is not clean.",
                 "commit/stash/discard changes and rerun release:patch.",
@@ -207,21 +230,25 @@ main
               );
             },
             ReleaseTagExistsError: (e) => {
+              handledKnownError = true;
               logReleaseAbort(
                 `tag ${e.tag} already exists locally or on origin.`,
                 "pick the next version, or intentionally delete/move the existing tag before retrying.",
               );
             },
             ParseError: (e) => {
+              handledKnownError = true;
               logReleaseAbort(
                 e.message ?? "invalid release kind.",
                 "usage: node ./tools/scripts/release-cut.ts <patch|minor|major>",
               );
             },
             ChangelogError: (e) => {
+              handledKnownError = true;
               logReleaseAbort(e.message);
             },
             CommandError: (e) => {
+              handledKnownError = true;
               logReleaseAbort(`command failed: ${e.command}`);
               if (e.cause instanceof Error && e.cause.message.length > 0) {
                 logger.error(e.cause.message);
@@ -229,6 +256,7 @@ main
             },
           },
           (unknownError) => {
+            if (handledKnownError) return;
             logReleaseAbort(String(unknownError));
           },
         );
