@@ -387,8 +387,7 @@ const ensureInstalledPackageReady = Op(function* (examplesDir: string, sourceLab
   }
 
   const entryPaths = Array.from(entryCandidates)
-    .map((candidate) => candidate.replace(/^\.\/+/, ""))
-    .map((candidate) => path.resolve(installedPkgDir, candidate))
+    .map((candidate) => path.resolve(installedPkgDir, candidate.replace(/^\.\/+/, "")))
     .filter((candidatePath) => {
       const relative = path.relative(installedPkgDir, candidatePath);
       return !relative.startsWith("..") && !path.isAbsolute(relative);
