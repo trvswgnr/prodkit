@@ -116,6 +116,10 @@ passes the bound signal"). A typed shortcut via `yield* Result.err` settles to `
 runs exit teardown along the usual path. Yield something that isn't a known instruction shape
 and you get `Err(UnhandledException(TypeError))` ("invalid yielded instructions...").
 
+`Op.try` mapper contract (`src/builders.ts`): `onError` may return a value, promise, nullary `Op`,
+or generator object. Program-shaped mappers are executed under the same run signal, and their
+return value becomes the typed mapped error channel.
+
 ### Exit finalizers (`RegisterExitFinalizerInstruction`)
 
 Cleanup hooks go through `RegisterExitFinalizerInstruction`. For each `drive` invocation the

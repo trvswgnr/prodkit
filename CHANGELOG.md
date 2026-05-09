@@ -9,13 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- No entries yet.
+- Documented `Op.try` error-mapper semantics in `README.md` and `DESIGN.md`,
+  including that mapper programs (nullary `Op` or generator objects) execute
+  under the same cancellation signal and map from their return value.
 
 ### Fixed
 
 - Fixed `Op.try` to await async `onError` mappers before emitting `Err`, so
   rejection mapping no longer leaks a raw `Promise` into the error channel and
   downstream tagged-error matching remains type- and runtime-consistent.
+- Fixed `Op.try` to execute generator/object-program `onError` mappers instead
+  of treating them as plain objects, so `function*` mappers now produce their
+  intended mapped error values at runtime.
 
 ## [0.1.57] - 2026-05-07
 

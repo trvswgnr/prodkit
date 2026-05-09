@@ -5,11 +5,45 @@ import type { Op } from "./index.js";
 import { RegisterExitFinalizerInstruction, SuspendInstruction } from "./core/instructions.js";
 import { withRetryOp, withTimeoutOp, withSignalOp } from "./policies.js";
 import { Result, type InferErr } from "./result.js";
-import { makeNullaryOp, createDefaultHooks, withCleanupNullaryOp } from "./core/nullary-ops.js";
+import {
+  makeNullaryOp,
+  createDefaultHooks,
+  isNullaryOp,
+  isOp,
+  withCleanupNullaryOp,
+} from "./core/nullary-ops.js";
 import { cast } from "./shared.js";
+import { drive } from "./core/runtime.js";
 
 function isAwaited<T>(value: T | Promise<T>): value is Awaited<T> {
   return !(value instanceof Promise);
+}
+
+function isGeneratorObject(
+  value: unknown,
+): value is Generator<Instruction<unknown>, unknown, unknown> {
+  if (typeof value !== "object" || value === null) return false;
+  if (!("next" in value) || typeof value.next !== "function") return false;
+  if (!("throw" in value) || typeof value.throw !== "function") return false;
+  if (!(Symbol.iterator in value) || typeof value[Symbol.iterator] !== "function") return false;
+  return true;
+}
+
+function coerceMapperToNullaryOp(value: unknown): Op<unknown, unknown, []> | undefined {
+  if (isNullaryOp(value)) return value;
+
+  if (isOp(value)) {
+    return cast(value());
+  }
+
+  if (!isGeneratorObject(value)) return undefined;
+
+  let generatorOp: Op<unknown, unknown, []>;
+  generatorOp = makeNullaryOp(
+    () => cast(value),
+    createDefaultHooks(() => generatorOp),
+  );
+  return generatorOp;
 }
 
 /**
@@ -63,10 +97,15 @@ export function defer(finalize: AnyExitFn): Op<void, never, []> {
 
 /**
  * Suspends until a promise settles, then continues with its value or a mapped failure
+ *
+ * `onError` may return a value, promise, nullary `Op`, or generator object. Program-shaped
+ * mappers are driven and their return value is used as the mapped typed error.
  */
 export function _try<T, E = UnhandledException>(
   f: (signal: AbortSignal) => T,
-  onError?: (e: unknown) => E | Promise<E>,
+  onError?: (
+    e: unknown,
+  ) => E | Promise<E> | Op<E, unknown, []> | Generator<Instruction<unknown>, E, unknown>,
 ): Op<Awaited<T>, TrackedErr<Awaited<E>>, []> {
   const op: Op<Awaited<T>, TrackedErr<Awaited<E>>, []> = makeNullaryOp(
     function* () {
@@ -76,8 +115,16 @@ export function _try<T, E = UnhandledException>(
             .then(() => f(signal))
             .then(
               (a) => Result.ok(a),
-              async (cause) =>
-                Result.err(onError ? await onError(cause) : new UnhandledException({ cause })),
+              async (cause) => {
+                if (!onError) return Result.err(new UnhandledException({ cause }));
+                const mappedOrProgram = await onError(cause);
+                const mappedProgram = coerceMapperToNullaryOp(mappedOrProgram);
+                if (!mappedProgram) return Result.err(mappedOrProgram as Awaited<E>);
+
+                const mappedResult = await drive(mappedProgram, signal);
+                if (mappedResult.isErr()) throw mappedResult.error;
+                return Result.err(mappedResult.value as Awaited<E>);
+              },
             ),
       );
 

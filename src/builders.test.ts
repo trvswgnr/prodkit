@@ -147,6 +147,33 @@ describe("_try", () => {
     assert(result.isErr() === true, "should be Err");
     expect(result.error).toBe("mapped: boom");
   });
+
+  test("allows generator functions as onError mapper", async () => {
+    const result = await _try(
+      () => Promise.reject("boom"),
+      function* (error) {
+        return `mapped: ${String(error)}`;
+      },
+    ).run();
+    assert(result.isErr() === true, "should be Err");
+    expect(result.error).toBe("mapped: boom");
+  });
+
+  test("short circuits on failure with UnhandledException when using generator function as onError mapper", async () => {
+    let ran = false;
+    const result = await _try(
+      () => Promise.reject("boom"),
+      function* (error) {
+        yield* fail("oops" as const);
+        ran = true;
+        return `mapped: ${String(error)}` as const;
+      },
+    ).run();
+    expect(ran).toBe(false);
+    assert(result.isErr() === true, "should be Err");
+    assert(result.error instanceof UnhandledException);
+    expect(result.error.cause).toBe("oops");
+  });
 });
 
 describe("gen", () => {
