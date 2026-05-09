@@ -3,7 +3,7 @@ import process from "node:process";
 import { Op } from "@prodkit/op";
 import * as v from "valibot";
 import { TaggedError } from "better-result";
-import { createLogger, fromRepoRoot, readFile, writeFile } from "./utils.ts";
+import { createLogger, fromRepoRoot, NonEmptyString, readFile, writeFile } from "./utils.ts";
 
 const logger = createLogger();
 
@@ -15,9 +15,6 @@ const UNRELEASED_HEADING = "## [Unreleased]";
 
 const BumpKind = v.union([v.literal("patch"), v.literal("minor"), v.literal("major")]);
 type BumpKind = v.InferOutput<typeof BumpKind>;
-
-const PackageJson = v.object({ version: v.pipe(v.string(), v.nonEmpty()) });
-type PackageJson = v.InferOutput<typeof PackageJson>;
 
 class ParseError extends TaggedError("ParseError")<{
   message?: string;
@@ -103,9 +100,10 @@ const main = Op(function* (dryRun: boolean) {
   });
 
   const getCurrentVersion = Op(function* () {
-    const raw = yield* readFile("../package.json");
+    const packageJsonPath = yield* fromRepoRoot("package.json");
+    const raw = yield* readFile(packageJsonPath);
     const parsedJson = yield* parseJson(raw);
-    const parsed = yield* parse(PackageJson, parsedJson);
+    const parsed = yield* parse(v.object({ version: NonEmptyString }), parsedJson);
 
     return parsed.version;
   });
