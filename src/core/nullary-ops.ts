@@ -23,7 +23,7 @@ import { runOp } from "./run-op.js";
 import {
   cast,
   coerceToNullaryOp,
-  EMPTY_ARGS,
+  EMPTY_TUPLE,
   isGeneratorObject,
   isNullaryOp,
   isOp,
@@ -164,7 +164,7 @@ export function onEnterNullaryOp<T, E>(op: Op<T, E, []>, initialize: EnterFn<[]>
   return makeNullaryOp(
     function* () {
       yield new SuspendInstruction(async (signal: AbortSignal) => {
-        const enterCtx: EnterContext<[]> = { signal, args: EMPTY_ARGS };
+        const enterCtx: EnterContext<[]> = { signal, args: EMPTY_TUPLE };
         await Promise.resolve(initialize(enterCtx));
       });
 
@@ -195,7 +195,7 @@ export function onExitNullaryOp<T, E>(op: Op<T, E, []>, finalize: ExitFn<T, E, [
         const exitCtx: ExitContext<T, E, []> = {
           signal: ctx.signal,
           result: cast(ctx.result),
-          args: EMPTY_ARGS,
+          args: EMPTY_TUPLE,
         };
         await Promise.resolve(finalize(exitCtx));
       });

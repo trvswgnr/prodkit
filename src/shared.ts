@@ -1,7 +1,7 @@
 import type { Instruction } from "./core/types.js";
 import type { Op } from "./index.js";
 
-export const EMPTY_ARGS: [] = [];
+export const EMPTY_TUPLE: [] = [];
 
 export const NULLARY_OP_SYMBOL = Symbol("NullaryOp");
 
