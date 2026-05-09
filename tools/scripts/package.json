@@ -7,11 +7,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@prodkit/op": "github:trvswgnr/op",
+    "@prodkit/op": "workspace:*",
+    "better-result": "2.9.0",
     "valibot": "^1.4.0"
   },
   "devDependencies": {
-    "@types/node": "^24.12.2"
+    "@types/node": "^24.12.2",
+    "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=24"

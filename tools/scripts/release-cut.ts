@@ -45,7 +45,7 @@ const main = Op(function* (dryRun: boolean) {
     const result = v.safeParse(BumpKind, arg);
     if (!result.success) {
       return yield* new ParseError({
-        message: "usage: node ./scripts/release-cut.ts <patch|minor|major>",
+        message: "usage: node ./tools/scripts/release-cut.ts <patch|minor|major>",
         issues: result.issues,
         input: arg,
       });
@@ -80,7 +80,7 @@ const main = Op(function* (dryRun: boolean) {
   });
 
   const getCurrentVersion = Op(function* () {
-    const packageJsonPath = yield* fromRepoRoot("package.json");
+    const packageJsonPath = yield* fromRepoRoot("packages/op/package.json");
     const raw = yield* readFile(packageJsonPath);
     const parsedJson = yield* parseJson(raw);
     const parsed = yield* parse(v.object({ version: NonEmptyString }), parsedJson);
@@ -141,16 +141,16 @@ const main = Op(function* (dryRun: boolean) {
   const currentVersion = yield* getCurrentVersion();
   const nextVersion = yield* bumpVersion(currentVersion, bumpKind);
   const releaseDate = yield* getReleaseDate();
-  const changelogPath = yield* fromRepoRoot("CHANGELOG.md");
+  const changelogPath = yield* fromRepoRoot("packages/op/CHANGELOG.md");
 
   const changelog = yield* readFile(changelogPath);
   const updatedChangelog = yield* promoteUnreleased(changelog, nextVersion, releaseDate);
   yield* writeUtf8(changelogPath, updatedChangelog);
 
-  yield* run(`npm version ${bumpKind} --no-git-tag-version`);
-  yield* run("npm run fmt");
-  yield* run("npm run release:prepare");
-  yield* run("git add CHANGELOG.md package.json package-lock.json");
+  yield* run(`pnpm --filter @prodkit/op version ${bumpKind} --no-git-tag-version`);
+  yield* run("pnpm run fmt");
+  yield* run("pnpm --filter @prodkit/op run release:prepare");
+  yield* run("git add packages/op/CHANGELOG.md packages/op/package.json");
   yield* run(`git commit -m "${nextVersion}"`);
   yield* run(`git tag v${nextVersion}`);
 
@@ -173,7 +173,7 @@ main
         }
 
         logger.info(`release cut complete: v${nextVersion}\n`);
-        logger.info("next step: npm run release:push\n");
+        logger.info("next step: pnpm --filter @prodkit/op run release:push\n");
       },
       err: (error) => {
         logger.error(error);

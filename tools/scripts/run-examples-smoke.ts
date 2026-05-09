@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
-import { rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { cp, mkdtemp, readFile as readFileFs, rm, writeFile as writeFileFs } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { Op } from "@prodkit/op";
 import * as v from "valibot";
@@ -14,7 +15,6 @@ import {
   parseJson,
   getOwnPropertyValue,
   readPackageJson,
-  getRepoRoot,
 } from "./utils.ts";
 
 const logger = createLogger();
@@ -23,7 +23,7 @@ const logger = createLogger();
 const SMOKE_TIMEOUT_MS_ENV = "OP_SMOKE_TIMEOUT_MS";
 
 /**
- * Controls whether examples/node_modules and examples/package-lock.json are deleted before install
+ * Controls whether apps/examples/node_modules and apps/examples/package-lock.json are deleted before install
  * Leaving this unset keeps lockfile-driven installs reproducible
  */
 const SMOKE_RESET_EXAMPLES_ENV = "OP_SMOKE_RESET_EXAMPLES";
@@ -62,6 +62,11 @@ class SmokeGithubRefResolveError extends TaggedError("SmokeGithubRefResolveError
   message: string;
 }>() {}
 
+class SmokeWorkspaceError extends TaggedError("SmokeWorkspaceError")<{
+  message: string;
+  cause?: unknown;
+}>() {}
+
 class SmokeCommandExitError extends TaggedError("SmokeCommandExitError")<{
   message: string;
   status: number | null;
@@ -71,6 +76,10 @@ class SmokeCommandExitError extends TaggedError("SmokeCommandExitError")<{
 }>() {}
 
 class OperationAbortedError extends TaggedError("OperationAbortedError")<{ message: string }>() {}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
 
 function collectRuntimeEntryLeaves(value: unknown, target: Set<string>): void {
   if (typeof value === "string") {
@@ -179,6 +188,15 @@ function formatSmokeExecInvocation(command: string, args: readonly string[]): st
   return [command, ...args].map((word) => JSON.stringify(word)).join(" ");
 }
 
+function buildCommandEnv(): NodeJS.ProcessEnv {
+  const nextEnv: NodeJS.ProcessEnv = { ...process.env };
+  for (const key of Object.keys(nextEnv)) {
+    if (!key.toLowerCase().startsWith("npm_config_")) continue;
+    delete nextEnv[key];
+  }
+  return nextEnv;
+}
+
 function runCommand(
   command: string,
   args: readonly string[],
@@ -190,6 +208,7 @@ function runCommand(
     const child = spawn(command, args, {
       cwd,
       signal,
+      env: buildCommandEnv(),
       stdio: capture ? ["ignore", "pipe", "pipe"] : "inherit",
     });
 
@@ -292,22 +311,6 @@ function parseSmokeTimeoutMs(raw: string | number | undefined, fallback: number)
   return parsedTimeoutMs;
 }
 
-function defaultResetExamplesInstall(): boolean {
-  return false;
-}
-
-function resolveResetExamplesInstall(raw: string | undefined): boolean {
-  if (raw === undefined || raw === "") return defaultResetExamplesInstall();
-  const normalized = raw.trim().toLowerCase();
-  if (normalized === "1" || normalized === "true" || normalized === "yes") return true;
-  if (normalized === "0" || normalized === "false" || normalized === "no") return false;
-  const fallback = defaultResetExamplesInstall();
-  logger.warn(
-    `${SMOKE_RESET_EXAMPLES_ENV}="${raw}" ignored; using default ${fallback ? "true" : "false"}`,
-  );
-  return fallback;
-}
-
 function parseGitLsRemoteSha(output: string, ref: string): string | undefined {
   for (const rawLine of output.split("\n")) {
     const line = rawLine.trimEnd();
@@ -399,13 +402,54 @@ const ensureInstalledPackageReady = Op(function* (examplesDir: string, sourceLab
   });
 });
 
-const prepareExamplesDependencies = Op(function* (examplesDir: string) {
-  const packageLockPath = path.join(examplesDir, "package-lock.json");
-  if (existsSync(packageLockPath)) {
-    yield* execOp("npm", ["ci"], examplesDir);
-    return;
+const createTempExamplesWorkspace = Op(function* (examplesDir: string, opInstallTarget: string) {
+  const tempDir = yield* Op.try(
+    () => mkdtemp(path.join(os.tmpdir(), "op-examples-smoke-")),
+    (cause) =>
+      new SmokeWorkspaceError({ message: "Failed to create temporary examples workspace", cause }),
+  );
+  yield* Op.defer(() => rm(tempDir, { recursive: true, force: true }));
+
+  yield* Op.try(
+    () =>
+      cp(examplesDir, tempDir, {
+        recursive: true,
+        force: true,
+        filter: (sourcePath) => path.basename(sourcePath) !== "node_modules",
+      }),
+    (cause) => new SmokeWorkspaceError({ message: "Failed to copy examples files", cause }),
+  );
+
+  const packageJsonPath = path.join(tempDir, "package.json");
+  const packageJsonRaw = yield* Op.try(
+    () => readFileFs(packageJsonPath, "utf8"),
+    (cause) =>
+      new SmokeWorkspaceError({ message: `Failed reading ${packageJsonPath} in temp workspace`, cause }),
+  );
+
+  const parsedPackageJson = yield* parseJson(packageJsonRaw);
+  if (!isRecord(parsedPackageJson)) {
+    return yield* new SmokeWorkspaceError({
+      message: "Examples package.json did not parse as an object",
+    });
   }
-  yield* execOp("npm", ["install"], examplesDir);
+
+  const currentDependencies = getOwnPropertyValue(parsedPackageJson, "dependencies");
+  const nextDependencies = isRecord(currentDependencies) ? { ...currentDependencies } : {};
+  nextDependencies["@prodkit/op"] = opInstallTarget;
+
+  const nextPackageJson: Record<string, unknown> = {
+    ...parsedPackageJson,
+    dependencies: nextDependencies,
+  };
+
+  yield* Op.try(
+    () => writeFileFs(packageJsonPath, `${JSON.stringify(nextPackageJson, null, 2)}\n`, "utf8"),
+    (cause) =>
+      new SmokeWorkspaceError({ message: `Failed writing ${packageJsonPath} in temp workspace`, cause }),
+  );
+
+  return tempDir;
 });
 
 const installAndSmoke = Op(function* (
@@ -413,13 +457,10 @@ const installAndSmoke = Op(function* (
   installTarget: string,
   sourceLabel: string,
 ) {
-  yield* execOp(
-    "npm",
-    ["install", "--no-save", "--package-lock=false", installTarget],
-    examplesDir,
-  );
-  yield* ensureInstalledPackageReady(examplesDir, sourceLabel);
-  yield* execOp("npm", ["run", "smoke"], examplesDir);
+  const smokeWorkspaceDir = yield* createTempExamplesWorkspace(examplesDir, installTarget);
+  yield* execOp("npm", ["install"], smokeWorkspaceDir);
+  yield* ensureInstalledPackageReady(smokeWorkspaceDir, sourceLabel);
+  yield* execOp("npm", ["run", "smoke"], smokeWorkspaceDir);
 });
 
 async function cleanupPackOutput(tarballPath: string) {
@@ -428,13 +469,13 @@ async function cleanupPackOutput(tarballPath: string) {
 }
 
 const installFromPack = Op(function* () {
-  const repoRoot = yield* getRepoRoot();
-  const examplesDir = yield* fromRepoRoot("examples");
-  yield* execOp("npm", ["run", "build"], repoRoot);
+  const packageDir = yield* fromRepoRoot("packages/op");
+  const examplesDir = yield* fromRepoRoot("apps/examples");
+  yield* execOp("npm", ["run", "build"], packageDir);
 
   // --ignore-scripts: we just built above, and letting `prepare` run tsdown
   // again would pollute stdout (including ANSI escapes) and corrupt --json
-  const packOutput = yield* execOp("npm", ["pack", "--json", "--ignore-scripts"], repoRoot, true);
+  const packOutput = yield* execOp("npm", ["pack", "--json", "--ignore-scripts"], packageDir, true);
   const filename = yield* parseNpmPackFilenameFromOutput(packOutput);
 
   const preview =
@@ -448,13 +489,13 @@ const installFromPack = Op(function* () {
     });
   }
 
-  const tarballPath = path.resolve(repoRoot, filename);
+  const tarballPath = path.resolve(packageDir, filename);
   yield* Op.defer(() => cleanupPackOutput(tarballPath));
 
-  const relativeToRepoRoot = path.relative(path.resolve(repoRoot), tarballPath);
-  if (relativeToRepoRoot.startsWith("..") || path.isAbsolute(relativeToRepoRoot)) {
+  const relativeToPackageDir = path.relative(path.resolve(packageDir), tarballPath);
+  if (relativeToPackageDir.startsWith("..") || path.isAbsolute(relativeToPackageDir)) {
     return yield* new SmokePackOutputError({
-      message: `npm pack filename resolves outside the repo root: ${filename}`,
+      message: `npm pack filename resolves outside the package root: ${filename}`,
     });
   }
 
@@ -463,7 +504,7 @@ const installFromPack = Op(function* () {
 
 const installFromGithub = Op(function* () {
   const repoRoot = yield* fromRepoRoot(".");
-  const examplesDir = yield* fromRepoRoot("examples");
+  const examplesDir = yield* fromRepoRoot("apps/examples");
   const commitSha = yield* resolveUpstreamMainCommitSha(repoRoot);
   logger.info(`github - resolved ${UPSTREAM_MAIN_REF} to ${commitSha}`);
   yield* installAndSmoke(
@@ -477,28 +518,15 @@ const installFromNpm = Op(function* (examplesDir: string) {
   yield* installAndSmoke(examplesDir, "@prodkit/op@latest", "npm registry");
 });
 
-const resetExamplesInstall = Op(function* (examplesDir: string) {
-  const nodeModulesPath = path.join(examplesDir, "node_modules");
-  const packageLockPath = path.join(examplesDir, "package-lock.json");
-
-  if (existsSync(nodeModulesPath)) rmSync(nodeModulesPath, { recursive: true, force: true });
-  if (existsSync(packageLockPath)) rmSync(packageLockPath, { force: true });
-});
-
 const smoke = Op(function* (rawMode: string | undefined) {
-  const examplesDir = yield* fromRepoRoot("examples");
+  const examplesDir = yield* fromRepoRoot("apps/examples");
 
   const mode = yield* parseMode(rawMode);
-
-  if (resolveResetExamplesInstall(process.env[SMOKE_RESET_EXAMPLES_ENV])) {
-    yield* resetExamplesInstall(examplesDir);
-  } else {
-    logger.info(
-      `setup - preserving examples lockfile. Set ${SMOKE_RESET_EXAMPLES_ENV}=1 to force cleanup.`,
+  if (process.env[SMOKE_RESET_EXAMPLES_ENV] !== undefined) {
+    logger.warn(
+      `${SMOKE_RESET_EXAMPLES_ENV} is ignored; smoke runs now use isolated temp workspaces.`,
     );
   }
-
-  yield* prepareExamplesDependencies(examplesDir);
 
   switch (mode) {
     case "pack":

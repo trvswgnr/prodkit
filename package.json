@@ -1,80 +1,19 @@
 {
-  "name": "@prodkit/op",
-  "version": "0.1.57",
-  "description": "A runtime-agnostic, composable library for writing predictable operations in TypeScript.",
-  "keywords": [
-    "composition",
-    "effect",
-    "error handling",
-    "operations",
-    "runtime-agnostic",
-    "typescript"
-  ],
-  "homepage": "https://github.com/trvswgnr/op#readme",
-  "bugs": {
-    "url": "https://github.com/trvswgnr/op/issues"
-  },
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/trvswgnr/op"
-  },
-  "files": [
-    "dist",
-    "CHANGELOG.md",
-    "README.md"
-  ],
-  "type": "module",
-  "main": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.mts",
-      "import": "./dist/index.mjs"
-    }
-  },
-  "publishConfig": {
-    "access": "public"
-  },
+  "name": "@prodkit/monorepo",
+  "private": true,
+  "packageManager": "pnpm@10.11.0",
   "scripts": {
-    "bench": "npm --prefix benchmarks run bench",
-    "bench:main": "npm --prefix benchmarks run bench -- --baseline=main",
-    "bench:npm": "npm --prefix benchmarks run bench -- --baseline=npm",
-    "bench:all": "npm run bench:main && npm run bench:npm",
-    "bench:typecheck": "npm --prefix benchmarks run typecheck",
-    "build": "tsdown --config-loader unrun",
-    "changelog:check": "node ./scripts/check-changelog-version.ts",
-    "check": "npm run typecheck && npm run lint && npm run fmt:check && npm run build && npm run test && npm run examples:smoke:pack && npm run examples:typecheck && npm run bench:typecheck && npm run scripts:typecheck",
-    "clean": "rm -rf dist",
-    "examples:smoke:pack": "node ./scripts/run-examples-smoke.ts pack",
-    "examples:smoke:github": "node ./scripts/run-examples-smoke.ts github",
-    "examples:smoke:npm": "node ./scripts/run-examples-smoke.ts npm",
-    "examples:smoke:all": "npm run examples:smoke:pack && npm run examples:smoke:github && npm run examples:smoke:npm",
-    "examples:typecheck": "cd examples && npm run typecheck",
-    "fix": "npm run lint:fix && npm run fmt",
-    "fmt": "oxfmt",
-    "fmt:check": "oxfmt --check",
-    "lint": "oxlint",
-    "lint:fix": "oxlint --fix",
-    "prepare": "npm run build",
-    "prepublishOnly": "npm run check && npm run changelog:check",
-    "release:prepare": "npm run check && npm run changelog:check && npm pack --dry-run",
-    "release:patch": "node ./scripts/release-cut.ts patch",
-    "release:publish": "npm publish --access public --provenance",
-    "release:push": "git push && git push --tags",
-    "scripts:typecheck": "npm --prefix scripts run typecheck",
-    "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "fmt": "turbo run fmt",
+    "fmt:check": "turbo run fmt:check",
+    "check": "turbo run check",
+    "bench": "turbo run bench --filter=@prodkit/op-benchmarks",
+    "clean": "turbo run clean"
   },
   "devDependencies": {
-    "fast-check": "^4.7.0",
-    "oxfmt": "^0.40.0",
-    "oxlint": "^1.55.0",
-    "tsdown": "^0.21.2",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.0"
-  },
-  "peerDependencies": {
-    "better-result": "^2.9.0"
+    "turbo": "^2.9.0"
   }
 }

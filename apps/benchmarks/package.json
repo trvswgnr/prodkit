@@ -10,7 +10,8 @@
   "devDependencies": {
     "@types/node": "^24.12.2",
     "esbuild": "^0.25.11",
-    "tinybench": "^5.1.0"
+    "tinybench": "^5.1.0",
+    "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=24.14.0"

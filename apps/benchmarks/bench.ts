@@ -74,17 +74,28 @@ function getRepoRoot(): string {
   let currentDir = path.dirname(fileURLToPath(import.meta.url));
 
   while (true) {
+    if (existsSync(path.join(currentDir, "pnpm-workspace.yaml"))) {
+      return currentDir;
+    }
+
     const name = readPackageNameIfPresent(currentDir);
-    if (name === "@prodkit/op") {
+    if (name === "@prodkit/monorepo" || name === "@prodkit/op") {
       return currentDir;
     }
 
     const parentDir = path.dirname(currentDir);
     if (parentDir === currentDir) {
-      throw new Error('Unable to locate repo root with package name "@prodkit/op"');
+      throw new Error("Unable to locate repo root");
     }
     currentDir = parentDir;
   }
+}
+
+function resolveOpPackageDir(repoRoot: string): string {
+  const workspacePackageDir = path.join(repoRoot, "packages", "op");
+  if (existsSync(path.join(workspacePackageDir, "package.json"))) return workspacePackageDir;
+  if (readPackageNameIfPresent(repoRoot) === OP_PACKAGE) return repoRoot;
+  throw new Error(`Unable to locate ${OP_PACKAGE} package directory from ${repoRoot}`);
 }
 
 function parseBaselineArg(argv: readonly string[]): BaselineKind {
@@ -263,19 +274,20 @@ async function installTarget(label: string, spec: string): Promise<TargetInstall
 }
 
 async function resolveCurrentTarball(repoRoot: string): Promise<string> {
-  logger.info(`Building current package in ${repoRoot}`);
-  await runCommand("npm", ["run", "build"], repoRoot);
-  logger.info(`Built current package in ${repoRoot}`);
+  const packageDir = resolveOpPackageDir(repoRoot);
+  logger.info(`Building current package in ${packageDir}`);
+  await runCommand("npm", ["run", "build"], packageDir);
+  logger.info(`Built current package in ${packageDir}`);
   const packOutput = await runCommand(
     "npm",
     ["pack", "--json", "--ignore-scripts"],
-    repoRoot,
+    packageDir,
     true,
   );
-  logger.info(`Packed current package in ${repoRoot}`);
+  logger.info(`Packed current package in ${packageDir}`);
   const filename = parsePackFilename(packOutput);
   logger.info(`Parsed pack filename: ${filename}`);
-  return path.resolve(repoRoot, filename);
+  return path.resolve(packageDir, filename);
 }
 
 async function resolveMainTarball(repoRoot: string, sha: string): Promise<string> {
@@ -286,11 +298,12 @@ async function resolveMainTarball(repoRoot: string, sha: string): Promise<string
   await runCommand("git", ["worktree", "add", "--detach", worktreeDir, sha], repoRoot);
   try {
     await runCommand("npm", ["ci"], worktreeDir);
-    await runCommand("npm", ["run", "build"], worktreeDir);
+    const packageDir = resolveOpPackageDir(worktreeDir);
+    await runCommand("npm", ["run", "build"], packageDir);
     const packOutput = await runCommand(
       "npm",
       ["pack", "--json", "--ignore-scripts"],
-      worktreeDir,
+      packageDir,
       true,
     );
     const filename = parsePackFilename(packOutput);

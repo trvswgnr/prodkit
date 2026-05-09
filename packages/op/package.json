@@ -1,0 +1,75 @@
+{
+  "name": "@prodkit/op",
+  "version": "0.1.57",
+  "description": "A runtime-agnostic, composable library for writing predictable operations in TypeScript.",
+  "keywords": [
+    "composition",
+    "effect",
+    "error handling",
+    "operations",
+    "runtime-agnostic",
+    "typescript"
+  ],
+  "homepage": "https://github.com/trvswgnr/op#readme",
+  "bugs": {
+    "url": "https://github.com/trvswgnr/op/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/trvswgnr/op"
+  },
+  "files": [
+    "dist",
+    "CHANGELOG.md",
+    "README.md"
+  ],
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "changelog:check": "node ../../tools/scripts/check-changelog-version.ts",
+    "check": "echo 'Use turbo run check from root'",
+    "clean": "rm -rf dist",
+    "examples:smoke:pack": "node ../../tools/scripts/run-examples-smoke.ts pack",
+    "examples:smoke:github": "node ../../tools/scripts/run-examples-smoke.ts github",
+    "examples:smoke:npm": "node ../../tools/scripts/run-examples-smoke.ts npm",
+    "examples:smoke:all": "pnpm run examples:smoke:pack && pnpm run examples:smoke:github && pnpm run examples:smoke:npm",
+    "smoke": "pnpm run examples:smoke:pack",
+    "fix": "pnpm run lint:fix && pnpm run fmt",
+    "fmt": "oxfmt \"src/**/*.ts\" \"*.ts\"",
+    "fmt:check": "oxfmt --check \"src/**/*.ts\" \"*.ts\"",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "prepare": "pnpm run build",
+    "prepublishOnly": "pnpm run check && pnpm run changelog:check",
+    "release:prepare": "pnpm run check && pnpm run changelog:check && npm pack --dry-run",
+    "release:patch": "node ../../tools/scripts/release-cut.ts patch",
+    "release:publish": "npm publish --access public --provenance",
+    "release:push": "git push && git push --tags",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "better-result": "2.9.0",
+    "fast-check": "4.7.0",
+    "oxfmt": "0.40.0",
+    "oxlint": "1.55.0",
+    "tsdown": "0.21.2",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  },
+  "peerDependencies": {
+    "better-result": "^2.9.0"
+  }
+}

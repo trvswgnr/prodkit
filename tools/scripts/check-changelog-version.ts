@@ -31,11 +31,11 @@ Add a heading like "## [${version}] - YYYY-MM-DD" before publishing.`;
 }
 
 const main = Op(function* () {
-  const packageJsonPath = yield* fromRepoRoot("package.json");
+  const packageJsonPath = yield* fromRepoRoot("packages/op/package.json");
   const packageJson = yield* readPackageJson(packageJsonPath);
   const { version } = yield* parse(v.object({ version: NonEmptyString }), packageJson);
 
-  const changelogPath = yield* fromRepoRoot("CHANGELOG.md");
+  const changelogPath = yield* fromRepoRoot("packages/op/CHANGELOG.md");
   const changelog = yield* readFile(changelogPath);
 
   if (!hasVersionHeading(changelog, version)) {

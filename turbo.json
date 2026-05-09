@@ -1,0 +1,43 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "envMode": "loose",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"],
+      "inputs": ["src/**/*.ts", "tsdown.config.ts", "tsconfig.json", "package.json"]
+    },
+    "test": {
+      "dependsOn": ["build"],
+      "inputs": ["src/**/*.ts", "src/**/*.test.ts", "vitest.config.ts"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "inputs": ["src/**/*.ts", "**/*.ts", "tsconfig.json"]
+    },
+    "lint": {
+      "inputs": ["src/**/*.ts", "oxlint.config.ts"]
+    },
+    "fmt": {
+      "cache": false
+    },
+    "fmt:check": {
+      "inputs": ["src/**/*.ts", "**/*.ts"]
+    },
+    "check": {
+      "dependsOn": ["build", "test", "typecheck", "lint", "fmt:check", "smoke"],
+      "cache": false
+    },
+    "smoke": {
+      "dependsOn": ["build", "^build"],
+      "cache": false
+    },
+    "bench": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "clean": {
+      "cache": false
+    }
+  }
+}

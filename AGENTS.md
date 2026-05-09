@@ -15,7 +15,7 @@
 - When requesting commit message drafts, prefers why-focused messages grounded in the actual staged/unstaged diff.
 - Prefers commit message drafts to use the simplest fitting body shape (none, one sentence, or bullets) rather than forcing multiple bullets.
 - Prefers file relocations to be done with move operations first (for example `mv`) followed by minimal targeted edits, not full-file rewrites.
-- Wants `npm run check` run after completing work, before considering anything "done".
+- Wants `pnpm run check` run after completing work, before considering anything "done".
 - Does not want GitHub issues moved to `Done` without explicit approval first.
 - For issue hierarchies, prefers real GitHub parent/sub-issue links over markdown-only checklists.
 - Wants issue-work flows to keep `CHANGELOG.md` `Unreleased` updated, but prefers to handle version/tag/publish release steps personally unless explicitly delegated.
@@ -25,6 +25,7 @@
 ## Learned Workspace Facts
 
 - This library supports Node >=20 for consumers; contributors need Node >=24.14.0.
+- Contributors are expected to have `pnpm@10.11.0` installed directly (not bootstrapped via Corepack).
 - npm publishing is configured with GitHub Actions trusted publishing (OIDC + provenance), not long-lived `NPM_TOKEN` auth.
 - The library is designed to be runtime-agnostic, not Node-specific in behavior.
 - The project is currently alpha-stage with no production users, so intentional breaking changes are acceptable.

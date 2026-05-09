@@ -24,12 +24,12 @@ Bundle-size scenario:
 From repo root:
 
 ```bash
-npm run bench
-npm run bench:main
-npm run bench:npm
+pnpm run bench
+pnpm --filter @prodkit/op-benchmarks run bench -- --baseline=main
+pnpm --filter @prodkit/op-benchmarks run bench -- --baseline=npm
 ```
 
-- `npm run bench` defaults to `--baseline=main`.
+- `pnpm run bench` defaults to `--baseline=main`.
 - Use `bench:npm` when you want drift against the latest published package.
 
 ## Contributor guidance
