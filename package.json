@@ -44,7 +44,7 @@
     "bench:typecheck": "npm --prefix benchmarks run typecheck",
     "build": "tsdown --config-loader unrun",
     "changelog:check": "node ./scripts/check-changelog-version.ts",
-    "check": "npm run typecheck && npm run lint && npm run fmt:check && npm run build && npm run test && npm run examples:smoke:pack && npm run examples:typecheck && npm run bench:typecheck",
+    "check": "npm run typecheck && npm run lint && npm run fmt:check && npm run build && npm run test && npm run examples:smoke:pack && npm run examples:typecheck && npm run bench:typecheck && npm run scripts:typecheck",
     "clean": "rm -rf dist",
     "examples:smoke:pack": "node ./scripts/run-examples-smoke.ts pack",
     "examples:smoke:github": "node ./scripts/run-examples-smoke.ts github",
@@ -62,6 +62,7 @@
     "release:patch": "node ./scripts/release-cut.ts patch",
     "release:publish": "npm publish --access public --provenance",
     "release:push": "git push && git push --tags",
+    "scripts:typecheck": "npm --prefix scripts run typecheck",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

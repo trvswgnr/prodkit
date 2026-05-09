@@ -73,7 +73,7 @@ const main = Op(function* (dryRun: boolean) {
     );
   };
 
-  const parseBumpKind = Op(function* (arg: string) {
+  const parseBumpKind = Op(function* (arg: string | undefined) {
     const result = v.safeParse(BumpKind, arg);
     if (!result.success) {
       return yield* new ParseError({

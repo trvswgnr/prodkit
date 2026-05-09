@@ -3,6 +3,9 @@
   "private": true,
   "description": "Project-level scripts for @prodkit/op",
   "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "@prodkit/op": "github:trvswgnr/op",
     "valibot": "^1.4.0"
