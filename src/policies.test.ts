@@ -38,7 +38,7 @@ describe("withRetry", () => {
     const program = createFetchProgram(fetcher);
 
     const result = await program.run("123");
-    assert(result.isOk() === true, "result.ok should be true");
+    assert(result.isOk(), "result.ok should be true");
     expect(result.value).toEqual({ url: `https://example.com/123` });
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
@@ -53,7 +53,7 @@ describe("withRetry", () => {
     const program = createFetchProgram(fetcher, policy);
 
     const result = await program.run("123");
-    assert(result.isOk() === true, "result should be Ok");
+    assert(result.isOk(), "result should be Ok");
     expect(result.value).toEqual({ url: `https://example.com/123` });
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
@@ -65,7 +65,7 @@ describe("withRetry", () => {
     const program = createFetchProgram(fetcher, retryFetchError);
 
     const result = await program.run("123");
-    assert(result.isErr() === true, "result should be Err");
+    assert(result.isErr(), "result should be Err");
     expect(result.error).toBeInstanceOf(UnhandledException);
     expect(fetcher).toHaveBeenCalledTimes(3);
   });
@@ -84,7 +84,7 @@ describe("withRetry", () => {
     const program = createFetchProgram(fetcher, policy);
 
     const result = await program.run("123");
-    assert(result.isErr() === true, "result should be Err");
+    assert(result.isErr(), "result should be Err");
     expect(result.error).toBeInstanceOf(UnhandledException);
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
@@ -109,7 +109,7 @@ describe("withRetry", () => {
       await vi.advanceTimersByTimeAsync(1);
 
       const result = await runPromise;
-      assert(result.isOk() === true, "result should be Ok");
+      assert(result.isOk(), "result should be Ok");
       expect(fetcher).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
@@ -131,7 +131,7 @@ describe("withRetry", () => {
     });
 
     const result = await program.run();
-    assert(result.isOk() === true, "result should be Ok");
+    assert(result.isOk(), "result should be Ok");
     expect(result.value).toEqual({ ok: true });
     expect(attempts).toBe(2);
   });
@@ -152,7 +152,7 @@ describe("withRetry", () => {
     });
 
     const result = await program.run();
-    assert(result.isOk() === true, "result should be Ok");
+    assert(result.isOk(), "result should be Ok");
     expect(result.value).toBe("done");
     expect(attempts).toBe(3);
   });
@@ -180,7 +180,7 @@ describe("withRetry", () => {
     });
 
     const result = await parent.run();
-    assert(result.isOk() === true, "result should be Ok");
+    assert(result.isOk(), "result should be Ok");
     expect(result.value).toBe(69);
     expect(attempts).toBe(2);
   });
@@ -201,7 +201,7 @@ describe("withRetry", () => {
     });
 
     const result = await program.run("123");
-    assert(result.isOk() === true, "result should be Ok");
+    assert(result.isOk(), "result should be Ok");
     expect(result.value).toEqual({ url: "https://example.com/123" });
     expect(attempts).toBe(2);
   });
@@ -221,7 +221,7 @@ describe("withRetry", () => {
     });
 
     const result = await program.run("123");
-    assert(result.isOk() === true, "result should be Ok");
+    assert(result.isOk(), "result should be Ok");
     expect(result.value).toEqual({ url: "https://example.com/123" });
     expect(attempts).toBe(2);
   });
@@ -231,7 +231,7 @@ describe("withTimeout", () => {
   test("succeeds when the operation completes before timeout", async () => {
     const program = _try(() => Promise.resolve(69)).withTimeout(100);
     const result = await program.run();
-    assert(result.isOk() === true, "result should be Ok");
+    assert(result.isOk(), "result should be Ok");
     expect(result.value).toBe(69);
   });
 
@@ -248,7 +248,7 @@ describe("withTimeout", () => {
       await vi.advanceTimersByTimeAsync(100);
 
       const result = await runPromise;
-      assert(result.isErr() === true, "result should be Err");
+      assert(result.isErr(), "result should be Err");
       expect(result.error).toBeInstanceOf(TimeoutError);
       if (result.error instanceof TimeoutError) {
         expect(result.error.timeoutMs).toBe(100);
@@ -287,7 +287,7 @@ describe("withTimeout", () => {
       await vi.advanceTimersByTimeAsync(100);
 
       const result = await runPromise;
-      assert(result.isErr() === true, "result should be Err");
+      assert(result.isErr(), "result should be Err");
       expect(result.error).toBeInstanceOf(TimeoutError);
       expect(attempts).toBe(2);
     } finally {
@@ -318,7 +318,7 @@ describe("withTimeout", () => {
       await vi.advanceTimersByTimeAsync(150);
 
       const result = await runPromise;
-      assert(result.isOk() === true, "result should be Ok");
+      assert(result.isOk(), "result should be Ok");
       expect(result.value).toBe(69);
       expect(attempts).toBe(2);
     } finally {
@@ -337,7 +337,7 @@ describe("withSignal", () => {
     }).withSignal(controller.signal);
 
     const result = await program.run();
-    assert(result.isOk() === true, "result should be Ok");
+    assert(result.isOk(), "result should be Ok");
     expect(result.value).toBe(69);
     expect(seenSignal).toBeInstanceOf(AbortSignal);
     expect(seenSignal?.aborted).toBe(false);
@@ -368,7 +368,7 @@ describe("withSignal", () => {
       await vi.advanceTimersByTimeAsync(0);
 
       const result = await runPromise;
-      assert(result.isErr() === true, "result should be Err");
+      assert(result.isErr(), "result should be Err");
       expect(result.error).toBe("request cancelled");
     } finally {
       vi.useRealTimers();
@@ -384,7 +384,7 @@ describe("AbortSignal", () => {
       return Promise.resolve("ok");
     });
     const result = await program.run();
-    assert(result.isOk() === true, "result should be Ok");
+    assert(result.isOk(), "result should be Ok");
     expect(seen).toBeInstanceOf(AbortSignal);
     expect(seen?.aborted).toBe(false);
   });
@@ -409,7 +409,7 @@ describe("AbortSignal", () => {
       await vi.advanceTimersByTimeAsync(100);
       const result = await runPromise;
 
-      assert(result.isErr() === true, "result should be Err");
+      assert(result.isErr(), "result should be Err");
       expect(result.error).toBeInstanceOf(TimeoutError);
       expect(seenSignal?.aborted).toBe(true);
       expect(seenSignal?.reason).toBeInstanceOf(TimeoutError);
@@ -447,7 +447,7 @@ describe("AbortSignal", () => {
       await vi.advanceTimersByTimeAsync(200);
 
       const result = await runPromise;
-      assert(result.isErr() === true, "result should be Err");
+      assert(result.isErr(), "result should be Err");
       expect(result.error).toBeInstanceOf(TimeoutError);
       expect(aborted).toBe(true);
       expect(attempts).toBeGreaterThanOrEqual(1);
@@ -476,7 +476,7 @@ describe("AbortSignal", () => {
       await vi.advanceTimersByTimeAsync(200);
 
       const result = await runPromise;
-      assert(result.isErr() === true, "result should be Err");
+      assert(result.isErr(), "result should be Err");
       expect(result.error).toBeInstanceOf(TimeoutError);
       // Only one attempt ran before the timeout aborted the delay and halted the loop
       expect(attempts).toBe(1);

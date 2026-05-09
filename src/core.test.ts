@@ -85,7 +85,7 @@ describe("drive runtime behavior", () => {
     const signal = new AbortController().signal;
     const result = await drive(op, signal);
 
-    assert(result.isOk() === true, "result should be Ok");
+    assert(result.isOk(), "result should be Ok");
     expect(result.value).toBe(70);
     expect(seenSignal).toBe(signal);
   });
@@ -98,7 +98,7 @@ describe("drive runtime behavior", () => {
 
     const result = await drive(op, new AbortController().signal);
 
-    assert(result.isErr() === true, "result should be Err");
+    assert(result.isErr(), "result should be Err");
     expect(result.error).toBeInstanceOf(UnhandledException);
     expect(result.error.cause).toBeInstanceOf(TypeError);
   });
@@ -117,7 +117,7 @@ describe("drive runtime behavior", () => {
 
     const result = await drive(op, new AbortController().signal);
 
-    assert(result.isOk() === true, "result should be Ok");
+    assert(result.isOk(), "result should be Ok");
     expect(result.value).toBe(123);
     expect(seen).toEqual(["second-ok", "first-ok"]);
   });
@@ -133,7 +133,7 @@ describe("drive runtime behavior", () => {
 
     const result = await drive(op, new AbortController().signal);
 
-    assert(result.isErr() === true, "result should be Err");
+    assert(result.isErr(), "result should be Err");
     expect(result.error).toBeInstanceOf(UnhandledException);
     const unhandled = result.error as UnhandledException;
     expect(unhandled.cause).toBe(cleanupFault);
@@ -150,7 +150,7 @@ describe("drive runtime behavior", () => {
 
     const result = await drive(op, new AbortController().signal);
 
-    assert(result.isErr() === true, "result should be Err");
+    assert(result.isErr(), "result should be Err");
     expect(result.error).toBeInstanceOf(UnhandledException);
     const unhandled = result.error as UnhandledException;
     expect(unhandled.cause).toBe(cleanupFault);
@@ -171,7 +171,7 @@ describe("drive runtime behavior", () => {
 
     const result = await drive(op, new AbortController().signal);
 
-    assert(result.isErr() === true, "result should be Err");
+    assert(result.isErr(), "result should be Err");
     expect(result.error).toBeInstanceOf(UnhandledException);
     const outer = result.error.cause as Error;
     expect(outer.message).toBe("second-registered-runs-first");
