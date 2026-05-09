@@ -4,6 +4,7 @@
   "description": "Consumer-level smoke checks for @prodkit/op installation paths.",
   "type": "module",
   "scripts": {
+    "check": "pnpm run typecheck && pnpm run smoke",
     "smoke": "node ./smoke.ts",
     "typecheck": "tsc --noEmit"
   },
@@ -17,6 +18,6 @@
     "typescript": "^5.9.3"
   },
   "engines": {
-    "node": ">=24"
+    "node": ">=24.14.0"
   }
 }

@@ -9,14 +9,20 @@
     },
     "test": {
       "dependsOn": ["build"],
-      "inputs": ["src/**/*.ts", "src/**/*.test.ts", "vitest.config.ts"]
+      "inputs": [
+        "src/**/*.ts",
+        "src/**/*.test.ts",
+        "vitest.config.ts",
+        "tsconfig.json",
+        "package.json"
+      ]
     },
     "typecheck": {
       "dependsOn": ["^build"],
       "inputs": ["src/**/*.ts", "**/*.ts", "tsconfig.json"]
     },
     "lint": {
-      "inputs": ["src/**/*.ts", "oxlint.config.ts"]
+      "inputs": ["src/**/*.ts", "*.ts", "oxlint.config.ts", "tsconfig.json", "package.json"]
     },
     "fmt": {
       "cache": false
@@ -25,7 +31,7 @@
       "inputs": ["src/**/*.ts", "**/*.ts"]
     },
     "check": {
-      "dependsOn": ["build", "test", "typecheck", "lint", "fmt:check", "smoke"],
+      "dependsOn": ["^build"],
       "cache": false
     },
     "smoke": {

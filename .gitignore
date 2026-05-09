@@ -20,5 +20,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .vscode/
 .cursor/
 .turbo/
+**/.turbo/
 .pnpm-store/
 pnpm-debug.log*

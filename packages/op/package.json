@@ -40,7 +40,7 @@
   "scripts": {
     "build": "tsdown",
     "changelog:check": "node ../../tools/scripts/check-changelog-version.ts",
-    "check": "echo 'Use turbo run check from root'",
+    "check": "pnpm run build && pnpm run test && pnpm run typecheck && pnpm run lint && pnpm run fmt:check && pnpm run smoke",
     "clean": "rm -rf dist",
     "examples:smoke:pack": "node ../../tools/scripts/run-examples-smoke.ts pack",
     "examples:smoke:github": "node ../../tools/scripts/run-examples-smoke.ts github",
@@ -53,10 +53,10 @@
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "prepare": "pnpm run build",
-    "prepublishOnly": "pnpm run check && pnpm run changelog:check",
-    "release:prepare": "pnpm run check && pnpm run changelog:check && npm pack --dry-run",
+    "prepublishOnly": "pnpm -C ../.. run check && pnpm run changelog:check",
+    "release:prepare": "pnpm -C ../.. run check && pnpm run changelog:check && npm pack --dry-run",
     "release:patch": "node ../../tools/scripts/release-cut.ts patch",
-    "release:publish": "npm publish --access public --provenance",
+    "release:publish:manual": "npm publish --access public --provenance",
     "release:push": "git push && git push --tags",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

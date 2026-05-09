@@ -42,8 +42,9 @@ Typical sequence:
 ```bash
 pnpm --filter @prodkit/op run release:patch
 pnpm --filter @prodkit/op run release:push
-pnpm --filter @prodkit/op run release:publish
 ```
+
+Pushing the version tag triggers `.github/workflows/release.yml`, which performs trusted npm publishing.
 
 ## license
 

@@ -1,5 +1,14 @@
 # Contributing
 
+## Setup
+
+- Use Node `>=24.14.0` and `pnpm@10.11.0`.
+- Run commands from the repo root unless noted otherwise.
+
+```bash
+pnpm install
+```
+
 ## Contributor Runtime
 
 - Node `>=24.14.0` is required for local development and release tasks.

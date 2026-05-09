@@ -30,7 +30,7 @@ pnpm --filter @prodkit/op-benchmarks run bench -- --baseline=npm
 ```
 
 - `pnpm run bench` defaults to `--baseline=main`.
-- Use `bench:npm` when you want drift against the latest published package.
+- Use `pnpm --filter @prodkit/op-benchmarks run bench -- --baseline=npm` when you want drift against the latest published package.
 
 ## Contributor guidance
 

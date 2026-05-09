@@ -2,6 +2,9 @@
   "name": "@prodkit/monorepo",
   "private": true,
   "packageManager": "pnpm@10.11.0",
+  "engines": {
+    "node": ">=24.14.0"
+  },
   "scripts": {
     "build": "turbo run build",
     "test": "turbo run test",

@@ -199,7 +199,6 @@ const main = Op(function* (bumpKindArg: string | undefined) {
   yield* writeUtf8(changelogPath, updatedChangelog);
 
   yield* setCurrentVersion(nextVersion);
-  yield* run("pnpm run fmt");
   yield* run("pnpm --filter @prodkit/op run release:prepare");
   yield* run("git add packages/op/CHANGELOG.md packages/op/package.json");
   yield* run(`git commit -m "${nextVersion}"`);

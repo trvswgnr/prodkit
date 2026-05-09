@@ -552,7 +552,9 @@ const r = await Op.race([slow, fast]).run();
 
 ## Webhook consumer example
 
-See `apps/examples/webhook.ts` for a complete order webhook pipeline
+See the repository example at
+[`apps/examples/webhook.ts`](https://github.com/trvswgnr/op/blob/main/apps/examples/webhook.ts)
+for a complete order webhook pipeline
 that demonstrates:
 
 - input validation with typed domain errors
@@ -572,47 +574,15 @@ pnpm --filter @prodkit/op run examples:smoke:pack
 
 ## More examples
 
-- `apps/examples/simple.ts`: minimal composition and typed error walkthrough.
-- `apps/examples/smoke.ts`: consumer-level scenario assertions for simple + webhook flows.
-
-## Consumer smoke project
-
-`apps/examples/` verifies this package the way a consumer would install and execute it.
-
-Prefer the tarball smoke test for release confidence (it validates the exact files that would be
-published):
-
-```bash
-pnpm --filter @prodkit/op run examples:smoke:pack
-```
-
-You can also validate alternative install paths:
-
-```bash
-# install directly from GitHub repo
-pnpm --filter @prodkit/op run examples:smoke:github
-
-# install from latest published npm package
-pnpm --filter @prodkit/op run examples:smoke:npm
-```
-
-## Scripts
-
-```bash
-pnpm run check                                  # full quality gate (typecheck, lint, format, build, tests, smoke checks)
-pnpm --filter @prodkit/op run test             # vitest suite
-pnpm --filter @prodkit/op run typecheck        # TypeScript type validation
-pnpm --filter @prodkit/op run lint             # static lint checks
-pnpm --filter @prodkit/op run build            # package build
-pnpm run bench                                  # benchmark harness
-pnpm --filter @prodkit/op run examples:smoke:pack # consumer install smoke test from npm pack tarball
-```
-
-For benchmark baseline modes and contributor guidance, see `apps/benchmarks/README.md`.
+- [`apps/examples/simple.ts`](https://github.com/trvswgnr/op/blob/main/apps/examples/simple.ts):
+  minimal composition and typed error walkthrough.
+- [`apps/examples/smoke.ts`](https://github.com/trvswgnr/op/blob/main/apps/examples/smoke.ts):
+  consumer-level scenario assertions for simple + webhook flows.
 
 ## Contributing
 
-For local development, release flow, and publish procedures, see `CONTRIBUTING.md`.
+For local development, release flow, and publish procedures, see
+[`CONTRIBUTING.md`](https://github.com/trvswgnr/op/blob/main/CONTRIBUTING.md).
 
 ## Publishing
 
