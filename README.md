@@ -128,9 +128,9 @@ For lifecycle hooks at op boundaries, `.on("enter", fn)` runs setup when a wrapp
 
 Runs an async or sync function and converts failures into `Err`.
 If `onError` is omitted, failures become `UnhandledException`.
-`onError` can return a plain value, `Promise`, nullary `Op`, or generator (`function*`) program.
-When it returns an `Op`/generator, `Op.try` runs it and uses its yielded return value as the mapped
-error.
+`onError` returns the error value `Op.try` should emit (or a `Promise` of that value). If it
+returns an `Op`/generator object, `Op.try` treats that object as the error value and does not run
+it.
 
 `f` receives an `AbortSignal` tied to surrounding cancellation policy (`withTimeout`, `withSignal`,
 and combinator cancellation). Forward it to cancellable APIs so in-flight work (e.g. `fetch`, DB queries) actually stops instead of
