@@ -177,7 +177,7 @@ const main = Op(function* (bumpKindArg: string | undefined) {
   const updatedChangelog = yield* promoteUnreleased(changelog, nextVersion, releaseDate);
   yield* writeUtf8(changelogPath, updatedChangelog);
 
-  yield* run(`pnpm --filter @prodkit/op version ${bumpKind} --no-git-tag-version`);
+  yield* run(`pnpm --filter @prodkit/op pkg set version=${nextVersion}`);
   yield* run("pnpm run fmt");
   yield* run("pnpm --filter @prodkit/op run release:prepare");
   yield* run("git add packages/op/CHANGELOG.md packages/op/package.json");
