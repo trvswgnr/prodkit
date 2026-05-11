@@ -8,8 +8,8 @@
     "check": "pnpm run typecheck",
     "fmt": "oxfmt \"**/*.ts\"",
     "fmt:check": "oxfmt --check \"**/*.ts\"",
-    "lint": "oxlint --config ../../oxlint.config.ts .",
-    "lint:fix": "oxlint --config ../../oxlint.config.ts --fix .",
+    "lint": "oxlint --config ../../../oxlint.config.ts .",
+    "lint:fix": "oxlint --config ../../../oxlint.config.ts --fix .",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

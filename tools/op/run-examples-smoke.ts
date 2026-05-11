@@ -1,6 +1,12 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { cp, mkdtemp, readFile as readFileFs, rm, writeFile as writeFileFs } from "node:fs/promises";
+import {
+  cp,
+  mkdtemp,
+  readFile as readFileFs,
+  rm,
+  writeFile as writeFileFs,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Op } from "@prodkit/op";
@@ -424,7 +430,10 @@ const createTempExamplesWorkspace = Op(function* (examplesDir: string, opInstall
   const packageJsonRaw = yield* Op.try(
     () => readFileFs(packageJsonPath, "utf8"),
     (cause) =>
-      new SmokeWorkspaceError({ message: `Failed reading ${packageJsonPath} in temp workspace`, cause }),
+      new SmokeWorkspaceError({
+        message: `Failed reading ${packageJsonPath} in temp workspace`,
+        cause,
+      }),
   );
 
   const parsedPackageJson = yield* parseJson(packageJsonRaw);
@@ -446,7 +455,10 @@ const createTempExamplesWorkspace = Op(function* (examplesDir: string, opInstall
   yield* Op.try(
     () => writeFileFs(packageJsonPath, `${JSON.stringify(nextPackageJson, null, 2)}\n`, "utf8"),
     (cause) =>
-      new SmokeWorkspaceError({ message: `Failed writing ${packageJsonPath} in temp workspace`, cause }),
+      new SmokeWorkspaceError({
+        message: `Failed writing ${packageJsonPath} in temp workspace`,
+        cause,
+      }),
   );
 
   return tempDir;
@@ -470,7 +482,7 @@ async function cleanupPackOutput(tarballPath: string) {
 
 const installFromPack = Op(function* () {
   const packageDir = yield* fromRepoRoot("packages/op");
-  const examplesDir = yield* fromRepoRoot("apps/examples");
+  const examplesDir = yield* fromRepoRoot("apps/op/examples");
   yield* execOp("npm", ["run", "build"], packageDir);
 
   // --ignore-scripts: we just built above, and letting `prepare` run tsdown
@@ -504,7 +516,7 @@ const installFromPack = Op(function* () {
 
 const installFromGithub = Op(function* () {
   const repoRoot = yield* fromRepoRoot(".");
-  const examplesDir = yield* fromRepoRoot("apps/examples");
+  const examplesDir = yield* fromRepoRoot("apps/op/examples");
   const commitSha = yield* resolveUpstreamMainCommitSha(repoRoot);
   logger.info(`github - resolved ${UPSTREAM_MAIN_REF} to ${commitSha}`);
   yield* installAndSmoke(
@@ -519,7 +531,7 @@ const installFromNpm = Op(function* (examplesDir: string) {
 });
 
 const smoke = Op(function* (rawMode: string | undefined) {
-  const examplesDir = yield* fromRepoRoot("apps/examples");
+  const examplesDir = yield* fromRepoRoot("apps/op/examples");
 
   const mode = yield* parseMode(rawMode);
   if (process.env[SMOKE_RESET_EXAMPLES_ENV] !== undefined) {

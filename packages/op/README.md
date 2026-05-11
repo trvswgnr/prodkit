@@ -553,7 +553,7 @@ const r = await Op.race([slow, fast]).run();
 ## Webhook consumer example
 
 See the repository example at
-[`apps/examples/webhook.ts`](https://github.com/trvswgnr/op/blob/main/apps/examples/webhook.ts)
+[`apps/op/examples/webhook.ts`](https://github.com/trvswgnr/op/blob/main/apps/op/examples/webhook.ts)
 for a complete order webhook pipeline
 that demonstrates:
 
@@ -574,9 +574,9 @@ pnpm --filter @prodkit/op run examples:smoke:pack
 
 ## More examples
 
-- [`apps/examples/simple.ts`](https://github.com/trvswgnr/op/blob/main/apps/examples/simple.ts):
+- [`apps/op/examples/simple.ts`](https://github.com/trvswgnr/op/blob/main/apps/op/examples/simple.ts):
   minimal composition and typed error walkthrough.
-- [`apps/examples/smoke.ts`](https://github.com/trvswgnr/op/blob/main/apps/examples/smoke.ts):
+- [`apps/op/examples/smoke.ts`](https://github.com/trvswgnr/op/blob/main/apps/op/examples/smoke.ts):
   consumer-level scenario assertions for simple + webhook flows.
 
 ## Contributing

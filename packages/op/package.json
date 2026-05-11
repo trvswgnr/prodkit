@@ -40,12 +40,7 @@
   "scripts": {
     "build": "tsdown",
     "changelog:check": "node ../../tools/op/check-changelog-version.ts",
-    "check": "pnpm run build && pnpm run test && pnpm run typecheck && pnpm run lint && pnpm run fmt:check && pnpm run smoke",
-    "examples:smoke:pack": "node ../../tools/op/run-examples-smoke.ts pack",
-    "examples:smoke:github": "node ../../tools/op/run-examples-smoke.ts github",
-    "examples:smoke:npm": "node ../../tools/op/run-examples-smoke.ts npm",
-    "examples:smoke:all": "pnpm run examples:smoke:pack && pnpm run examples:smoke:github && pnpm run examples:smoke:npm",
-    "smoke": "pnpm run examples:smoke:pack",
+    "check": "pnpm run build && pnpm run typecheck && pnpm run test && pnpm run lint && pnpm run fmt:check",
     "fix": "pnpm run lint:fix && pnpm run fmt",
     "fmt": "oxfmt \"src/**/*.ts\" \"*.ts\"",
     "fmt:check": "oxfmt --check \"src/**/*.ts\" \"*.ts\"",

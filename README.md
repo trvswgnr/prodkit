@@ -16,8 +16,8 @@ That README is also the one shipped with the published npm package.
 ## workspace layout
 
 - `packages/op`: publishable library package (`@prodkit/op`)
-- `apps/examples`: consumer-style examples and smoke harness
-- `apps/benchmarks`: benchmark harness and baseline tooling
+- `apps/op/examples` (`@prodkit/op-examples`): consumer-style examples and smoke harness for `@prodkit/op`
+- `apps/op/benchmarks`: benchmark harness and baseline tooling for `@prodkit/op`
 - `tools/op`: maintainer tooling scoped to `@prodkit/op` (release cuts, changelog/version checks, examples smoke runs)
 - `.github/workflows`: CI and release automation
 

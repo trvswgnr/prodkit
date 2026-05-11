@@ -207,59 +207,57 @@ const main = Op(function* (bumpKindArg: string | undefined) {
   return { nextVersion };
 });
 
-main
-  .run(process.argv[2])
-  .then((result) => {
-    result.match({
-      ok: ({ nextVersion }) => {
-        logger.info(`release cut complete: v${nextVersion}\n`);
-        logger.info("next step: pnpm --filter @prodkit/op run release:push\n");
-      },
-      err: (error) => {
-        let handledKnownError = false;
-        matchErrorPartial(
-          error,
-          {
-            DirtyWorktreeError: (e) => {
-              handledKnownError = true;
-              logReleaseAbort(
-                "git worktree is not clean.",
-                "commit/stash/discard changes and rerun release:patch.",
-                `pending changes:\n${e.details || "unknown"}`,
-              );
-            },
-            ReleaseTagExistsError: (e) => {
-              handledKnownError = true;
-              logReleaseAbort(
-                `tag ${e.tag} already exists locally or on origin.`,
-                "pick the next version, or intentionally delete/move the existing tag before retrying.",
-              );
-            },
-            ParseError: (e) => {
-              handledKnownError = true;
-              logReleaseAbort(
-                e.message ?? "invalid release kind.",
-                "usage: node ./tools/op/release-cut.ts <patch|minor|major>",
-              );
-            },
-            ChangelogError: (e) => {
-              handledKnownError = true;
-              logReleaseAbort(e.message);
-            },
-            CommandError: (e) => {
-              handledKnownError = true;
-              logReleaseAbort(`command failed: ${e.command}`);
-              if (e.cause instanceof Error && e.cause.message.length > 0) {
-                logger.error(e.cause.message);
-              }
-            },
+main.run(process.argv[2]).then((result) => {
+  result.match({
+    ok: ({ nextVersion }) => {
+      logger.info(`release cut complete: v${nextVersion}\n`);
+      logger.info("next step: pnpm --filter @prodkit/op run release:push\n");
+    },
+    err: (error) => {
+      let handledKnownError = false;
+      matchErrorPartial(
+        error,
+        {
+          DirtyWorktreeError: (e) => {
+            handledKnownError = true;
+            logReleaseAbort(
+              "git worktree is not clean.",
+              "commit/stash/discard changes and rerun release:patch.",
+              `pending changes:\n${e.details || "unknown"}`,
+            );
           },
-          (unknownError) => {
-            if (handledKnownError) return;
-            logReleaseAbort(String(unknownError));
+          ReleaseTagExistsError: (e) => {
+            handledKnownError = true;
+            logReleaseAbort(
+              `tag ${e.tag} already exists locally or on origin.`,
+              "pick the next version, or intentionally delete/move the existing tag before retrying.",
+            );
           },
-        );
-        process.exit(1);
-      },
-    });
+          ParseError: (e) => {
+            handledKnownError = true;
+            logReleaseAbort(
+              e.message ?? "invalid release kind.",
+              "usage: node ./tools/op/release-cut.ts <patch|minor|major>",
+            );
+          },
+          ChangelogError: (e) => {
+            handledKnownError = true;
+            logReleaseAbort(e.message);
+          },
+          CommandError: (e) => {
+            handledKnownError = true;
+            logReleaseAbort(`command failed: ${e.command}`);
+            if (e.cause instanceof Error && e.cause.message.length > 0) {
+              logger.error(e.cause.message);
+            }
+          },
+        },
+        (unknownError) => {
+          if (handledKnownError) return;
+          logReleaseAbort(String(unknownError));
+        },
+      );
+      process.exit(1);
+    },
   });
+});

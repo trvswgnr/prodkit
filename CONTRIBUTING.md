@@ -23,11 +23,11 @@ pnpm run check
 ```
 
 The quality gate includes a consumer-level smoke test that installs the package from an `npm pack`
-tarball via `apps/examples/` in an isolated temp workspace.
+tarball via `apps/op/examples/` in an isolated temp workspace.
 
 Pull requests and pushes to `main` run the same gate in `.github/workflows/ci.yml`.
 
-All examples are consumer-level and live under `apps/examples/*`.
+All examples are consumer-level and live under `apps/op/examples/*`.
 
 ## Benchmarking
 
@@ -41,7 +41,7 @@ pnpm run bench
 - For latest published package comparison, run `pnpm --filter @prodkit/op-benchmarks run bench -- --baseline=npm`.
 - Keep benchmark interpretation directional; rely on relative deltas and rerun unexpected regressions before acting.
 
-Detailed benchmark scenarios and authoring guidance live in `apps/benchmarks/README.md`.
+Detailed benchmark scenarios and authoring guidance live in `apps/op/benchmarks/README.md`.
 
 ## Type Cast Policy
 

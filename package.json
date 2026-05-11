@@ -2,18 +2,19 @@
   "name": "@prodkit/monorepo",
   "private": true,
   "packageManager": "pnpm@10.11.0",
+  "type": "module",
   "engines": {
     "node": ">=24.14.0"
   },
   "scripts": {
-    "build": "turbo run build",
-    "test": "turbo run test",
-    "typecheck": "turbo run typecheck",
-    "lint": "turbo run lint",
-    "fmt": "turbo run fmt",
-    "fmt:check": "turbo run fmt:check",
-    "check": "turbo run check",
-    "bench": "turbo run bench --filter=@prodkit/op-benchmarks",
+    "build": "turbo run build --log-order=grouped",
+    "test": "turbo run test --log-order=grouped",
+    "typecheck": "turbo run typecheck --log-order=grouped",
+    "lint": "turbo run lint --log-order=grouped",
+    "fmt": "turbo run fmt --log-order=grouped",
+    "fmt:check": "turbo run fmt:check --log-order=grouped",
+    "check": "turbo run check --log-order=grouped",
+    "bench": "turbo run bench --filter=@prodkit/op-benchmarks --log-order=grouped",
     "clean": "git clean -Xfd"
   },
   "devDependencies": {
