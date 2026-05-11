@@ -488,7 +488,7 @@ describe("Op.race", () => {
           signal.addEventListener(
             "abort",
             () => {
-              reject("cleanup-failed" as const);
+              reject("cleanup-failed");
             },
             { once: true },
           );

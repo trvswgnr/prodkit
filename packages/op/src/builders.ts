@@ -78,13 +78,13 @@ export function _try<T, E = UnhandledException>(
               async (cause) => {
                 if (!onError) return Result.err(new UnhandledException({ cause }));
                 const mapped = await onError(cause);
-                return Result.err(mapped as Awaited<E>);
+                return Result.err(mapped);
               },
             ),
       );
 
       if (result.isErr()) return yield* result;
-      return result.value as Awaited<T>;
+      return cast(result.value);
     },
     createDefaultHooks(() => op),
   );

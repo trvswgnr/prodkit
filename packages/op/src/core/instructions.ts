@@ -1,6 +1,7 @@
 import type { ExitContext, Instruction, RunContext } from "./types.js";
 import { Tagged } from "../tagged.js";
 import { Err } from "../result.js";
+import { cast } from "../shared.js";
 
 type SuspendFn = (ctx: RunContext<readonly unknown[]>) => Promise<unknown>;
 export class SuspendInstruction extends Tagged("SuspendInstruction") {
@@ -15,7 +16,7 @@ export class SuspendInstruction extends Tagged("SuspendInstruction") {
   // we use a single `any` here to avoid casting at every call site
   // oxlint-disable-next-line typescript/no-explicit-any
   *[Symbol.iterator](): Generator<Instruction<never>, any, unknown> {
-    return (yield this) as never;
+    return cast(yield this);
   }
 }
 
