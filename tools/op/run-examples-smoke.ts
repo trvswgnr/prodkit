@@ -41,9 +41,18 @@ const PACK_OUTPUT_PREVIEW = 4000;
 const UPSTREAM_REPO_URL = "https://github.com/trvswgnr/op.git";
 const UPSTREAM_MAIN_REF = "refs/heads/main";
 
-const VALID_MODES = ["pack", "github", "npm"] as const;
-type Mode = (typeof VALID_MODES)[number];
-const VALID_MODE_SET = new Set<string>(VALID_MODES);
+// const VALID_MODES = ["pack", "github", "npm"] as const;
+// type Mode = (typeof VALID_MODES)[number];
+// const VALID_MODE_SET = new Set<string>(VALID_MODES);
+
+const Mode = v.enum({ pack: "pack", github: "github", npm: "npm" });
+type Mode = v.InferOutput<typeof Mode>;
+
+const PropertyKey = v.union([v.string(), v.number(), v.symbol()]);
+// @ts-expect-error - PropertyKey is a union of string, number, and symbol. this is correct, valibot is wrong.
+const Record = v.record(PropertyKey, v.unknown());
+const isRecord = (value: unknown): value is Record<PropertyKey, unknown> =>
+  v.safeParse(Record, value).success;
 
 class SmokeExecError extends TaggedError("SmokeExecError")<{
   command: string;
@@ -82,10 +91,6 @@ class SmokeCommandExitError extends TaggedError("SmokeCommandExitError")<{
 }>() {}
 
 class OperationAbortedError extends TaggedError("OperationAbortedError")<{ message: string }>() {}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 function collectRuntimeEntryLeaves(value: unknown, target: Set<string>): void {
   if (typeof value === "string") {
@@ -328,20 +333,6 @@ function parseGitLsRemoteSha(output: string, ref: string): string | undefined {
   return undefined;
 }
 
-class InvalidModeError extends TaggedError("InvalidModeError")<{ message: string }>() {
-  constructor(mode: string | undefined) {
-    const message = mode
-      ? `Unknown mode "${mode}". Expected one of: ${VALID_MODES.join(", ")}`
-      : "No mode provided";
-    super({ message });
-  }
-}
-
-const parseMode = Op(function* (mode: string | undefined) {
-  if (mode !== undefined && VALID_MODE_SET.has(mode)) return mode as Mode;
-  return yield* new InvalidModeError(mode);
-});
-
 const execOp = Op(function* (
   command: string,
   args: string[],
@@ -533,7 +524,7 @@ const installFromNpm = Op(function* (examplesDir: string) {
 const smoke = Op(function* (rawMode: string | undefined) {
   const examplesDir = yield* fromRepoRoot("apps/op/examples");
 
-  const mode = yield* parseMode(rawMode);
+  const mode = yield* parse(Mode, rawMode);
   if (process.env[SMOKE_RESET_EXAMPLES_ENV] !== undefined) {
     logger.warn(
       `${SMOKE_RESET_EXAMPLES_ENV} is ignored; smoke runs now use isolated temp workspaces.`,
