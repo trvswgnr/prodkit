@@ -10,14 +10,14 @@
     "runtime-agnostic",
     "typescript"
   ],
-  "homepage": "https://github.com/trvswgnr/op#readme",
+  "homepage": "https://github.com/trvswgnr/prodkit#readme",
   "bugs": {
-    "url": "https://github.com/trvswgnr/op/issues"
+    "url": "https://github.com/trvswgnr/prodkit/issues"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/trvswgnr/op"
+    "url": "https://github.com/trvswgnr/prodkit"
   },
   "files": [
     "dist",

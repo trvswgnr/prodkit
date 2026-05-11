@@ -38,7 +38,7 @@ const SMOKE_RESET_EXAMPLES_ENV = "OP_SMOKE_RESET_EXAMPLES";
 const DEFAULT_SMOKE_TIMEOUT_MS = 45 * 60_000;
 
 const PACK_OUTPUT_PREVIEW = 4000;
-const UPSTREAM_REPO_URL = "https://github.com/trvswgnr/op.git";
+const UPSTREAM_REPO_URL = "https://github.com/trvswgnr/prodkit.git";
 const UPSTREAM_MAIN_REF = "refs/heads/main";
 
 // const VALID_MODES = ["pack", "github", "npm"] as const;
@@ -512,7 +512,7 @@ const installFromGithub = Op(function* () {
   logger.info(`github - resolved ${UPSTREAM_MAIN_REF} to ${commitSha}`);
   yield* installAndSmoke(
     examplesDir,
-    `@prodkit/op@https://codeload.github.com/trvswgnr/op/tar.gz/${commitSha}`,
+    `@prodkit/op@https://codeload.github.com/trvswgnr/prodkit/tar.gz/${commitSha}`,
     `GitHub dependency (${UPSTREAM_MAIN_REF}@${commitSha})`,
   );
 });

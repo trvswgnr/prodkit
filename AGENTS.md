@@ -31,3 +31,4 @@
 - The library is designed to be runtime-agnostic, not Node-specific in behavior.
 - The project is currently alpha-stage with no production users, so intentional breaking changes are acceptable.
 - Workspace taxonomy: `packages/*` (publishable), `examples/*` (consumer examples), `benchmarks/*` (performance harnesses), `tools/*` (maintainer scripts), and `apps/*` reserved for runnable product/demo apps.
+- GitHub repository canonical path is `trvswgnr/prodkit` (renamed from `trvswgnr/op`).

@@ -38,7 +38,7 @@ type TargetInstall = {
   packageVersion: string;
 };
 
-const REPO = "trvswgnr/op";
+const REPO = "trvswgnr/prodkit";
 const MAIN_REF = "refs/heads/main";
 const MAIN_REMOTE_URL = `https://github.com/${REPO}.git`;
 const OP_PACKAGE = "@prodkit/op";
