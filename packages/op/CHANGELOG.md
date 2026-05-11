@@ -53,15 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   combinators, policies, and runtime internals, so public helper inference now
   consistently reflects the same type surface users compose against.
 
-## [0.1.56] - 2026-05-07
-
-### Changed
-
-- No user-facing changes in this release.
-
 ## [0.1.55] - 2026-05-06
-
-### Added
 
 ### Fixed
 
@@ -191,9 +183,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retry timing, and composed operation semantics).
 - Improved examples and parsing validation in places where earlier behavior
   could produce weaker diagnostics or drift from production expectations.
-
-
-
-
-
-
