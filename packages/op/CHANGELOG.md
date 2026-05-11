@@ -17,18 +17,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Renamed the monorepo quality script from `pnpm run check` to `pnpm run gate`.
 
-## [0.1.60] - 2026-05-09
-
-### Changed
-
-- No user-facing changes in this release.
-
-## [0.1.59] - 2026-05-09
-
-### Changed
-
-- No user-facing changes in this release.
-
 ## [0.1.58] - 2026-05-09
 
 ### Changed
