@@ -264,7 +264,9 @@ export function tapNullaryOp<T, E, R>(
 
       if (source.isErr()) return yield* source;
 
-      const observed = yield new SuspendInstruction(() => Promise.resolve(observe(source.value)));
+      const observed: R = yield* new SuspendInstruction(() =>
+        Promise.resolve(observe(source.value)),
+      );
       const observedOp: Op<unknown, unknown, []> | undefined = yield* new SuspendInstruction(() =>
         Promise.resolve(coerceToNullaryOp(observed)),
       );
@@ -300,7 +302,9 @@ export function tapErrNullaryOp<T, E, R>(
 
       if (UnhandledException.is(sourceError)) return yield* sourceError;
 
-      const observed = yield new SuspendInstruction(() => Promise.resolve(observe(sourceError)));
+      const observed: R = yield* new SuspendInstruction(() =>
+        Promise.resolve(observe(sourceError)),
+      );
       const observedOp: Op<unknown, unknown, []> | undefined = yield* new SuspendInstruction(() =>
         Promise.resolve(coerceToNullaryOp(observed)),
       );
