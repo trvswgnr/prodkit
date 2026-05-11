@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- No entries yet.
+
+## [0.1.63] - 2026-05-11
+
+### Added
+
 - Added lifecycle regression coverage proving `withTimeout` does not settle
   `run()` until async `withRelease` cleanup and async `.on("exit")` finalizers
   finish.
@@ -198,4 +204,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retry timing, and composed operation semantics).
 - Improved examples and parsing validation in places where earlier behavior
   could produce weaker diagnostics or drift from production expectations.
+
 
