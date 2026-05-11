@@ -23,7 +23,7 @@ npm i @prodkit/op
 ```
 
 Runtime support for consumers: any JavaScript runtime with `Promise` and `AbortController`.
-For Node consumers specifically, this package supports Node `>=20` and is tested on Node `24.14.0`.
+For Node consumers specifically, this package is tested on Node `24.14.0`.
 
 This project is designed to be runtime-agnostic: no Node-specific APIs are required by the public
 operation model.
