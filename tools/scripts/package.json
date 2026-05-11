@@ -4,7 +4,12 @@
   "description": "Project-level scripts for @prodkit/op",
   "type": "module",
   "scripts": {
-    "check": "pnpm run typecheck",
+    "check": "pnpm run typecheck && pnpm run check:workspace-tool-deps",
+    "check:workspace-tool-deps": "node ./check-workspace-tool-deps.ts",
+    "fmt": "oxfmt \"**/*.ts\"",
+    "fmt:check": "oxfmt --check \"**/*.ts\"",
+    "lint": "oxlint --config ../../oxlint.config.ts .",
+    "lint:fix": "oxlint --config ../../oxlint.config.ts --fix .",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -14,6 +19,8 @@
   },
   "devDependencies": {
     "@types/node": "^24.12.2",
+    "oxfmt": "0.48.0",
+    "oxlint": "1.55.0",
     "typescript": "^5.9.3"
   },
   "engines": {

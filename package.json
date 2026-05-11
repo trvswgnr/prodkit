@@ -14,9 +14,15 @@
     "fmt:check": "turbo run fmt:check",
     "check": "turbo run check",
     "bench": "turbo run bench --filter=@prodkit/op-benchmarks",
-    "clean": "turbo run clean"
+    "clean": "git clean -Xfd"
   },
   "devDependencies": {
+    "oxlint": "1.55.0",
     "turbo": "^2.9.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "tsdown>unrun": "0.2.37"
+    }
   }
 }

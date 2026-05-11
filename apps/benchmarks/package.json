@@ -6,11 +6,17 @@
   "scripts": {
     "bench": "node ./bench.ts",
     "check": "pnpm run typecheck",
+    "fmt": "oxfmt \"**/*.ts\"",
+    "fmt:check": "oxfmt --check \"**/*.ts\"",
+    "lint": "oxlint --config ../../oxlint.config.ts .",
+    "lint:fix": "oxlint --config ../../oxlint.config.ts --fix .",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^24.12.2",
     "esbuild": "^0.25.11",
+    "oxfmt": "0.48.0",
+    "oxlint": "1.55.0",
     "tinybench": "^5.1.0",
     "typescript": "^5.9.3"
   },
