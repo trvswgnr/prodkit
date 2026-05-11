@@ -26,7 +26,7 @@
 
 - `pnpm install` must be run outside the sandbox (request full permissions / non-sandbox); it hangs or fails reliably in the default sandbox.
 - Contributors need Node >=24.14.0.
-- Contributors are expected to have `pnpm@10.11.0` installed directly (not bootstrapped via Corepack).
+- Contributors should use `pnpm@10` locally (CI/release stays pinned to `10.11.0`).
 - npm publishing is configured with GitHub Actions trusted publishing (OIDC + provenance), not long-lived `NPM_TOKEN` auth.
 - The library is designed to be runtime-agnostic, not Node-specific in behavior.
 - The project is currently alpha-stage with no production users, so intentional breaking changes are acceptable.

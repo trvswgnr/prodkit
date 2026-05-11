@@ -2,7 +2,7 @@
 
 ## Setup
 
-- Use Node `>=24.14.0` and `pnpm@10.11.0`.
+- Use Node `>=24.14.0` and `pnpm@10` (validated in CI on `10.11.0`).
 - Run commands from the repo root unless noted otherwise.
 
 ```bash
