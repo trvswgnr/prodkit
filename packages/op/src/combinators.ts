@@ -8,9 +8,8 @@ import {
 import type { Op } from "./index.js";
 import { SuspendInstruction } from "./core/instructions.js";
 import { createRunContext, drive } from "./core/runtime.js";
-import { Err, Ok, Result } from "./result.js";
+import { Err, Result } from "./result.js";
 import { makeNullaryOp, createDefaultHooks } from "./core/nullary-ops.js";
-import { cast } from "./shared.js";
 
 type AnyNullaryOp = Op<unknown, unknown, []>;
 
@@ -331,12 +330,12 @@ async function driveAny<T, E>(
 
   const fan = fanOut(ops, outerContext);
 
-  let winner: Ok<T> | undefined;
+  let winner: { value: T } | undefined;
   const results = await Promise.all(
     fan.runs.map((p, i) =>
       p.then((res) => {
         if (res.isOk() && winner === undefined) {
-          winner = cast(res); // SAFETY: we know res is Ok
+          winner = { value: res.value };
           fan.controllers.forEach((c, j) => {
             if (j !== i) c.abort();
           });
@@ -348,7 +347,7 @@ async function driveAny<T, E>(
 
   fan.detach();
 
-  if (winner !== undefined) return winner;
+  if (winner !== undefined) return Result.ok(winner.value);
 
   const errors = results.filter(Result.isError).map((r) => r.error);
   return Result.err(new ErrorGroup(errors, "Op.any failed because all operations failed"));

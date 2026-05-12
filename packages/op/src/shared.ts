@@ -33,7 +33,7 @@ export function isNullaryOp(value: unknown): value is Op<unknown, unknown, []> {
 export function coerceToNullaryOp(value: unknown): Op<unknown, unknown, []> | undefined {
   if (!isOp(value)) return undefined;
   if (isNullaryOp(value)) return value;
-  return cast(value());
+  return value();
 }
 
 export function isAwaited<T>(value: T | Promise<T>): value is Awaited<T> {

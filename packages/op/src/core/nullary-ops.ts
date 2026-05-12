@@ -73,19 +73,19 @@ export function makeNullaryOp<T, E>(
     run: () => runOp(self),
     withRetry: (policy?: RetryPolicy) => {
       if (!hasPushThroughConfig || pushInner === undefined || rebuild === undefined) {
-        return cast(withRetryOp(self, policy));
+        return withRetryOp(self, policy);
       }
       return cast(rebuild(pushInner.withRetry(policy)));
     },
     withTimeout: (timeoutMs: number) => {
       if (!hasPushThroughConfig || pushInner === undefined || rebuildForTimeout === undefined) {
-        return cast(withTimeoutOp(self, timeoutMs));
+        return withTimeoutOp(self, timeoutMs);
       }
       return cast(rebuildForTimeout(pushInner.withTimeout(timeoutMs)));
     },
     withSignal: (signal: AbortSignal) => {
       if (!hasPushThroughConfig || pushInner === undefined || rebuild === undefined) {
-        return cast(withSignalOp(self, signal));
+        return withSignalOp(self, signal);
       }
       return cast(rebuild(pushInner.withSignal(signal)));
     },
@@ -341,16 +341,11 @@ export function mapErrNullaryOp<T, E, E2>(
 
       if (result.isOk()) return result.value;
 
-      if (UnhandledException.is(result.error)) return yield* result.error;
+      const sourceError = result.error;
+      if (UnhandledException.is(sourceError)) return yield* sourceError;
 
       const mapped: E2 = yield* new SuspendInstruction(() =>
-        Promise.resolve(
-          transform(
-            // SAFETY: result error is a union of E and UnhandledException, so we need to cast it to E
-            // to match the transform function type
-            cast(result.error),
-          ),
-        ),
+        Promise.resolve(transform(sourceError)),
       );
 
       return yield* Result.err(mapped);
