@@ -6,7 +6,7 @@ import { RegisterExitFinalizerInstruction, SuspendInstruction } from "./core/ins
 import { withRetryOp, withTimeoutOp, withSignalOp } from "./policies.js";
 import { Result, type InferErr } from "./result.js";
 import { makeNullaryOp, createDefaultHooks, withCleanupNullaryOp } from "./core/nullary-ops.js";
-import { cast, isAwaited } from "./shared.js";
+import { unsafeCoerce, isAwaited } from "./shared.js";
 
 /**
  * Lifts a value into an operation that always completes successfully
@@ -111,7 +111,7 @@ function bindArityArgsToFinalizers<T>(
 
   return {
     next: (value?: unknown) => bindStep(iterator.next(value)),
-    return: (value?: T) => bindStep(iterator.return(cast<T>(value))),
+    return: (value?: T) => bindStep(iterator.return(unsafeCoerce<T>(value))),
     throw: (error?: unknown) => bindStep(iterator.throw(error)),
     [Symbol.iterator]() {
       return this;
@@ -144,11 +144,14 @@ export function fromGenFn<Y extends Instruction<unknown>, T, A extends readonly 
   const op = makeArityOp((...args: A) => {
     // TS cannot model `Generator<Y, T, unknown>` as the internal instruction-supertype without this bridge cast
     const bound: Op<T, InferErr<Y>, []> = makeNullaryOp(
-      () => cast<never>(bindArityArgsToFinalizers(f(...args), args)),
+      () =>
+        unsafeCoerce<Generator<Instruction<InferErr<Y>>, T, unknown>>(
+          bindArityArgsToFinalizers(f(...args), args),
+        ),
       createDefaultHooks(() => bound),
     );
     return bound;
   });
   // SAFETY: `makeArityOp` returns an OpArity<T, E, A>, so we need to cast it to an Op<T, E, A>
-  return cast(op);
+  return unsafeCoerce(op);
 }

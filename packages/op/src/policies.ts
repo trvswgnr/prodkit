@@ -6,7 +6,7 @@ import type { Op } from "./index.js";
 import { SuspendInstruction } from "./core/instructions.js";
 import { createRunContext, drive, driveInterruptOnAbort } from "./core/runtime.js";
 import { makeNullaryOp, createDefaultHooks } from "./core/nullary-ops.js";
-import { cast, isNullaryOp } from "./shared.js";
+import { unsafeCoerce, isNullaryOp } from "./shared.js";
 
 /** Retry policy for `op.withRetry(policy)`. */
 export interface RetryPolicy {
@@ -90,7 +90,7 @@ function mapArityFluentOp<T, EIn, EOut, A extends readonly unknown[]>(
             // SAFETY: `withTimeout` widens the source error to `EIn | TimeoutError`, but this
             // mapper is polymorphic over the error channel and forwards whatever union it receives.
             // The cast narrows only for TS so we can reuse the same fluent mapper pipeline.
-            cast(source.withTimeout(timeoutMs)),
+            unsafeCoerce(source.withTimeout(timeoutMs)),
           ),
           mapNullary,
         ),
@@ -108,10 +108,10 @@ function mapFluentOp<T, EIn, EOut, A extends readonly unknown[]>(
   if (isNullaryOp(op)) {
     // SAFETY: TS cannot express that `[] extends A` may collapse to the nullary branch here
     // Runtime behavior is correct: nullary input remains nullary after mapping
-    return cast(mapNullary(op));
+    return unsafeCoerce(mapNullary(op));
   }
 
-  return cast(mapArityFluentOp(op, mapNullary));
+  return unsafeCoerce(mapArityFluentOp(op, mapNullary));
 }
 
 function makePolicyNullaryOp<T, E>(

@@ -12,7 +12,7 @@ export const NULLARY_OP_SYMBOL = Symbol("NullaryOp");
  * Every call site for this function should be accompanied by a comment explaining why it is
  * absolutely necessary.
  */
-export function cast<T>(value: unknown): T {
+export function unsafeCoerce<T>(value: unknown): T {
   // oxlint-disable-next-line typescript/consistent-type-assertions - only used here
   return value as T;
 }

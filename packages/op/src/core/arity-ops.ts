@@ -14,7 +14,7 @@ import {
   tapNullaryOp,
   withCleanupNullaryOp,
 } from "./nullary-ops.js";
-import { cast, EMPTY_TUPLE } from "../shared.js";
+import { unsafeCoerce, EMPTY_TUPLE } from "../shared.js";
 
 export interface FluentArityHandlers<T, E, A extends readonly unknown[]> {
   withRetry: (policy?: RetryPolicy) => OpArity<T, E, A>;
@@ -34,7 +34,7 @@ export interface FluentArityHandlers<T, E, A extends readonly unknown[]> {
  * @warning This function is UNSAFE and should be used only when the type is known to be correct
  */
 export function asArityOp<T, E, A extends readonly unknown[]>(op: Op<T, E, A>): OpArity<T, E, A> {
-  return cast(op);
+  return unsafeCoerce(op);
 }
 
 export function makeFluentArityOp<T, E, A extends readonly unknown[]>(
@@ -44,13 +44,13 @@ export function makeFluentArityOp<T, E, A extends readonly unknown[]>(
   // SAFETY: `invoke` already has the runtime call signature `(...args: A) => Op<T, E, []>`.
   // `Object.assign` only decorates that function object with fluent handlers, so this
   // cast restores the intended callable+methods intersection that TS cannot infer.
-  const self: OpArity<T, E, A> = cast(
+  const self: OpArity<T, E, A> = unsafeCoerce(
     Object.assign(invoke, {
       run: (...args: A) =>
         drive(invoke(...args), createRunContext(new AbortController().signal, args)),
       // Bridge `yield* op` runtime interop for ops produced from generic wrappers
       // that erase nullary-ness at runtime but still resolve through `invoke()`.
-      [Symbol.iterator]: () => invoke(...cast<A>(EMPTY_TUPLE))[Symbol.iterator](),
+      [Symbol.iterator]: () => invoke(...unsafeCoerce<A>(EMPTY_TUPLE))[Symbol.iterator](),
       withRetry: (policy?: RetryPolicy) => makeHandlers(self).withRetry(policy),
       withTimeout: (timeoutMs: number) => makeHandlers(self).withTimeout(timeoutMs),
       withSignal: (signal: AbortSignal) => makeHandlers(self).withSignal(signal),
@@ -58,7 +58,11 @@ export function makeFluentArityOp<T, E, A extends readonly unknown[]>(
       on: (event: OpLifecycleHook, handler: LifecycleFn<T, E, A>) =>
         makeHandlers(self).on(event, handler),
       map: <U>(transform: (value: T) => U) =>
-        liftArityOp(self, (resolved) => mapNullaryOp(resolved, transform)),
+        liftArityOp(
+          self,
+          (resolved) => mapNullaryOp(resolved, transform),
+          (resolved) => mapNullaryOp(resolved, transform),
+        ),
       mapErr: <E2>(transform: (error: E) => E2) =>
         liftArityOp(
           self,
@@ -69,9 +73,17 @@ export function makeFluentArityOp<T, E, A extends readonly unknown[]>(
             ),
         ),
       flatMap: <U, E2>(bind: (value: T) => Op<U, E2, []>) =>
-        liftArityOp(self, (resolved) => flatMapNullaryOp(resolved, bind)),
+        liftArityOp(
+          self,
+          (resolved) => flatMapNullaryOp(resolved, bind),
+          (resolved) => flatMapNullaryOp(resolved, bind),
+        ),
       tap: <R>(observe: (value: T) => R) =>
-        liftArityOp(self, (resolved) => tapNullaryOp(resolved, observe)),
+        liftArityOp(
+          self,
+          (resolved) => tapNullaryOp(resolved, observe),
+          (resolved) => tapNullaryOp(resolved, observe),
+        ),
       tapErr: <R>(observe: (error: E) => R) =>
         liftArityOp(
           self,
@@ -89,7 +101,7 @@ export function makeFluentArityOp<T, E, A extends readonly unknown[]>(
             recoverNullaryOp(
               resolved,
               (error) => !TimeoutError.is(error) && predicate(error),
-              cast(handler),
+              unsafeCoerce(handler),
             ),
         ),
       _tag: "Op" as const,
@@ -101,21 +113,23 @@ export function makeFluentArityOp<T, E, A extends readonly unknown[]>(
 export function liftArityOp<TIn, EIn, A extends readonly unknown[], TOut, EOut>(
   op: OpArity<TIn, EIn, A>,
   mapNullary: (resolved: Op<TIn, EIn, []>) => Op<TOut, EOut, []>,
-  mapNullaryForTimeout?: (
+  mapNullaryForTimeout: (
     resolved: Op<TIn, EIn | TimeoutError, []>,
   ) => Op<TOut, EOut | TimeoutError, []>,
 ): OpArity<TOut, EOut, A> {
   return makeFluentArityOp(
     (...args) => mapNullary(op(...args)),
     (self) => ({
-      withRetry: (policy) => liftArityOp(asArityOp(op.withRetry(policy)), mapNullary),
+      withRetry: (policy) =>
+        liftArityOp(asArityOp(op.withRetry(policy)), mapNullary, mapNullaryForTimeout),
       withTimeout: (timeoutMs) =>
         liftArityOp<TIn, EIn | TimeoutError, A, TOut, EOut | TimeoutError>(
           asArityOp(op.withTimeout(timeoutMs)),
-          cast(mapNullaryForTimeout ?? mapNullary),
+          mapNullaryForTimeout,
           mapNullaryForTimeout,
         ),
-      withSignal: (signal) => liftArityOp(asArityOp(op.withSignal(signal)), mapNullary),
+      withSignal: (signal) =>
+        liftArityOp(asArityOp(op.withSignal(signal)), mapNullary, mapNullaryForTimeout),
       withRelease: (release) => withReleaseOp(self, release),
       on: (event, handler) => onOp(self, event, handler),
     }),
@@ -142,7 +156,7 @@ export function onExitOp<T, E, A extends readonly unknown[]>(
         onExitOp(
           asArityOp(source.withTimeout(timeoutMs)),
           // SAFETY: `withTimeout` widens the error type to `E | TimeoutError`, so we need to cast the finalize function
-          cast(finalize),
+          unsafeCoerce(finalize),
         ),
       withSignal: (signal) => onExitOp(asArityOp(source.withSignal(signal)), finalize),
       withRelease: (release) => withReleaseOp(self, release),
@@ -175,12 +189,12 @@ export function onOp<T, E, A extends readonly unknown[]>(
 ): OpArity<T, E, A> {
   if (event === "enter") {
     // Discriminant narrows runtime event, but TS cannot narrow unioned function type parameterized by `A`.
-    return onEnterOp(op, cast(handler));
+    return onEnterOp(op, unsafeCoerce(handler));
   }
 
   if (event === "exit") {
     // Discriminant narrows runtime event, but TS cannot narrow unioned function type parameterized by `A`.
-    return onExitOp(op, cast(handler));
+    return onExitOp(op, unsafeCoerce(handler));
   }
 
   event satisfies never;

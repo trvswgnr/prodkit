@@ -20,7 +20,7 @@ import type { Op } from "../index.js";
 import { RegisterExitFinalizerInstruction, SuspendInstruction } from "./instructions.js";
 import { drive } from "./runtime.js";
 import { runOp } from "./run-op.js";
-import { cast, coerceToNullaryOp, EMPTY_TUPLE, NULLARY_OP_SYMBOL } from "../shared.js";
+import { unsafeCoerce, coerceToNullaryOp, EMPTY_TUPLE, NULLARY_OP_SYMBOL } from "../shared.js";
 
 function conditionalPredicate<E>(pred: ((error: E) => boolean) | WithPredicateMethod<E>, error: E) {
   return "is" in pred ? pred.is(error) : pred(error);
@@ -33,12 +33,12 @@ function dispatchLifecycleNullary<T, E>(
 ): Op<T, E, []> {
   if (event === "enter") {
     // Discriminant narrows runtime event, but TS cannot narrow unioned function type through generic `event`.
-    return hooks.registerEnterInitialize(cast(handler));
+    return hooks.registerEnterInitialize(unsafeCoerce(handler));
   }
 
   if (event === "exit") {
     // Discriminant narrows runtime event, but TS cannot narrow unioned function type through generic `event`.
-    return hooks.registerExitFinalize(cast(handler));
+    return hooks.registerExitFinalize(unsafeCoerce(handler));
   }
 
   const _: never = event;
@@ -75,19 +75,19 @@ export function makeNullaryOp<T, E>(
       if (!hasPushThroughConfig || pushInner === undefined || rebuild === undefined) {
         return withRetryOp(self, policy);
       }
-      return cast(rebuild(pushInner.withRetry(policy)));
+      return rebuild(pushInner.withRetry(policy));
     },
     withTimeout: (timeoutMs: number) => {
       if (!hasPushThroughConfig || pushInner === undefined || rebuildForTimeout === undefined) {
         return withTimeoutOp(self, timeoutMs);
       }
-      return cast(rebuildForTimeout(pushInner.withTimeout(timeoutMs)));
+      return rebuildForTimeout(pushInner.withTimeout(timeoutMs));
     },
     withSignal: (signal: AbortSignal) => {
       if (!hasPushThroughConfig || pushInner === undefined || rebuild === undefined) {
         return withSignalOp(self, signal);
       }
-      return cast(rebuild(pushInner.withSignal(signal)));
+      return rebuild(pushInner.withSignal(signal));
     },
     withRelease: hooks.withRelease,
     on: (event: OpLifecycleHook, handler: LifecycleFn<T, E, []>) =>
@@ -106,7 +106,7 @@ export function makeNullaryOp<T, E>(
 
   // SAFETY: `Object.assign` only decorates that function object with fluent handlers, so this
   // cast restores the intended callable+methods intersection that TS cannot infer
-  self = cast(Object.assign(callable, state));
+  self = unsafeCoerce(Object.assign(callable, state));
 
   return self;
 }
@@ -128,7 +128,7 @@ export function withCleanupNullaryOp<T, E>(op: Op<T, E, []>, release: ReleaseFn<
     },
     {
       inner: op,
-      rebuild: (newInner) => withCleanupNullaryOp(cast<Op<T, E, []>>(newInner), release),
+      rebuild: (newInner) => withCleanupNullaryOp(unsafeCoerce<Op<T, E, []>>(newInner), release),
       withRelease: (nextRelease) =>
         withCleanupNullaryOp(withCleanupNullaryOp(op, release), nextRelease),
       registerEnterInitialize: (initialize) =>
@@ -156,7 +156,7 @@ export function onEnterNullaryOp<T, E>(op: Op<T, E, []>, initialize: EnterFn<[]>
     },
     {
       inner: op,
-      rebuild: (newInner) => onEnterNullaryOp(cast<Op<T, E, []>>(newInner), initialize),
+      rebuild: (newInner) => onEnterNullaryOp(unsafeCoerce<Op<T, E, []>>(newInner), initialize),
       withRelease: (release) => withCleanupNullaryOp(onEnterNullaryOp(op, initialize), release),
       registerEnterInitialize: (nextInitialize) =>
         onEnterNullaryOp(onEnterNullaryOp(op, initialize), nextInitialize),
@@ -170,10 +170,9 @@ export function onExitNullaryOp<T, E>(op: Op<T, E, []>, finalize: ExitFn<T, E, [
   return makeNullaryOp(
     function* () {
       yield new RegisterExitFinalizerInstruction(async (ctx) => {
-        // Finalizer registry erases generic payloads to unknown; this restores the concrete op result types.
         const exitCtx: ExitContext<T, E, []> = {
           signal: ctx.signal,
-          result: cast(ctx.result),
+          result: unsafeCoerce(ctx.result),
           args: EMPTY_TUPLE,
         };
         await Promise.resolve(finalize(exitCtx));
@@ -188,10 +187,13 @@ export function onExitNullaryOp<T, E>(op: Op<T, E, []>, finalize: ExitFn<T, E, [
     },
     {
       inner: op,
-      rebuild: (newInner) => onExitNullaryOp(cast<Op<T, E, []>>(newInner), finalize),
+      rebuild: (newInner) => onExitNullaryOp(unsafeCoerce<Op<T, E, []>>(newInner), finalize),
       rebuildForTimeout: (newInner) =>
         // SAFETY: timeout push-through widens inner error type, so widen finalize accordingly.
-        onExitNullaryOp(cast<Op<T, E | TimeoutError, []>>(newInner), cast(finalize)),
+        onExitNullaryOp(
+          unsafeCoerce<Op<T, E | TimeoutError, []>>(newInner),
+          unsafeCoerce(finalize),
+        ),
       withRelease: (release) => withCleanupNullaryOp(onExitNullaryOp(op, finalize), release),
       registerEnterInitialize: (initialize) =>
         onEnterNullaryOp(onExitNullaryOp(op, finalize), initialize),
@@ -222,7 +224,7 @@ export function mapNullaryOp<T, E, U>(
     {
       ...createDefaultHooks(() => mapNullaryOp(op, transform)),
       inner: op,
-      rebuild: (newInner) => mapNullaryOp(cast<Op<T, E, []>>(newInner), transform),
+      rebuild: (newInner) => mapNullaryOp(unsafeCoerce<Op<T, E, []>>(newInner), transform),
     },
   );
 }
@@ -282,7 +284,7 @@ export function tapNullaryOp<T, E, R>(
     {
       ...createDefaultHooks(() => tapNullaryOp(op, observe)),
       inner: op,
-      rebuild: (newInner) => tapNullaryOp(cast<Op<T, E, []>>(newInner), observe),
+      rebuild: (newInner) => tapNullaryOp(unsafeCoerce<Op<T, E, []>>(newInner), observe),
     },
   );
 }
@@ -320,10 +322,11 @@ export function tapErrNullaryOp<T, E, R>(
     {
       ...createDefaultHooks(() => tapErrNullaryOp(op, observe)),
       inner: op,
-      rebuild: (newInner) => tapErrNullaryOp(cast<Op<T, E, []>>(newInner), observe),
+      rebuild: (newInner) => tapErrNullaryOp(unsafeCoerce<Op<T, E, []>>(newInner), observe),
       rebuildForTimeout: (newInner) =>
-        tapErrNullaryOp(cast<Op<T, E | TimeoutError, []>>(newInner), (error: E | TimeoutError) =>
-          TimeoutError.is(error) ? undefined : observe(error),
+        tapErrNullaryOp(
+          unsafeCoerce<Op<T, E | TimeoutError, []>>(newInner),
+          (error: E | TimeoutError) => (TimeoutError.is(error) ? undefined : observe(error)),
         ),
     },
   );
@@ -353,10 +356,11 @@ export function mapErrNullaryOp<T, E, E2>(
     {
       ...createDefaultHooks(() => mapErrNullaryOp(op, transform)),
       inner: op,
-      rebuild: (newInner) => mapErrNullaryOp(cast<Op<T, E, []>>(newInner), transform),
+      rebuild: (newInner) => mapErrNullaryOp(unsafeCoerce<Op<T, E, []>>(newInner), transform),
       rebuildForTimeout: (newInner) =>
-        mapErrNullaryOp(cast<Op<T, E | TimeoutError, []>>(newInner), (error: E | TimeoutError) =>
-          TimeoutError.is(error) ? error : transform(error),
+        mapErrNullaryOp(
+          unsafeCoerce<Op<T, E | TimeoutError, []>>(newInner),
+          (error: E | TimeoutError) => (TimeoutError.is(error) ? error : transform(error)),
         ),
     },
   );
@@ -401,13 +405,14 @@ export function recoverNullaryOp<T, E, R>(
     {
       ...createDefaultHooks(() => recoverNullaryOp(op, predicate, handler)),
       inner: op,
-      rebuild: (newInner) => recoverNullaryOp(cast<Op<T, E, []>>(newInner), predicate, handler),
+      rebuild: (newInner) =>
+        recoverNullaryOp(unsafeCoerce<Op<T, E, []>>(newInner), predicate, handler),
       rebuildForTimeout: (newInner) =>
         recoverNullaryOp(
-          cast<Op<T, E | TimeoutError, []>>(newInner),
+          unsafeCoerce<Op<T, E | TimeoutError, []>>(newInner),
           (error: E | TimeoutError) =>
             !TimeoutError.is(error) && conditionalPredicate(predicate, error),
-          cast(handler),
+          unsafeCoerce(handler),
         ),
     },
   );

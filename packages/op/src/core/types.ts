@@ -171,13 +171,15 @@ export interface OpArity<T, E, A extends readonly unknown[]>
   run(...args: A): Promise<Result<T, E | UnhandledException>>;
 }
 
-export interface OpHooks<T, E> {
+export interface OpHooks<T, E, TInner = unknown, EInner = unknown> {
   /** Inner op to push policy wrappers to (when present with `rebuild`). */
-  inner?: Op<unknown, unknown, []>;
+  inner?: Op<TInner, EInner, []>;
   /** Rebuild this operator around a new inner op for push-through policy behavior. */
-  rebuild?: (newInner: Op<unknown, unknown, []>) => Op<T, unknown, []>;
+  rebuild?: (newInner: Op<TInner, EInner, []>) => Op<T, E, []>;
   /** Optional timeout-specific rebuild for error-channel widening edge cases. */
-  rebuildForTimeout?: (newInner: Op<unknown, unknown, []>) => Op<T, unknown, []>;
+  rebuildForTimeout?: (
+    newInner: Op<TInner, EInner | TimeoutError, []>,
+  ) => Op<T, E | TimeoutError, []>;
   withRelease: (release: ReleaseFn<T>) => Op<T, E, []>;
   /** Backs public `.on("enter", fn)` on ops built from these hooks. */
   registerEnterInitialize: (initialize: EnterFn<[]>) => Op<T, E, []>;
