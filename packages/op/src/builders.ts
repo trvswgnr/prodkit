@@ -1,11 +1,11 @@
 import { UnhandledException } from "./errors.js";
-import { makeFluentArityOp, onOp } from "./core/arity-ops.js";
-import type { TrackedErr, AnyExitFn, Instruction, OpArity } from "./core/types.js";
+import { makeFluentOp, onOp } from "./core/ops.js";
+import type { TrackedErr, AnyExitFn, Instruction, OpInterface } from "./core/types.js";
 import type { Op } from "./index.js";
 import { RegisterExitFinalizerInstruction, SuspendInstruction } from "./core/instructions.js";
 import { withRetryOp, withTimeoutOp, withSignalOp } from "./policies.js";
 import { Result, type InferErr } from "./result.js";
-import { makeNullaryOp, createDefaultHooks, withCleanupNullaryOp } from "./core/nullary-ops.js";
+import { makeCoreOp, createDefaultHooks, withCleanupCoreOp } from "./core/ops.js";
 import { unsafeCoerce, isAwaited } from "./shared.js";
 
 /**
@@ -16,7 +16,7 @@ export function succeed<T>(value: T | Promise<T>): Op<Awaited<T>, never, []> {
     return _try(() => value);
   }
 
-  const op: Op<Awaited<T>, never, []> = makeNullaryOp(
+  const op: Op<Awaited<T>, never, []> = makeCoreOp(
     function* () {
       return value;
     },
@@ -30,7 +30,7 @@ export function succeed<T>(value: T | Promise<T>): Op<Awaited<T>, never, []> {
  * Lifts a value into an operation that always fails
  */
 export function fail<E>(value: E): Op<never, E, []> {
-  const op: Op<never, E, []> = makeNullaryOp(
+  const op: Op<never, E, []> = makeCoreOp(
     function* () {
       return yield* Result.err(value);
     },
@@ -46,7 +46,7 @@ export function fail<E>(value: E): Op<never, E, []> {
  * whose `cause` is a nested {@link Error} chain (`.cause`), **first LIFO failure outermost**
  */
 export function defer(finalize: AnyExitFn): Op<void, never, []> {
-  const op: Op<void, never, []> = makeNullaryOp(
+  const op: Op<void, never, []> = makeCoreOp(
     function* () {
       yield new RegisterExitFinalizerInstruction((ctx) =>
         Promise.resolve(finalize(ctx)).then(() => {}),
@@ -67,7 +67,7 @@ export function _try<T, E = UnhandledException>(
   f: (signal: AbortSignal) => T,
   onError?: (e: unknown) => E | Promise<E>,
 ): Op<Awaited<T>, TrackedErr<Awaited<E>>, []> {
-  const op: Op<Awaited<T>, TrackedErr<Awaited<E>>, []> = makeNullaryOp(
+  const op: Op<Awaited<T>, TrackedErr<Awaited<E>>, []> = makeCoreOp(
     function* () {
       const result: Result<
         Awaited<T>,
@@ -121,13 +121,12 @@ function bindArityArgsToFinalizers<T>(
 
 function makeArityOp<T, E, A extends readonly unknown[]>(
   invoke: (...args: A) => Op<T, E, []>,
-): OpArity<T, E, A> {
-  return makeFluentArityOp(invoke, (self) => ({
+): OpInterface<T, E, A> {
+  return makeFluentOp(invoke, (self) => ({
     withRetry: (policy) => makeArityOp((...args) => withRetryOp(invoke(...args), policy)),
     withTimeout: (timeoutMs) => makeArityOp((...args) => withTimeoutOp(invoke(...args), timeoutMs)),
     withSignal: (signal) => makeArityOp((...args) => withSignalOp(invoke(...args), signal)),
-    withRelease: (release) =>
-      makeArityOp((...args) => withCleanupNullaryOp(invoke(...args), release)),
+    withRelease: (release) => makeArityOp((...args) => withCleanupCoreOp(invoke(...args), release)),
     on: (event, handler) => onOp(self, event, handler),
   }));
 }
@@ -138,12 +137,11 @@ function makeArityOp<T, E, A extends readonly unknown[]>(
 export function fromGenFn<Y extends Instruction<unknown>, T, A extends readonly unknown[]>(
   f: (...args: A) => Generator<Y, T, unknown>,
 ): Op<T, InferErr<Y>, A> {
-  // we are intentionally always returning the arity wrapper shape, including for `A = []` generators
-  // this keeps arity/nullary classification deterministic via explicit op kind metadata
-  // instead of runtime function reflection or shape guessing in correctness paths
+  // We intentionally always build through the tuple-arity lifting path, including for `A = []`.
+  // This keeps runtime behavior uniform while preserving exact tuple signatures at the type level.
   const op = makeArityOp((...args: A) => {
     // TS cannot model `Generator<Y, T, unknown>` as the internal instruction-supertype without this bridge cast
-    const bound: Op<T, InferErr<Y>, []> = makeNullaryOp(
+    const bound: Op<T, InferErr<Y>, []> = makeCoreOp(
       () =>
         unsafeCoerce<Generator<Instruction<InferErr<Y>>, T, unknown>>(
           bindArityArgsToFinalizers(f(...args), args),
@@ -152,6 +150,6 @@ export function fromGenFn<Y extends Instruction<unknown>, T, A extends readonly 
     );
     return bound;
   });
-  // SAFETY: `makeArityOp` returns an OpArity<T, E, A>, so we need to cast it to an Op<T, E, A>
+  // SAFETY: `makeArityOp` returns an OpInterface<T, E, A>, so we need to cast it to an Op<T, E, A>
   return unsafeCoerce(op);
 }

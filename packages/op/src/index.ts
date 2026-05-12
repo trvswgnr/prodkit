@@ -5,8 +5,7 @@ import {
   type EnterContext,
   type ExitContext,
   type OpLifecycleHook,
-  OpNullary,
-  OpArity,
+  OpInterface,
 } from "./core/types.js";
 import { runOp } from "./core/run-op.js";
 import { exponentialBackoff } from "./policies.js";
@@ -51,10 +50,7 @@ export const Op = Object.assign(fromGenFn, {
  * @template E Error type from yielded failures (not counting {@link UnhandledException} from throws)
  * @template A Argument tuple for parameterized operations
  */
-export type Op<T, E, A extends readonly unknown[]> = (A extends []
-  ? OpNullary<T, E>
-  : OpArity<T, E, A>) &
-  Tagged<"Op">;
+export type Op<T, E, A extends readonly unknown[]> = OpInterface<T, E, A> & Tagged<"Op">;
 
 export type { EnterContext, ExitContext, OpLifecycleHook };
 export type { BackoffOptions, RetryPolicy } from "./policies.js";

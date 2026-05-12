@@ -3,8 +3,6 @@ import type { Op } from "./index.js";
 
 export const EMPTY_TUPLE: [] = [];
 
-export const NULLARY_OP_SYMBOL = Symbol("NullaryOp");
-
 /**
  * UNSAFE: casts any value to a given type
  *
@@ -21,18 +19,8 @@ export function isOp(value: unknown): value is Op<unknown, unknown, readonly unk
   return typeof value === "function" && "_tag" in value && value._tag === "Op";
 }
 
-export function isNullaryOp(value: unknown): value is Op<unknown, unknown, []> {
-  return (
-    typeof value === "function" &&
-    Symbol.iterator in value &&
-    typeof value[Symbol.iterator] === "function" &&
-    NULLARY_OP_SYMBOL in value
-  );
-}
-
 export function coerceToNullaryOp(value: unknown): Op<unknown, unknown, []> | undefined {
   if (!isOp(value)) return undefined;
-  if (isNullaryOp(value)) return value;
   return value();
 }
 

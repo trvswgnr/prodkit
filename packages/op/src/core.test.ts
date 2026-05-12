@@ -1,6 +1,6 @@
 import { assert, describe, expect, test } from "vitest";
 import { chainCleanupFaults, closeGenerator, createRunContext, drive } from "./core/runtime.js";
-import { makeNullaryOp } from "./core/nullary-ops.js";
+import { makeCoreOp } from "./core/ops.js";
 import {
   isErrInstruction,
   RegisterExitFinalizerInstruction,
@@ -12,7 +12,7 @@ import { UnhandledException } from "./errors.js";
 import { Result } from "./result.js";
 
 function makeRuntimeOp<T, E>(gen: () => Generator<Instruction<E>, T, unknown>): Op<T, E, []> {
-  const op: Op<T, E, []> = makeNullaryOp(gen, {
+  const op: Op<T, E, []> = makeCoreOp(gen, {
     withRelease: (_release) => op,
     registerEnterInitialize: (_initialize) => op,
     registerExitFinalize: (_finalize) => op,

@@ -239,6 +239,26 @@ describe("gen", () => {
     expect(result.value).toBe(5);
   });
 
+  test("defaulted generator params still receive explicit run args", async () => {
+    const withDefaults = fromGenFn(function* (a: number = 1, b: number = 2) {
+      return a + b;
+    });
+
+    const result = await withDefaults.run(10, 20);
+    assert(result.isOk(), "result should be Ok");
+    expect(result.value).toBe(30);
+  });
+
+  test("rest-parameter generators preserve all run args", async () => {
+    const sumAll = fromGenFn(function* (...values: number[]) {
+      return values.reduce((sum, value) => sum + value, 0);
+    });
+
+    const result = await sumAll.run(1, 2, 3, 4);
+    assert(result.isOk(), "result should be Ok");
+    expect(result.value).toBe(10);
+  });
+
   test("parameterized gen composes via yield* and callable op", async () => {
     const add = fromGenFn(function* (a: number, b: number) {
       return a + b;

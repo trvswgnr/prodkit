@@ -9,12 +9,12 @@ import type { Op } from "./index.js";
 import { SuspendInstruction } from "./core/instructions.js";
 import { createRunContext, drive } from "./core/runtime.js";
 import { Err, Result } from "./result.js";
-import { makeNullaryOp, createDefaultHooks } from "./core/nullary-ops.js";
+import { makeCoreOp, createDefaultHooks } from "./core/ops.js";
 
 type AnyNullaryOp = Op<unknown, unknown, []>;
 
 function makeCombinatorOp<T, E>(gen: () => Generator<Instruction<E>, T, unknown>): Op<T, E, []> {
-  const self: Op<T, E, []> = makeNullaryOp(
+  const self: Op<T, E, []> = makeCoreOp(
     gen,
     createDefaultHooks(() => self),
   );

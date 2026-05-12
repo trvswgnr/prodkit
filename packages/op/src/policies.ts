@@ -1,12 +1,12 @@
 import { TimeoutError, UnhandledException } from "./errors.js";
 import { Result } from "./result.js";
-import { asArityOp, makeFluentArityOp, onOp, withReleaseOp } from "./core/arity-ops.js";
-import { TrackedErr, type Instruction, type OpArity, type RunContext } from "./core/types.js";
+import { makeFluentOp, onOp, withCleanupCoreOp } from "./core/ops.js";
+import { TrackedErr, type Instruction, type OpInterface, type RunContext } from "./core/types.js";
 import type { Op } from "./index.js";
 import { SuspendInstruction } from "./core/instructions.js";
 import { createRunContext, drive, driveInterruptOnAbort } from "./core/runtime.js";
-import { makeNullaryOp, createDefaultHooks } from "./core/nullary-ops.js";
-import { unsafeCoerce, isNullaryOp } from "./shared.js";
+import { makeCoreOp, createDefaultHooks } from "./core/ops.js";
+import { unsafeCoerce } from "./shared.js";
 
 /** Retry policy for `op.withRetry(policy)`. */
 export interface RetryPolicy {
@@ -76,48 +76,24 @@ export const DEFAULT_RETRY_POLICY = Object.freeze({
   getDelay: exponentialBackoff.DEFAULT,
 }) satisfies RetryPolicy;
 
-function mapArityFluentOp<T, EIn, EOut, A extends readonly unknown[]>(
-  source: OpArity<T, EIn, A>,
-  mapNullary: (resolved: Op<T, EIn, []>) => Op<T, EOut, []>,
-): OpArity<T, EOut, A> {
-  return makeFluentArityOp(
-    (...args: A) => mapNullary(source(...args)),
-    (self) => ({
-      withRetry: (policy) => mapArityFluentOp(asArityOp(source.withRetry(policy)), mapNullary),
-      withTimeout: (timeoutMs) =>
-        mapArityFluentOp(
-          asArityOp(
-            // SAFETY: `withTimeout` widens the source error to `EIn | TimeoutError`, but this
-            // mapper is polymorphic over the error channel and forwards whatever union it receives.
-            // The cast narrows only for TS so we can reuse the same fluent mapper pipeline.
-            unsafeCoerce(source.withTimeout(timeoutMs)),
-          ),
-          mapNullary,
-        ),
-      withSignal: (signal) => mapArityFluentOp(asArityOp(source.withSignal(signal)), mapNullary),
-      withRelease: (release) => withReleaseOp(self, release),
-      on: (event, finalize) => onOp(self, event, finalize),
-    }),
-  );
+function makePolicyLiftedOp<T, E, A extends readonly unknown[]>(
+  invoke: (...args: A) => Op<T, E, []>,
+): OpInterface<T, E, A> {
+  return makeFluentOp(invoke, (self) => ({
+    withRetry: (policy) => makePolicyLiftedOp((...args) => withRetryOp(invoke(...args), policy)),
+    withTimeout: (timeoutMs) =>
+      makePolicyLiftedOp((...args) => withTimeoutOp(invoke(...args), timeoutMs)),
+    withSignal: (signal) => makePolicyLiftedOp((...args) => withSignalOp(invoke(...args), signal)),
+    withRelease: (release) =>
+      makePolicyLiftedOp((...args) => withCleanupCoreOp(invoke(...args), release)),
+    on: (event, handler) => onOp(self, event, handler),
+  }));
 }
 
-function mapFluentOp<T, EIn, EOut, A extends readonly unknown[]>(
-  op: Op<T, EIn, A>,
-  mapNullary: (resolved: Op<T, EIn, []>) => Op<T, EOut, []>,
-): Op<T, EOut, A> {
-  if (isNullaryOp(op)) {
-    // SAFETY: TS cannot express that `[] extends A` may collapse to the nullary branch here
-    // Runtime behavior is correct: nullary input remains nullary after mapping
-    return unsafeCoerce(mapNullary(op));
-  }
-
-  return unsafeCoerce(mapArityFluentOp(op, mapNullary));
-}
-
-function makePolicyNullaryOp<T, E>(
+function makePolicyCoreOp<T, E>(
   gen: () => Generator<Instruction<E>, T, unknown>,
 ): Op<T, TrackedErr<E>, []> {
-  const self: Op<T, TrackedErr<E>, []> = makeNullaryOp(
+  const self: Op<T, TrackedErr<E>, []> = makeCoreOp(
     gen,
     createDefaultHooks(() => self),
   );
@@ -155,11 +131,11 @@ function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
  * - Retries only re-run the same op; the exposed typed error channel remains `E`
  * - Internally we include `UnhandledException` for runtime safety in `drive`
  */
-function withRetryNullaryOp<T, E>(
+function withRetryCoreOp<T, E>(
   op: Op<T, E, []>,
   policy: RetryPolicy = DEFAULT_RETRY_POLICY,
 ): Op<T, E, []> {
-  return makePolicyNullaryOp(function* () {
+  return makePolicyCoreOp(function* () {
     let attempt = 1;
 
     while (true) {
@@ -200,13 +176,10 @@ function withRetryNullaryOp<T, E>(
  * - `drive` can still surface `UnhandledException` internally
  * - We intentionally expose only he public contract of `E | TimeoutError` for fluent API stability
  */
-function withTimeoutNullaryOp<T, E>(
-  op: Op<T, E, []>,
-  timeoutMs: number,
-): Op<T, E | TimeoutError, []> {
+function withTimeoutCoreOp<T, E>(op: Op<T, E, []>, timeoutMs: number): Op<T, E | TimeoutError, []> {
   const clampedTimeoutMs = Math.max(0, timeoutMs);
 
-  return makePolicyNullaryOp(function* () {
+  return makePolicyCoreOp(function* () {
     const result: Result<T, E | UnhandledException | TimeoutError> = yield* new SuspendInstruction(
       (outerContext) =>
         raceTimeout(
@@ -226,8 +199,8 @@ function withTimeoutNullaryOp<T, E>(
  *
  * - Same contract as source op: binding a signal does not widen the typed error channel
  */
-function withSignalNullaryOp<T, E>(op: Op<T, E, []>, signal: AbortSignal): Op<T, E, []> {
-  return makePolicyNullaryOp(function* () {
+function withSignalCoreOp<T, E>(op: Op<T, E, []>, signal: AbortSignal): Op<T, E, []> {
+  return makePolicyCoreOp(function* () {
     const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
       (outerContext) =>
         runWithBoundSignal((mergedContext) => drive(op, mergedContext), signal, outerContext),
@@ -242,21 +215,23 @@ export function withRetryOp<T, E, A extends readonly unknown[]>(
   op: Op<T, E, A>,
   policy: RetryPolicy = DEFAULT_RETRY_POLICY,
 ): Op<T, E, A> {
-  return mapFluentOp(op, (resolved) => withRetryNullaryOp(resolved, policy));
+  return unsafeCoerce(makePolicyLiftedOp((...args: A) => withRetryCoreOp(op(...args), policy)));
 }
 
 export function withTimeoutOp<T, E, A extends readonly unknown[]>(
   op: Op<T, E, A>,
   timeoutMs: number,
 ): Op<T, E | TimeoutError, A> {
-  return mapFluentOp(op, (resolved) => withTimeoutNullaryOp(resolved, timeoutMs));
+  return unsafeCoerce(
+    makePolicyLiftedOp((...args: A) => withTimeoutCoreOp(op(...args), timeoutMs)),
+  );
 }
 
 export function withSignalOp<T, E, A extends readonly unknown[]>(
   op: Op<T, E, A>,
   signal: AbortSignal,
 ): Op<T, E, A> {
-  return mapFluentOp(op, (resolved) => withSignalNullaryOp(resolved, signal));
+  return unsafeCoerce(makePolicyLiftedOp((...args: A) => withSignalCoreOp(op(...args), signal)));
 }
 
 /**

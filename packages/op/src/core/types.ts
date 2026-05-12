@@ -3,7 +3,6 @@ import type { Err, Result } from "../result.js";
 import type { RetryPolicy } from "../policies.js";
 import type { RegisterExitFinalizerInstruction, SuspendInstruction } from "./instructions.js";
 import type { Op } from "../index.js";
-import type { NULLARY_OP_SYMBOL } from "../shared.js";
 
 export type TrackedErr<E, Excluded = never> = E extends UnhandledException
   ? never
@@ -132,28 +131,7 @@ export interface WithRecover<T, E, A extends readonly unknown[]> {
   ): Op<T | InferOpOk<R>, TrackedErr<E> | InferOpErr<R>, A>;
 }
 
-export interface OpNullary<T, E>
-  extends
-    WithRetry<T, E, []>,
-    WithTimeout<T, E, []>,
-    WithSignal<T, E, []>,
-    WithRelease<T, E, []>,
-    WithLifecycleHooks<T, E, []>,
-    WithMap<T, E, []>,
-    WithMapErr<T, E, []>,
-    WithFlatMap<T, E, []>,
-    WithTap<T, E, []>,
-    WithTapErr<T, E, []>,
-    WithRecover<T, E, []> {
-  (): OpNullary<T, E>;
-  /** Executes the operation and returns a `Result` for this run. */
-  run(): Promise<Result<T, E | UnhandledException>>;
-  readonly _tag: "Op";
-  [Symbol.iterator](): Generator<Instruction<E>, T, unknown>;
-  [NULLARY_OP_SYMBOL]: true;
-}
-
-export interface OpArity<T, E, A extends readonly unknown[]>
+export interface OpInterface<T, E, A extends readonly unknown[]>
   extends
     WithRetry<T, E, A>,
     WithTimeout<T, E, A>,
@@ -169,6 +147,8 @@ export interface OpArity<T, E, A extends readonly unknown[]>
   (...args: A): Op<T, E, []>;
   /** Executes the operation with runtime arguments and returns a `Result`. */
   run(...args: A): Promise<Result<T, E | UnhandledException>>;
+  readonly _tag: "Op";
+  [Symbol.iterator](): Generator<Instruction<E>, T, unknown>;
 }
 
 export interface OpHooks<T, E, TInner = unknown, EInner = unknown> {
