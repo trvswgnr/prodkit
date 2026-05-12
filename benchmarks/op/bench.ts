@@ -310,7 +310,7 @@ async function resolveMainTarball(repoRoot: string, sha: string): Promise<string
 
   await runCommand("git", ["worktree", "add", "--detach", worktreeDir, sha], repoRoot);
   try {
-    await runCommand("npm", ["ci"], worktreeDir);
+    await runCommand("pnpm", ["install", "--no-frozen-lockfile"], worktreeDir);
     const packageDir = resolveOpPackageDir(worktreeDir);
     await runCommand("npm", ["run", "build"], packageDir);
     const packOutput = await runCommand(
@@ -320,7 +320,7 @@ async function resolveMainTarball(repoRoot: string, sha: string): Promise<string
       true,
     );
     const filename = parsePackFilename(packOutput);
-    const packedTarball = path.resolve(worktreeDir, filename);
+    const packedTarball = path.resolve(packageDir, filename);
     const copiedTarball = path.resolve(repoRoot, `main-${sha.slice(0, 12)}.tgz`);
     await copyFile(packedTarball, copiedTarball);
     createdTarballPath = copiedTarball;
