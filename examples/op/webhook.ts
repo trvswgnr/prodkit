@@ -101,8 +101,8 @@ export class ServiceCallError extends TaggedError("ServiceCallError")<{
       typeof cause === "object" &&
       cause !== null &&
       "retryable" in cause &&
-      typeof (cause as { retryable?: unknown }).retryable === "boolean"
-        ? (cause as { retryable: boolean }).retryable
+      typeof cause.retryable === "boolean"
+        ? cause.retryable
         : false;
     return new ServiceCallError({ service, retryable, cause });
   }

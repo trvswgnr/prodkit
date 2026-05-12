@@ -263,13 +263,13 @@ const Otel: Otel = {
         };
         return await run(span);
       },
-      startSpan: (async (_spanName: string, _options: { attributes?: Record<string, unknown> }) => {
+      startSpan: (_spanName: string, _options: { attributes?: Record<string, unknown> }) => {
         const span: Span = {
           setStatus: () => {},
           end: () => {},
         };
         return span;
-      }) as never,
+      },
     }),
   },
   SpanStatusCode: {

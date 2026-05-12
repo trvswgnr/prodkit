@@ -70,6 +70,10 @@ function readPackageNameIfPresent(dir: string): string | undefined {
   return typeof name === "string" ? name : undefined;
 }
 
+function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
+  return (typeof value === "object" || typeof value === "function") && value !== null;
+}
+
 function getRepoRoot(): string {
   let currentDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -118,7 +122,10 @@ function parseLsRemoteSha(output: string): string | undefined {
 }
 
 function parsePackFilename(packOutput: string): string {
-  const parsed = JSON.parse(packOutput) as Array<{ filename?: string }>;
+  const parsed = JSON.parse(packOutput);
+  if (!Array.isArray(parsed)) {
+    throw new Error("Could not parse npm pack output filename.");
+  }
   const filename = parsed[0]?.filename;
   if (typeof filename !== "string" || filename.length === 0) {
     throw new Error("Could not parse npm pack output filename.");
@@ -137,16 +144,16 @@ function relativeSafePath(pkgRoot: string, candidate: string): string {
 
 function readRuntimeEntryFromExports(exportsField: unknown): string | undefined {
   if (typeof exportsField === "string") return exportsField;
-  if (typeof exportsField !== "object" || exportsField === null) return undefined;
+  if (!isRecord(exportsField)) return undefined;
 
-  const entry = (exportsField as Record<string, unknown>)["."];
+  const entry = exportsField["."];
   if (typeof entry === "string") return entry;
-  if (typeof entry !== "object" || entry === null) return undefined;
+  if (!isRecord(entry)) return undefined;
 
-  const runtimeEntry = (entry as Record<string, unknown>).import;
+  const runtimeEntry = entry.import;
   if (typeof runtimeEntry === "string") return runtimeEntry;
 
-  const defaultEntry = (entry as Record<string, unknown>).default;
+  const defaultEntry = entry.default;
   if (typeof defaultEntry === "string") return defaultEntry;
   return undefined;
 }
@@ -267,8 +274,14 @@ async function installTarget(label: string, spec: string): Promise<TargetInstall
   }
 
   const packageJsonRaw = await readFile(path.join(packageDir, "package.json"), "utf8");
-  const parsed = JSON.parse(packageJsonRaw) as { version?: string };
+  const parsed: unknown = JSON.parse(packageJsonRaw);
+  if (!isRecord(parsed)) {
+    throw new Error("Could not parse package.json.");
+  }
   const packageVersion = parsed.version ?? "unknown";
+  if (typeof packageVersion !== "string") {
+    throw new Error("Could not parse package.json version.");
+  }
 
   return { label, workspaceDir, packageDir, packageVersion };
 }
@@ -331,14 +344,17 @@ async function importOpFactory(packageDir: string): Promise<{ Op: unknown }> {
   if (!existsSync(modulePath)) {
     throw new Error(`Resolved runtime entry does not exist: ${modulePath}`);
   }
-  const mod = (await import(pathToFileURL(modulePath).href)) as { Op?: unknown };
+  const mod: unknown = await import(pathToFileURL(modulePath).href);
+  if (!isRecord(mod)) {
+    throw new Error(`Unable to import Op factory from ${modulePath}.`);
+  }
   if (!mod.Op) {
     throw new Error(`Unable to import Op factory from ${modulePath}.`);
   }
   return { Op: mod.Op };
 }
 
-function assertOpFactory(input: unknown): {
+type OpFactory = {
   of: (value: unknown) => {
     run: () => Promise<{ isOk: () => boolean }>;
     withTimeout: (timeoutMs: number) => { run: () => Promise<{ isOk: () => boolean }> };
@@ -352,19 +368,21 @@ function assertOpFactory(input: unknown): {
     withTimeout: (timeoutMs: number) => { run: () => Promise<{ isOk: () => boolean }> };
   };
   all: (ops: unknown[]) => { run: () => Promise<{ isOk: () => boolean }> };
-} {
-  if (typeof input !== "function" && (typeof input !== "object" || input === null)) {
+};
+
+function assertOpFactory(input: unknown): OpFactory {
+  if (!isRecord(input)) {
     throw new Error("Imported Op value is invalid.");
   }
-  const op = input as {
-    of?: unknown;
-    try?: unknown;
-    all?: unknown;
-  };
-  if (typeof op.of !== "function" || typeof op.try !== "function" || typeof op.all !== "function") {
+  if (
+    typeof input.of !== "function" ||
+    typeof input.try !== "function" ||
+    typeof input.all !== "function"
+  ) {
     throw new Error("Imported Op is missing required methods (of/try/all).");
   }
-  return op as ReturnType<typeof assertOpFactory>;
+  // SAFETY: We've already asserted that the input is a valid OpFactory.
+  return input as OpFactory;
 }
 
 async function runVariant(name: string, fn: () => Promise<unknown>): Promise<BenchmarkRecord> {
@@ -460,11 +478,11 @@ async function runRuntimeBenchmarks(opFactoryInput: unknown): Promise<RuntimeRep
 async function resolveBundleEntry(packageDir: string): Promise<string> {
   const packageJsonPath = path.join(packageDir, "package.json");
   const packageJsonRaw = await readFile(packageJsonPath, "utf8");
-  const packageJson = JSON.parse(packageJsonRaw) as {
-    exports?: unknown;
-    module?: string;
-    main?: string;
-  };
+  const packageJson: unknown = JSON.parse(packageJsonRaw);
+
+  if (!isRecord(packageJson)) {
+    throw new Error("Could not parse package.json.");
+  }
 
   const exportEntry = readRuntimeEntryFromExports(packageJson.exports);
   const moduleEntry = typeof packageJson.module === "string" ? packageJson.module : undefined;
