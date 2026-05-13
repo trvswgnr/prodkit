@@ -28,6 +28,31 @@ describe("type inference contracts", () => {
     p2.run(1, 2);
   });
 
+  test("only nullary ops expose direct yield-star composition", () => {
+    const nullary = Op(function* () {
+      return 1;
+    });
+    const parameterized = Op(function* (id: string) {
+      return id.length;
+    });
+
+    Op(function* () {
+      const value = yield* nullary;
+      return value;
+    });
+    Op(function* () {
+      const value = yield* parameterized("abc");
+      return value;
+    });
+
+    // @ts-expect-error - parameterized ops must be invoked before `yield*`
+    void parameterized[Symbol.iterator];
+    Op(function* () {
+      // @ts-expect-error - parameterized ops must be invoked before `yield*`
+      return yield* parameterized;
+    });
+  });
+
   test("policy chaining preserves arity and widens error channels", () => {
     const retryNullary = Op.try(() => Promise.resolve(1)).withRetry();
     expectTypeOf(retryNullary).toEqualTypeOf<Op<number, never, []>>();
@@ -106,6 +131,12 @@ describe("type inference contracts", () => {
       return 69;
     }).tapErr((error) => error.toUpperCase());
     expectTypeOf(tapErrOp).toEqualTypeOf<Op<number, "bad-input", ["bad" | "ok"]>>();
+
+    const parameterizedObserver = Op(function* (id: string) {
+      return yield* Op.fail(`bad:${id}` as const);
+    });
+    const tapParameterized = Op.of(1).tap(() => parameterizedObserver);
+    expectTypeOf(tapParameterized).toEqualTypeOf<Op<number, never, []>>();
   });
 
   test("mapErr, tapErr, and recover callbacks exclude UnhandledException", () => {

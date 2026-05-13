@@ -21,7 +21,7 @@ import type { Op } from "../index.js";
 import { RegisterExitFinalizerInstruction, SuspendInstruction } from "./instructions.js";
 import { createRunContext, drive } from "./runtime.js";
 import { runOp } from "./run-op.js";
-import { unsafeCoerce, coerceToNullaryOp, EMPTY_TUPLE, OP_BRAND } from "../shared.js";
+import { unsafeCoerce, coerceToNullaryOp, EMPTY_TUPLE, isIterableOp, OP_BRAND } from "../shared.js";
 
 function conditionalPredicate<E>(pred: ((error: E) => boolean) | WithPredicateMethod<E>, error: E) {
   return "is" in pred ? pred.is(error) : pred(error);
@@ -439,6 +439,7 @@ export function asOpInterface<T, E, A extends readonly unknown[]>(
 export function makeFluentOp<T, E, A extends readonly unknown[]>(
   invoke: (...args: A) => Op<T, E, []>,
   makeHandlers: (self: OpInterface<T, E, A>) => FluentHandlers<T, E, A>,
+  makeIterable?: () => Op<T, E, []>,
 ): OpInterface<T, E, A> {
   // SAFETY: `invoke` already has runtime signature `(...args: A) => Op<T, E, []>`.
   // `Object.assign` only decorates that function object with fluent handlers, so this
@@ -447,8 +448,6 @@ export function makeFluentOp<T, E, A extends readonly unknown[]>(
     Object.assign(invoke, {
       run: (...args: A) =>
         drive(invoke(...args), createRunContext(new AbortController().signal, args)),
-      // Bridge `yield* op` runtime interop for ops produced from generic wrappers.
-      [Symbol.iterator]: () => invoke(...unsafeCoerce<A>(EMPTY_TUPLE))[Symbol.iterator](),
       withRetry: (policy?: RetryPolicy) => makeHandlers(self).withRetry(policy),
       withTimeout: (timeoutMs: number) => makeHandlers(self).withTimeout(timeoutMs),
       withSignal: (signal: AbortSignal) => makeHandlers(self).withSignal(signal),
@@ -504,6 +503,12 @@ export function makeFluentOp<T, E, A extends readonly unknown[]>(
       _tag: "Op" as const,
     }),
   );
+  if (makeIterable !== undefined) {
+    Object.assign(self, {
+      // Bridge `yield* op` runtime interop for ops produced from generic wrappers.
+      [Symbol.iterator]: () => makeIterable()[Symbol.iterator](),
+    });
+  }
   return self;
 }
 
@@ -514,7 +519,7 @@ export function liftOp<TIn, EIn, A extends readonly unknown[], TOut, EOut>(
     resolved: Op<TIn, EIn | TimeoutError, []>,
   ) => Op<TOut, EOut | TimeoutError, []>,
 ): OpInterface<TOut, EOut, A> {
-  return makeFluentOp(
+  return makeFluentOp<TOut, EOut, A>(
     (...args) => mapCore(op(...args)),
     (self) => ({
       withRetry: (policy) =>
@@ -530,6 +535,7 @@ export function liftOp<TIn, EIn, A extends readonly unknown[], TOut, EOut>(
       withRelease: (release) => withReleaseOp(self, release),
       on: (event, handler) => onOp(self, event, handler),
     }),
+    isIterableOp(op) ? () => mapCore(unsafeCoerce<Op<TIn, EIn, []>>(op)()) : undefined,
   );
 }
 
@@ -538,7 +544,7 @@ export function onExitOp<T, E, A extends readonly unknown[]>(
   finalize: ExitFn<T, E, A>,
 ): OpInterface<T, E, A> {
   const source = op;
-  return makeFluentOp(
+  return makeFluentOp<T, E, A>(
     (...args) =>
       onExitCoreOp(source(...args), (ctx) =>
         finalize({
@@ -559,6 +565,9 @@ export function onExitOp<T, E, A extends readonly unknown[]>(
       withRelease: (release) => withReleaseOp(self, release),
       on: (event, handler) => onOp(self, event, handler),
     }),
+    isIterableOp(source)
+      ? () => onExitCoreOp(unsafeCoerce<Op<T, E, []>>(source)(), unsafeCoerce(finalize))
+      : undefined,
   );
 }
 
@@ -567,7 +576,7 @@ export function onEnterOp<T, E, A extends readonly unknown[]>(
   initialize: EnterFn<A>,
 ): OpInterface<T, E, A> {
   const source = op;
-  return makeFluentOp(
+  return makeFluentOp<T, E, A>(
     (...args) => onEnterCoreOp(source(...args), ({ signal }) => initialize({ signal, args })),
     (self) => ({
       withRetry: (policy) => onEnterOp(asOpInterface(source.withRetry(policy)), initialize),
@@ -577,6 +586,9 @@ export function onEnterOp<T, E, A extends readonly unknown[]>(
       withRelease: (release) => withReleaseOp(self, release),
       on: (event, handler) => onOp(self, event, handler),
     }),
+    isIterableOp(source)
+      ? () => onEnterCoreOp(unsafeCoerce<Op<T, E, []>>(source)(), unsafeCoerce(initialize))
+      : undefined,
   );
 }
 
@@ -602,7 +614,7 @@ export function withReleaseOp<T, E, A extends readonly unknown[]>(
   release: ReleaseFn<T>,
 ): OpInterface<T, E, A> {
   const source = op;
-  return makeFluentOp(
+  return makeFluentOp<T, E, A>(
     (...args) => withCleanupCoreOp(source(...args), release),
     (self) => ({
       withRetry: (policy) => withReleaseOp(asOpInterface(source.withRetry(policy)), release),
@@ -612,5 +624,8 @@ export function withReleaseOp<T, E, A extends readonly unknown[]>(
       withRelease: (nextRelease) => withReleaseOp(self, nextRelease),
       on: (event, handler) => onOp(self, event, handler),
     }),
+    isIterableOp(source)
+      ? () => withCleanupCoreOp(unsafeCoerce<Op<T, E, []>>(source)(), release)
+      : undefined,
   );
 }

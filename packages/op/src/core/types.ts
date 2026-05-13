@@ -10,9 +10,9 @@ export type TrackedErr<E, Excluded = never> = E extends UnhandledException
     ? never
     : E;
 
-export type InferOpOk<R> = R extends Op<infer T, unknown, infer _> ? T : Awaited<R>;
+export type InferOpOk<R> = R extends Op<infer T, unknown, []> ? T : Awaited<R>;
 
-export type InferOpErr<R> = R extends Op<unknown, infer E, infer _> ? E : never;
+export type InferOpErr<R> = R extends Op<unknown, infer E, []> ? E : never;
 
 /**
  * Passed to {@link ExitFn} when the run unwinds.
@@ -217,22 +217,25 @@ export interface OpBase<T, E, A extends readonly unknown[]> {
    * const result = await Op.of(1).run();
    */
   run(...args: A): Promise<Result<T, E | UnhandledException>>;
+}
+
+export interface OpIterable<T, E> {
   [Symbol.iterator](): Generator<Instruction<E>, T, unknown>;
 }
-export interface OpInterface<T, E, A extends readonly unknown[]>
-  extends
-    OpBase<T, E, A>,
-    WithRetry<T, E, A>,
-    WithTimeout<T, E, A>,
-    WithSignal<T, E, A>,
-    WithRelease<T, E, A>,
-    WithLifecycleHooks<T, E, A>,
-    WithMap<T, E, A>,
-    WithMapErr<T, E, A>,
-    WithFlatMap<T, E, A>,
-    WithTap<T, E, A>,
-    WithTapErr<T, E, A>,
-    WithRecover<T, E, A> {}
+
+export type OpInterface<T, E, A extends readonly unknown[]> = OpBase<T, E, A> &
+  WithRetry<T, E, A> &
+  WithTimeout<T, E, A> &
+  WithSignal<T, E, A> &
+  WithRelease<T, E, A> &
+  WithLifecycleHooks<T, E, A> &
+  WithMap<T, E, A> &
+  WithMapErr<T, E, A> &
+  WithFlatMap<T, E, A> &
+  WithTap<T, E, A> &
+  WithTapErr<T, E, A> &
+  WithRecover<T, E, A> &
+  (A extends [] ? OpIterable<T, E> : {});
 
 export interface OpHooks<T, E, TInner = unknown, EInner = unknown> {
   /** Inner op to push policy wrappers to (when present with `rebuild`). */

@@ -6,7 +6,7 @@ import type { Op } from "./index.js";
 import { SuspendInstruction } from "./core/instructions.js";
 import { createRunContext, drive, driveInterruptOnAbort } from "./core/runtime.js";
 import { makeCoreOp, createDefaultHooks } from "./core/ops.js";
-import { unsafeCoerce } from "./shared.js";
+import { isIterableOp, unsafeCoerce } from "./shared.js";
 
 /** Retry policy for `op.withRetry(policy)`. */
 export interface RetryPolicy {
@@ -78,16 +78,35 @@ export const DEFAULT_RETRY_POLICY = Object.freeze({
 
 function makePolicyLiftedOp<T, E, A extends readonly unknown[]>(
   invoke: (...args: A) => Op<T, E, []>,
+  makeIterable?: () => Op<T, E, []>,
 ): OpInterface<T, E, A> {
-  return makeFluentOp(invoke, (self) => ({
-    withRetry: (policy) => makePolicyLiftedOp((...args) => withRetryOp(invoke(...args), policy)),
-    withTimeout: (timeoutMs) =>
-      makePolicyLiftedOp((...args) => withTimeoutOp(invoke(...args), timeoutMs)),
-    withSignal: (signal) => makePolicyLiftedOp((...args) => withSignalOp(invoke(...args), signal)),
-    withRelease: (release) =>
-      makePolicyLiftedOp((...args) => withCleanupCoreOp(invoke(...args), release)),
-    on: (event, handler) => onOp(self, event, handler),
-  }));
+  return makeFluentOp(
+    invoke,
+    (self) => ({
+      withRetry: (policy) =>
+        makePolicyLiftedOp(
+          (...args) => withRetryOp(invoke(...args), policy),
+          makeIterable ? () => withRetryOp(makeIterable(), policy) : undefined,
+        ),
+      withTimeout: (timeoutMs) =>
+        makePolicyLiftedOp(
+          (...args) => withTimeoutOp(invoke(...args), timeoutMs),
+          makeIterable ? () => withTimeoutOp(makeIterable(), timeoutMs) : undefined,
+        ),
+      withSignal: (signal) =>
+        makePolicyLiftedOp(
+          (...args) => withSignalOp(invoke(...args), signal),
+          makeIterable ? () => withSignalOp(makeIterable(), signal) : undefined,
+        ),
+      withRelease: (release) =>
+        makePolicyLiftedOp(
+          (...args) => withCleanupCoreOp(invoke(...args), release),
+          makeIterable ? () => withCleanupCoreOp(makeIterable(), release) : undefined,
+        ),
+      on: (event, handler) => onOp(self, event, handler),
+    }),
+    makeIterable,
+  );
 }
 
 function makePolicyCoreOp<T, E>(
@@ -215,7 +234,12 @@ export function withRetryOp<T, E, A extends readonly unknown[]>(
   op: Op<T, E, A>,
   policy: RetryPolicy = DEFAULT_RETRY_POLICY,
 ): Op<T, E, A> {
-  return unsafeCoerce(makePolicyLiftedOp((...args: A) => withRetryCoreOp(op(...args), policy)));
+  return unsafeCoerce(
+    makePolicyLiftedOp(
+      (...args: A) => withRetryCoreOp(op(...args), policy),
+      isIterableOp(op) ? () => withRetryCoreOp(op(), policy) : undefined,
+    ),
+  );
 }
 
 export function withTimeoutOp<T, E, A extends readonly unknown[]>(
@@ -223,7 +247,10 @@ export function withTimeoutOp<T, E, A extends readonly unknown[]>(
   timeoutMs: number,
 ): Op<T, E | TimeoutError, A> {
   return unsafeCoerce(
-    makePolicyLiftedOp((...args: A) => withTimeoutCoreOp(op(...args), timeoutMs)),
+    makePolicyLiftedOp(
+      (...args: A) => withTimeoutCoreOp(op(...args), timeoutMs),
+      isIterableOp(op) ? () => withTimeoutCoreOp(op(), timeoutMs) : undefined,
+    ),
   );
 }
 
@@ -231,7 +258,12 @@ export function withSignalOp<T, E, A extends readonly unknown[]>(
   op: Op<T, E, A>,
   signal: AbortSignal,
 ): Op<T, E, A> {
-  return unsafeCoerce(makePolicyLiftedOp((...args: A) => withSignalCoreOp(op(...args), signal)));
+  return unsafeCoerce(
+    makePolicyLiftedOp(
+      (...args: A) => withSignalCoreOp(op(...args), signal),
+      isIterableOp(op) ? () => withSignalCoreOp(op(), signal) : undefined,
+    ),
+  );
 }
 
 /**

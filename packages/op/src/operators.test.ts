@@ -234,6 +234,22 @@ describe("operator combinators", () => {
       expect(result.value).toBe(4);
     });
 
+    test("tap treats parameterized Op returns as plain ignored values", async () => {
+      const observer = vi.fn();
+      const parameterized = Op(function* (id: string) {
+        observer(id);
+        return id;
+      });
+
+      const result = await Op.of(4)
+        .tap(() => parameterized)
+        .run();
+
+      assert(result.isOk(), "should be Ok");
+      expect(result.value).toBe(4);
+      expect(observer).not.toHaveBeenCalled();
+    });
+
     test("tap drives Op(function*) observers that succeed", async () => {
       const seen: string[] = [];
       const result = await Op.of(4)

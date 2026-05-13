@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   factory helper matches instance `run(...args)` behavior for parameterized ops.
 - Expanded and standardized JSDoc/examples across `Op` static and instance
   methods, with type-level coverage to prevent documentation drift.
+- Limited direct `yield* op` composition to nullary ops so parameterized ops
+  must be invoked before composition.
 
 ### Fixed
 
@@ -37,6 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replaced `Promise.prototype.finally` cleanup coupling in signal binding with
   `try/finally`, preventing listener/timer cleanup regressions when callers pass
   non-native thenables.
+- Corrected README/operator docs for `Op.try` mapper handling and `mapErr`
+  bypass behavior around `UnhandledException`.
 
 ## [0.1.64] - 2026-05-12
 

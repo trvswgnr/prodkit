@@ -52,8 +52,8 @@ export function defer(finalize: AnyExitFn): Op<void, never, []> {
 /*
  * Suspends until a promise settles, then continues with its value or a mapped failure
  *
- * `onError` may return a value, promise, nullary `Op`, or generator object. Program-shaped
- * mappers are driven and their return value is used as the mapped typed error.
+ * `onError` may return a value or promise. Program-shaped values are used as the mapped typed
+ * error value and are not driven.
  */
 export function _try<T, E = UnhandledException>(
   f: (signal: AbortSignal) => T,
@@ -113,14 +113,35 @@ function bindArityArgsToFinalizers<T>(
 
 function makeArityOp<T, E, A extends readonly unknown[]>(
   invoke: (...args: A) => Op<T, E, []>,
+  makeIterable?: () => Op<T, E, []>,
 ): OpInterface<T, E, A> {
-  return makeFluentOp(invoke, (self) => ({
-    withRetry: (policy) => makeArityOp((...args) => withRetryOp(invoke(...args), policy)),
-    withTimeout: (timeoutMs) => makeArityOp((...args) => withTimeoutOp(invoke(...args), timeoutMs)),
-    withSignal: (signal) => makeArityOp((...args) => withSignalOp(invoke(...args), signal)),
-    withRelease: (release) => makeArityOp((...args) => withCleanupCoreOp(invoke(...args), release)),
-    on: (event, handler) => onOp(self, event, handler),
-  }));
+  return makeFluentOp(
+    invoke,
+    (self) => ({
+      withRetry: (policy) =>
+        makeArityOp(
+          (...args) => withRetryOp(invoke(...args), policy),
+          makeIterable ? () => withRetryOp(makeIterable(), policy) : undefined,
+        ),
+      withTimeout: (timeoutMs) =>
+        makeArityOp(
+          (...args) => withTimeoutOp(invoke(...args), timeoutMs),
+          makeIterable ? () => withTimeoutOp(makeIterable(), timeoutMs) : undefined,
+        ),
+      withSignal: (signal) =>
+        makeArityOp(
+          (...args) => withSignalOp(invoke(...args), signal),
+          makeIterable ? () => withSignalOp(makeIterable(), signal) : undefined,
+        ),
+      withRelease: (release) =>
+        makeArityOp(
+          (...args) => withCleanupCoreOp(invoke(...args), release),
+          makeIterable ? () => withCleanupCoreOp(makeIterable(), release) : undefined,
+        ),
+      on: (event, handler) => onOp(self, event, handler),
+    }),
+    makeIterable,
+  );
 }
 
 /**
@@ -131,7 +152,7 @@ export function fromGenFn<Y extends Instruction<unknown>, T, A extends readonly 
 ): Op<T, InferErr<Y>, A> {
   // We intentionally always build through the tuple-arity lifting path, including for `A = []`.
   // This keeps runtime behavior uniform while preserving exact tuple signatures at the type level.
-  const op = makeArityOp((...args: A) => {
+  const invoke = (...args: A) => {
     // TS cannot model `Generator<Y, T, unknown>` as the internal instruction-supertype without this bridge cast
     const bound: Op<T, InferErr<Y>, []> = makeCoreOp(
       () =>
@@ -141,7 +162,8 @@ export function fromGenFn<Y extends Instruction<unknown>, T, A extends readonly 
       createDefaultHooks(() => bound),
     );
     return bound;
-  });
+  };
+  const op = makeArityOp(invoke, f.length === 0 ? () => invoke(...unsafeCoerce<A>([])) : undefined);
   // SAFETY: `makeArityOp` returns an OpInterface<T, E, A>, so we need to cast it to an Op<T, E, A>
   return unsafeCoerce(op);
 }

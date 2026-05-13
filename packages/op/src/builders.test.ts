@@ -237,6 +237,8 @@ describe("gen", () => {
     const result = await add(2, 3).run();
     assert(result.isOk(), "result should be Ok");
     expect(result.value).toBe(5);
+    expect(Symbol.iterator in add).toBe(false);
+    expect(Symbol.iterator in add(2, 3)).toBe(true);
   });
 
   test("defaulted generator params still receive explicit run args", async () => {

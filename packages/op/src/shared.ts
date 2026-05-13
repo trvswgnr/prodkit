@@ -1,4 +1,5 @@
 import type { Op } from "./index.js";
+import type { OpIterable } from "./core/types.js";
 
 export const EMPTY_TUPLE: [] = [];
 export const OP_BRAND: unique symbol = Symbol("prodkit.op");
@@ -19,10 +20,16 @@ export function isOp(value: unknown): value is Op<unknown, unknown, readonly unk
   return typeof value === "function" && OP_BRAND in value && value[OP_BRAND] === true;
 }
 
+export function isIterableOp(
+  value: unknown,
+): value is Op<unknown, unknown, []> & OpIterable<unknown, unknown> {
+  return isOp(value) && Symbol.iterator in value && typeof value[Symbol.iterator] === "function";
+}
+
 export function coerceToNullaryOp(value: unknown): Op<unknown, unknown, []> | undefined {
-  if (!isOp(value)) return undefined;
+  if (!isIterableOp(value)) return undefined;
   const nullary = value();
-  return isOp(nullary) ? nullary : undefined;
+  return isIterableOp(nullary) ? nullary : undefined;
 }
 
 export function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {

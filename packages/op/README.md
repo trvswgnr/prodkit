@@ -74,6 +74,8 @@ if (result.isOk()) {
 
 Turns a generator into a composable operation.
 Inside the generator, `yield*` another op to unwrap success or short-circuit on failure.
+Parameterized ops must be invoked before composition: use `yield* loadUser(id)`, not
+`yield* loadUser`.
 
 ### `Op.of(value)`
 
@@ -148,9 +150,7 @@ const result = await fetchUser.withTimeout(1000).run();
 ```ts
 const mapped = await Op.try(
   () => Promise.reject("boom"),
-  function* (cause) {
-    return `mapped: ${String(cause)}`;
-  },
+  (cause) => `mapped: ${String(cause)}`,
 ).run();
 // Result<never, "mapped: boom" | UnhandledException>
 ```
@@ -248,13 +248,14 @@ Transforms an op's typed error channel while preserving the success value and ar
 Use this when you want to normalize or enrich domain failures without restructuring into a
 generator.
 
-`UnhandledException` is part of the runtime channel and can also be mapped.
+`UnhandledException` is part of the runtime channel and bypasses `mapErr`; only tracked typed
+errors are passed to `f`.
 
 ```ts
 const normalizeFetchError = Op.try(
   () => fetch("https://example.com/user/69"),
   (cause) => new FetchError({ cause }),
-).mapErr((error) => (error instanceof FetchError ? new UserLookupError({ cause: error }) : error));
+).mapErr((e) => (FetchError.is(e) ? new UserLookupError({ cause: e }) : e));
 ```
 
 ### `.recover(predicate, handler)`
