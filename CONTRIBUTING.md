@@ -93,9 +93,9 @@ Use a strict two-tier model so behavior has one clear home.
 You can run consumer install path checks directly:
 
 ```bash
-pnpm --filter @prodkit/op run examples:smoke:pack
-pnpm --filter @prodkit/op run examples:smoke:github
-pnpm --filter @prodkit/op run examples:smoke:npm
+pnpm --filter @prodkit/op-scripts run examples:smoke:pack
+pnpm --filter @prodkit/op-scripts run examples:smoke:github
+pnpm --filter @prodkit/op-scripts run examples:smoke:npm
 pnpm --filter @prodkit/op run test
 ```
 

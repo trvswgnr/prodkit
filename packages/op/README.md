@@ -155,15 +155,20 @@ const mapped = await Op.try(
 // Result<never, "mapped: boom" | UnhandledException>
 ```
 
-### `Op.run(op)`
+### `Op.run(op, ...args)`
 
-Static runner for nullary ops. This is equivalent to `op.run()`, and is useful when you want to
+Static runner for ops. This is equivalent to `op.run(...args)`, and is useful when you want to
 execute an op value passed around as data.
-`Op.run(op)` does not expose a cancel handle; if the caller needs external cancellation, compose
+`Op.run(op, ...args)` does not expose a cancel handle; if the caller needs external cancellation, compose
 the op with `.withSignal(signal)` before running it.
 
 ```ts
 const result = await Op.run(Op.of(7));
+
+const add = Op(function* (a: number, b: number) {
+  return a + b;
+});
+const sum = await Op.run(add, 2, 5);
 ```
 
 ### `Op.empty`
@@ -575,7 +580,7 @@ that demonstrates:
 Run the consumer-level checks (repo contributors, from monorepo root):
 
 ```bash
-pnpm --filter @prodkit/op run examples:smoke:pack
+pnpm --filter @prodkit/op-scripts run examples:smoke:pack
 ```
 
 ## More examples

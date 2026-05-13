@@ -234,6 +234,7 @@ export function withRetryOp<T, E, A extends readonly unknown[]>(
   op: Op<T, E, A>,
   policy: RetryPolicy = DEFAULT_RETRY_POLICY,
 ): Op<T, E, A> {
+  // SAFETY: makePolicyLiftedOp preserves the source op arity and only changes run behavior.
   return unsafeCoerce(
     makePolicyLiftedOp(
       (...args: A) => withRetryCoreOp(op(...args), policy),
@@ -246,6 +247,7 @@ export function withTimeoutOp<T, E, A extends readonly unknown[]>(
   op: Op<T, E, A>,
   timeoutMs: number,
 ): Op<T, E | TimeoutError, A> {
+  // SAFETY: makePolicyLiftedOp preserves arity while withTimeoutCoreOp widens only the error type.
   return unsafeCoerce(
     makePolicyLiftedOp(
       (...args: A) => withTimeoutCoreOp(op(...args), timeoutMs),
@@ -258,6 +260,7 @@ export function withSignalOp<T, E, A extends readonly unknown[]>(
   op: Op<T, E, A>,
   signal: AbortSignal,
 ): Op<T, E, A> {
+  // SAFETY: makePolicyLiftedOp preserves the source op arity and error channel.
   return unsafeCoerce(
     makePolicyLiftedOp(
       (...args: A) => withSignalCoreOp(op(...args), signal),

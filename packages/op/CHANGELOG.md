@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Corrected contributor and package README smoke-check commands to point at the
+  `@prodkit/op-scripts` workspace that owns the `examples:smoke:*` scripts.
+- Corrected `Op.run` README wording to reflect parameterized
+  `Op.run(op, ...args)` support.
 - Passed the same unwrapped retry cause to `RetryPolicy.shouldRetry` and
   `RetryPolicy.getDelay`, so cause-aware delay functions see the same value as
   retry predicates.

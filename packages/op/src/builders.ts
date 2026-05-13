@@ -103,7 +103,14 @@ function bindArityArgsToFinalizers<T>(
 
   return {
     next: (value?: unknown) => bindStep(iterator.next(value)),
-    return: (value?: T) => bindStep(iterator.return(unsafeCoerce<T>(value))),
+    return: (value?: T) =>
+      bindStep(
+        iterator.return(
+          // SAFETY: `Iterator.return` requires the generator return type, but callers may close without
+          // a payload; the value is only forwarded to generator finalization.
+          unsafeCoerce<T>(value),
+        ),
+      ),
     throw: (error?: unknown) => bindStep(iterator.throw(error)),
     [Symbol.iterator]() {
       return this;
@@ -163,7 +170,11 @@ export function fromGenFn<Y extends Instruction<unknown>, T, A extends readonly 
     );
     return bound;
   };
-  const op = makeArityOp(invoke, f.length === 0 ? () => invoke(...unsafeCoerce<A>([])) : undefined);
+  const op = makeArityOp(
+    invoke,
+    // SAFETY: only generator functions with zero declared parameters expose the nullary iterator path.
+    f.length === 0 ? () => invoke(...unsafeCoerce<A>([])) : undefined,
+  );
   // SAFETY: `makeArityOp` returns an OpInterface<T, E, A>, so we need to cast it to an Op<T, E, A>
   return unsafeCoerce(op);
 }

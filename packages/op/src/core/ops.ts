@@ -129,7 +129,12 @@ export function withCleanupCoreOp<T, E>(op: Op<T, E, []>, release: ReleaseFn<T>)
     },
     {
       inner: op,
-      rebuild: (newInner) => withCleanupCoreOp(unsafeCoerce<Op<T, E, []>>(newInner), release),
+      rebuild: (newInner) =>
+        withCleanupCoreOp(
+          // SAFETY: rebuild callbacks are only used with the `inner` op they declared in this hook.
+          unsafeCoerce<Op<T, E, []>>(newInner),
+          release,
+        ),
       withRelease: (nextRelease) => withCleanupCoreOp(withCleanupCoreOp(op, release), nextRelease),
       registerEnterInitialize: (initialize) =>
         onEnterCoreOp(withCleanupCoreOp(op, release), initialize),
@@ -155,6 +160,7 @@ export function onEnterCoreOp<T, E>(op: Op<T, E, []>, initialize: EnterFn<[]>): 
     },
     {
       inner: op,
+      // SAFETY: rebuild callbacks are only used with the `inner` op they declared in this hook.
       rebuild: (newInner) => onEnterCoreOp(unsafeCoerce<Op<T, E, []>>(newInner), initialize),
       withRelease: (release) => withCleanupCoreOp(onEnterCoreOp(op, initialize), release),
       registerEnterInitialize: (nextInitialize) =>
@@ -170,6 +176,7 @@ export function onExitCoreOp<T, E>(op: Op<T, E, []>, finalize: ExitFn<T, E, []>)
       yield new RegisterExitFinalizerInstruction(async (ctx) => {
         const exitCtx: ExitContext<T, E, []> = {
           signal: ctx.signal,
+          // SAFETY: this finalizer is registered by the op that produced the result type `T | E`.
           result: unsafeCoerce(ctx.result),
           args: EMPTY_TUPLE,
         };
@@ -185,6 +192,7 @@ export function onExitCoreOp<T, E>(op: Op<T, E, []>, finalize: ExitFn<T, E, []>)
     },
     {
       inner: op,
+      // SAFETY: rebuild callbacks are only used with the `inner` op they declared in this hook.
       rebuild: (newInner) => onExitCoreOp(unsafeCoerce<Op<T, E, []>>(newInner), finalize),
       rebuildForTimeout: (newInner) =>
         // SAFETY: timeout push-through widens inner error type, so widen finalize accordingly.
@@ -219,6 +227,7 @@ export function mapCoreOp<T, E, U>(
     {
       ...createDefaultHooks(() => mapCoreOp(op, transform)),
       inner: op,
+      // SAFETY: rebuild callbacks are only used with the `inner` op they declared in this hook.
       rebuild: (newInner) => mapCoreOp(unsafeCoerce<Op<T, E, []>>(newInner), transform),
     },
   );
@@ -279,6 +288,7 @@ export function tapCoreOp<T, E, R>(
     {
       ...createDefaultHooks(() => tapCoreOp(op, observe)),
       inner: op,
+      // SAFETY: rebuild callbacks are only used with the `inner` op they declared in this hook.
       rebuild: (newInner) => tapCoreOp(unsafeCoerce<Op<T, E, []>>(newInner), observe),
     },
   );
@@ -317,9 +327,11 @@ export function tapErrCoreOp<T, E, R>(
     {
       ...createDefaultHooks(() => tapErrCoreOp(op, observe)),
       inner: op,
+      // SAFETY: rebuild callbacks are only used with the `inner` op they declared in this hook.
       rebuild: (newInner) => tapErrCoreOp(unsafeCoerce<Op<T, E, []>>(newInner), observe),
       rebuildForTimeout: (newInner) =>
         tapErrCoreOp(
+          // SAFETY: timeout push-through widens only the error channel with TimeoutError.
           unsafeCoerce<Op<T, E | TimeoutError, []>>(newInner),
           (error: E | TimeoutError) => (TimeoutError.is(error) ? undefined : observe(error)),
         ),
@@ -351,9 +363,11 @@ export function mapErrCoreOp<T, E, E2>(
     {
       ...createDefaultHooks(() => mapErrCoreOp(op, transform)),
       inner: op,
+      // SAFETY: rebuild callbacks are only used with the `inner` op they declared in this hook.
       rebuild: (newInner) => mapErrCoreOp(unsafeCoerce<Op<T, E, []>>(newInner), transform),
       rebuildForTimeout: (newInner) =>
         mapErrCoreOp(
+          // SAFETY: timeout push-through widens only the error channel with TimeoutError.
           unsafeCoerce<Op<T, E | TimeoutError, []>>(newInner),
           (error: E | TimeoutError) => (TimeoutError.is(error) ? error : transform(error)),
         ),
@@ -401,12 +415,15 @@ export function recoverCoreOp<T, E, R>(
       ...createDefaultHooks(() => recoverCoreOp(op, predicate, handler)),
       inner: op,
       rebuild: (newInner) =>
+        // SAFETY: rebuild callbacks are only used with the `inner` op they declared in this hook.
         recoverCoreOp(unsafeCoerce<Op<T, E, []>>(newInner), predicate, handler),
       rebuildForTimeout: (newInner) =>
         recoverCoreOp(
+          // SAFETY: timeout push-through widens only the error channel with TimeoutError.
           unsafeCoerce<Op<T, E | TimeoutError, []>>(newInner),
           (error: E | TimeoutError) =>
             !TimeoutError.is(error) && conditionalPredicate(predicate, error),
+          // SAFETY: TimeoutError is filtered before `handler`, so it still only receives `E`.
           unsafeCoerce(handler),
         ),
     },
@@ -433,6 +450,7 @@ export interface FluentHandlers<T, E, A extends readonly unknown[]> {
 export function asOpInterface<T, E, A extends readonly unknown[]>(
   op: Op<T, E, A>,
 ): OpInterface<T, E, A> {
+  // SAFETY: Op<T, E, A> is the public branded intersection over OpInterface<T, E, A>.
   return unsafeCoerce(op);
 }
 
@@ -496,6 +514,7 @@ export function makeFluentOp<T, E, A extends readonly unknown[]>(
             recoverCoreOp(
               resolved,
               (error) => !TimeoutError.is(error) && predicate(error),
+              // SAFETY: TimeoutError is filtered before `handler`, so it still only receives `E`.
               unsafeCoerce(handler),
             ),
         ),
@@ -535,6 +554,8 @@ export function liftOp<TIn, EIn, A extends readonly unknown[], TOut, EOut>(
       withRelease: (release) => withReleaseOp(self, release),
       on: (event, handler) => onOp(self, event, handler),
     }),
+    // SAFETY: `isIterableOp` proves `op` has the nullary iterator surface; calling it resolves
+    // the underlying core op before applying the lifted mapper.
     isIterableOp(op) ? () => mapCore(unsafeCoerce<Op<TIn, EIn, []>>(op)()) : undefined,
   );
 }
@@ -566,7 +587,13 @@ export function onExitOp<T, E, A extends readonly unknown[]>(
       on: (event, handler) => onOp(self, event, handler),
     }),
     isIterableOp(source)
-      ? () => onExitCoreOp(unsafeCoerce<Op<T, E, []>>(source)(), unsafeCoerce(finalize))
+      ? () =>
+          onExitCoreOp(
+            // SAFETY: `isIterableOp` proves `source` has the nullary iterator surface.
+            unsafeCoerce<Op<T, E, []>>(source)(),
+            // SAFETY: nullary iterator composition has no runtime args, so the finalize arity is compatible.
+            unsafeCoerce(finalize),
+          )
       : undefined,
   );
 }
@@ -587,7 +614,13 @@ export function onEnterOp<T, E, A extends readonly unknown[]>(
       on: (event, handler) => onOp(self, event, handler),
     }),
     isIterableOp(source)
-      ? () => onEnterCoreOp(unsafeCoerce<Op<T, E, []>>(source)(), unsafeCoerce(initialize))
+      ? () =>
+          onEnterCoreOp(
+            // SAFETY: `isIterableOp` proves `source` has the nullary iterator surface.
+            unsafeCoerce<Op<T, E, []>>(source)(),
+            // SAFETY: nullary iterator composition has no runtime args, so the initialize arity is compatible.
+            unsafeCoerce(initialize),
+          )
       : undefined,
   );
 }
@@ -598,10 +631,12 @@ export function onOp<T, E, A extends readonly unknown[]>(
   handler: LifecycleFn<T, E, A>,
 ): OpInterface<T, E, A> {
   if (event === "enter") {
+    // SAFETY: runtime event discriminant selects the enter handler overload.
     return onEnterOp(op, unsafeCoerce(handler));
   }
 
   if (event === "exit") {
+    // SAFETY: runtime event discriminant selects the exit handler overload.
     return onExitOp(op, unsafeCoerce(handler));
   }
 
@@ -625,7 +660,8 @@ export function withReleaseOp<T, E, A extends readonly unknown[]>(
       on: (event, handler) => onOp(self, event, handler),
     }),
     isIterableOp(source)
-      ? () => withCleanupCoreOp(unsafeCoerce<Op<T, E, []>>(source)(), release)
+      ? // SAFETY: `isIterableOp` proves `source` has the nullary iterator surface.
+        () => withCleanupCoreOp(unsafeCoerce<Op<T, E, []>>(source)(), release)
       : undefined,
   );
 }

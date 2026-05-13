@@ -46,10 +46,6 @@ const NPM_SANDBOX_STATE_DIR = path.join(REPO_ROOT, "var", "npm-smoke");
 const NPM_SANDBOX_CACHE_DIR = path.join(NPM_SANDBOX_STATE_DIR, "cache");
 const NPM_SANDBOX_LOGS_DIR = path.join(NPM_SANDBOX_STATE_DIR, "logs");
 
-// const VALID_MODES = ["pack", "github", "npm"] as const;
-// type Mode = (typeof VALID_MODES)[number];
-// const VALID_MODE_SET = new Set<string>(VALID_MODES);
-
 const Mode = v.enum({ pack: "pack", github: "github", npm: "npm" });
 type Mode = v.InferOutput<typeof Mode>;
 
