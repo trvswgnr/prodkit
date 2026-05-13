@@ -665,24 +665,17 @@ export function onOp<T, E, A extends readonly unknown[]>(
   event: OpLifecycleHook,
   handler: LifecycleFn<T, E, A>,
 ): OpInterface<T, E, A> {
-  if (event === "enter") {
-    return onEnterOp(
-      op,
-      // SAFETY: runtime event discriminant selects the enter handler overload
-      unsafeCoerce(handler),
-    );
+  const dispatch = event === "enter" ? onEnterOp : event === "exit" ? onExitOp : undefined;
+
+  if (dispatch === undefined) {
+    throw new Error(`Invalid event: ${event}`);
   }
 
-  if (event === "exit") {
-    return onExitOp(
-      op,
-      // SAFETY: runtime event discriminant selects the exit handler overload.
-      unsafeCoerce(handler),
-    );
-  }
-
-  event satisfies never;
-  return op;
+  return dispatch(
+    op,
+    // SAFETY: runtime event discriminant selects the enter/exit handler overload.
+    unsafeCoerce(handler),
+  );
 }
 
 export function withReleaseOp<T, E, A extends readonly unknown[]>(

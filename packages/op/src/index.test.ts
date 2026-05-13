@@ -431,4 +431,3 @@ describe("unsafeCoerce documentation", () => {
     expect(missingSafetyComments).toEqual([]);
   });
 });
-
