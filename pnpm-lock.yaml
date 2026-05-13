@@ -67,7 +67,7 @@ importers:
   packages/op:
     dependencies:
       better-result:
-        specifier: 2.9.0
+        specifier: ^2.9.0
         version: 2.9.0
     devDependencies:
       fast-check:
