@@ -229,7 +229,7 @@ export function createApp(deps: AppDeps) {
       authorizationId: payment.authorizationId,
       riskScore,
       fraudPolicyVersion,
-      warnings: [],
+      warnings: [...warnings],
     };
 
     yield* Op.try(

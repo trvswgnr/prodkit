@@ -40,7 +40,7 @@ const main = Op(function* (bumpKindArg: string | undefined) {
 
   const writeUtf8 = Op(function* (filepath: string, content: string) {
     return yield* writeFile({
-      filepath: new URL(filepath, import.meta.url),
+      filepath,
       content,
       encoding: "utf8",
     });

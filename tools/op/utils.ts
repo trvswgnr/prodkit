@@ -121,7 +121,7 @@ export class FileError extends TaggedError("FileError")<{
 export const readFile = Op(function* (filepath: string, encoding?: BufferEncoding) {
   encoding ??= "utf8";
   return yield* Op.try(
-    (signal) => fs.readFile(new URL(filepath, import.meta.url), { encoding, signal }),
+    (signal) => fs.readFile(filepath, { encoding, signal }),
     (cause) => new FileError({ type: "read", cause, path: filepath }),
   );
 });

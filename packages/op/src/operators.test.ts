@@ -218,6 +218,22 @@ describe("operator combinators", () => {
       expect(result.error).toBe("tap-failed");
     });
 
+    test("tap ignores fake Op-shaped functions", async () => {
+      const fake = Object.assign(
+        () => {
+          throw new Error("fake op should not run");
+        },
+        { _tag: "Op" as const },
+      );
+
+      const result = await Op.of(4)
+        .tap(() => fake)
+        .run();
+
+      assert(result.isOk(), "should be Ok");
+      expect(result.value).toBe(4);
+    });
+
     test("tap drives Op(function*) observers that succeed", async () => {
       const seen: string[] = [];
       const result = await Op.of(4)

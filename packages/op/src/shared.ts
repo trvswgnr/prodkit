@@ -1,7 +1,7 @@
-import type { Instruction } from "./core/types.js";
 import type { Op } from "./index.js";
 
 export const EMPTY_TUPLE: [] = [];
+export const OP_BRAND: unique symbol = Symbol("prodkit.op");
 
 /**
  * UNSAFE: casts any value to a given type
@@ -16,12 +16,13 @@ export function unsafeCoerce<T>(value: unknown): T {
 }
 
 export function isOp(value: unknown): value is Op<unknown, unknown, readonly unknown[]> {
-  return typeof value === "function" && "_tag" in value && value._tag === "Op";
+  return typeof value === "function" && OP_BRAND in value && value[OP_BRAND] === true;
 }
 
 export function coerceToNullaryOp(value: unknown): Op<unknown, unknown, []> | undefined {
   if (!isOp(value)) return undefined;
-  return value();
+  const nullary = value();
+  return isOp(nullary) ? nullary : undefined;
 }
 
 export function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {
@@ -37,14 +38,4 @@ export function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLik
 
 export function isAwaited<T>(value: T | PromiseLike<T> | Awaited<T>): value is Awaited<T> {
   return !isPromiseLike(value);
-}
-
-export function isGeneratorObject(
-  value: unknown,
-): value is Generator<Instruction<unknown>, unknown, unknown> {
-  if (typeof value !== "object" || value === null) return false;
-  if (!("next" in value) || typeof value.next !== "function") return false;
-  if (!("throw" in value) || typeof value.throw !== "function") return false;
-  if (!(Symbol.iterator in value) || typeof value[Symbol.iterator] !== "function") return false;
-  return true;
 }

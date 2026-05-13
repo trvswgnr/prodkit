@@ -21,7 +21,7 @@ import type { Op } from "../index.js";
 import { RegisterExitFinalizerInstruction, SuspendInstruction } from "./instructions.js";
 import { createRunContext, drive } from "./runtime.js";
 import { runOp } from "./run-op.js";
-import { unsafeCoerce, coerceToNullaryOp, EMPTY_TUPLE } from "../shared.js";
+import { unsafeCoerce, coerceToNullaryOp, EMPTY_TUPLE, OP_BRAND } from "../shared.js";
 
 function conditionalPredicate<E>(pred: ((error: E) => boolean) | WithPredicateMethod<E>, error: E) {
   return "is" in pred ? pred.is(error) : pred(error);
@@ -99,10 +99,11 @@ export function makeCoreOp<T, E>(
     tapErr: <R>(observe: (error: E) => R) => tapErrCoreOp(self, observe),
     recover: <R>(predicate: (error: E) => boolean, handler: (error: E) => R) =>
       recoverCoreOp(self, predicate, handler),
+    [OP_BRAND]: true,
     _tag: "Op" as const,
   };
 
-  const callable = () => state;
+  const callable = () => self;
 
   // SAFETY: `Object.assign` only decorates that function object with fluent handlers, so this
   // cast restores the intended callable+methods intersection that TS cannot infer
@@ -499,6 +500,7 @@ export function makeFluentOp<T, E, A extends readonly unknown[]>(
               unsafeCoerce(handler),
             ),
         ),
+      [OP_BRAND]: true,
       _tag: "Op" as const,
     }),
   );

@@ -105,7 +105,7 @@ If you change the scheduler, combinators, or policy wrappers, these are the beha
 holding steady. Stuff that reads like a micro-optimization can still blow up determinism or
 what callers see when something fails.
 
-The references here are `packages/op/src/core/runtime.ts`, `packages/op/src/core/nullary-ops.ts`, and `packages/op/src/combinators.ts`,
+The references here are `packages/op/src/core/runtime.ts`, `packages/op/src/core/ops.ts`, and `packages/op/src/combinators.ts`,
 plus the tests named inline so regressions stay obvious.
 
 ## Single-run driver (`drive`)
@@ -127,7 +127,7 @@ registered finalizers unwind last-in-first-out: `runFinalizersSafely` walks the 
 tail (`packages/op/src/core/runtime.ts`). In one generator body, multiple defers unwind in reverse yield order
 (second defer runs before the first).
 
-Chained `.on("exit", ...)` builds wrappers (`onExitNullaryOp` in `packages/op/src/core/nullary-ops.ts`) where the
+Chained `.on("exit", ...)` builds wrappers (`onExitCoreOp` in `packages/op/src/core/ops.ts`) where the
 hand you attach first behaves like the inner scope, so at exit time the inner-most handler runs
 before the outer ones (`packages/op/src/lifecycle.test.ts`, "chains `.on("exit")` in LIFO order with inner
 registration running first"). That matches how people think about stacking defer-like behavior.
@@ -142,7 +142,7 @@ already settled to typed `Err` ("cleanup fault takes precedence over typed body 
 successful bodies where a finalizer throws ("finalizer throw after successful body converts to
 `UnhandledException`").
 
-`withRelease` / `withCleanupNullaryOp` is different (`packages/op/src/core/nullary-ops.ts`). The release hook
+`withRelease` / `withCleanupCoreOp` is different (`packages/op/src/core/ops.ts`). The release hook
 arms only after a successful inner completion. Typed failure short-circuits without scheduling that
 release, so primary errors stay intact (`packages/op/src/lifecycle.test.ts`, "preserves primary error..." on
 `Op.fail` with `withRelease`). That isn't swapping semantics with exit finalizers registered while

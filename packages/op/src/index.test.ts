@@ -120,6 +120,17 @@ describe("Op.run", () => {
     assert(r2.isOk(), "should be Ok");
     expect(r2.value).toBe(1);
   });
+
+  test("free-function run forwards runtime args", async () => {
+    const add = Op(function* (a: number, b: number) {
+      return a + b;
+    });
+
+    const result = await Op.run(add, 30, 39);
+
+    assert(result.isOk(), "should be Ok");
+    expect(result.value).toBe(69);
+  });
 });
 
 describe("Op namespace value", () => {
@@ -128,6 +139,14 @@ describe("Op namespace value", () => {
       return yield* Op.of(1);
     });
     expect(p._tag).toBe("Op");
+  });
+
+  test("calling a nullary op returns another runnable op", async () => {
+    const op = Op.of(69);
+    const result = await op()().run();
+
+    assert(result.isOk(), "should be Ok");
+    expect(result.value).toBe(69);
   });
 
   test("yield* can consume a generic helper that returns Op(function*)", async () => {

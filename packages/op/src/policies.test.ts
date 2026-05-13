@@ -139,6 +139,7 @@ describe("withRetry", () => {
   test("wrapping _try directly can retry UnhandledException causes", async () => {
     let attempts = 0;
     const transient = new Error("temporary outage");
+    const delayCauses: unknown[] = [];
     const program = _try(async () => {
       attempts += 1;
       if (attempts < 3) {
@@ -148,13 +149,17 @@ describe("withRetry", () => {
     }).withRetry({
       maxAttempts: 3,
       shouldRetry: (cause) => cause === transient,
-      getDelay: () => 0,
+      getDelay: (_attempt, cause) => {
+        delayCauses.push(cause);
+        return 0;
+      },
     });
 
     const result = await program.run();
     assert(result.isOk(), "result should be Ok");
     expect(result.value).toBe("done");
     expect(attempts).toBe(3);
+    expect(delayCauses).toEqual([transient, transient]);
   });
 
   test("retries a child op inside a parent op", async () => {

@@ -26,6 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Passed the same unwrapped retry cause to `RetryPolicy.shouldRetry` and
+  `RetryPolicy.getDelay`, so cause-aware delay functions see the same value as
+  retry predicates.
+- Hardened Op detection against plain functions with `_tag: "Op"` and made
+  nullary op calls return another runnable Op instead of an internal state
+  object.
+- Removed silent result filtering from bounded `Op.all`/`Op.allSettled` success
+  paths so internal scheduler gaps surface as `UnhandledException`.
 - Replaced `Promise.prototype.finally` cleanup coupling in signal binding with
   `try/finally`, preventing listener/timer cleanup regressions when callers pass
   non-native thenables.

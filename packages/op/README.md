@@ -43,13 +43,13 @@ import { TaggedError } from "better-result";
 class DivisionByZeroError extends TaggedError("DivisionByZeroError")() {}
 
 const divide = Op(function* (a: number, b: number) {
-  if (b === 0) yield* new DivisionByZeroError();
+  if (b === 0) return yield* new DivisionByZeroError();
   return a / b;
 });
 
 const sqrt = Op(function* (n: number) {
   // any value can be passed to Op.fail, but it should be discriminative
-  if (n < 0) yield* Op.fail("Negative");
+  if (n < 0) return yield* Op.fail("Negative");
   return Math.sqrt(n);
 });
 

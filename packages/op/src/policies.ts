@@ -156,7 +156,7 @@ function withRetryCoreOp<T, E>(
 
       if (!canRetry) return yield* Result.err(error);
 
-      const delayMs = Math.max(0, policy.getDelay(attempt, error));
+      const delayMs = Math.max(0, policy.getDelay(attempt, retryCause));
       if (delayMs > 0) {
         const delayAborted: boolean = yield* new SuspendInstruction((context) =>
           abortableDelay(delayMs, context.signal).then(() => context.signal.aborted),

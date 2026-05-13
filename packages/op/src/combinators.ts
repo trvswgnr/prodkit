@@ -8,7 +8,7 @@ import {
 import type { Op } from "./index.js";
 import { SuspendInstruction } from "./core/instructions.js";
 import { createRunContext, drive } from "./core/runtime.js";
-import { Err, Result } from "./result.js";
+import { Result, type Err } from "./result.js";
 import { makeCoreOp, createDefaultHooks } from "./core/ops.js";
 
 type AnyNullaryOp = Op<unknown, unknown, []>;
@@ -70,6 +70,43 @@ function concurrencyLimit(
 type AllOpOk<Ops extends readonly AnyNullaryOp[]> = { [K in keyof Ops]: InferOpOk<Ops[K]> };
 type AllOpErr<Ops extends readonly AnyNullaryOp[]> = InferOpErr<Ops[number]>;
 
+function collectAllOk<T, E>(
+  results: readonly (Result<T, E | UnhandledException> | undefined)[],
+): Result<T[], E | UnhandledException> {
+  const values: T[] = [];
+
+  for (const [index, result] of results.entries()) {
+    if (result === undefined)
+      return Result.err(
+        new UnhandledException({
+          cause: new Error(`Op combinator invariant violation: missing result at index ${index}`),
+        }),
+      );
+    if (result.isErr()) return result;
+    values.push(result.value);
+  }
+
+  return Result.ok(values);
+}
+
+function collectAllSettled<T, E>(
+  results: ReadonlyArray<Result<T, E | UnhandledException> | undefined>,
+): Result<Result<T, E | UnhandledException>[], UnhandledException> {
+  const settled: Result<T, E | UnhandledException>[] = [];
+
+  for (const [index, result] of results.entries()) {
+    if (result === undefined)
+      return Result.err(
+        new UnhandledException({
+          cause: new Error(`Op combinator invariant violation: missing result at index ${index}`),
+        }),
+      );
+    settled.push(result);
+  }
+
+  return Result.ok(settled);
+}
+
 export function allOp<const Ops extends readonly AnyNullaryOp[]>(
   ops: Ops,
   concurrency?: number,
@@ -117,7 +154,7 @@ async function driveAll<T, E>(
   else outerContext.signal.addEventListener("abort", cascade, { once: true });
 
   let nextIndex = 0;
-  let firstErr: Err<T[], E | UnhandledException> | undefined;
+  let firstErr: Err<T, E | UnhandledException> | undefined;
   const worker = async () => {
     while (firstErr === undefined) {
       const i = nextIndex;
@@ -137,16 +174,15 @@ async function driveAll<T, E>(
     }
   };
 
-  const promises = Array(limit.value)
-    .fill(undefined)
-    .map(() => worker());
+  const promises = Array(limit.value).fill(undefined).map(worker);
 
   const detach = () => outerContext.signal.removeEventListener("abort", cascade);
 
   await Promise.all(promises).finally(detach);
 
   if (firstErr !== undefined) return firstErr;
-  return Result.ok(results.filter((r) => r !== undefined && r.isOk()).map((x) => x.value));
+
+  return collectAllOk(results);
 }
 
 /**
@@ -162,16 +198,16 @@ async function driveAllUnbounded<T, E>(
 ): Promise<Result<T[], E | UnhandledException>> {
   const fan = fanOut(ops, outerContext);
 
-  let firstErr: Err<Result<T, E | UnhandledException>[], E | UnhandledException> | undefined;
+  let firstErr: Err<T[], E | UnhandledException> | undefined;
   const observed = fan.runs.map((p, i) =>
-    p.then((res) => {
-      if (res.isErr() && firstErr === undefined) {
-        firstErr = res;
+    p.then((result) => {
+      if (result.isErr() && firstErr === undefined) {
+        firstErr = result;
         fan.controllers.forEach((c, j) => {
           if (j !== i) c.abort();
         });
       }
-      return res;
+      return result;
     }),
   );
 
@@ -181,7 +217,7 @@ async function driveAllUnbounded<T, E>(
 
   if (firstErr !== undefined) return firstErr;
 
-  return Result.ok(results.filter(Result.isOk).map((x) => x.value));
+  return collectAllOk(results);
 }
 
 type AllSettledOpOk<Ops extends readonly AnyNullaryOp[]> = {
@@ -256,14 +292,13 @@ async function driveAllSettled<T, E>(
     }
   };
 
-  const promises = Array(limit.value)
-    .fill(undefined)
-    .map(() => worker());
+  const promises = Array(limit.value).fill(undefined).map(worker);
+
   const detach = () => outerContext.signal.removeEventListener("abort", cascade);
 
   await Promise.all(promises).finally(detach);
 
-  return Result.ok(results.filter((r) => r !== undefined));
+  return collectAllSettled(results);
 }
 
 async function driveAllSettledUnbounded<T, E>(
