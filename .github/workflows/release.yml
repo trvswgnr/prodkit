@@ -71,6 +71,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build package
+        run: pnpm --filter @prodkit/op run build
+
       - name: Verify changelog includes current package version
         run: pnpm --filter @prodkit/op run changelog:check
 

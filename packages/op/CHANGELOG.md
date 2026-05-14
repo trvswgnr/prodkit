@@ -7,9 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Fixed
 
-- No entries yet.
+- Built the package before release changelog validation so fresh GitHub Actions
+  runners can resolve the workspace package entrypoint.
 
 ## [0.1.66] - 2026-05-14
 
@@ -281,4 +282,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retry timing, and composed operation semantics).
 - Improved examples and parsing validation in places where earlier behavior
   could produce weaker diagnostics or drift from production expectations.
-
