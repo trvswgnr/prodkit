@@ -10,6 +10,7 @@ import {
   fetchData,
   mathComposeProgram,
   parseUser,
+  pollUntil,
   sqrt,
   userProgram,
   exampleWithPoll,
@@ -206,6 +207,21 @@ async function runSimpleExampleSmoke() {
   const pollResult = await exampleWithPoll.run();
   assert(pollResult.isOk(), "pollResult should be Ok");
   assert(pollResult.value.count === 10, `expected 10, got ${pollResult.value.count}`);
+
+  const controller = new AbortController();
+  const cancelledPollPromise = pollUntil(Op.of({ count: 0 }), {
+    until: () => false,
+    intervalMs: 50,
+  })
+    .withSignal(controller.signal)
+    .run();
+  controller.abort("poll cancelled");
+  const cancelledPoll = await cancelledPollPromise;
+  assert(cancelledPoll.isErr(), "cancelled poll should fail");
+  assert(
+    cancelledPoll.error instanceof UnhandledException,
+    "cancelled poll should surface cancellation as UnhandledException",
+  );
 }
 
 async function runWebhookExampleSmoke() {

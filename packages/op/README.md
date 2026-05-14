@@ -89,7 +89,7 @@ Creates an op that always fails with `error`.
 ### `Op.defer(finalize)`
 
 Registers cleanup for the **current** op run inside a generator. **`finalize(ctx)`** receives **`ExitContext`**:
-the run `AbortSignal`, runtime **`args`**, plus **`result`**: the same **`Result`** instance `.run()` returns for that settle (from `better-result`, so use `.isOk()` / `.isErr()` as usual).
+the run `AbortSignal`, runtime **`args`**, plus **`result`**: the operation's pre-finalizer settlement result (from `better-result`, so use `.isOk()` / `.isErr()` as usual).
 
 Deferred callbacks share one stack
 with `.withRelease` / `.on("exit", ...)`: they run in **LIFO** order when the run unwinds (success, typed
@@ -101,6 +101,10 @@ is a nested **`Error` chain**: the outer error matches the **first** failure dur
 `.cause` is the next fault in unwind order. Only **throwing** callbacks appear in the chain: cleanups that finish
 without throwing add no links. `finalize` can
 be sync or async.
+
+Use `Op.defer`/`.withRelease`/`.on("exit", ...)` for effectful cleanup. Native generator
+`finally` blocks are only best-effort synchronous finalization; yielded or async work inside
+`finally` is not driven during early exit.
 
 `.withRelease` still invokes only `release(successValue)` (no context parameter); its stack slot is invoked with the
 same **`ExitContext`** as other finalizers for this run, but the release function ignores it.
@@ -408,7 +412,7 @@ afterward in LIFO order; multiple faults become a **nested `Error.cause` chain**
 
 ### `.on("exit", finalize)`
 
-Registers unconditional finalization when the enclosing run settles (success or failure), on the same LIFO stack as `Op.defer` and `.withRelease`. **`finalize(ctx)`** receives **`ExitContext`** with run `args` and the same **`ctx.result`** as `.run()` returns. If `finalize` throws, `.run()` fails with `UnhandledException` and `cause` set to that fault (or a nested **`error.cause` chain** if several finalizers fault).
+Registers unconditional finalization when the enclosing run settles (success or failure), on the same LIFO stack as `Op.defer` and `.withRelease`. **`finalize(ctx)`** receives **`ExitContext`** with run `args` and the pre-finalizer **`ctx.result`**. If `finalize` throws, `.run()` fails with `UnhandledException` and `cause` set to that fault (or a nested **`error.cause` chain** if several finalizers fault).
 
 ```ts
 const result = await doWork.on("exit", (ctx) => telemetry.record(ctx)).run();

@@ -150,8 +150,11 @@ the run is unwinding inside `drive`.
 
 ### Generator finalization (`closeGenerator`)
 
-`drive` touches `iterator.return` through `closeGenerator` so native `finally` in generator code
-actually runs (`packages/op/src/core/runtime.ts`). Throws from `return` are swallowed on purpose
+`drive` touches `iterator.return` through `closeGenerator` so synchronous native `finally` code runs
+(`packages/op/src/core/runtime.ts`). This is best-effort generator finalization, not the effectful
+cleanup path: yielded or async work inside a `finally` block is not driven after early exit. Use
+`Op.defer`, `.withRelease`, or `.on("exit", ...)` for cleanup that must suspend, fail explicitly, or
+complete before `.run()` settles. Throws from `return` are swallowed on purpose
 (`packages/op/src/lifecycle.test.ts`, "preserves original Err result when cleanup throws during `iter.return()`").
 
 ## Concurrency (`Op.any`, `Op.race`)

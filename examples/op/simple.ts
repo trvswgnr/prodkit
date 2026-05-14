@@ -75,30 +75,40 @@ export const userProgram = Op(function* (id: string) {
   return user;
 });
 
-class _PollPending<T> extends TaggedError("_PollPending")() {
-  readonly value: T;
+const delay = (ms: number) =>
+  Op.try(
+    (signal) =>
+      new Promise<void>((resolve, reject) => {
+        if (signal.aborted) {
+          reject(signal.reason);
+          return;
+        }
 
-  constructor(value: T) {
-    super();
-    this.value = value;
-  }
-}
+        const onAbort = () => {
+          clearTimeout(timer);
+          reject(signal.reason);
+        };
+        const timer = setTimeout(() => {
+          signal.removeEventListener("abort", onAbort);
+          resolve();
+        }, ms);
+
+        signal.addEventListener("abort", onAbort, { once: true });
+      }),
+  );
 
 export const pollUntil = <T, E>(
   op: Op<T, E, []>,
   opts: { until: (value: T) => boolean; intervalMs: number },
 ): Op<T, E, []> => {
-  return op
-    .flatMap((value) => (opts.until(value) ? Op.of(value) : Op.fail(new _PollPending(value))))
-    .withRetry({
-      shouldRetry: _PollPending.is,
-      getDelay: () => opts.intervalMs,
-      maxAttempts: Number.POSITIVE_INFINITY,
-    })
-    .recover(
-      (e) => _PollPending.is(e),
-      (e) => Op.of(e.value),
-    );
+  return Op(function* () {
+    while (true) {
+      const value = yield* op;
+      if (opts.until(value)) return value;
+
+      yield* delay(opts.intervalMs);
+    }
+  });
 };
 
 export const exampleWithPoll = Op(function* () {
@@ -106,12 +116,14 @@ export const exampleWithPoll = Op(function* () {
   const interval = setInterval(() => {
     o.count++;
   }, 50);
+  yield* Op.defer(() => clearInterval(interval));
+
   const result = yield* pollUntil(Op.of(o), {
     until: (v) => {
       return v.count === 10;
     },
     intervalMs: 10,
   });
-  clearInterval(interval);
+
   return result;
 });

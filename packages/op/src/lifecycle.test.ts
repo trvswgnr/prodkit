@@ -347,7 +347,7 @@ describe('op.on("exit")', () => {
     expect(typeof p2.run).toBe("function");
   });
 
-  test('.on("exit") ExitContext.result is the same Result as .run()', async () => {
+  test('.on("exit") ExitContext.result is the pre-finalizer Result when cleanup succeeds', async () => {
     let okCtx!: ExitContext<number, never>;
     const ok = await Op.of(99)
       .on("exit", (c) => {
@@ -387,7 +387,7 @@ describe('op.on("exit")', () => {
     expect(throwCtx.args).toEqual([]);
   });
 
-  test('.on("exit") ExitContext.result matches run after withTimeout', async () => {
+  test('.on("exit") ExitContext.result is the pre-finalizer timeout Result', async () => {
     vi.useFakeTimers();
     try {
       let timedCtx!: ExitContext<number, UnhandledException | TimeoutError>;
@@ -408,6 +408,25 @@ describe('op.on("exit")', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  test('.on("exit") ExitContext.result remains the pre-finalizer Result when cleanup fails', async () => {
+    let seenCtx!: ExitContext<number, never>;
+    const cleanupFault = new Error("cleanup failed");
+    const result = await Op.of(99)
+      .on("exit", (ctx) => {
+        seenCtx = ctx;
+        throw cleanupFault;
+      })
+      .run();
+
+    assert(result.isErr(), "should be Err");
+    expect(result.error).toBeInstanceOf(UnhandledException);
+    if (result.error instanceof UnhandledException) {
+      expect(result.error.cause).toBe(cleanupFault);
+    }
+    expect(seenCtx.result.isOk()).toBe(true);
+    expect(seenCtx.result).not.toBe(result);
   });
 
   test("withTimeout waits for async exit finalizers before run settles", async () => {
@@ -610,6 +629,23 @@ describe("Op.defer error handling", () => {
     const r = await op.run();
     assert(r.isErr(), "should be Err");
     expect(r.error).toBe("boom");
+  });
+
+  test("when op fails, async cleanup completes before run settles", async () => {
+    let cleaned = false;
+    const op = Op(function* () {
+      yield* Op.defer(async () => {
+        await Promise.resolve();
+        cleaned = true;
+      });
+      return yield* Op.fail("boom" as const);
+    });
+
+    const result = await op.run();
+
+    assert(result.isErr(), "should be Err");
+    expect(result.error).toBe("boom");
+    expect(cleaned).toBe(true);
   });
 
   test("when op succeeds, cleanup succeeds: value is preserved", async () => {

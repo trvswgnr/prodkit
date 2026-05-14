@@ -18,8 +18,9 @@ export type InferOpErr<R> = R extends Op<unknown, infer E, []> ? E : never;
  * Passed to {@link ExitFn} when the run unwinds.
  *
  * - `args` are the runtime inputs for this run
- * - `result` is the same {@link Result} instance `.run()` returns for this settle
- *   (including {@link UnhandledException} on the error channel when relevant)
+ * - `result` is the operation's pre-finalizer settlement result
+ *   (including {@link UnhandledException} on the error channel when relevant).
+ *   If a finalizer throws, `.run()` returns a new cleanup-failure result instead.
  */
 export interface ExitContext<T, E, A extends readonly unknown[] = []> {
   readonly signal: AbortSignal;

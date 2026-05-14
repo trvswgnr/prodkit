@@ -28,6 +28,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reworked the polling example to use an abort-aware loop instead of recovering
+  an internal retry sentinel, so external cancellation no longer becomes a
+  successful stale value.
+- Registered the polling example interval cleanup with `Op.defer` so it runs
+  when the example exits through success, failure, timeout, or cancellation.
+- Clarified lifecycle docs that `ExitContext.result` is the pre-finalizer
+  settlement result and that effectful cleanup belongs in registered finalizers,
+  not yielded generator `finally` blocks.
 - Corrected contributor and package README smoke-check commands to point at the
   `@prodkit/op-scripts` workspace that owns the `examples:smoke:*` scripts.
 - Corrected `Op.run` README wording to reflect parameterized
