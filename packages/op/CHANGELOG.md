@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Hardened workspace installs by disabling npm lifecycle scripts by default.
+- Hardened the npm release workflow by removing pnpm cache restore from the
+  publish path.
 
 ## [0.1.65] - 2026-05-14
 
