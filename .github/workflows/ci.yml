@@ -36,5 +36,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Audit dependency signatures
+        run: npm audit signatures
+
       - name: Run project quality gate
         run: pnpm run gate
