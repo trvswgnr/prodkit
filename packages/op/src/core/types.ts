@@ -56,17 +56,44 @@ export type Instruction<E> =
   | SuspendInstruction
   | RegisterExitFinalizerInstruction;
 
-export interface WithRetry<T, E, A extends readonly unknown[]> {
+export type ReleaseFn<T> = (value: T) => unknown;
+
+/** Lifecycle channels exposed by {@link Op}. */
+export type OpLifecycleHook = "enter" | "exit";
+
+export type WithPredicateMethod<E> = { is: (value: unknown) => value is E };
+
+export interface BaseOp<T, E, A extends readonly unknown[]> {
+  /** Type discriminant for an `Op` instance. */
+  readonly _tag: "Op";
+
+  /** Provides the operation with runtime arguments. */
+  (...args: A): Op<T, E, []>;
+
+  /**
+   * Executes the operation with runtime arguments and returns a `Result`.
+   *
+   * @example
+   * const result = await Op.of(1).run();
+   */
+  run(...args: A): Promise<Result<T, E | UnhandledException>>;
+}
+
+export type Identity<T> =
+  T extends Record<PropertyKey, unknown> ? { [K in keyof T]: T[K] } & {} : T;
+export type RequireOne<T> = {
+  [K in keyof T]: Identity<Required<Pick<T, K>> & Partial<Omit<T, K>>>;
+}[keyof T];
+
+export interface FluentOp<T, E, A extends readonly unknown[]> {
   /**
    * Wraps the operation in retry policy logic.
    *
    * @example
    * const resilient = Op.try(() => fetch("/ping")).withRetry();
    */
-  withRetry(policy?: RetryPolicy): Op<T, E, A>;
-}
+  withRetry(policy?: RequireOne<RetryPolicy>): Op<T, E, A>;
 
-export interface WithTimeout<T, E, A extends readonly unknown[]> {
   /**
    * Applies a timeout budget in milliseconds to the wrapped operation.
    *
@@ -74,9 +101,7 @@ export interface WithTimeout<T, E, A extends readonly unknown[]> {
    * const bounded = Op.try(() => fetch("/slow")).withTimeout(1000);
    */
   withTimeout(timeoutMs: number): Op<T, E | TimeoutError, A>;
-}
 
-export interface WithSignal<T, E, A extends readonly unknown[]> {
   /**
    * Binds an external abort signal to the wrapped operation run.
    *
@@ -84,14 +109,7 @@ export interface WithSignal<T, E, A extends readonly unknown[]> {
    * const linked = Op.of(1).withSignal(new AbortController().signal);
    */
   withSignal(signal: AbortSignal): Op<T, E, A>;
-}
 
-export type ReleaseFn<T> = (value: T) => unknown;
-
-/** Lifecycle channels exposed by {@link Op}. */
-export type OpLifecycleHook = "enter" | "exit";
-
-export interface WithRelease<T, E, A extends readonly unknown[]> {
   /**
    * Registers release logic that runs after a successful value is produced.
    *
@@ -99,9 +117,7 @@ export interface WithRelease<T, E, A extends readonly unknown[]> {
    * const managed = Op.of({ close() {} }).withRelease((r) => r.close());
    */
   withRelease(release: ReleaseFn<T>): Op<T, E, A>;
-}
 
-export interface WithLifecycleHooks<T, E, A extends readonly unknown[]> {
   /**
    * Register a handler that runs before the operation body starts.
    *
@@ -116,9 +132,7 @@ export interface WithLifecycleHooks<T, E, A extends readonly unknown[]> {
    * const withExit = Op.of(1).on("exit", () => console.log("done"));
    */
   on(event: "exit", finalize: ExitFn<T, E, A>): Op<T, E, A>;
-}
 
-export interface WithMap<T, E, A extends readonly unknown[]> {
   /**
    * Transforms the success value while preserving args and error channel.
    *
@@ -126,9 +140,7 @@ export interface WithMap<T, E, A extends readonly unknown[]> {
    * const mapped = Op.of(2).map((n) => n * 2);
    */
   map<U>(transform: (value: T) => U): Op<Awaited<U>, E, A>;
-}
 
-export interface WithMapErr<T, E, A extends readonly unknown[]> {
   /**
    * Transforms the tracked typed error channel while preserving success values.
    *
@@ -136,9 +148,7 @@ export interface WithMapErr<T, E, A extends readonly unknown[]> {
    * const mappedError = Op.fail("x" as const).mapErr((e) => ({ code: e }));
    */
   mapErr<E2>(transform: (error: TrackedErr<E>) => E2): Op<T, E2, A>;
-}
 
-export interface WithFlatMap<T, E, A extends readonly unknown[]> {
   /**
    * Binds the success value into the next operation.
    *
@@ -146,9 +156,7 @@ export interface WithFlatMap<T, E, A extends readonly unknown[]> {
    * const chained = Op.of(1).flatMap((n) => Op.of(n + 1));
    */
   flatMap<U, E2>(bind: (value: T) => Op<U, E2, []>): Op<U, E | E2, A>;
-}
 
-export interface WithTap<T, E, A extends readonly unknown[]> {
   /**
    * Observes successful values without changing the success payload.
    *
@@ -156,9 +164,7 @@ export interface WithTap<T, E, A extends readonly unknown[]> {
    * const observed = Op.of(1).tap((n) => console.log(n));
    */
   tap<R>(observe: (value: T) => R): Op<T, E | InferOpErr<R>, A>;
-}
 
-export interface WithTapErr<T, E, A extends readonly unknown[]> {
   /**
    * Observes tracked errors without changing the original success payload.
    *
@@ -166,11 +172,7 @@ export interface WithTapErr<T, E, A extends readonly unknown[]> {
    * const observedError = Op.fail("x" as const).tapErr((e) => console.error(e));
    */
   tapErr<R>(observe: (error: TrackedErr<E>) => R): Op<T, TrackedErr<E> | InferOpErr<R>, A>;
-}
 
-export type WithPredicateMethod<E> = { is: (value: unknown) => value is E };
-
-export interface WithRecover<T, E, A extends readonly unknown[]> {
   /**
    * Recovers selected typed failures into a fallback value or operation.
    *
@@ -206,36 +208,12 @@ export interface WithRecover<T, E, A extends readonly unknown[]> {
   ): Op<T | InferOpOk<R>, TrackedErr<E> | InferOpErr<R>, A>;
 }
 
-export interface OpBase<T, E, A extends readonly unknown[]> {
-  /** Type discriminant for an `Op` instance. */
-  readonly _tag: "Op";
-  /** Provides the operation with runtime arguments. */
-  (...args: A): Op<T, E, []>;
-  /**
-   * Executes the operation with runtime arguments and returns a `Result`.
-   *
-   * @example
-   * const result = await Op.of(1).run();
-   */
-  run(...args: A): Promise<Result<T, E | UnhandledException>>;
-}
-
 export interface OpIterable<T, E> {
   [Symbol.iterator](): Generator<Instruction<E>, T, unknown>;
 }
 
-export type OpInterface<T, E, A extends readonly unknown[]> = OpBase<T, E, A> &
-  WithRetry<T, E, A> &
-  WithTimeout<T, E, A> &
-  WithSignal<T, E, A> &
-  WithRelease<T, E, A> &
-  WithLifecycleHooks<T, E, A> &
-  WithMap<T, E, A> &
-  WithMapErr<T, E, A> &
-  WithFlatMap<T, E, A> &
-  WithTap<T, E, A> &
-  WithTapErr<T, E, A> &
-  WithRecover<T, E, A> &
+export type OpInterface<T, E, A extends readonly unknown[]> = BaseOp<T, E, A> &
+  FluentOp<T, E, A> &
   (A extends [] ? OpIterable<T, E> : {});
 
 export interface OpHooks<T, E, TInner = unknown, EInner = unknown> {

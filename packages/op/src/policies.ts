@@ -1,7 +1,13 @@
 import { TimeoutError, UnhandledException } from "./errors.js";
 import { Result } from "./result.js";
 import { makeFluentOp, onOp, withCleanupCoreOp } from "./core/fluent.js";
-import { TrackedErr, type Instruction, type OpInterface, type RunContext } from "./core/types.js";
+import {
+  RequireOne,
+  TrackedErr,
+  type Instruction,
+  type OpInterface,
+  type RunContext,
+} from "./core/types.js";
 import type { Op } from "./index.js";
 import { SuspendInstruction } from "./core/instructions.js";
 import { createRunContext, drive, driveInterruptOnAbort } from "./core/runtime.js";
@@ -32,7 +38,7 @@ export interface BackoffOptions {
 
 const DEFAULT_BACKOFF_OPTIONS: BackoffOptions = { base: 1_000, max: 30_000, jitter: 1 };
 
-function normalizeBackoffOptions(opts?: BackoffOptions): BackoffOptions {
+function normalizeBackoffOptions(opts?: RequireOne<BackoffOptions>): BackoffOptions {
   const baseCandidate = opts?.base ?? DEFAULT_BACKOFF_OPTIONS.base;
   const base =
     Number.isFinite(baseCandidate) && baseCandidate > 0
@@ -55,7 +61,7 @@ function normalizeBackoffOptions(opts?: BackoffOptions): BackoffOptions {
  * @param opts Options for the backoff function
  * @returns A function that calculates the delay in milliseconds for a given attempt
  */
-export function exponentialBackoff(opts?: BackoffOptions): (attempt: number) => number {
+export function exponentialBackoff(opts?: RequireOne<BackoffOptions>): (attempt: number) => number {
   const { base, max, jitter } = normalizeBackoffOptions(opts);
 
   return (attempt) => {
