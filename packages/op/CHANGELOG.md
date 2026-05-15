@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- No entries yet.
+
+## [0.1.68] - 2026-05-15
+
+### Added
+
 - Added a comparison page covering tradeoffs against Effect, neverthrow, `fp-ts`,
   native `Promise`, and `ResultAsync`.
 - Added CI-published Vitest coverage artifacts for `@prodkit/op` so correctness
@@ -295,3 +301,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retry timing, and composed operation semantics).
 - Improved examples and parsing validation in places where earlier behavior
   could produce weaker diagnostics or drift from production expectations.
+
