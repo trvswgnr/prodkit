@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Miniflare } from "miniflare";
-import { createLogger } from "./utils.ts";
+import { createLogger } from "./logger.ts";
 
 type Runtime = "bun" | "deno" | "edge";
 
