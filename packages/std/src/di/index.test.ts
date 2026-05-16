@@ -91,6 +91,32 @@ describe("Ctx", () => {
     expect(result.unwrap()).toBe("hello abc");
   });
 
+  test("fluent callbacks can return context-aware operations", async () => {
+    const findUser = Ctx.Op(function* (id: string) {
+      const db = yield* Ctx.require(DatabaseService);
+      return yield* db.query("user", [id]);
+    });
+    const greet = Ctx.Op(function* () {
+      return "abc";
+    })
+      .flatMap((id) => findUser(id))
+      .map((user) => `hello ${user.id}`);
+
+    expectTypeOf(greet).toEqualTypeOf<Ctx.Op<string, DatabaseError, [], DatabaseService>>();
+
+    const result = await greet
+      .use(
+        DatabaseService.of({
+          query: Op(function* (_sql: string, params: unknown[]) {
+            return { id: String(params[0]) };
+          }).mapErr((error): DatabaseError => error),
+        }),
+      )
+      .run();
+
+    expect(result.unwrap()).toBe("hello abc");
+  });
+
   test("all services are required", async () => {
     class TestService1 extends Ctx.Service("TestService1")<{}> {}
     class TestService2 extends Ctx.Service("TestService2")<{}> {}

@@ -137,6 +137,7 @@ export class WithContextInstruction<T, E, R> {
 export type Requirement<P> = P extends Provider<infer C> ? _Requirement<C> : never;
 
 type AnyNullaryWithContext = Ctx.Op<unknown, unknown, [], unknown>;
+type AnyWithContext = Ctx.Op<unknown, unknown, readonly unknown[], unknown>;
 type AnyNullaryOp = Op<unknown, unknown, []>;
 type Env = ReadonlyMap<AnyContext, unknown>;
 
@@ -225,10 +226,14 @@ type _WithContext<T, E, A extends readonly unknown[], R> = (WithContextBase<T, E
       }
     : {})) & { [WITH_CONTEXT]: true };
 
-interface WithContextState<T, E, A extends readonly unknown[]> {
-  readonly build: (env: Env) => Op<T, E, A>;
+interface ContextOpState<T, E, A extends readonly unknown[]> {
+  readonly buildOp: (env: Env) => Op<T, E, A>;
   readonly env: Env;
-  readonly makeIterable?: ((env: Env) => AnyNullaryOp) | undefined;
+  readonly iterable: boolean;
+}
+
+interface ContextOpRuntime<T, E, A extends readonly unknown[]> {
+  toOp(env?: Env): Op<T, E, A>;
 }
 
 function isContextInstruction(value: unknown): value is ContextInstruction<unknown, AnyContext> {
@@ -241,7 +246,7 @@ function isWithContextInstruction(
   return value instanceof WithContextInstruction;
 }
 
-function isWithContext(value: unknown): value is AnyNullaryWithContext {
+function isWithContext(value: unknown): value is AnyWithContext {
   return (
     typeof value === "function" &&
     value !== null &&
@@ -258,37 +263,49 @@ function extendEnv(env: Env, context: AnyContext, value: unknown): Env {
 
 function resolveObserved(value: unknown, env: Env): unknown {
   if (!isWithContext(value)) return value;
-  return lower(value, env);
+  return lower(unsafeCoerce<AnyNullaryWithContext>(value), env);
 }
 
 function lower<T, E, A extends readonly unknown[]>(
   value: Ctx.Op<T, E, A, unknown>,
   env: Env,
 ): Op<T, E, A> {
-  return (value as unknown as { toOp: (env?: Env) => Op<T, E, A> }).toOp(env);
+  return unsafeCoerce<ContextOpRuntime<T, E, A>>(value).toOp(env);
 }
 
-function wrapped<T, E, A extends readonly unknown[]>(op: Op<T, E, A>): Op<T, E, A> {
+function asOp<T, E, A extends readonly unknown[]>(op: Op<T, E, A>): Op<T, E, A> {
   return unsafeCoerce<Op<T, E, A>>(op);
 }
 
 function makeWithContext<T, E, A extends readonly unknown[], R>(
-  state: WithContextState<T, E, A>,
+  state: ContextOpState<T, E, A>,
 ): Ctx.Op<T, E, A, R> {
+  const rebuild = <T2, E2, A2 extends readonly unknown[], R2>(
+    next: ContextOpState<T2, E2, A2>,
+  ): Ctx.Op<T2, E2, A2, R2> => makeWithContext<T2, E2, A2, R2>(next);
+
+  const mapBuiltOp = <T2, E2>(
+    mapOp: (op: Op<T, E, A>, env: Env) => Op<T2, E2, A>,
+  ): Ctx.Op<T2, E2, A, R> =>
+    rebuild<T2, E2, A, R>({
+      ...state,
+      buildOp: (env) => mapOp(state.buildOp(env), env),
+    });
+
   const self = Object.assign(
     (...args: A) =>
-      makeWithContext<T, E, [], R>({
-        build: (env) => unsafeCoerce(wrapped(state.build(env))(...args)),
+      rebuild<T, E, [], R>({
+        buildOp: (env) => unsafeCoerce(asOp(state.buildOp(env))(...args)),
         env: state.env,
-        makeIterable: (env) => unsafeCoerce<AnyNullaryOp>(wrapped(state.build(env))(...args)),
+        iterable: true,
       }),
     {
       _tag: "WithContext" as const,
       [WITH_CONTEXT]: true as const,
-      toOp: (envOverride?: Env) => state.build(envOverride ?? state.env),
-      run: (...args: A) => wrapped(state.build(state.env)).run(...args),
+      toOp: (envOverride?: Env) => state.buildOp(envOverride ?? state.env),
+      run: (...args: A) => asOp(state.buildOp(state.env)).run(...args),
       use: (...providers: readonly AnyProvider[]) =>
-        makeWithContext({
+        rebuild<T, E, A, R>({
           ...state,
           env: providers.reduce(
             (env, provider) => extendEnv(env, provider.context, provider.value),
@@ -296,84 +313,51 @@ function makeWithContext<T, E, A extends readonly unknown[], R>(
           ),
         }),
       withRetry: (policy?: RetryPolicy) =>
-        makeWithContext({
-          ...state,
-          build: (env) => unsafeCoerce<Op<T, E, A>>(wrapped(state.build(env)).withRetry(policy)),
-        }),
+        mapBuiltOp((op) => unsafeCoerce<Op<T, E, A>>(asOp(op).withRetry(policy))),
       withTimeout: (timeoutMs: number) =>
-        makeWithContext({
-          ...state,
-          build: (env) =>
-            unsafeCoerce<Op<T, E, A>>(wrapped(state.build(env)).withTimeout(timeoutMs)),
-        }),
+        mapBuiltOp((op) => unsafeCoerce<Op<T, E, A>>(asOp(op).withTimeout(timeoutMs))),
       withSignal: (signal: AbortSignal) =>
-        makeWithContext({
-          ...state,
-          build: (env) => unsafeCoerce<Op<T, E, A>>(wrapped(state.build(env)).withSignal(signal)),
-        }),
+        mapBuiltOp((op) => unsafeCoerce<Op<T, E, A>>(asOp(op).withSignal(signal))),
       withRelease: (release: (value: T) => unknown) =>
-        makeWithContext({
-          ...state,
-          build: (env) => unsafeCoerce<Op<T, E, A>>(wrapped(state.build(env)).withRelease(release)),
-        }),
+        mapBuiltOp((op) => unsafeCoerce<Op<T, E, A>>(asOp(op).withRelease(release))),
       on: (event: OpLifecycleHook, handler: unknown) =>
-        makeWithContext({
-          ...state,
-          build: (env) =>
-            unsafeCoerce<Op<T, E, A>>(
-              wrapped(state.build(env)).on(unsafeCoerce(event), unsafeCoerce(handler)),
-            ),
-        }),
+        mapBuiltOp((op) =>
+          unsafeCoerce<Op<T, E, A>>(asOp(op).on(unsafeCoerce(event), unsafeCoerce(handler))),
+        ),
       map: (transform: (value: T) => unknown) =>
-        makeWithContext({
-          ...state,
-          build: (env) => unsafeCoerce<Op<T, E, A>>(wrapped(state.build(env)).map(transform)),
-        }),
+        mapBuiltOp((op) => unsafeCoerce<Op<T, E, A>>(asOp(op).map(transform))),
       mapErr: (transform: (error: E) => unknown) =>
-        makeWithContext({
-          ...state,
-          build: (env) => unsafeCoerce<Op<T, E, A>>(wrapped(state.build(env)).mapErr(transform)),
-        }),
+        mapBuiltOp((op) => unsafeCoerce<Op<T, E, A>>(asOp(op).mapErr(transform))),
       flatMap: (bind: (value: T) => MaybeOp<unknown, unknown>) =>
-        makeWithContext({
-          ...state,
-          build: (env) =>
-            unsafeCoerce<Op<T, E, A>>(
-              wrapped(state.build(env)).flatMap((value) =>
-                unsafeCoerce<AnyNullaryOp>(resolveObserved(bind(value), env)),
-              ),
+        mapBuiltOp((op, env) =>
+          unsafeCoerce<Op<T, E, A>>(
+            asOp(op).flatMap((value) =>
+              unsafeCoerce<AnyNullaryOp>(resolveObserved(bind(value), env)),
             ),
-        }),
+          ),
+        ),
       tap: (observe: (value: T) => unknown) =>
-        makeWithContext({
-          ...state,
-          build: (env) =>
-            unsafeCoerce<Op<T, E, A>>(
-              wrapped(state.build(env)).tap((value) => resolveObserved(observe(value), env)),
-            ),
-        }),
+        mapBuiltOp((op, env) =>
+          unsafeCoerce<Op<T, E, A>>(asOp(op).tap((value) => resolveObserved(observe(value), env))),
+        ),
       tapErr: (observe: (error: E) => unknown) =>
-        makeWithContext({
-          ...state,
-          build: (env) =>
-            unsafeCoerce<Op<T, E, A>>(
-              wrapped(state.build(env)).tapErr((error) => resolveObserved(observe(error), env)),
-            ),
-        }),
+        mapBuiltOp((op, env) =>
+          unsafeCoerce<Op<T, E, A>>(
+            asOp(op).tapErr((error) => resolveObserved(observe(error), env)),
+          ),
+        ),
       recover: (predicate: (error: E) => boolean, handler: (error: E) => unknown) =>
-        makeWithContext({
-          ...state,
-          build: (env) =>
-            unsafeCoerce<Op<T, E, A>>(
-              wrapped(state.build(env)).recover(unsafeCoerce(predicate), (error) =>
-                resolveObserved(handler(unsafeCoerce<E>(error)), env),
-              ),
+        mapBuiltOp((op, env) =>
+          unsafeCoerce<Op<T, E, A>>(
+            asOp(op).recover(unsafeCoerce(predicate), (error) =>
+              resolveObserved(handler(unsafeCoerce<E>(error)), env),
             ),
-        }),
+          ),
+        ),
     },
   );
 
-  if (state.makeIterable !== undefined) {
+  if (state.iterable) {
     Object.assign(self, {
       [Symbol.iterator]: function* (): Generator<WithContextInstruction<T, E, R>, T, unknown> {
         return unsafeCoerce<T>(
@@ -428,12 +412,9 @@ function withContext<
   A extends readonly unknown[],
   R extends InferContext<Y> = SimplifyRequirement<InferContext<Y>>,
 >(f: (...args: A) => Generator<Y, T, unknown>): Ctx.Op<T, InferErr<Y> | InferContextErr<Y>, A, R> {
-  const makeIterable =
-    f.length === 0 ? (env: Env) => unsafeCoerce<AnyNullaryOp>(buildContextOp(f, env)) : undefined;
-
   return makeWithContext<T, InferErr<Y> | InferContextErr<Y>, A, R>({
-    build: (env) => buildContextOp(f, env),
+    buildOp: (env) => buildContextOp(f, env),
     env: new Map(),
-    makeIterable,
+    iterable: f.length === 0,
   });
 }
