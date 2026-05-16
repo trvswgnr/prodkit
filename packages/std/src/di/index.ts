@@ -78,9 +78,52 @@ export namespace Ctx {
 }
 
 export const Ctx = Object.freeze({
-  Op: CtxOp,
-  Service: CtxService,
-  require: requireCtx,
+  Op: <
+    Y,
+    T,
+    A extends readonly unknown[],
+    R extends InferContext<Y> = SimplifyRequirement<InferContext<Y>>,
+  >(
+    f: (...args: A) => Generator<Y, T, unknown>,
+  ): Ctx.Op<T, InferErr<Y> | InferContextErr<Y>, A, R> =>
+    makeContextOp<T, InferErr<Y> | InferContextErr<Y>, A, R>({
+      buildOp: (env) => buildContextOp(f, env),
+      env: new Map(),
+      iterable: true,
+    }),
+  Service: <const Name extends string>(key: Name): ContextBuilder<Name> => {
+    class ServiceContext<T> {
+      readonly _tag = "Context";
+      readonly key = key;
+      readonly [CONTEXT_TOKEN] = NEVER;
+
+      *[Symbol.iterator](): Generator<ContextInstruction<T, this>, T, unknown> {
+        return yield* new ContextInstruction<T, this>(ServiceContext);
+      }
+
+      static readonly _tag = "Context";
+      static readonly key = key;
+      static readonly [CONTEXT_TOKEN] = NEVER;
+      static of<C extends AnyContext>(this: C, value: Value<C>): Provider<C> {
+        return {
+          _tag: "ContextProvider",
+          context: this,
+          value,
+        };
+      }
+
+      static *[Symbol.iterator](): Generator<never, never, unknown> {
+        throw new TypeError("Use Ctx.require(Requirement) to require a context");
+      }
+    }
+
+    return ServiceContext;
+  },
+  require: function* <C extends AnyContext>(
+    context: C,
+  ): Generator<ContextInstruction<Value<C>, Dep<C>>, Value<C>, unknown> {
+    return yield* new ContextInstruction<Value<C>, Dep<C>>(context);
+  },
 });
 
 type ContextBuilder<Name extends string> = {
@@ -92,42 +135,7 @@ type ContextBuilder<Name extends string> = {
   new <T>(): Ctx<T, Name>;
 };
 
-type _Requirement<C> = C extends abstract new (...args: never[]) => infer I ? I : C;
-
-function CtxService<const Name extends string>(key: Name): ContextBuilder<Name> {
-  class ServiceContext<T> {
-    readonly _tag = "Context";
-    readonly key = key;
-    readonly [CONTEXT_TOKEN] = NEVER;
-
-    *[Symbol.iterator](): Generator<ContextInstruction<T, this>, T, unknown> {
-      return yield* new ContextInstruction<T, this>(ServiceContext);
-    }
-
-    static readonly _tag = "Context";
-    static readonly key = key;
-    static readonly [CONTEXT_TOKEN] = NEVER;
-    static of<C extends AnyContext>(this: C, value: Value<C>): Provider<C> {
-      return {
-        _tag: "ContextProvider",
-        context: this,
-        value,
-      };
-    }
-
-    static *[Symbol.iterator](): Generator<never, never, unknown> {
-      throw new TypeError("Use Ctx.require(Requirement) to require a context");
-    }
-  }
-
-  return ServiceContext;
-}
-
-function* requireCtx<C extends AnyContext>(
-  context: C,
-): Generator<ContextInstruction<Value<C>, _Requirement<C>>, Value<C>, unknown> {
-  return yield* new ContextInstruction<Value<C>, _Requirement<C>>(context);
-}
+type Dep<C> = C extends abstract new (...args: never[]) => infer I ? I : C;
 
 export class WithContextInstruction<T, E, R> {
   readonly _tag = "WithContextInstruction";
@@ -143,7 +151,7 @@ export class WithContextInstruction<T, E, R> {
   }
 }
 
-export type Requirement<P> = P extends Provider<infer C> ? _Requirement<C> : never;
+export type Requirement<P> = P extends Provider<infer C> ? Dep<C> : never;
 
 type AnyNullaryWithContext = Ctx.Op<unknown, unknown, [], unknown>;
 type AnyWithContext = Ctx.Op<unknown, unknown, readonly unknown[], unknown>;
@@ -157,21 +165,11 @@ type SimplifyRequirement<R> = R extends unknown ? R : never;
 
 type InferContextErr<Y> = Y extends WithContextInstruction<unknown, infer E, unknown> ? E : never;
 
-type ObserverContext<R> = R extends Ctx.Op<unknown, unknown, [], infer RContext> ? RContext : never;
-type ObserverErr<R> =
-  R extends Op<unknown, infer E, []>
-    ? E
-    : R extends Ctx.Op<unknown, infer E, [], unknown>
-      ? E
-      : never;
-type ObserverOk<R> =
-  R extends Op<infer T, unknown, []>
-    ? T
-    : R extends Ctx.Op<infer T, unknown, [], unknown>
-      ? T
-      : Awaited<R>;
+type OpLike<T, E> = Op<T, E, []> | Ctx.Op<T, E, [], unknown>;
 
-type MaybeOp<T, E> = Op<T, E, []> | Ctx.Op<T, E, [], unknown>;
+type ObserverReq<X> = X extends Ctx.Op<unknown, unknown, [], infer R> ? R : never;
+type ObserverErr<X> = X extends OpLike<unknown, infer E> ? E : never;
+type ObserverOk<X> = X extends OpLike<infer T, unknown> ? T : Awaited<X>;
 
 export interface WithContextBase<T, E, A extends readonly unknown[], R> {
   readonly _tag: "WithContext";
@@ -203,10 +201,10 @@ export interface WithContextBase<T, E, A extends readonly unknown[], R> {
 
   tap<RObserved>(
     observe: (value: T) => RObserved,
-  ): Ctx.Op<T, E | ObserverErr<RObserved>, A, R | ObserverContext<RObserved>>;
+  ): Ctx.Op<T, E | ObserverErr<RObserved>, A, R | ObserverReq<RObserved>>;
   tapErr<RObserved>(
     observe: (error: E) => RObserved,
-  ): Ctx.Op<T, E | ObserverErr<RObserved>, A, R | ObserverContext<RObserved>>;
+  ): Ctx.Op<T, E | ObserverErr<RObserved>, A, R | ObserverReq<RObserved>>;
 
   recover<ECaught extends E, RRecovered>(
     predicate: (error: E) => error is ECaught,
@@ -215,7 +213,7 @@ export interface WithContextBase<T, E, A extends readonly unknown[], R> {
     T | ObserverOk<RRecovered>,
     Exclude<E, ECaught> | ObserverErr<RRecovered>,
     A,
-    R | ObserverContext<RRecovered>
+    R | ObserverReq<RRecovered>
   >;
   recover<RRecovered>(
     predicate: (error: E) => boolean,
@@ -224,7 +222,7 @@ export interface WithContextBase<T, E, A extends readonly unknown[], R> {
     T | ObserverOk<RRecovered>,
     E | ObserverErr<RRecovered>,
     A,
-    R | ObserverContext<RRecovered>
+    R | ObserverReq<RRecovered>
   >;
 }
 
@@ -254,7 +252,7 @@ type ContextOpCallable<T, E, A extends readonly unknown[], R> = ((
     readonly map: (transform: (value: T) => unknown) => Ctx.Op<unknown, E, A, R>;
     readonly mapErr: (transform: (error: E) => unknown) => Ctx.Op<T, unknown, A, R>;
     readonly flatMap: (
-      bind: (value: T) => MaybeOp<unknown, unknown>,
+      bind: (value: T) => OpLike<unknown, unknown>,
     ) => Ctx.Op<unknown, unknown, A, unknown>;
     readonly tap: (observe: (value: T) => unknown) => Ctx.Op<T, unknown, A, unknown>;
     readonly tapErr: (observe: (error: E) => unknown) => Ctx.Op<T, unknown, A, unknown>;
@@ -391,7 +389,7 @@ function makeContextOp<T, E, A extends readonly unknown[], R>(
         transformContextOp(state, (op) => op.map(transform)),
       mapErr: (transform: (error: E) => unknown) =>
         transformContextOp(state, (op) => op.mapErr(transform)),
-      flatMap: (bind: (value: T) => MaybeOp<unknown, unknown>) =>
+      flatMap: (bind: (value: T) => OpLike<unknown, unknown>) =>
         transformContextOp(state, (op, env) =>
           op.flatMap((value) => unsafeCoerce<AnyNullaryOp>(resolveObserved(bind(value), env))),
         ),
@@ -452,17 +450,4 @@ function buildContextOp<Y, T, A extends readonly unknown[]>(
       }
     }),
   );
-}
-
-function CtxOp<
-  Y,
-  T,
-  A extends readonly unknown[],
-  R extends InferContext<Y> = SimplifyRequirement<InferContext<Y>>,
->(f: (...args: A) => Generator<Y, T, unknown>): Ctx.Op<T, InferErr<Y> | InferContextErr<Y>, A, R> {
-  return makeContextOp<T, InferErr<Y> | InferContextErr<Y>, A, R>({
-    buildOp: (env) => buildContextOp(f, env),
-    env: new Map(),
-    iterable: true,
-  });
 }
