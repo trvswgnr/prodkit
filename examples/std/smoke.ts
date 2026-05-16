@@ -1,10 +1,6 @@
 import {
   DuplicateEmailError,
-  ClockService,
-  DatabaseService,
-  MailerService,
-  PasswordHasherService,
-  createExampleServices,
+  createExampleDependencies,
   registerUser,
   runnableRegisterUser,
 } from "./onboarding.ts";
@@ -18,7 +14,7 @@ async function runSuccessfulRegistrationSmoke() {
   assert(result.isOk(), "registration should succeed");
   assert(result.value.email === "marissa@example.test", "registered user email should match");
   assert(result.value.createdAt === "2026-05-15T12:00:00.000Z", "createdAt should come from clock");
-  assert(services.db.records.length === 1, "database should contain the registered user");
+  assert(services.db.value.records.length === 1, "database should contain the registered user");
   assert(
     services.sentWelcomeEmails.join(",") === "marissa@example.test",
     "mailer should send one welcome email",
@@ -26,14 +22,8 @@ async function runSuccessfulRegistrationSmoke() {
 }
 
 async function runDuplicateRegistrationSmoke() {
-  const services = createExampleServices();
-  const op = registerUser
-    .use(DatabaseService.of(services.db))
-    .use(
-      PasswordHasherService.of(services.hasher),
-      MailerService.of(services.mailer),
-      ClockService.of(services.clock),
-    );
+  const services = createExampleDependencies();
+  const op = registerUser.use(services.db).use(services.hasher, services.mailer, services.clock);
 
   const first = await op.run("existing@example.test", "first");
   assert(first.isOk(), "first registration should succeed");
@@ -43,7 +33,7 @@ async function runDuplicateRegistrationSmoke() {
     duplicate.isErr() && duplicate.error instanceof DuplicateEmailError,
     "duplicate registration should fail with DuplicateEmailError",
   );
-  assert(services.db.records.length === 1, "duplicate registration should not insert a user");
+  assert(services.db.value.records.length === 1, "duplicate registration should not insert a user");
   assert(
     services.sentWelcomeEmails.join(",") === "existing@example.test",
     "duplicate registration should not send another welcome email",

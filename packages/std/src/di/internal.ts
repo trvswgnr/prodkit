@@ -8,83 +8,101 @@ import {
   type RetryPolicy,
 } from "@prodkit/op";
 import { hasBrand, NEVER, unsafeCoerce, type AbortSignalLike } from "@prodkit/op/internal";
-import type { DI } from "./index.js";
+import type { Dependency, DI } from "./index.js";
 
-export class MissingContextError extends Error {
-  override readonly name = "MissingContextError";
-  readonly _tag = "MissingContextError";
+declare global {
+  interface ObjectConstructor {
+    hasOwn<T extends object, K extends PropertyKey>(
+      object: T,
+      key: K,
+    ): object is T & Record<K, unknown>;
+  }
+}
+
+export class MissingDependencyError extends Error {
+  override readonly name = "MissingDependencyError";
+  readonly _tag = "MissingDependencyError";
   readonly key: string;
   constructor(key: string) {
-    super(`${key} is required but not provided`);
+    super(`${key} is required but was not provided`);
     this.key = key;
   }
 
-  static is(value: unknown): value is MissingContextError {
-    return value instanceof MissingContextError;
+  static is(value: unknown): value is MissingDependencyError {
+    return value instanceof MissingDependencyError;
   }
 }
 
 export type RunResult<T, E> = Promise<Result<T, E | UnhandledException>>;
 
-export const CTX_TOKEN = Symbol("prodkit.std.di.context");
-const CTX_REQUIREMENT_TOKEN = Symbol("prodkit.std.di.requirement");
-const CTX_OP_TOKEN = Symbol("prodkit.std.di.ctxOp");
-export const CTX_TAG = "DI";
+export const DI_TOKEN = Symbol("prodkit.std.di.dependency");
+const DI_REQ_TOKEN = Symbol("prodkit.std.di.req");
+const DI_OP_TOKEN = Symbol("prodkit.std.di.op");
+export const DI_TAG = "DI";
 
-export type AnyCtx = DI<unknown, string>;
+export type AnyDependency = Dependency<unknown, string>;
 
-export type Value<C> = C extends abstract new (...args: never[]) => DI<infer T, string>
-  ? T
-  : C extends DI<infer T, string>
-    ? T
+export type DependencyValue<C, V = unknown> = C extends abstract new (
+  ...args: never[]
+) => Dependency<infer T, string>
+  ? T & V
+  : C extends Dependency<infer T, string>
+    ? T & V
     : never;
 
-export type Provider<C extends AnyCtx> = {
-  readonly _tag: "ContextProvider";
-  readonly context: C;
-  readonly value: Value<C>;
+export type Binding<C extends AnyDependency, V = unknown> = {
+  readonly _tag: "DependencyBinding";
+  readonly dependency: C;
+  readonly value: DependencyValue<C, V>;
 };
-export type AnyProvider = Provider<AnyCtx>;
+export type AnyBinding = Binding<AnyDependency>;
+export type LazyBinding<C extends AnyDependency, V = unknown> = {
+  readonly _tag: "DependencyLazyBinding";
+  readonly dependency: C;
+  readonly resolve: () => DependencyValue<C, V>;
+};
+export type AnyLazyBinding = LazyBinding<AnyDependency>;
 
-export type InferContextRequirements<C> =
-  C extends DI.Op<infer _T, infer _E, infer _A, infer R> ? R : never;
+export type InferReqs<C> = C extends DI.Op<infer _T, infer _E, infer _A, infer R> ? R : never;
 
-/** Yielded by `DI.require` and bare service classes to ask the runtime for an env binding. */
-export class RequireContext<_T, _R> {
-  readonly _tag = "RequireContext";
-  readonly [CTX_REQUIREMENT_TOKEN]: { _T: _T; _R: _R };
-  readonly context: AnyCtx;
+/** Yielded by `DI.require` and bare dependency classes to ask the runtime for a dependency binding. */
+export class DependencyReqInstruction<T, R> {
+  readonly _tag = "DependencyReqInstruction";
+  readonly [DI_REQ_TOKEN]: { _T: T; _R: R } = NEVER;
+  readonly dependency: AnyDependency;
 
-  constructor(context: AnyCtx) {
-    this[CTX_REQUIREMENT_TOKEN] = NEVER;
-    this.context = context;
+  constructor(dependency: AnyDependency) {
+    this.dependency = dependency;
   }
 
   // oxlint-disable-next-line typescript/no-explicit-any
   *[Symbol.iterator](): Generator<this, any, unknown> {
     return yield this;
   }
+
+  static is(value: unknown): value is DependencyReqInstruction<unknown, AnyDependency> {
+    return value instanceof DependencyReqInstruction;
+  }
 }
 
 export type ConditionalIterable<T, E, A extends readonly unknown[], R> = A extends []
-  ? { [Symbol.iterator](): Generator<EmbedCtxOp<T, E, R>, T, unknown> }
+  ? { [Symbol.iterator](): Generator<EmbedDiOpInstruction<T, E, R>, T, unknown> }
   : {};
 
-export type ServiceContextCtor<Name extends string> = {
-  readonly _tag: typeof CTX_TAG;
+export interface DependencyCtor<Name extends string> {
+  readonly _tag: typeof DI_TAG;
   readonly key: Name;
-  readonly [CTX_TOKEN]: never;
+  readonly [DI_TOKEN]: never;
 
-  of<C extends AnyCtx>(this: C, value: Value<C>): Provider<C>;
-  new <T>(): DI<T, Name>;
-};
+  new <T>(): Dependency<T, Name>;
+}
 
-/** Constructor-or-token metatype used in requirement set `R` for a service key class. */
-export type ContextReq<C> = C extends abstract new (...args: never[]) => infer I ? I : C;
+/** Constructor-or-token metatype used in dependency-req set `R` for a dependency key class. */
+export type DependencyReq<C> = C extends abstract new (...args: never[]) => infer I ? I : C;
 
 /** Yield wrapping a nested nullary `DI.Op` so the parent generator can `yield*` it. */
-export class EmbedCtxOp<T, E, R> {
-  readonly _tag = "EmbedCtxOp";
+export class EmbedDiOpInstruction<T, E, R> {
+  readonly _tag = "EmbedDiOpInstruction";
   readonly op: DI.Op<T, E, [], R>;
 
   constructor(op: DI.Op<T, E, [], R>) {
@@ -97,19 +115,31 @@ export class EmbedCtxOp<T, E, R> {
   }
 }
 
-export type Requirement<P> = P extends Provider<infer C> ? ContextReq<C> : never;
+export type BindingReq<P> = P extends Binding<infer C> ? DependencyReq<C> : never;
+export type LazyBindingReq<P> = P extends LazyBinding<infer C> ? DependencyReq<C> : never;
+type SatisfiedReq<P, R> = R extends unknown ? (P extends R ? R : never) : never;
+export type UseEntry = AnyBinding | AnyLazyBinding | AnyDependency;
+export type UseReq<P, R> =
+  P extends Binding<infer C>
+    ? DependencyReq<C>
+    : P extends LazyBinding<infer C>
+      ? DependencyReq<C>
+      : P extends AnyDependency
+        ? SatisfiedReq<P, R>
+        : never;
 
-export type AnyNullaryCtxOp = DI.Op<unknown, unknown, [], unknown>;
-export type AnyCtxOp = DI.Op<unknown, unknown, readonly unknown[], unknown>;
+export type AnyNullaryDiOp = DI.Op<unknown, unknown, [], unknown>;
+export type AnyDiOp = DI.Op<unknown, unknown, readonly unknown[], unknown>;
 export type AnyNullaryOp = Op<unknown, unknown, []>;
-export type Env = ReadonlyMap<AnyCtx, unknown>;
+export type Env = ReadonlyMap<AnyDependency, unknown>;
 
-export type InferYieldRequirement<Y> =
-  | (Y extends RequireContext<unknown, infer R> ? R : never)
-  | (Y extends EmbedCtxOp<unknown, unknown, infer R> ? R : never);
-export type DistributeRequirement<R> = R extends unknown ? R : never;
+export type InferYieldReq<Y> =
+  | (Y extends DependencyReqInstruction<unknown, infer R> ? R : never)
+  | (Y extends EmbedDiOpInstruction<unknown, unknown, infer R> ? R : never);
+export type DistributeReq<R> = R extends unknown ? R : never;
 
-export type InferEmbedErr<Y> = Y extends EmbedCtxOp<unknown, infer E, unknown> ? E : never;
+export type InferEmbedErr<Y> =
+  Y extends EmbedDiOpInstruction<unknown, infer E, unknown> ? E : never;
 
 export type OpLike<T, E> = Op<T, E, []> | DI.Op<T, E, [], unknown>;
 
@@ -117,19 +147,21 @@ export type ObserverReq<X> = X extends DI.Op<unknown, unknown, [], infer R> ? R 
 export type ObserverErr<X> = X extends OpLike<unknown, infer E> ? E : never;
 export type ObserverOk<X> = X extends OpLike<infer T, unknown> ? T : Awaited<X>;
 
-export interface CtxOpBase<T, E, A extends readonly unknown[], R> {
-  readonly _tag: "CtxOp";
-  readonly [CTX_OP_TOKEN]: true;
+export interface DiOpBase<T, E, A extends readonly unknown[], R> {
+  readonly _tag: "DiOp";
+  readonly [DI_OP_TOKEN]: true;
 
   (...args: A): DI.Op<T, E, [], R>;
 
   /** Runs a fully-provided wrapper with the same argument shape as the wrapped `Op`. */
-  readonly run: [R] extends [never] ? (...args: A) => RunResult<T, E> : never;
+  readonly run: [R] extends [never]
+    ? (...args: A) => Promise<Result<T, E | UnhandledException>>
+    : never;
 
-  /** Provides services and removes them from the remaining requirement type. */
-  use<const Providers extends readonly AnyProvider[]>(
-    ...providers: Providers
-  ): DI.Op<T, E, A, Exclude<R, Requirement<Providers[number]>>>;
+  /** Applies dependency bindings and removes them from the remaining req type. */
+  use<const Entries extends readonly UseEntry[]>(
+    ...entries: Entries
+  ): DI.Op<T, E, A, Exclude<R, UseReq<Entries[number], R>>>;
 
   withRetry(policy?: RetryPolicy): DI.Op<T, E, A, R>;
   withTimeout(timeoutMs: number): DI.Op<T, E | TimeoutError, A, R>;
@@ -167,24 +199,24 @@ export interface CtxOpBase<T, E, A extends readonly unknown[], R> {
   ): DI.Op<T | ObserverOk<RRecovered>, E | ObserverErr<RRecovered>, A, R | ObserverReq<RRecovered>>;
 }
 
-export interface CtxOpState<T, E, A extends readonly unknown[]> {
+export interface DiOpState<T, E, A extends readonly unknown[]> {
   readonly buildOp: (env: Env) => Op<T, E, A>;
   readonly env: Env;
   readonly iterable: boolean;
 }
 
-export interface CtxOpRuntime<T, E, A extends readonly unknown[]> {
+export interface DiOpRuntime<T, E, A extends readonly unknown[]> {
   toOp(env?: Env): Op<T, E, A>;
 }
 
-export type CtxOpCallable<T, E, A extends readonly unknown[], R> = ((
+export type DiOpCallable<T, E, A extends readonly unknown[], R> = ((
   ...args: A
 ) => DI.Op<T, E, [], R>) &
-  CtxOpRuntime<T, E, A> & {
-    readonly _tag: "CtxOp";
-    readonly [CTX_OP_TOKEN]: true;
+  DiOpRuntime<T, E, A> & {
+    readonly _tag: "DiOp";
+    readonly [DI_OP_TOKEN]: true;
     readonly run: (...args: A) => RunResult<T, E>;
-    readonly use: (...providers: readonly AnyProvider[]) => DI.Op<T, E, A, unknown>;
+    readonly use: (...entries: readonly UseEntry[]) => DI.Op<T, E, A, unknown>;
     readonly withRetry: (policy?: RetryPolicy) => DI.Op<T, E, A, R>;
     readonly withTimeout: (timeoutMs: number) => DI.Op<T, E | TimeoutError, A, R>;
     readonly withSignal: (signal: AbortSignalLike) => DI.Op<T, E, A, R>;
@@ -194,137 +226,212 @@ export type CtxOpCallable<T, E, A extends readonly unknown[], R> = ((
     readonly mapErr: (transform: (error: E) => unknown) => DI.Op<T, unknown, A, R>;
     readonly flatMap: (
       bind: (value: T) => OpLike<unknown, unknown>,
-    ) => DI.Op<unknown, unknown, A, unknown>;
-    readonly tap: (observe: (value: T) => unknown) => DI.Op<T, unknown, A, unknown>;
-    readonly tapErr: (observe: (error: E) => unknown) => DI.Op<T, unknown, A, unknown>;
+    ) => DI.Op<unknown, unknown, A, R>;
+    readonly tap: (observe: (value: T) => unknown) => DI.Op<T, unknown, A, R>;
+    readonly tapErr: (observe: (error: E) => unknown) => DI.Op<T, unknown, A, R>;
     readonly recover: (
       predicate: (error: E) => boolean,
       handler: (error: E) => unknown,
-    ) => DI.Op<unknown, unknown, A, unknown>;
+    ) => DI.Op<unknown, unknown, A, R>;
   };
 
-function isContextRequirementInstruction(value: unknown): value is RequireContext<unknown, AnyCtx> {
-  return value instanceof RequireContext;
-}
-
-function isEmbeddedContextOperationInstruction(
+function isEmbeddedDependencyOperationInstruction(
   value: unknown,
-): value is EmbedCtxOp<unknown, unknown, unknown> {
-  return value instanceof EmbedCtxOp;
+): value is EmbedDiOpInstruction<unknown, unknown, unknown> {
+  return value instanceof EmbedDiOpInstruction;
 }
 
-function isContextOperation(value: unknown): value is AnyCtxOp {
-  return hasBrand(value, CTX_OP_TOKEN);
+function isDependencyOperation(value: unknown): value is AnyDiOp {
+  return hasBrand(value, DI_OP_TOKEN);
 }
 
-function withContextBinding(env: Env, context: AnyCtx, value: unknown): Env {
+function isDependencyBinding(value: unknown): value is AnyBinding {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Object.hasOwn(value, "_tag") &&
+    value._tag === "DependencyBinding"
+  );
+}
+
+function isDependencyLazyBinding(value: unknown): value is AnyLazyBinding {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Object.hasOwn(value, "_tag") &&
+    value._tag === "DependencyLazyBinding"
+  );
+}
+
+function dependencyTokenFromEntry(entry: AnyDependency): AnyDependency {
+  const ctor = entry.constructor;
+  if (typeof ctor !== "function") return entry;
+
+  let current: unknown = ctor;
+  while (typeof current === "function") {
+    if (
+      Object.hasOwn(current, "_tag") &&
+      current._tag === DI_TAG &&
+      Object.hasOwn(current, "key") &&
+      Object.hasOwn(current, DI_TOKEN)
+    ) {
+      return unsafeCoerce<AnyDependency>(current);
+    }
+    current = Object.getPrototypeOf(current);
+  }
+
+  return entry;
+}
+
+function withDependencyBinding(env: Env, dependency: AnyDependency, value: unknown): Env {
   const nextEnv = new Map(env);
-  nextEnv.set(context, value);
+  nextEnv.set(dependency, value);
   return nextEnv;
+}
+
+function withDependencyEntry(env: Env, entry: UseEntry): Env {
+  if (isDependencyBinding(entry)) {
+    return withDependencyBinding(env, entry.dependency, entry.value);
+  }
+  if (isDependencyLazyBinding(entry)) {
+    return withDependencyBinding(env, entry.dependency, entry);
+  }
+  return withDependencyBinding(env, dependencyTokenFromEntry(entry), entry);
+}
+
+const MISSING_DEPENDENCY = Symbol("prodkit.std.di.missing-dependency");
+
+function resolveDependencyValue(env: Env, dependency: AnyDependency): unknown {
+  let matchedToken: AnyDependency | undefined;
+  let matchedValue: unknown = MISSING_DEPENDENCY;
+
+  if (env.has(dependency)) {
+    matchedToken = dependency;
+    matchedValue = env.get(dependency);
+  } else {
+    for (const [token, value] of env.entries()) {
+      if (token.key === dependency.key) {
+        matchedToken = token;
+        matchedValue = value;
+        break;
+      }
+    }
+  }
+
+  if (matchedValue === MISSING_DEPENDENCY) {
+    return MISSING_DEPENDENCY;
+  }
+
+  if (isDependencyLazyBinding(matchedValue)) {
+    const resolved = matchedValue.resolve();
+    if (matchedToken !== undefined && env instanceof Map) {
+      env.set(matchedToken, resolved);
+    }
+    return resolved;
+  }
+
+  return matchedValue;
 }
 
 function toRuntimeOp<T, E, A extends readonly unknown[]>(
   value: DI.Op<T, E, A, unknown>,
   env: Env,
 ): Op<T, E, A> {
-  return unsafeCoerce<CtxOpRuntime<T, E, A>>(value).toOp(env);
+  return unsafeCoerce<DiOpRuntime<T, E, A>>(value).toOp(env);
 }
 
-function toRuntimeNullaryOp(value: AnyCtxOp, env: Env): AnyNullaryOp {
-  return toRuntimeOp(unsafeCoerce<AnyNullaryCtxOp>(value), env);
+function toRuntimeNullaryOp(value: AnyDiOp, env: Env): AnyNullaryOp {
+  return toRuntimeOp(unsafeCoerce<AnyNullaryDiOp>(value), env);
 }
 
-function materializeContextAwareReturn(value: unknown, env: Env): unknown {
-  if (!isContextOperation(value)) return value;
+function materializeDependencyAwareReturn(value: unknown, env: Env): unknown {
+  if (!isDependencyOperation(value)) return value;
   return toRuntimeNullaryOp(value, env);
 }
 
 function runWithState<T, E, A extends readonly unknown[]>(
-  state: CtxOpState<T, E, A>,
+  state: DiOpState<T, E, A>,
   args: A,
 ): RunResult<T, E> {
-  return state.buildOp(state.env).run(...args);
+  return state.buildOp(new Map(state.env)).run(...args);
 }
 
 function invokeWithState<T, E, A extends readonly unknown[]>(
-  state: CtxOpState<T, E, A>,
+  state: DiOpState<T, E, A>,
   env: Env,
   args: A,
 ): Op<T, E, []> {
-  return state.buildOp(env)(...args);
+  return state.buildOp(new Map(env))(...args);
 }
 
-function recreateContextOp<T, E, A extends readonly unknown[], R>(
-  state: CtxOpState<T, E, A>,
+function recreateDependencyOp<T, E, A extends readonly unknown[], R>(
+  state: DiOpState<T, E, A>,
 ): DI.Op<T, E, A, R> {
-  return createContextOp<T, E, A, R>(state);
+  return createDependencyOp<T, E, A, R>(state);
 }
 
-function mapContextOp<T, E, A extends readonly unknown[], R, TOut, EOut>(
-  state: CtxOpState<T, E, A>,
+function mapDependencyOp<T, E, A extends readonly unknown[], R, TOut, EOut>(
+  state: DiOpState<T, E, A>,
   mapOp: (op: Op<T, E, A>, env: Env) => Op<TOut, EOut, A>,
 ): DI.Op<TOut, EOut, A, R> {
-  return recreateContextOp<TOut, EOut, A, R>({
+  return recreateDependencyOp<TOut, EOut, A, R>({
     ...state,
     buildOp: (env) => mapOp(state.buildOp(env), env),
   });
 }
 
-function applyProviders<T, E, A extends readonly unknown[], R>(
-  state: CtxOpState<T, E, A>,
-  providers: readonly AnyProvider[],
+function applyUseEntries<T, E, A extends readonly unknown[], R>(
+  state: DiOpState<T, E, A>,
+  entries: readonly UseEntry[],
 ): DI.Op<T, E, A, R> {
-  return recreateContextOp<T, E, A, R>({
+  return recreateDependencyOp<T, E, A, R>({
     ...state,
-    env: providers.reduce(
-      (env, provider) => withContextBinding(env, provider.context, provider.value),
-      state.env,
-    ),
+    env: entries.reduce((env, entry) => withDependencyEntry(env, entry), state.env),
   });
 }
 
-function asCtxOp<T, E, A extends readonly unknown[], R>(
-  value: CtxOpCallable<T, E, A, R>,
+function asDiOp<T, E, A extends readonly unknown[], R>(
+  value: DiOpCallable<T, E, A, R>,
 ): DI.Op<T, E, A, R> {
   return unsafeCoerce<DI.Op<T, E, A, R>>(value);
 }
 
 function buildIterableFacade<T, E, R>(
-  self: CtxOpCallable<T, E, [], R>,
+  self: DiOpCallable<T, E, [], R>,
 ): {
-  [Symbol.iterator](): Generator<EmbedCtxOp<T, E, R>, T, unknown>;
+  [Symbol.iterator](): Generator<EmbedDiOpInstruction<T, E, R>, T, unknown>;
 } {
   return {
-    [Symbol.iterator]: function* (): Generator<EmbedCtxOp<T, E, R>, T, unknown> {
-      return yield* new EmbedCtxOp(asCtxOp<T, E, [], R>(self));
+    [Symbol.iterator]: function* (): Generator<EmbedDiOpInstruction<T, E, R>, T, unknown> {
+      return yield* new EmbedDiOpInstruction(asDiOp<T, E, [], R>(self));
     },
   };
 }
 
 function toFlatMapOpLike(value: OpLike<unknown, unknown>, env: Env): AnyNullaryOp {
-  return isContextOperation(value) ? toRuntimeNullaryOp(value, env) : value;
+  return isDependencyOperation(value) ? toRuntimeNullaryOp(value, env) : value;
 }
 
-export function createContextOp<T, E, A extends readonly unknown[], R>(
-  state: CtxOpState<T, E, A>,
+export function createDependencyOp<T, E, A extends readonly unknown[], R>(
+  state: DiOpState<T, E, A>,
 ): DI.Op<T, E, A, R> {
   const lift = <TOut, EOut>(
     mapOp: (op: Op<T, E, A>, env: Env) => Op<TOut, EOut, A>,
-  ): DI.Op<TOut, EOut, A, R> => mapContextOp(state, mapOp);
+  ): DI.Op<TOut, EOut, A, R> => mapDependencyOp(state, mapOp);
 
-  const self: CtxOpCallable<T, E, A, R> = Object.assign(
+  const self: DiOpCallable<T, E, A, R> = Object.assign(
     (...args: A) =>
-      recreateContextOp<T, E, [], R>({
+      recreateDependencyOp<T, E, [], R>({
         buildOp: (env) => invokeWithState(state, env, args),
         env: state.env,
         iterable: true,
       }),
     {
-      _tag: "CtxOp" as const,
-      [CTX_OP_TOKEN]: true as const,
-      toOp: (envOverride?: Env) => state.buildOp(envOverride ?? state.env),
+      _tag: "DiOp" as const,
+      [DI_OP_TOKEN]: true as const,
+      toOp: (envOverride?: Env) => state.buildOp(new Map(envOverride ?? state.env)),
       run: (...args: A) => runWithState(state, args),
-      use: (...providers: readonly AnyProvider[]) => applyProviders(state, providers),
+      use: (...entries: readonly UseEntry[]) => applyUseEntries(state, entries),
       withRetry: (policy?: RetryPolicy) => lift((op) => op.withRetry(policy)),
       withTimeout: (timeoutMs: number) => lift((op) => op.withTimeout(timeoutMs)),
       withSignal: (signal: AbortSignalLike) => lift((op) => op.withSignal(signal)),
@@ -336,24 +443,26 @@ export function createContextOp<T, E, A extends readonly unknown[], R>(
       flatMap: (bind: (value: T) => OpLike<unknown, unknown>) =>
         lift((op, env) => op.flatMap((value) => toFlatMapOpLike(bind(value), env))),
       tap: (observe: (value: T) => unknown) =>
-        lift((op, env) => op.tap((value) => materializeContextAwareReturn(observe(value), env))),
+        lift((op, env) => op.tap((value) => materializeDependencyAwareReturn(observe(value), env))),
       tapErr: (observe: (error: E) => unknown) =>
-        lift((op, env) => op.tapErr((error) => materializeContextAwareReturn(observe(error), env))),
+        lift((op, env) =>
+          op.tapErr((error) => materializeDependencyAwareReturn(observe(error), env)),
+        ),
       recover: (predicate: (error: E) => boolean, handler: (error: E) => unknown) =>
         lift((op, env) =>
-          op.recover(predicate, (error) => materializeContextAwareReturn(handler(error), env)),
+          op.recover(predicate, (error) => materializeDependencyAwareReturn(handler(error), env)),
         ),
     },
   );
 
   if (state.iterable) {
-    Object.assign(self, buildIterableFacade(unsafeCoerce<CtxOpCallable<T, E, [], R>>(self)));
+    Object.assign(self, buildIterableFacade(unsafeCoerce<DiOpCallable<T, E, [], R>>(self)));
   }
 
-  return asCtxOp(self);
+  return asDiOp(self);
 }
 
-export function buildContextOp<Y, T, A extends readonly unknown[]>(
+export function buildDependencyOp<Y, T, A extends readonly unknown[]>(
   program: (...args: A) => Generator<Y, T, unknown>,
   env: Env,
 ): Op<T, InferErr<Y> | InferEmbedErr<Y>, A> {
@@ -366,23 +475,24 @@ export function buildContextOp<Y, T, A extends readonly unknown[]>(
         const step = iterator.next(input);
         if (step.done) return step.value;
 
-        const yielded = step.value;
+        const stepValue = step.value;
 
-        if (isContextRequirementInstruction(yielded)) {
-          if (env.has(yielded.context)) {
-            input = env.get(yielded.context);
+        if (DependencyReqInstruction.is(stepValue)) {
+          const value = resolveDependencyValue(env, stepValue.dependency);
+          if (value !== MISSING_DEPENDENCY) {
+            input = value;
             continue;
           }
 
-          throw new MissingContextError(yielded.context.key);
+          throw new MissingDependencyError(stepValue.dependency.key);
         }
 
-        if (isEmbeddedContextOperationInstruction(yielded)) {
-          input = yield* toRuntimeOp(yielded.op, env);
+        if (isEmbeddedDependencyOperationInstruction(stepValue)) {
+          input = yield* toRuntimeOp(stepValue.op, env);
           continue;
         }
 
-        input = yield yielded as never;
+        input = yield stepValue as never;
       }
     }),
   );

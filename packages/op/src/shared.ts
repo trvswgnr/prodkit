@@ -31,6 +31,10 @@ export function hasBrand<K extends PropertyKey>(value: unknown, key: K): value i
   return isRecordLike(value) && value[key] === true;
 }
 
+export function hasTag<T extends string>(value: unknown, tag: T): value is { readonly _tag: T } {
+  return isRecordLike(value) && value._tag === tag;
+}
+
 /**
  * UNSAFE: casts any value to a given type
  *

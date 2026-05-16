@@ -44,10 +44,10 @@ export interface Clock {
   nowIso: Op<string, never, []>;
 }
 
-export class DatabaseService extends DI.Service("DatabaseService")<Database> {}
-export class PasswordHasherService extends DI.Service("PasswordHasherService")<PasswordHasher> {}
-export class MailerService extends DI.Service("MailerService")<Mailer> {}
-export class ClockService extends DI.Service("ClockService")<Clock> {}
+export class DatabaseService extends DI.Dependency("DatabaseService")<Database> {}
+export class PasswordHasherService extends DI.Dependency("PasswordHasherService")<PasswordHasher> {}
+export class MailerService extends DI.Dependency("MailerService")<Mailer> {}
+export class ClockService extends DI.Dependency("ClockService")<Clock> {}
 
 export const loadExistingUser = DI.Op(function* (email: string) {
   const db = yield* DI.require(DatabaseService);
@@ -102,19 +102,19 @@ export function createInMemoryDatabase(seed: readonly User[] = []): Database & {
   };
 }
 
-export function createExampleServices() {
+export function createExampleDependencies() {
   const db = createInMemoryDatabase();
   const sentWelcomeEmails: string[] = [];
 
   return {
-    db,
+    db: DI.singleton(DatabaseService, db),
     sentWelcomeEmails,
-    hasher: {
+    hasher: DI.singleton(PasswordHasherService, {
       hash: Op(function* (password: string) {
         return `hash:${password}`;
       }),
-    } satisfies PasswordHasher,
-    mailer: {
+    }),
+    mailer: DI.singleton(MailerService, {
       sendWelcome: Op(function* (user: User) {
         sentWelcomeEmails.push(user.email);
       }).mapErr(
@@ -124,20 +124,20 @@ export function createExampleServices() {
             cause: error,
           }),
       ),
-    } satisfies Mailer,
-    clock: {
+    }),
+    clock: DI.singleton(ClockService, {
       nowIso: Op.of("2026-05-15T12:00:00.000Z"),
-    } satisfies Clock,
+    }),
   };
 }
 
 export function runnableRegisterUser() {
-  const services = createExampleServices();
+  const services = createExampleDependencies();
   const op = registerUser.use(
-    DatabaseService.of(services.db),
-    PasswordHasherService.of(services.hasher),
-    MailerService.of(services.mailer),
-    ClockService.of(services.clock),
+    services.db, //
+    services.hasher,
+    services.mailer,
+    services.clock,
   );
 
   return { op, services };
