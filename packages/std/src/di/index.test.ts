@@ -1,4 +1,5 @@
 import { assert, describe, expect, expectTypeOf, test } from "vitest";
+import ts from "typescript";
 import { Op, TimeoutError } from "@prodkit/op";
 import { UnhandledException } from "better-result";
 import * as std from "../index.js";
@@ -67,6 +68,30 @@ describe("Ctx", () => {
     expect(result.isOk()).toBe(true);
     expect(result.unwrap()).toEqual({ id: "123" });
     expect(calls).toEqual(["user:123"]);
+  });
+
+  test("defaulted generator params still receive explicit run args", async () => {
+    const op = Ctx.Op(function* (id: string = "default") {
+      return id;
+    });
+
+    expectTypeOf(op).toEqualTypeOf<Ctx.Op<string, never, [id?: string], never>>();
+
+    const result = await op.run("explicit");
+
+    expect(result.unwrap()).toBe("explicit");
+  });
+
+  test("rest-parameter generators preserve all run args", async () => {
+    const op = Ctx.Op(function* (...values: number[]) {
+      return values.reduce((sum, value) => sum + value, 0);
+    });
+
+    expectTypeOf(op).toEqualTypeOf<Ctx.Op<number, never, number[], never>>();
+
+    const result = await op.run(1, 2, 3, 4);
+
+    expect(result.unwrap()).toBe(10);
   });
 
   test("composes context-aware operations", async () => {
@@ -224,5 +249,13 @@ describe("Ctx", () => {
     assert(UnhandledException.is(error));
     expect(error.cause).toBeInstanceOf(TypeError);
     expect(String(error.cause)).toContain("Use Ctx.require(Requirement) to require a context");
+  });
+});
+
+describe("Ctx implementation hygiene", () => {
+  test("does not inspect generator Function.length", () => {
+    const source = ts.sys.readFile(`${ts.sys.getCurrentDirectory()}/src/di/index.ts`);
+
+    expect(source).not.toContain("f.length");
   });
 });

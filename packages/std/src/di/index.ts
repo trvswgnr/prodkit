@@ -473,6 +473,6 @@ function CtxOp<
   return makeContextOp<T, InferErr<Y> | InferContextErr<Y>, A, R>({
     buildOp: (env) => buildContextOp(f, env),
     env: new Map(),
-    iterable: f.length === 0,
+    iterable: true,
   });
 }
