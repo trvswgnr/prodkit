@@ -1,9 +1,9 @@
-# @prodkit/di
+# @prodkit/std
 
-Typed dependency injection for `@prodkit/op`.
+Standard library utilities for `@prodkit/op`.
 
 ```ts
-import { Context, withContext } from "@prodkit/di";
+import { Context, withContext } from "@prodkit/std/di";
 import { Op } from "@prodkit/op";
 
 interface Database {
@@ -19,4 +19,12 @@ const getUser = withContext(function* () {
 
 const runnable = getUser.provide(DatabaseService, db);
 const result = await runnable.run();
+```
+
+The root package is intended for namespace imports:
+
+```ts
+import * as std from "@prodkit/std";
+
+const Service = std.di.Context("Service");
 ```

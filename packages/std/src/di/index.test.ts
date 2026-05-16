@@ -1,12 +1,7 @@
 import { describe, expect, expectTypeOf, test } from "vitest";
 import { Op } from "@prodkit/op";
-import {
-  Context,
-  InferContextRequirements,
-  withContext,
-  type ContextValue,
-  type WithContext,
-} from "./index.js";
+import * as std from "../index.js";
+import { Context, InferContextRequirements, type ContextValue } from "./index.js";
 
 class DatabaseError extends Error {
   readonly _tag = "DatabaseError";
@@ -29,13 +24,18 @@ describe("withContext", () => {
     expectTypeOf<ContextValue<typeof DatabaseService>>().toEqualTypeOf<Database>();
   });
 
+  test("exports dependency injection helpers from the root namespace", () => {
+    expect(std.di.Context).toBe(Context);
+    expect(std.di.Context.Op).toBe(Context.Op);
+  });
+
   test("infers context requirements from yielded services", () => {
-    const op = withContext(function* () {
+    const op = Context.Op(function* () {
       const db = yield* Context.require(DatabaseService);
       return yield* db.query("select * from users where id = ?", ["1"]);
     });
 
-    expectTypeOf(op).toEqualTypeOf<WithContext<Op<User, DatabaseError, []>, DatabaseService>>();
+    expectTypeOf(op).toEqualTypeOf<Context.Op<User, DatabaseError, [], DatabaseService>>();
 
     const provided = op.provide(DatabaseService, {
       query: Op(function* (_sql: string, _params: unknown[]) {
@@ -43,7 +43,7 @@ describe("withContext", () => {
       }).mapErr((error): DatabaseError => error),
     });
 
-    expectTypeOf(provided).toEqualTypeOf<WithContext<Op<User, DatabaseError, []>, never>>();
+    expectTypeOf(provided).toEqualTypeOf<Context.Op<User, DatabaseError, [], never>>();
     expectTypeOf(provided.run()).toEqualTypeOf<ReturnType<Op<User, DatabaseError, []>["run"]>>();
   });
 
@@ -55,7 +55,7 @@ describe("withContext", () => {
         return { id: String(params[0]) };
       }).mapErr((error): DatabaseError => error),
     };
-    const op = withContext(function* (id: string) {
+    const op = Context.Op(function* (id: string) {
       const service = yield* Context.require(DatabaseService);
       return yield* service.query("user", [id]);
     }).provide(DatabaseService, db);
@@ -68,11 +68,11 @@ describe("withContext", () => {
   });
 
   test("composes context-aware operations", async () => {
-    const findUser = withContext(function* (id: string) {
+    const findUser = Context.Op(function* (id: string) {
       const db = yield* Context.require(DatabaseService);
       return yield* db.query("user", [id]);
     });
-    const greet = withContext(function* (id: string) {
+    const greet = Context.Op(function* (id: string) {
       const user = yield* findUser(id);
       return `hello ${user.id}`;
     });
@@ -92,14 +92,14 @@ describe("withContext", () => {
     class TestService2 extends Context("TestService2")<{}> {}
     class TestService3 extends Context("TestService3")<{}> {}
 
-    const op = withContext(function* () {
+    const op = Context.Op(function* () {
       yield* Context.require(TestService1);
       yield* Context.require(TestService2);
       yield* Context.require(TestService3);
     });
 
     expectTypeOf(op).toEqualTypeOf<
-      WithContext<Op<void, never, []>, TestService1 | TestService2 | TestService3>
+      Context.Op<void, never, [], TestService1 | TestService2 | TestService3>
     >();
 
     type OpRequirements = InferContextRequirements<typeof op>;
@@ -107,7 +107,7 @@ describe("withContext", () => {
 
     const provided = op.provide(TestService1, {});
     expectTypeOf(provided).toEqualTypeOf<
-      WithContext<Op<void, never, []>, TestService2 | TestService3>
+      Context.Op<void, never, [], TestService2 | TestService3>
     >();
 
     type ProvidedRequirements = InferContextRequirements<typeof provided>;
@@ -117,7 +117,7 @@ describe("withContext", () => {
     void (await provided.run());
 
     const provided2 = provided.provide(TestService2, {});
-    expectTypeOf(provided2).toEqualTypeOf<WithContext<Op<void, never, []>, TestService3>>();
+    expectTypeOf(provided2).toEqualTypeOf<Context.Op<void, never, [], TestService3>>();
     type Provided2Requirements = InferContextRequirements<typeof provided2>;
     expectTypeOf<Provided2Requirements>().toEqualTypeOf<TestService3>();
 
@@ -125,14 +125,14 @@ describe("withContext", () => {
     void (await provided2.run());
 
     const provided3 = provided2.provide(TestService3, {});
-    expectTypeOf(provided3).toEqualTypeOf<WithContext<Op<void, never, []>, never>>();
+    expectTypeOf(provided3).toEqualTypeOf<Context.Op<void, never, [], never>>();
 
     const result = await provided3.run();
     expect(result.isOk()).toBe(true);
   });
 
   test("missing services surface as unhandled runtime failures", async () => {
-    const op = withContext(function* () {
+    const op = Context.Op(function* () {
       yield* Context.require(DatabaseService);
       return "unreachable";
     });

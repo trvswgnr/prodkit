@@ -25,7 +25,7 @@
 ## Learned Workspace Facts
 
 - `pnpm install` must be run outside the sandbox (request full permissions / non-sandbox); it hangs or fails reliably in the default sandbox.
-- `pnpm run gate` smoke creates a temp examples workspace and runs `npm install`; restricted/no-network sandboxes can hang there until the smoke timeout.
+- Run `pnpm run gate` outside the sandbox by default; its smoke step creates a temp examples workspace and runs `npm install`, which reliably times out or hangs in restricted/no-network sandboxes.
 - Contributors need Node >=24.14.0.
 - Contributors should use `pnpm@10` locally (CI/release stays pinned to `10.11.0`).
 - npm publishing is configured with GitHub Actions trusted publishing (OIDC + provenance), not long-lived `NPM_TOKEN` auth.
@@ -33,4 +33,5 @@
 - CI verifies the runtime-agnostic claim with a separate Bun, Deno, and Miniflare runtime smoke matrix.
 - The project is currently alpha-stage with no production users, so intentional breaking changes are acceptable.
 - Workspace taxonomy: `packages/*` (publishable), `examples/*` (consumer examples), `benchmarks/*` (performance harnesses), `tools/*` (maintainer scripts), and `apps/*` reserved for runnable product/demo apps.
+- `@prodkit/std` is the standard-library package; dependency-injection helpers are imported directly from `@prodkit/std/di` and exposed as `di` on root namespace imports.
 - GitHub repository canonical path is `trvswgnr/prodkit` (renamed from `trvswgnr/op`).

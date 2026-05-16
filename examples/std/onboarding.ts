@@ -1,4 +1,4 @@
-import { Context, withContext } from "@prodkit/di";
+import { Context } from "@prodkit/std/di";
 import { Op } from "@prodkit/op";
 import { TaggedError } from "better-result";
 
@@ -49,12 +49,12 @@ export class PasswordHasherService extends Context("PasswordHasherService")<Pass
 export class MailerService extends Context("MailerService")<Mailer> {}
 export class ClockService extends Context("ClockService")<Clock> {}
 
-export const loadExistingUser = withContext(function* (email: string) {
+export const loadExistingUser = Context.Op(function* (email: string) {
   const db = yield* Context.require(DatabaseService);
   return yield* db.findUserByEmail(email);
 });
 
-export const registerUser = withContext(function* (email: string, password: string) {
+export const registerUser = Context.Op(function* (email: string, password: string) {
   const existing = yield* loadExistingUser(email);
   if (existing !== undefined) {
     return yield* new DuplicateEmailError({ email });

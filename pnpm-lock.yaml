@@ -39,31 +39,6 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  examples/di:
-    dependencies:
-      '@prodkit/di':
-        specifier: workspace:*
-        version: link:../../packages/di
-      '@prodkit/op':
-        specifier: workspace:*
-        version: link:../../packages/op
-      better-result:
-        specifier: 2.9.0
-        version: 2.9.0
-    devDependencies:
-      '@types/node':
-        specifier: ^24.12.2
-        version: 24.12.3
-      oxfmt:
-        specifier: 0.48.0
-        version: 0.48.0
-      oxlint:
-        specifier: 1.55.0
-        version: 1.55.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
   examples/op:
     dependencies:
       '@prodkit/op':
@@ -89,15 +64,43 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/di:
+  examples/std:
     dependencies:
       '@prodkit/op':
         specifier: workspace:*
-        version: link:../op
+        version: link:../../packages/op
+      '@prodkit/std':
+        specifier: workspace:*
+        version: link:../../packages/std
+      better-result:
+        specifier: 2.9.0
+        version: 2.9.0
+    devDependencies:
+      '@types/node':
+        specifier: ^24.12.2
+        version: 24.12.3
+      oxfmt:
+        specifier: 0.48.0
+        version: 0.48.0
+      oxlint:
+        specifier: 1.55.0
+        version: 1.55.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/op:
+    dependencies:
       better-result:
         specifier: ^2.9.0
         version: 2.9.0
     devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 4.1.0
+        version: 4.1.0(vitest@4.1.0(@types/node@24.12.3)(vite@8.0.11(@types/node@24.12.3)))
+      fast-check:
+        specifier: 4.7.0
+        version: 4.7.0
       oxfmt:
         specifier: 0.48.0
         version: 0.48.0
@@ -114,18 +117,15 @@ importers:
         specifier: 4.1.0
         version: 4.1.0(@types/node@24.12.3)(vite@8.0.11(@types/node@24.12.3))
 
-  packages/op:
+  packages/std:
     dependencies:
+      '@prodkit/op':
+        specifier: workspace:*
+        version: link:../op
       better-result:
         specifier: ^2.9.0
         version: 2.9.0
     devDependencies:
-      '@vitest/coverage-v8':
-        specifier: 4.1.0
-        version: 4.1.0(vitest@4.1.0(@types/node@24.12.3)(vite@8.0.11(@types/node@24.12.3)))
-      fast-check:
-        specifier: 4.7.0
-        version: 4.7.0
       oxfmt:
         specifier: 0.48.0
         version: 0.48.0

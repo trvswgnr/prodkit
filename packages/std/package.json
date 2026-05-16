@@ -1,7 +1,7 @@
 {
-  "name": "@prodkit/di",
+  "name": "@prodkit/std",
   "version": "0.1.0",
-  "description": "Typed dependency injection for @prodkit/op programs.",
+  "description": "Standard library utilities for @prodkit/op programs.",
   "keywords": [
     "dependency injection",
     "effect",
@@ -30,6 +30,10 @@
     ".": {
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
+    },
+    "./di": {
+      "types": "./dist/di/index.d.mts",
+      "import": "./dist/di/index.mjs"
     }
   },
   "publishConfig": {
