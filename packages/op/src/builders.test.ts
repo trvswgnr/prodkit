@@ -305,8 +305,33 @@ describe("gen", () => {
     const result = await add(2, 3).run();
     assert(result.isOk(), "result should be Ok");
     expect(result.value).toBe(5);
-    expect(Symbol.iterator in add).toBe(false);
     expect(Symbol.iterator in add(2, 3)).toBe(true);
+  });
+
+  test("nullary generator factories compose directly or after invocation", async () => {
+    const calls: number[] = [];
+    const load = fromGenFn(function* () {
+      calls.push(1);
+      return 69;
+    });
+    const direct = fromGenFn(function* () {
+      return yield* load;
+    });
+    const invoked = fromGenFn(function* () {
+      return yield* load();
+    });
+
+    const directResult = await direct.run();
+
+    assert(directResult.isOk(), "direct yield-star should succeed");
+    expect(directResult.value).toBe(69);
+    expect(calls).toEqual([1]);
+
+    const invokedResult = await invoked.run();
+
+    assert(invokedResult.isOk(), "invoked yield-star should succeed");
+    expect(invokedResult.value).toBe(69);
+    expect(calls).toEqual([1, 1]);
   });
 
   test("defaulted generator params still receive explicit run args", async () => {

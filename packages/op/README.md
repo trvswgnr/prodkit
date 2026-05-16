@@ -67,6 +67,14 @@ const program = Op(function* () {
   return rooted * 2;
 });
 
+// Nullary generator-built ops can compose directly. Parameterized ops are invoked first.
+const startup = Op(function* () {
+  return "ready";
+});
+const composed = Op(function* () {
+  return yield* startup;
+});
+
 const result = await program.run();
 //    ^? Result<number, DivisionByZeroError | "Negative" | UnhandledException>
 if (result.isOk()) {
@@ -250,8 +258,9 @@ Observes a successful value without changing it. This is useful for logging, met
 or debugging in the middle of a pipeline without restructuring into a generator.
 
 If `f` returns a plain value, that value is ignored and the original success value passes through.
-If `f` returns a nullary `Op`, that op is sequenced and its result is discarded. If `f` throws, or
-if the returned op fails, that failure propagates.
+If `f` returns a bound nullary `Op`, that op is sequenced and its result is discarded. Invoke
+generator-built ops before returning them from `f`. If `f` throws, or if the returned op fails, that
+failure propagates.
 
 ```ts
 const withLog = Op.try(() => fetch("https://example.com/user/69"))
@@ -267,8 +276,9 @@ Observes typed failures without changing which error is returned. This is useful
 structured logging, and alert hooks while preserving existing control flow.
 
 If `f` returns a plain value, that value is ignored and the original typed error passes through.
-If `f` returns a nullary `Op`, that op is sequenced and its result is discarded. If `f` throws, or
-if the returned op fails, that failure propagates. `UnhandledException` bypasses `tapErr`.
+If `f` returns a bound nullary `Op`, that op is sequenced and its result is discarded. Invoke
+generator-built ops before returning them from `f`. If `f` throws, or if the returned op fails, that
+failure propagates. `UnhandledException` bypasses `tapErr`.
 
 ```ts
 const withErrorMetric = Op.try(
@@ -300,7 +310,8 @@ const normalizeFetchError = Op.try(
 Recovers from selected typed failures while preserving the rest of the error channel.
 For `TaggedError` classes, pass the error class directly for concise typed recovery.
 For other error types, use a predicate (including a type guard) to select what to handle.
-`handler` can return either a fallback value or another nullary `Op`.
+`handler` can return either a fallback value or another bound nullary `Op`. Invoke generator-built
+ops before returning them from `handler`.
 
 `UnhandledException` is intentionally not recoverable through this method; unexpected throws
 still surface so bugs are not silently converted into success paths.

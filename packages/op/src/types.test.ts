@@ -32,7 +32,7 @@ describe("type inference contracts", () => {
     p2.run(1, 2);
   });
 
-  test("only nullary ops expose direct yield-star composition", () => {
+  test("only parameterized generator-built ops must be invoked before yield-star composition", () => {
     const nullary = Op(function* () {
       return 1;
     });

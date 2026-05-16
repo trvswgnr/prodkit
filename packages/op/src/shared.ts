@@ -3,6 +3,7 @@ import type { OpIterable } from "./core/types.js";
 
 export const EMPTY_TUPLE: [] = [];
 export const OP_BRAND: unique symbol = Symbol("prodkit.op");
+export const OP_BOUND_BRAND: unique symbol = Symbol("prodkit.op.bound");
 
 /**
  * UNSAFE: casts any value to a given type
@@ -27,7 +28,14 @@ export function isIterableOp(
 }
 
 export function coerceToNullaryOp(value: unknown): Op<unknown, unknown, []> | undefined {
-  if (!isIterableOp(value)) return undefined;
+  if (
+    !isOp(value) ||
+    !(OP_BOUND_BRAND in value) ||
+    value[OP_BOUND_BRAND] !== true ||
+    typeof value !== "function"
+  ) {
+    return undefined;
+  }
   const nullary = value();
   return isIterableOp(nullary) ? nullary : undefined;
 }

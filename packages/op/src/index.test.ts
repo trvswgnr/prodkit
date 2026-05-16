@@ -119,7 +119,7 @@ describe("Op.run", () => {
     const nullary = Op(function* () {
       return 1;
     });
-    const r2 = await Op.run(nullary);
+    const r2 = await Op.run(nullary());
     assert(r2.isOk(), "should be Ok");
     expect(r2.value).toBe(1);
   });
@@ -168,7 +168,7 @@ describe("Op namespace value", () => {
       <T>(t: T) =>
         Op(function* () {
           return t;
-        }),
+        })(),
       <T>(t: T) => Op.of(t),
       <T>(t: T) => Op.of(Promise.resolve(t)),
       <T>(t: T) => Op.empty.map(() => t),
@@ -213,7 +213,7 @@ describe("Op combinators compose with withTimeout / withRetry", () => {
       if (attempts < 2) return yield* Op.fail("nope" as const);
       return yield* Op.of(11);
     });
-    const r = await Op.any([flaky])
+    const r = await Op.any([flaky()])
       .withRetry({ maxAttempts: 3, shouldRetry: () => true, getDelay: () => 0 })
       .run();
     assert(r.isOk(), "should be Ok");

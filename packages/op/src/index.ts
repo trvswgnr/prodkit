@@ -169,7 +169,12 @@ export const Op = Object.assign(fromGenFn, {
   empty,
 });
 
-export type Op<T, E, A extends readonly unknown[]> = OpInterface<T, E, A> & Tagged<"Op">;
+export type Op<
+  T,
+  E,
+  A extends readonly unknown[],
+  Yieldable extends boolean = A extends [] ? true : false,
+> = OpInterface<T, E, A, Yieldable> & Tagged<"Op">;
 
 export type { EnterContext, ExitContext, OpLifecycleHook };
 export type { BackoffOptions, RetryPolicy } from "./policies.js";

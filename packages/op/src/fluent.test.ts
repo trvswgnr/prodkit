@@ -248,7 +248,7 @@ describe("op.tap", () => {
     expect(observer).not.toHaveBeenCalled();
   });
 
-  test("tap drives Op(function*) observers that succeed", async () => {
+  test("tap treats generator factory observer returns as plain ignored values", async () => {
     const seen: string[] = [];
     const result = await Op.of(4)
       .tap((value) =>
@@ -261,15 +261,31 @@ describe("op.tap", () => {
 
     assert(result.isOk(), "should be Ok");
     expect(result.value).toBe(4);
+    expect(seen).toEqual([]);
+  });
+
+  test("tap drives invoked Op(function*) observers that succeed", async () => {
+    const seen: string[] = [];
+    const op = Op(function* (value) {
+      seen.push(`observed:${value}`);
+      return 69;
+    });
+
+    const result = await Op.of(4)
+      .tap((value) => op(value))
+      .run();
+
+    assert(result.isOk(), "should be Ok");
+    expect(result.value).toBe(4);
     expect(seen).toEqual(["observed:4"]);
   });
 
-  test("tap propagates failures from Op(function*) observers", async () => {
+  test("tap propagates failures from invoked Op(function*) observers", async () => {
     const result = await Op.of(4)
       .tap(() =>
         Op(function* () {
           return yield* Op.fail("tap-gen-failed" as const);
-        }),
+        })(),
       )
       .run();
 
@@ -349,7 +365,7 @@ describe("op.tapErr", () => {
     expect(result.error).toBe("observer-failed");
   });
 
-  test("tapErr drives Op(function*) observers that succeed", async () => {
+  test("tapErr treats generator factory observer returns as plain ignored values", async () => {
     const seen: string[] = [];
     const result = await Op.fail("bad-input" as const)
       .tapErr((error) =>
@@ -362,15 +378,31 @@ describe("op.tapErr", () => {
 
     assert(result.isErr(), "should be Err");
     expect(result.error).toBe("bad-input");
+    expect(seen).toEqual([]);
+  });
+
+  test("tapErr drives invoked Op(function*) observers that succeed", async () => {
+    const seen: string[] = [];
+    const result = await Op.fail("bad-input" as const)
+      .tapErr((error) =>
+        Op(function* () {
+          seen.push(error.toUpperCase());
+          return 69;
+        })(),
+      )
+      .run();
+
+    assert(result.isErr(), "should be Err");
+    expect(result.error).toBe("bad-input");
     expect(seen).toEqual(["BAD-INPUT"]);
   });
 
-  test("tapErr propagates failures from Op(function*) observers", async () => {
+  test("tapErr propagates failures from invoked Op(function*) observers", async () => {
     const result = await Op.fail("bad-input" as const)
       .tapErr(() =>
         Op(function* () {
           return yield* Op.fail("tap-err-gen-failed" as const);
-        }),
+        })(),
       )
       .run();
 
@@ -460,7 +492,22 @@ describe("op.recover", () => {
     expect(result.value).toBe(69);
   });
 
-  test("recover drives Op(function*) handlers that succeed", async () => {
+  test("recover treats generator factory handlers as plain fallback values", async () => {
+    class MissingConfigError extends TaggedError("MissingConfigError")() {}
+
+    const fallback = Op(function* () {
+      return 69;
+    });
+    const recovered = Op(function* () {
+      return yield* new MissingConfigError();
+    }).recover(MissingConfigError.is, () => fallback);
+
+    const result = await recovered.run();
+    assert(result.isOk(), "should be Ok");
+    expect(result.value).toBe(fallback);
+  });
+
+  test("recover drives invoked Op(function*) handlers that succeed", async () => {
     class MissingConfigError extends TaggedError("MissingConfigError")() {}
 
     const recovered = Op(function* () {
@@ -468,7 +515,7 @@ describe("op.recover", () => {
     }).recover(MissingConfigError.is, () =>
       Op(function* () {
         return 69;
-      }),
+      })(),
     );
 
     const result = await recovered.run();
@@ -476,7 +523,7 @@ describe("op.recover", () => {
     expect(result.value).toBe(69);
   });
 
-  test("recover propagates failures from Op(function*) handlers", async () => {
+  test("recover propagates failures from invoked Op(function*) handlers", async () => {
     class MissingConfigError extends TaggedError("MissingConfigError")() {}
     class RecoveryErr extends TaggedError("RecoveryErr")() {}
 
@@ -485,7 +532,7 @@ describe("op.recover", () => {
     }).recover(MissingConfigError.is, () =>
       Op(function* () {
         return yield* new RecoveryErr();
-      }),
+      })(),
     );
 
     const result = await recovered.run();

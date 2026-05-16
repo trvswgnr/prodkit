@@ -9,7 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- No entries yet.
+- Added regression coverage for generator-built operation callback sequencing without relying on
+  function arity reflection.
+
+### Changed
+
+- Changed fluent callback sequencing to drive only bound nullary ops, so returned generator-built
+  op factories are treated as plain values unless they are explicitly invoked.
 
 ## [0.1.68] - 2026-05-15
 
@@ -301,4 +307,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retry timing, and composed operation semantics).
 - Improved examples and parsing validation in places where earlier behavior
   could produce weaker diagnostics or drift from production expectations.
-

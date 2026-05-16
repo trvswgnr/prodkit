@@ -239,7 +239,7 @@ describe("Op.allSettled", () => {
       return yield* Op.of("ok" as const);
     });
 
-    const r = await Op.allSettled([first, second], 1).run();
+    const r = await Op.allSettled([first(), second()], 1).run();
 
     assert(r.isOk(), "should be Ok");
     expect(started).toEqual([0, 1]);

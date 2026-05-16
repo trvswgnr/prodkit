@@ -173,15 +173,12 @@ export function fromGenFn<Y extends Instruction<unknown>, T, A extends readonly 
     );
     return bound;
   };
-  const op = makeArityOp(
-    invoke,
-    f.length === 0
-      ? () =>
-          invoke(
-            // SAFETY: only generator functions with zero declared parameters expose the nullary iterator path.
-            ...unsafeCoerce<A>([]),
-          )
-      : undefined,
+  const op = makeArityOp(invoke, () =>
+    invoke(
+      // SAFETY: direct iterator composition has no runtime args. The public type exposes that
+      // surface only for `A = []`; runtime intentionally avoids function arity reflection.
+      ...unsafeCoerce<A>([]),
+    ),
   );
 
   return op;

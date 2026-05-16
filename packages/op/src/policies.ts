@@ -12,7 +12,7 @@ import type { Op } from "./index.js";
 import { SuspendInstruction } from "./core/instructions.js";
 import { createRunContext, drive, driveInterruptOnAbort } from "./core/runtime.js";
 import { makeCoreOp, createDefaultHooks } from "./core/fluent.js";
-import { isIterableOp, unsafeCoerce, sleepWithSignal } from "./shared.js";
+import { coerceToNullaryOp, isIterableOp, unsafeCoerce, sleepWithSignal } from "./shared.js";
 
 /** Retry policy for `op.withRetry(policy)`. */
 export interface RetryPolicy {
@@ -85,6 +85,7 @@ export const DEFAULT_RETRY_POLICY = Object.freeze({
 function makePolicyLiftedOp<T, E, A extends readonly unknown[]>(
   invoke: (...args: A) => Op<T, E, []>,
   makeIterable?: () => Op<T, E, []>,
+  bound = false,
 ): OpInterface<T, E, A> {
   return makeFluentOp(
     invoke,
@@ -93,25 +94,30 @@ function makePolicyLiftedOp<T, E, A extends readonly unknown[]>(
         makePolicyLiftedOp(
           (...args) => withRetryOp(invoke(...args), policy),
           makeIterable ? () => withRetryOp(makeIterable(), policy) : undefined,
+          bound,
         ),
       withTimeout: (timeoutMs) =>
         makePolicyLiftedOp(
           (...args) => withTimeoutOp(invoke(...args), timeoutMs),
           makeIterable ? () => withTimeoutOp(makeIterable(), timeoutMs) : undefined,
+          bound,
         ),
       withSignal: (signal) =>
         makePolicyLiftedOp(
           (...args) => withSignalOp(invoke(...args), signal),
           makeIterable ? () => withSignalOp(makeIterable(), signal) : undefined,
+          bound,
         ),
       withRelease: (release) =>
         makePolicyLiftedOp(
           (...args) => withCleanupCoreOp(invoke(...args), release),
           makeIterable ? () => withCleanupCoreOp(makeIterable(), release) : undefined,
+          bound,
         ),
       on: (event, handler) => onOp(self, event, handler),
     }),
     makeIterable,
+    bound,
   );
 }
 
@@ -228,6 +234,7 @@ export function withRetryOp<T, E, A extends readonly unknown[]>(
     makePolicyLiftedOp(
       (...args: A) => withRetryCoreOp(op(...args), policy),
       isIterableOp(op) ? () => withRetryCoreOp(op(), policy) : undefined,
+      coerceToNullaryOp(op) !== undefined,
     ),
   );
 }
@@ -241,6 +248,7 @@ export function withTimeoutOp<T, E, A extends readonly unknown[]>(
     makePolicyLiftedOp(
       (...args: A) => withTimeoutCoreOp(op(...args), timeoutMs),
       isIterableOp(op) ? () => withTimeoutCoreOp(op(), timeoutMs) : undefined,
+      coerceToNullaryOp(op) !== undefined,
     ),
   );
 }
@@ -254,6 +262,7 @@ export function withSignalOp<T, E, A extends readonly unknown[]>(
     makePolicyLiftedOp(
       (...args: A) => withSignalCoreOp(op(...args), signal),
       isIterableOp(op) ? () => withSignalCoreOp(op(), signal) : undefined,
+      coerceToNullaryOp(op) !== undefined,
     ),
   );
 }
