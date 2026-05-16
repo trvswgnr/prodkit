@@ -6,6 +6,32 @@ export const OP_BRAND: unique symbol = Symbol("prodkit.op");
 export const OP_BOUND_BRAND: unique symbol = Symbol("prodkit.op.bound");
 
 /**
+ * Narrow `AbortSignal` / userland stand-ins across runtimes without depending on DOM `lib`s.
+ *
+ * Compatible with WHATWG-ish signals and `@prodkit`'s augmented globals in this package's types.
+ */
+export interface AbortSignalLike {
+  readonly aborted: boolean;
+  readonly reason: unknown;
+  addEventListener(
+    type: "abort",
+    /** Installations invoke this with zero args when the signal fires. */
+    listener: () => void,
+    options?: { once?: boolean },
+  ): void;
+  removeEventListener(type: "abort", listener: () => void): void;
+}
+
+export function isRecordLike(value: unknown): value is Record<PropertyKey, unknown> {
+  return (typeof value === "object" || typeof value === "function") && value !== null;
+}
+
+/** True when `value` is a function that carries `key -> true` (internal brand pattern). */
+export function hasBrand<K extends PropertyKey>(value: unknown, key: K): value is Record<K, true> {
+  return isRecordLike(value) && value[key] === true;
+}
+
+/**
  * UNSAFE: casts any value to a given type
  *
  * @warning This function is UNSAFE and should be used only when the type is known to be correct
@@ -17,8 +43,13 @@ export function unsafeCoerce<T>(value: unknown): T {
   return value as T;
 }
 
+/** `never`-typed sentinel for phantom brand slots and unused instruction payloads. */
+export const NEVER: never =
+  // SAFETY: centralized `never` sentinel; callers must treat this as proof-only at the type level.
+  unsafeCoerce<never>(undefined);
+
 export function isOp(value: unknown): value is Op<unknown, unknown, readonly unknown[]> {
-  return typeof value === "function" && OP_BRAND in value && value[OP_BRAND] === true;
+  return hasBrand(value, OP_BRAND);
 }
 
 export function isIterableOp(
@@ -55,7 +86,7 @@ export function isAwaited<T>(value: T | PromiseLike<T> | Awaited<T>): value is A
   return !isPromiseLike(value);
 }
 
-export function sleepWithSignal(ms: number, signal: AbortSignal): Promise<void> {
+export function sleepWithSignal(ms: number, signal: AbortSignalLike): Promise<void> {
   if (!Number.isFinite(ms)) {
     return Promise.reject(new RangeError("sleep duration must be a finite number"));
   }

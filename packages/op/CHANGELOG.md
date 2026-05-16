@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `@prodkit/op/internal` entry for low-level helpers shared with extension packages
+  (for example `@prodkit/std`).
+- Exported `AbortSignalLike`, `functionHasTruthyBrand`, and `NEVER` via `@prodkit/op/internal`
+  for runtime-agnostic extension code.
 - Added regression coverage for generator-built operation callback sequencing without relying on
   function arity reflection.
 
@@ -18,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   validates packed installs for both `@prodkit/op` and `@prodkit/std`.
 - Flattened maintainer scripts workspace from `tools/op` to `tools/` and renamed it to
   `@prodkit/tools` (was `@prodkit/op-scripts`).
+- `sleepWithSignal(ms, signal)` now types `signal` as `AbortSignalLike` (structurally compatible with
+  real `AbortSignal` implementations).
 - Changed fluent callback sequencing to drive only bound nullary ops, so returned generator-built
   op factories are treated as plain values unless they are explicitly invoked.
 

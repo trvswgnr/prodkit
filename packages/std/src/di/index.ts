@@ -7,11 +7,7 @@ import {
   type OpLifecycleHook,
   type RetryPolicy,
 } from "@prodkit/op";
-import type { AbortSignal } from "../platform.js";
-
-function unsafeCoerce<T>(value: unknown): T {
-  return value as T;
-}
+import { hasBrand, NEVER, unsafeCoerce, type AbortSignalLike } from "@prodkit/op/internal";
 
 export class MissingContextError extends Error {
   override readonly name = "MissingContextError";
@@ -32,8 +28,6 @@ type RunResult<T, E> = Promise<Result<T, E | UnhandledException>>;
 const CONTEXT_TOKEN = Symbol("prodkit.std.di.context");
 const CONTEXT_REQUIREMENT = Symbol("prodkit.std.di.requirement");
 const WITH_CONTEXT = Symbol("prodkit.std.di.withContext");
-
-const NEVER: never = unsafeCoerce<never>(undefined);
 
 type AnyContext = Ctx<unknown, string>;
 
@@ -195,7 +189,7 @@ export interface WithContextBase<T, E, A extends readonly unknown[], R> {
 
   withRetry(policy?: RetryPolicy): Ctx.Op<T, E, A, R>;
   withTimeout(timeoutMs: number): Ctx.Op<T, E | TimeoutError, A, R>;
-  withSignal(signal: AbortSignal): Ctx.Op<T, E, A, R>;
+  withSignal(signal: AbortSignalLike): Ctx.Op<T, E, A, R>;
   withRelease(release: (value: T) => unknown): Ctx.Op<T, E, A, R>;
 
   on(event: "enter", initialize: (ctx: EnterContext<A>) => unknown): Ctx.Op<T, E, A, R>;
@@ -254,7 +248,7 @@ type ContextOpCallable<T, E, A extends readonly unknown[], R> = ((
     readonly use: (...providers: readonly AnyProvider[]) => Ctx.Op<T, E, A, unknown>;
     readonly withRetry: (policy?: RetryPolicy) => Ctx.Op<T, E, A, R>;
     readonly withTimeout: (timeoutMs: number) => Ctx.Op<T, E | TimeoutError, A, R>;
-    readonly withSignal: (signal: AbortSignal) => Ctx.Op<T, E, A, R>;
+    readonly withSignal: (signal: AbortSignalLike) => Ctx.Op<T, E, A, R>;
     readonly withRelease: (release: (value: T) => unknown) => Ctx.Op<T, E, A, R>;
     readonly on: (event: OpLifecycleHook, handler: unknown) => Ctx.Op<T, E, A, R>;
     readonly map: (transform: (value: T) => unknown) => Ctx.Op<unknown, E, A, R>;
@@ -281,12 +275,7 @@ function isWithContextInstruction(
 }
 
 function isWithContext(value: unknown): value is AnyWithContext {
-  return (
-    typeof value === "function" &&
-    value !== null &&
-    WITH_CONTEXT in value &&
-    value[WITH_CONTEXT] === true
-  );
+  return hasBrand(value, WITH_CONTEXT);
 }
 
 function extendEnv(env: Env, context: AnyContext, value: unknown): Env {
@@ -392,7 +381,8 @@ function makeContextOp<T, E, A extends readonly unknown[], R>(
       withRetry: (policy?: RetryPolicy) => transformContextOp(state, (op) => op.withRetry(policy)),
       withTimeout: (timeoutMs: number) =>
         transformContextOp(state, (op) => op.withTimeout(timeoutMs)),
-      withSignal: (signal: AbortSignal) => transformContextOp(state, (op) => op.withSignal(signal)),
+      withSignal: (signal: AbortSignalLike) =>
+        transformContextOp(state, (op) => op.withSignal(signal)),
       withRelease: (release: (value: T) => unknown) =>
         transformContextOp(state, (op) => op.withRelease(release)),
       on: (event: OpLifecycleHook, handler: unknown) =>

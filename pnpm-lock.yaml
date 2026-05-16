@@ -38,9 +38,6 @@ importers:
       turbo:
         specifier: ^2.9.0
         version: 2.9.12
-      typescript:
-        specifier: 'catalog:'
-        version: 6.0.3
 
   benchmarks/op:
     devDependencies:

@@ -143,7 +143,7 @@ pnpm --filter @prodkit/op run release:push
    - installs with `pnpm install --frozen-lockfile`
    - publishes with npm trusted publishing (OIDC) and provenance (`pnpm --filter @prodkit/op publish --provenance --access public --no-git-checks`)
 
-For **`@prodkit/std`**, bump `packages/std/package.json`, update `packages/std/CHANGELOG.md`, run `pnpm run gate`, and publish manually (`pnpm --filter @prodkit/std publish --access public --provenance --no-git-checks`) when you cut a std release—there is no shared tag workflow for it yet.
+For **`@prodkit/std`**, bump `packages/std/package.json`, update `packages/std/CHANGELOG.md`, run `pnpm run gate`, and publish manually (`pnpm --filter @prodkit/std publish --access public --provenance --no-git-checks`) when you cut a std release; there is no shared tag workflow for it yet.
 
 ## Release Failure Recovery
 

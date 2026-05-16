@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- Aligned `@prodkit/std` dev tooling with the workspace TypeScript 6 line and adjusted DI compile-time assertions for TS 6 optional-parameter tuple typing.
+- Removed the local abort-signal stub; `.withSignal` uses `AbortSignalLike` from `@prodkit/op/internal`.
+- Replaced local `unsafeCoerce` usage with `@prodkit/op/internal` so helpers stay centralized.
 - Changed `@prodkit/op` to a peer dependency so consumers install a single compatible `@prodkit/op` alongside `@prodkit/std`.
 - Added the initial `@prodkit/std` package with `@prodkit/std/di` helpers for yieldable context tokens and context-aware `Op` wrappers.
 - Added DI regression coverage for defaulted and rest-parameter context operations.

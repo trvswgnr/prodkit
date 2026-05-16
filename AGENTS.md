@@ -12,6 +12,7 @@
 - Prefers agreeing on API/design direction before implementation when requirements are ambiguous.
 - Prefers `.run(...args)` to stay args-only; cancellation/config should compose fluently (for example via `.withSignal(...)`) rather than be passed to `run`.
 - Prefers user-facing docs and comments to emphasize outcomes and usage over internal implementation details.
+- Requires ASCII-only in repo text (comments, docs, changelogs): no Unicode symbols or typographic punctuation (arrows, em dashes, etc.).
 - When requesting commit message drafts, prefers why-focused messages grounded in the actual staged/unstaged diff.
 - Prefers commit message drafts to use the simplest fitting body shape (none, one sentence, or bullets) rather than forcing multiple bullets.
 - Prefers file relocations to be done with move operations first (for example `mv`) followed by minimal targeted edits, not full-file rewrites.

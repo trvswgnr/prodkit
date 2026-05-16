@@ -20,8 +20,7 @@
   },
   "devDependencies": {
     "oxlint": "catalog:",
-    "turbo": "^2.9.0",
-    "typescript": "catalog:"
+    "turbo": "^2.9.0"
   },
   "pnpm": {
     "overrides": {
