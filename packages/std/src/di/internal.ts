@@ -8,7 +8,7 @@ import {
   type RetryPolicy,
 } from "@prodkit/op";
 import { hasBrand, NEVER, unsafeCoerce, type AbortSignalLike } from "@prodkit/op/internal";
-import type { Ctx } from "./index.js";
+import type { DI } from "./index.js";
 
 export class MissingContextError extends Error {
   override readonly name = "MissingContextError";
@@ -29,13 +29,13 @@ export type RunResult<T, E> = Promise<Result<T, E | UnhandledException>>;
 export const CTX_TOKEN = Symbol("prodkit.std.di.context");
 const CTX_REQUIREMENT_TOKEN = Symbol("prodkit.std.di.requirement");
 const CTX_OP_TOKEN = Symbol("prodkit.std.di.ctxOp");
-export const CTX_TAG = "Ctx";
+export const CTX_TAG = "DI";
 
-export type AnyCtx = Ctx<unknown, string>;
+export type AnyCtx = DI<unknown, string>;
 
-export type Value<C> = C extends abstract new (...args: never[]) => Ctx<infer T, string>
+export type Value<C> = C extends abstract new (...args: never[]) => DI<infer T, string>
   ? T
-  : C extends Ctx<infer T, string>
+  : C extends DI<infer T, string>
     ? T
     : never;
 
@@ -47,9 +47,9 @@ export type Provider<C extends AnyCtx> = {
 export type AnyProvider = Provider<AnyCtx>;
 
 export type InferContextRequirements<C> =
-  C extends Ctx.Op<infer _T, infer _E, infer _A, infer R> ? R : never;
+  C extends DI.Op<infer _T, infer _E, infer _A, infer R> ? R : never;
 
-/** Yielded by `Ctx.require` and bare service classes to ask the runtime for an env binding. */
+/** Yielded by `DI.require` and bare service classes to ask the runtime for an env binding. */
 export class RequireContext<_T, _R> {
   readonly _tag = "RequireContext";
   readonly [CTX_REQUIREMENT_TOKEN]: { _T: _T; _R: _R };
@@ -76,18 +76,18 @@ export type ServiceContextCtor<Name extends string> = {
   readonly [CTX_TOKEN]: never;
 
   of<C extends AnyCtx>(this: C, value: Value<C>): Provider<C>;
-  new <T>(): Ctx<T, Name>;
+  new <T>(): DI<T, Name>;
 };
 
 /** Constructor-or-token metatype used in requirement set `R` for a service key class. */
 export type ContextReq<C> = C extends abstract new (...args: never[]) => infer I ? I : C;
 
-/** Yield wrapping a nested nullary `Ctx.Op` so the parent generator can `yield*` it. */
+/** Yield wrapping a nested nullary `DI.Op` so the parent generator can `yield*` it. */
 export class EmbedCtxOp<T, E, R> {
   readonly _tag = "EmbedCtxOp";
-  readonly op: Ctx.Op<T, E, [], R>;
+  readonly op: DI.Op<T, E, [], R>;
 
-  constructor(op: Ctx.Op<T, E, [], R>) {
+  constructor(op: DI.Op<T, E, [], R>) {
     this.op = op;
   }
 
@@ -99,8 +99,8 @@ export class EmbedCtxOp<T, E, R> {
 
 export type Requirement<P> = P extends Provider<infer C> ? ContextReq<C> : never;
 
-export type AnyNullaryCtxOp = Ctx.Op<unknown, unknown, [], unknown>;
-export type AnyCtxOp = Ctx.Op<unknown, unknown, readonly unknown[], unknown>;
+export type AnyNullaryCtxOp = DI.Op<unknown, unknown, [], unknown>;
+export type AnyCtxOp = DI.Op<unknown, unknown, readonly unknown[], unknown>;
 export type AnyNullaryOp = Op<unknown, unknown, []>;
 export type Env = ReadonlyMap<AnyCtx, unknown>;
 
@@ -111,9 +111,9 @@ export type DistributeRequirement<R> = R extends unknown ? R : never;
 
 export type InferEmbedErr<Y> = Y extends EmbedCtxOp<unknown, infer E, unknown> ? E : never;
 
-export type OpLike<T, E> = Op<T, E, []> | Ctx.Op<T, E, [], unknown>;
+export type OpLike<T, E> = Op<T, E, []> | DI.Op<T, E, [], unknown>;
 
-export type ObserverReq<X> = X extends Ctx.Op<unknown, unknown, [], infer R> ? R : never;
+export type ObserverReq<X> = X extends DI.Op<unknown, unknown, [], infer R> ? R : never;
 export type ObserverErr<X> = X extends OpLike<unknown, infer E> ? E : never;
 export type ObserverOk<X> = X extends OpLike<infer T, unknown> ? T : Awaited<X>;
 
@@ -121,7 +121,7 @@ export interface CtxOpBase<T, E, A extends readonly unknown[], R> {
   readonly _tag: "CtxOp";
   readonly [CTX_OP_TOKEN]: true;
 
-  (...args: A): Ctx.Op<T, E, [], R>;
+  (...args: A): DI.Op<T, E, [], R>;
 
   /** Runs a fully-provided wrapper with the same argument shape as the wrapped `Op`. */
   readonly run: [R] extends [never] ? (...args: A) => RunResult<T, E> : never;
@@ -129,33 +129,33 @@ export interface CtxOpBase<T, E, A extends readonly unknown[], R> {
   /** Provides services and removes them from the remaining requirement type. */
   use<const Providers extends readonly AnyProvider[]>(
     ...providers: Providers
-  ): Ctx.Op<T, E, A, Exclude<R, Requirement<Providers[number]>>>;
+  ): DI.Op<T, E, A, Exclude<R, Requirement<Providers[number]>>>;
 
-  withRetry(policy?: RetryPolicy): Ctx.Op<T, E, A, R>;
-  withTimeout(timeoutMs: number): Ctx.Op<T, E | TimeoutError, A, R>;
-  withSignal(signal: AbortSignalLike): Ctx.Op<T, E, A, R>;
-  withRelease(release: (value: T) => unknown): Ctx.Op<T, E, A, R>;
+  withRetry(policy?: RetryPolicy): DI.Op<T, E, A, R>;
+  withTimeout(timeoutMs: number): DI.Op<T, E | TimeoutError, A, R>;
+  withSignal(signal: AbortSignalLike): DI.Op<T, E, A, R>;
+  withRelease(release: (value: T) => unknown): DI.Op<T, E, A, R>;
 
-  on(event: "enter", initialize: (ctx: EnterContext<A>) => unknown): Ctx.Op<T, E, A, R>;
-  on(event: "exit", finalize: (ctx: ExitContext<T, E, A>) => unknown): Ctx.Op<T, E, A, R>;
+  on(event: "enter", initialize: (ctx: EnterContext<A>) => unknown): DI.Op<T, E, A, R>;
+  on(event: "exit", finalize: (ctx: ExitContext<T, E, A>) => unknown): DI.Op<T, E, A, R>;
 
-  map<U>(transform: (value: T) => U): Ctx.Op<Awaited<U>, E, A, R>;
-  mapErr<E2>(transform: (error: E) => E2): Ctx.Op<T, E2, A, R>;
+  map<U>(transform: (value: T) => U): DI.Op<Awaited<U>, E, A, R>;
+  mapErr<E2>(transform: (error: E) => E2): DI.Op<T, E2, A, R>;
 
-  flatMap<U, E2, R2>(bind: (value: T) => Ctx.Op<U, E2, [], R2>): Ctx.Op<U, E | E2, A, R | R2>;
-  flatMap<U, E2>(bind: (value: T) => Op<U, E2, []>): Ctx.Op<U, E | E2, A, R>;
+  flatMap<U, E2, R2>(bind: (value: T) => DI.Op<U, E2, [], R2>): DI.Op<U, E | E2, A, R | R2>;
+  flatMap<U, E2>(bind: (value: T) => Op<U, E2, []>): DI.Op<U, E | E2, A, R>;
 
   tap<RObserved>(
     observe: (value: T) => RObserved,
-  ): Ctx.Op<T, E | ObserverErr<RObserved>, A, R | ObserverReq<RObserved>>;
+  ): DI.Op<T, E | ObserverErr<RObserved>, A, R | ObserverReq<RObserved>>;
   tapErr<RObserved>(
     observe: (error: E) => RObserved,
-  ): Ctx.Op<T, E | ObserverErr<RObserved>, A, R | ObserverReq<RObserved>>;
+  ): DI.Op<T, E | ObserverErr<RObserved>, A, R | ObserverReq<RObserved>>;
 
   recover<ECaught extends E, RRecovered>(
     predicate: (error: E) => error is ECaught,
     handler: (error: ECaught) => RRecovered,
-  ): Ctx.Op<
+  ): DI.Op<
     T | ObserverOk<RRecovered>,
     Exclude<E, ECaught> | ObserverErr<RRecovered>,
     A,
@@ -164,12 +164,7 @@ export interface CtxOpBase<T, E, A extends readonly unknown[], R> {
   recover<RRecovered>(
     predicate: (error: E) => boolean,
     handler: (error: E) => RRecovered,
-  ): Ctx.Op<
-    T | ObserverOk<RRecovered>,
-    E | ObserverErr<RRecovered>,
-    A,
-    R | ObserverReq<RRecovered>
-  >;
+  ): DI.Op<T | ObserverOk<RRecovered>, E | ObserverErr<RRecovered>, A, R | ObserverReq<RRecovered>>;
 }
 
 export interface CtxOpState<T, E, A extends readonly unknown[]> {
@@ -184,28 +179,28 @@ export interface CtxOpRuntime<T, E, A extends readonly unknown[]> {
 
 export type CtxOpCallable<T, E, A extends readonly unknown[], R> = ((
   ...args: A
-) => Ctx.Op<T, E, [], R>) &
+) => DI.Op<T, E, [], R>) &
   CtxOpRuntime<T, E, A> & {
     readonly _tag: "CtxOp";
     readonly [CTX_OP_TOKEN]: true;
     readonly run: (...args: A) => RunResult<T, E>;
-    readonly use: (...providers: readonly AnyProvider[]) => Ctx.Op<T, E, A, unknown>;
-    readonly withRetry: (policy?: RetryPolicy) => Ctx.Op<T, E, A, R>;
-    readonly withTimeout: (timeoutMs: number) => Ctx.Op<T, E | TimeoutError, A, R>;
-    readonly withSignal: (signal: AbortSignalLike) => Ctx.Op<T, E, A, R>;
-    readonly withRelease: (release: (value: T) => unknown) => Ctx.Op<T, E, A, R>;
-    readonly on: (event: OpLifecycleHook, handler: unknown) => Ctx.Op<T, E, A, R>;
-    readonly map: (transform: (value: T) => unknown) => Ctx.Op<unknown, E, A, R>;
-    readonly mapErr: (transform: (error: E) => unknown) => Ctx.Op<T, unknown, A, R>;
+    readonly use: (...providers: readonly AnyProvider[]) => DI.Op<T, E, A, unknown>;
+    readonly withRetry: (policy?: RetryPolicy) => DI.Op<T, E, A, R>;
+    readonly withTimeout: (timeoutMs: number) => DI.Op<T, E | TimeoutError, A, R>;
+    readonly withSignal: (signal: AbortSignalLike) => DI.Op<T, E, A, R>;
+    readonly withRelease: (release: (value: T) => unknown) => DI.Op<T, E, A, R>;
+    readonly on: (event: OpLifecycleHook, handler: unknown) => DI.Op<T, E, A, R>;
+    readonly map: (transform: (value: T) => unknown) => DI.Op<unknown, E, A, R>;
+    readonly mapErr: (transform: (error: E) => unknown) => DI.Op<T, unknown, A, R>;
     readonly flatMap: (
       bind: (value: T) => OpLike<unknown, unknown>,
-    ) => Ctx.Op<unknown, unknown, A, unknown>;
-    readonly tap: (observe: (value: T) => unknown) => Ctx.Op<T, unknown, A, unknown>;
-    readonly tapErr: (observe: (error: E) => unknown) => Ctx.Op<T, unknown, A, unknown>;
+    ) => DI.Op<unknown, unknown, A, unknown>;
+    readonly tap: (observe: (value: T) => unknown) => DI.Op<T, unknown, A, unknown>;
+    readonly tapErr: (observe: (error: E) => unknown) => DI.Op<T, unknown, A, unknown>;
     readonly recover: (
       predicate: (error: E) => boolean,
       handler: (error: E) => unknown,
-    ) => Ctx.Op<unknown, unknown, A, unknown>;
+    ) => DI.Op<unknown, unknown, A, unknown>;
   };
 
 function isContextRequirementInstruction(value: unknown): value is RequireContext<unknown, AnyCtx> {
@@ -229,7 +224,7 @@ function withContextBinding(env: Env, context: AnyCtx, value: unknown): Env {
 }
 
 function toRuntimeOp<T, E, A extends readonly unknown[]>(
-  value: Ctx.Op<T, E, A, unknown>,
+  value: DI.Op<T, E, A, unknown>,
   env: Env,
 ): Op<T, E, A> {
   return unsafeCoerce<CtxOpRuntime<T, E, A>>(value).toOp(env);
@@ -261,14 +256,14 @@ function invokeWithState<T, E, A extends readonly unknown[]>(
 
 function recreateContextOp<T, E, A extends readonly unknown[], R>(
   state: CtxOpState<T, E, A>,
-): Ctx.Op<T, E, A, R> {
+): DI.Op<T, E, A, R> {
   return createContextOp<T, E, A, R>(state);
 }
 
 function mapContextOp<T, E, A extends readonly unknown[], R, TOut, EOut>(
   state: CtxOpState<T, E, A>,
   mapOp: (op: Op<T, E, A>, env: Env) => Op<TOut, EOut, A>,
-): Ctx.Op<TOut, EOut, A, R> {
+): DI.Op<TOut, EOut, A, R> {
   return recreateContextOp<TOut, EOut, A, R>({
     ...state,
     buildOp: (env) => mapOp(state.buildOp(env), env),
@@ -278,7 +273,7 @@ function mapContextOp<T, E, A extends readonly unknown[], R, TOut, EOut>(
 function applyProviders<T, E, A extends readonly unknown[], R>(
   state: CtxOpState<T, E, A>,
   providers: readonly AnyProvider[],
-): Ctx.Op<T, E, A, R> {
+): DI.Op<T, E, A, R> {
   return recreateContextOp<T, E, A, R>({
     ...state,
     env: providers.reduce(
@@ -290,8 +285,8 @@ function applyProviders<T, E, A extends readonly unknown[], R>(
 
 function asCtxOp<T, E, A extends readonly unknown[], R>(
   value: CtxOpCallable<T, E, A, R>,
-): Ctx.Op<T, E, A, R> {
-  return unsafeCoerce<Ctx.Op<T, E, A, R>>(value);
+): DI.Op<T, E, A, R> {
+  return unsafeCoerce<DI.Op<T, E, A, R>>(value);
 }
 
 function buildIterableFacade<T, E, R>(
@@ -312,10 +307,10 @@ function toFlatMapOpLike(value: OpLike<unknown, unknown>, env: Env): AnyNullaryO
 
 export function createContextOp<T, E, A extends readonly unknown[], R>(
   state: CtxOpState<T, E, A>,
-): Ctx.Op<T, E, A, R> {
+): DI.Op<T, E, A, R> {
   const lift = <TOut, EOut>(
     mapOp: (op: Op<T, E, A>, env: Env) => Op<TOut, EOut, A>,
-  ): Ctx.Op<TOut, EOut, A, R> => mapContextOp(state, mapOp);
+  ): DI.Op<TOut, EOut, A, R> => mapContextOp(state, mapOp);
 
   const self: CtxOpCallable<T, E, A, R> = Object.assign(
     (...args: A) =>

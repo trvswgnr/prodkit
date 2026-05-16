@@ -1,4 +1,4 @@
-import { Ctx } from "@prodkit/std/di";
+import { DI } from "@prodkit/std/di";
 import { Op } from "@prodkit/op";
 import { TaggedError } from "better-result";
 
@@ -44,26 +44,26 @@ export interface Clock {
   nowIso: Op<string, never, []>;
 }
 
-export class DatabaseService extends Ctx.Service("DatabaseService")<Database> {}
-export class PasswordHasherService extends Ctx.Service("PasswordHasherService")<PasswordHasher> {}
-export class MailerService extends Ctx.Service("MailerService")<Mailer> {}
-export class ClockService extends Ctx.Service("ClockService")<Clock> {}
+export class DatabaseService extends DI.Service("DatabaseService")<Database> {}
+export class PasswordHasherService extends DI.Service("PasswordHasherService")<PasswordHasher> {}
+export class MailerService extends DI.Service("MailerService")<Mailer> {}
+export class ClockService extends DI.Service("ClockService")<Clock> {}
 
-export const loadExistingUser = Ctx.Op(function* (email: string) {
-  const db = yield* Ctx.require(DatabaseService);
+export const loadExistingUser = DI.Op(function* (email: string) {
+  const db = yield* DI.require(DatabaseService);
   return yield* db.findUserByEmail(email);
 });
 
-export const registerUser = Ctx.Op(function* (email: string, password: string) {
+export const registerUser = DI.Op(function* (email: string, password: string) {
   const existing = yield* loadExistingUser(email);
   if (existing !== undefined) {
     return yield* new DuplicateEmailError({ email });
   }
 
-  const db = yield* Ctx.require(DatabaseService);
-  const hasher = yield* Ctx.require(PasswordHasherService);
-  const mailer = yield* Ctx.require(MailerService);
-  const clock = yield* Ctx.require(ClockService);
+  const db = yield* DI.require(DatabaseService);
+  const hasher = yield* DI.require(PasswordHasherService);
+  const mailer = yield* DI.require(MailerService);
+  const clock = yield* DI.require(ClockService);
 
   const passwordHash = yield* hasher.hash(password);
   const createdAt = yield* clock.nowIso;
