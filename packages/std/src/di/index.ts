@@ -2,7 +2,8 @@ import { NEVER } from "@prodkit/op/internal";
 import type { Op as OgOp } from "@prodkit/op";
 import { InferErr as InferResultErr } from "better-result";
 import {
-  CONTEXT_TOKEN,
+  CTX_TOKEN,
+  CTX_TAG,
   CtxOpBase,
   ConditionalIterable,
   InferYieldRequirement,
@@ -16,18 +17,17 @@ import {
   ContextReq,
   InferEmbedErr,
   createContextOp,
-  CTX_TAG,
 } from "./internal";
 
 export interface Ctx<T, Name extends string> {
   readonly _tag: typeof CTX_TAG;
   readonly key: Name;
-  readonly [CONTEXT_TOKEN]: T;
+  readonly [CTX_TOKEN]: T;
 }
 
 export namespace Ctx {
   export type Op<T, E, A extends readonly unknown[], R> = CtxOpBase<T, E, A, R> &
-    ConditionalIterable<T, E, A, R> & { readonly [CONTEXT_TOKEN]: T };
+    ConditionalIterable<T, E, A, R> & { readonly [CTX_TOKEN]: T };
 }
 
 export const Ctx = Object.freeze({
@@ -48,7 +48,7 @@ export const Ctx = Object.freeze({
     class ServiceContext<T> {
       readonly _tag = CTX_TAG;
       readonly key = key;
-      readonly [CONTEXT_TOKEN] = NEVER;
+      readonly [CTX_TOKEN] = NEVER;
 
       *[Symbol.iterator](): Generator<RequireContext<T, this>, T, unknown> {
         return yield* new RequireContext<T, this>(ServiceContext);
@@ -56,7 +56,7 @@ export const Ctx = Object.freeze({
 
       static readonly _tag = CTX_TAG;
       static readonly key = key;
-      static readonly [CONTEXT_TOKEN] = NEVER;
+      static readonly [CTX_TOKEN] = NEVER;
       static of<C extends AnyCtx>(this: C, value: Value<C>): Provider<C> {
         return {
           _tag: "ContextProvider",
