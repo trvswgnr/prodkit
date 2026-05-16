@@ -53,17 +53,16 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "@prodkit/op": "workspace:*"
-  },
   "devDependencies": {
-    "oxfmt": "0.48.0",
-    "oxlint": "1.55.0",
-    "tsdown": "0.21.2",
-    "typescript": "5.9.3",
-    "vitest": "4.1.0"
+    "@prodkit/op": "workspace:*",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
+    "@prodkit/op": "^0.1.0",
     "better-result": "^2.9.0"
   }
 }

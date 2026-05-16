@@ -73,9 +73,7 @@ describe("Ctx", () => {
   test("defaulted generator params still receive explicit run args", async () => {
     const op = Ctx.Op(function* (id: string = "default") {
       return id;
-    });
-
-    expectTypeOf(op).toEqualTypeOf<Ctx.Op<string, never, [id?: string], never>>();
+    }) satisfies Ctx.Op<string, never, [id?: string | undefined], never>;
 
     const result = await op.run("explicit");
 

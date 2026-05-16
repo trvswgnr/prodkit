@@ -92,7 +92,7 @@ Use a strict two-tier model so behavior has one clear home.
   - `packages/op/src/types.test.ts` for compile-time type contracts
 - Runtime invariants and execution semantics are documented in `packages/op/DESIGN.md`.
 
-You can run consumer install path checks directly:
+You can run consumer install path checks directly. Each mode builds a temporary mini-pnpm workspace (reusing the repo `catalog:` from `pnpm-workspace.yaml`), installs `@prodkit/op` from the chosen source, then runs `examples/op` smoke:
 
 ```bash
 pnpm --filter @prodkit/op-scripts run examples:smoke:pack

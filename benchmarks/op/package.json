@@ -15,10 +15,10 @@
   "devDependencies": {
     "@types/node": "^24.12.2",
     "esbuild": "^0.25.11",
-    "oxfmt": "0.48.0",
-    "oxlint": "1.55.0",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
     "tinybench": "^5.1.0",
-    "typescript": "^5.9.3"
+    "typescript": "catalog:"
   },
   "engines": {
     "node": ">=24.14.0"

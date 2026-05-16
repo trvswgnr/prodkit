@@ -10,10 +10,8 @@ import { createLogger } from "./logger.ts";
 type Runtime = "bun" | "deno" | "edge";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const PACKAGE_DIR = path.join(REPO_ROOT, "packages", "op");
-const NPM_SANDBOX_STATE_DIR = path.join(REPO_ROOT, "var", "runtime-smoke");
-const NPM_SANDBOX_CACHE_DIR = path.join(NPM_SANDBOX_STATE_DIR, "cache");
-const NPM_SANDBOX_LOGS_DIR = path.join(NPM_SANDBOX_STATE_DIR, "logs");
+const RUNTIME_SMOKE_STATE_DIR = path.join(REPO_ROOT, "var", "runtime-smoke");
+const PNPM_RUNTIME_STORE_DIR = path.join(RUNTIME_SMOKE_STATE_DIR, "store");
 const PACK_OUTPUT_PREVIEW = 4000;
 const logger = createLogger(import.meta.url);
 
@@ -22,10 +20,7 @@ function commandEnv(): NodeJS.ProcessEnv {
   for (const key of Object.keys(nextEnv)) {
     if (key.toLowerCase().startsWith("npm_config_")) delete nextEnv[key];
   }
-  mkdirSync(NPM_SANDBOX_CACHE_DIR, { recursive: true });
-  mkdirSync(NPM_SANDBOX_LOGS_DIR, { recursive: true });
-  nextEnv["npm_config_cache"] = NPM_SANDBOX_CACHE_DIR;
-  nextEnv["npm_config_logs_dir"] = NPM_SANDBOX_LOGS_DIR;
+  mkdirSync(PNPM_RUNTIME_STORE_DIR, { recursive: true });
   return nextEnv;
 }
 
@@ -64,80 +59,35 @@ function run(command: string, args: readonly string[], cwd: string, capture = fa
   });
 }
 
-function collectJsonArrayChunks(text: string): string[] {
-  const chunks: string[] = [];
-  let inString = false;
-  let escapeNext = false;
-  let depth = 0;
-  let startIndex = -1;
-
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index];
-    if (char === undefined) continue;
-
-    if (inString) {
-      if (escapeNext) {
-        escapeNext = false;
-        continue;
-      }
-      if (char === "\\") {
-        escapeNext = true;
-        continue;
-      }
-      if (char === '"') inString = false;
-      continue;
-    }
-
-    if (char === '"') {
-      inString = true;
-      continue;
-    }
-    if (char === "[") {
-      if (depth === 0) startIndex = index;
-      depth += 1;
-      continue;
-    }
-    if (char === "]" && depth > 0) {
-      depth -= 1;
-      if (depth === 0 && startIndex >= 0) {
-        chunks.push(text.slice(startIndex, index + 1));
-        startIndex = -1;
-      }
-    }
-  }
-
-  return chunks;
-}
-
 function parsePackFilename(packOutput: string): string {
-  for (const chunk of collectJsonArrayChunks(packOutput).reverse()) {
-    const parsed = JSON.parse(chunk) as unknown;
-    if (!Array.isArray(parsed)) continue;
-    const head = parsed[0] as unknown;
-    if (typeof head !== "object" || head === null) continue;
-    const filename = Reflect.get(head, "filename");
-    if (typeof filename === "string" && filename.length > 0) return filename;
+  try {
+    const parsed = JSON.parse(packOutput.trim()) as { filename?: unknown };
+    if (typeof parsed.filename === "string" && parsed.filename.length > 0) {
+      return parsed.filename;
+    }
+  } catch {
+    // handled below
   }
-
   const preview =
     packOutput.length > PACK_OUTPUT_PREVIEW
       ? `${packOutput.slice(0, PACK_OUTPUT_PREVIEW)}...`
       : packOutput;
-  throw new Error(`Unable to read tarball filename from npm pack JSON:\n${preview}`);
+  throw new Error(`Unable to read tarball filename from pnpm pack --json:\n${preview}`);
 }
 
 async function createPackTarball(): Promise<string> {
-  await run("npm", ["run", "build"], PACKAGE_DIR);
+  await run("pnpm", ["--filter", "@prodkit/op", "run", "build"], REPO_ROOT);
   const packOutput = await run(
-    "npm",
-    ["pack", "--json", "--ignore-scripts", "./packages/op"],
+    "pnpm",
+    ["--filter", "@prodkit/op", "pack", "--json"],
     REPO_ROOT,
     true,
   );
-  const tarballPath = path.resolve(REPO_ROOT, parsePackFilename(packOutput));
+  const filename = parsePackFilename(packOutput);
+  const tarballPath = path.isAbsolute(filename) ? filename : path.resolve(REPO_ROOT, filename);
   const relative = path.relative(REPO_ROOT, tarballPath);
   if (relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new Error(`npm pack filename resolved outside the repository root: ${tarballPath}`);
+    throw new Error(`pnpm pack filename resolved outside the repository root: ${tarballPath}`);
   }
   return tarballPath;
 }
@@ -217,7 +167,11 @@ async function createRuntimeWorkspace(tarballPath: string) {
     )}\n`,
     "utf8",
   );
-  await run("npm", ["install", "--ignore-scripts"], workspaceDir);
+  await run(
+    "pnpm",
+    ["install", "--ignore-scripts", `--store-dir=${PNPM_RUNTIME_STORE_DIR}`],
+    workspaceDir,
+  );
   return workspaceDir;
 }
 

@@ -16,8 +16,6 @@ import { TaggedError, matchErrorPartial } from "better-result";
 import {
   createLogger,
   fromRepoRoot,
-  NonEmptyArray,
-  NonEmptyString,
   parse,
   parseJson,
   getOwnPropertyValue,
@@ -35,16 +33,18 @@ const SMOKE_TIMEOUT_MS_ENV = "OP_SMOKE_TIMEOUT_MS";
  */
 const SMOKE_RESET_EXAMPLES_ENV = "OP_SMOKE_RESET_EXAMPLES";
 
-/** Wall-clock budget for the full smoke pipeline (covers cold npm/GitHub installs on CI). */
+/** Wall-clock budget for the full smoke pipeline (covers cold installs on CI). */
 const DEFAULT_SMOKE_TIMEOUT_MS = 30_000; // 30 seconds
 
 const PACK_OUTPUT_PREVIEW = 4000;
 const UPSTREAM_REPO_URL = "https://github.com/trvswgnr/prodkit.git";
 const UPSTREAM_MAIN_REF = "refs/heads/main";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const NPM_SANDBOX_STATE_DIR = path.join(REPO_ROOT, "var", "npm-smoke");
-const NPM_SANDBOX_CACHE_DIR = path.join(NPM_SANDBOX_STATE_DIR, "cache");
-const NPM_SANDBOX_LOGS_DIR = path.join(NPM_SANDBOX_STATE_DIR, "logs");
+/** Temp workspace layout: `pnpm-workspace.yaml` + this folder (copied from `examples/op`). */
+const EXAMPLES_CONSUMER_DIR = "examples-consumer";
+const EXAMPLES_PACKAGE_NAME = "@prodkit/op-examples";
+const EXAMPLES_SMOKE_STATE_DIR = path.join(REPO_ROOT, "var", "examples-smoke");
+const PNPM_STORE_DIR = path.join(EXAMPLES_SMOKE_STATE_DIR, "store");
 
 const Mode = v.enum({ pack: "pack", github: "github", npm: "npm" });
 type Mode = v.InferOutput<typeof Mode>;
@@ -129,72 +129,40 @@ function collectRuntimeEntryLeaves(value: unknown, target: Set<string>): void {
   }
 }
 
-const parseNpmPackFilename = Op(function* (packJsonChunk: string) {
-  const parsedJson = yield* parseJson(packJsonChunk);
-  const [head] = yield* parse(NonEmptyArray(v.object({ filename: NonEmptyString })), parsedJson);
-  const filename: NonEmptyString = head.filename;
-  return filename;
-});
-
-function collectJsonArrayChunks(text: string): string[] {
-  const chunks: string[] = [];
-  let inString = false;
-  let escapeNext = false;
-  let depth = 0;
-  let startIndex = -1;
-
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index];
-    if (char === undefined) continue;
-
-    if (inString) {
-      if (escapeNext) {
-        escapeNext = false;
-        continue;
-      }
-      if (char === "\\") {
-        escapeNext = true;
-        continue;
-      }
-      if (char === '"') {
-        inString = false;
-      }
-      continue;
-    }
-
-    if (char === '"') {
-      inString = true;
-      continue;
-    }
-
-    if (char === "[") {
-      if (depth === 0) startIndex = index;
-      depth += 1;
-      continue;
-    }
-
-    if (char === "]" && depth > 0) {
-      depth -= 1;
-      if (depth === 0 && startIndex >= 0) {
-        chunks.push(text.slice(startIndex, index + 1));
-        startIndex = -1;
-      }
-    }
+function extractCatalogSection(workspaceYaml: string): string {
+  const lines = workspaceYaml.split(/\r?\n/);
+  const startIdx = lines.findIndex((line) => /^\s*catalog:\s*$/.test(line));
+  if (startIdx === -1) {
+    throw new Error(
+      'Repository pnpm-workspace.yaml must define a top-level "catalog:" block (required for isolated smoke workspaces).',
+    );
   }
-
-  return chunks;
+  const block: string[] = [];
+  for (let i = startIdx; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (line === undefined) break;
+    if (i === startIdx) {
+      block.push(line);
+      continue;
+    }
+    if (line === "" || /^  /.test(line)) {
+      block.push(line);
+      continue;
+    }
+    break;
+  }
+  return block.join("\n").trimEnd();
 }
 
-const parseNpmPackFilenameFromOutput = Op(function* (packOutput: string) {
-  const chunks = collectJsonArrayChunks(packOutput);
-  for (let index = chunks.length - 1; index >= 0; index -= 1) {
-    const chunk = chunks[index];
-    if (chunk === undefined) continue;
-    const parsed = yield* parseNpmPackFilename(chunk);
-    if (parsed) return parsed;
+function parsePnpmPackFilename(packOutput: string): string | undefined {
+  try {
+    const parsed = JSON.parse(packOutput.trim()) as { filename?: unknown };
+    if (typeof parsed.filename === "string" && parsed.filename.length > 0) return parsed.filename;
+  } catch {
+    // handled below
   }
   return undefined;
-});
+}
 
 function formatSmokeExecInvocation(command: string, args: readonly string[]): string {
   return [command, ...args].map((word) => JSON.stringify(word)).join(" ");
@@ -206,11 +174,7 @@ function buildCommandEnv(): NodeJS.ProcessEnv {
     if (!key.toLowerCase().startsWith("npm_config_")) continue;
     delete nextEnv[key];
   }
-  // Keep npm writable state inside the repo so sandboxed runs never need ~/.npm.
-  mkdirSync(NPM_SANDBOX_CACHE_DIR, { recursive: true });
-  mkdirSync(NPM_SANDBOX_LOGS_DIR, { recursive: true });
-  nextEnv["npm_config_cache"] = NPM_SANDBOX_CACHE_DIR;
-  nextEnv["npm_config_logs_dir"] = NPM_SANDBOX_LOGS_DIR;
+  mkdirSync(PNPM_STORE_DIR, { recursive: true });
   return nextEnv;
 }
 
@@ -360,8 +324,15 @@ const resolveUpstreamMainCommitSha = Op(function* (repoRoot: string) {
   return sha;
 });
 
-const ensureInstalledPackageReady = Op(function* (examplesDir: string, sourceLabel: string) {
-  const installedPkgDir = path.join(examplesDir, "node_modules", "@prodkit", "op");
+function resolveInstalledProdkitOpDir(workspaceRoot: string): string {
+  const nested = path.join(workspaceRoot, EXAMPLES_CONSUMER_DIR, "node_modules", "@prodkit", "op");
+  const hoisted = path.join(workspaceRoot, "node_modules", "@prodkit", "op");
+  if (existsSync(path.join(nested, "package.json"))) return nested;
+  return hoisted;
+}
+
+const ensureInstalledPackageReady = Op(function* (workspaceRoot: string, sourceLabel: string) {
+  const installedPkgDir = resolveInstalledProdkitOpDir(workspaceRoot);
   const packageJson = yield* readPackageJson(path.join(installedPkgDir, "package.json"));
   const entryCandidates = new Set<string>(["./dist/index.mjs"]);
 
@@ -393,16 +364,75 @@ const ensureInstalledPackageReady = Op(function* (examplesDir: string, sourceLab
 });
 
 const createTempExamplesWorkspace = Op(function* (examplesDir: string, opInstallTarget: string) {
-  const tempDir = yield* Op.try(
+  const tempRoot = yield* Op.try(
     () => mkdtemp(path.join(os.tmpdir(), "op-examples-smoke-")),
     (cause) =>
       new SmokeWorkspaceError({ message: "Failed to create temporary examples workspace", cause }),
   );
-  yield* Op.defer(() => rm(tempDir, { recursive: true, force: true }));
+  yield* Op.defer(() => rm(tempRoot, { recursive: true, force: true }));
+
+  const workspaceYamlRaw = yield* Op.try(
+    () => readFileFs(path.join(REPO_ROOT, "pnpm-workspace.yaml"), "utf8"),
+    (cause) =>
+      new SmokeWorkspaceError({
+        message: "Failed reading repository pnpm-workspace.yaml",
+        cause,
+      }),
+  );
+
+  let catalogSection: string;
+  try {
+    catalogSection = extractCatalogSection(workspaceYamlRaw);
+  } catch (cause) {
+    return yield* new SmokeWorkspaceError({
+      message: cause instanceof Error ? cause.message : String(cause),
+      cause,
+    });
+  }
+
+  const workspaceYamlBody = `packages:\n  - ${JSON.stringify(EXAMPLES_CONSUMER_DIR)}\n\n${catalogSection}\n`;
+  yield* Op.try(
+    () => writeFileFs(path.join(tempRoot, "pnpm-workspace.yaml"), workspaceYamlBody, "utf8"),
+    (cause) =>
+      new SmokeWorkspaceError({
+        message: "Failed writing pnpm-workspace.yaml in temp workspace",
+        cause,
+      }),
+  );
+
+  const rootPackageJsonRaw = yield* Op.try(
+    () => readFileFs(path.join(REPO_ROOT, "package.json"), "utf8"),
+    (cause) =>
+      new SmokeWorkspaceError({ message: "Failed reading repository package.json", cause }),
+  );
+  const rootPackageParsed = yield* parseJson(rootPackageJsonRaw);
+  const packageManager = isRecord(rootPackageParsed)
+    ? getOwnPropertyValue(rootPackageParsed, "packageManager")
+    : undefined;
+  const smokeRootPackage: Record<string, unknown> = {
+    name: "@prodkit/examples-smoke-root",
+    private: true,
+  };
+  if (typeof packageManager === "string") smokeRootPackage["packageManager"] = packageManager;
 
   yield* Op.try(
     () =>
-      cp(examplesDir, tempDir, {
+      writeFileFs(
+        path.join(tempRoot, "package.json"),
+        `${JSON.stringify(smokeRootPackage, null, 2)}\n`,
+        "utf8",
+      ),
+    (cause) =>
+      new SmokeWorkspaceError({
+        message: "Failed writing root package.json in temp workspace",
+        cause,
+      }),
+  );
+
+  const consumerDir = path.join(tempRoot, EXAMPLES_CONSUMER_DIR);
+  yield* Op.try(
+    () =>
+      cp(examplesDir, consumerDir, {
         recursive: true,
         force: true,
         filter: (sourcePath) => path.basename(sourcePath) !== "node_modules",
@@ -410,7 +440,7 @@ const createTempExamplesWorkspace = Op(function* (examplesDir: string, opInstall
     (cause) => new SmokeWorkspaceError({ message: "Failed to copy examples files", cause }),
   );
 
-  const packageJsonPath = path.join(tempDir, "package.json");
+  const packageJsonPath = path.join(consumerDir, "package.json");
   const packageJsonRaw = yield* Op.try(
     () => readFileFs(packageJsonPath, "utf8"),
     (cause) =>
@@ -445,7 +475,7 @@ const createTempExamplesWorkspace = Op(function* (examplesDir: string, opInstall
       }),
   );
 
-  return tempDir;
+  return tempRoot;
 });
 
 const installAndSmoke = Op(function* (
@@ -454,9 +484,9 @@ const installAndSmoke = Op(function* (
   sourceLabel: string,
 ) {
   const smokeWorkspaceDir = yield* createTempExamplesWorkspace(examplesDir, installTarget);
-  yield* execOp("npm", ["install"], smokeWorkspaceDir);
+  yield* execOp("pnpm", ["install", `--store-dir=${PNPM_STORE_DIR}`], smokeWorkspaceDir);
   yield* ensureInstalledPackageReady(smokeWorkspaceDir, sourceLabel);
-  yield* execOp("npm", ["run", "smoke"], smokeWorkspaceDir);
+  yield* execOp("pnpm", ["--filter", EXAMPLES_PACKAGE_NAME, "run", "smoke"], smokeWorkspaceDir);
 });
 
 async function cleanupPackOutput(tarballPath: string) {
@@ -466,19 +496,16 @@ async function cleanupPackOutput(tarballPath: string) {
 
 const installFromPack = Op(function* () {
   const repoRoot = yield* fromRepoRoot(".");
-  const packageDir = yield* fromRepoRoot("packages/op");
   const examplesDir = yield* fromRepoRoot("examples/op");
-  yield* execOp("npm", ["run", "build"], packageDir);
+  yield* execOp("pnpm", ["--filter", "@prodkit/op", "run", "build"], repoRoot);
 
-  // --ignore-scripts: we just built above, and letting `prepare` run tsdown
-  // again would pollute stdout (including ANSI escapes) and corrupt --json
   const packOutput = yield* execOp(
-    "npm",
-    ["pack", "--json", "--ignore-scripts", "./packages/op"],
+    "pnpm",
+    ["--filter", "@prodkit/op", "pack", "--json"],
     repoRoot,
     true,
   );
-  const filename = yield* parseNpmPackFilenameFromOutput(packOutput);
+  const filename = parsePnpmPackFilename(packOutput);
 
   const preview =
     packOutput.length > PACK_OUTPUT_PREVIEW
@@ -487,21 +514,21 @@ const installFromPack = Op(function* () {
 
   if (!filename) {
     return yield* new SmokePackOutputError({
-      message: `Unable to read tarball filename from npm pack JSON (preview):\n${preview}`,
+      message: `Unable to read tarball filename from pnpm pack --json (preview):\n${preview}`,
     });
   }
 
-  const tarballPath = path.resolve(repoRoot, filename);
+  const tarballPath = path.isAbsolute(filename) ? filename : path.resolve(repoRoot, filename);
   yield* Op.defer(() => cleanupPackOutput(tarballPath));
 
   const relativeToRepoRoot = path.relative(path.resolve(repoRoot), tarballPath);
   if (relativeToRepoRoot.startsWith("..") || path.isAbsolute(relativeToRepoRoot)) {
     return yield* new SmokePackOutputError({
-      message: `npm pack filename resolves outside the repository root: ${filename}`,
+      message: `pnpm pack filename resolves outside the repository root: ${filename}`,
     });
   }
 
-  yield* installAndSmoke(examplesDir, tarballPath, "npm pack tarball");
+  yield* installAndSmoke(examplesDir, tarballPath, "pnpm pack tarball");
 });
 
 const installFromGithub = Op(function* () {
