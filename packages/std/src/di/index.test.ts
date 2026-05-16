@@ -37,11 +37,13 @@ describe("withContext", () => {
 
     expectTypeOf(op).toEqualTypeOf<Context.Op<User, DatabaseError, [], DatabaseService>>();
 
-    const provided = op.provide(DatabaseService, {
-      query: Op(function* (_sql: string, _params: unknown[]) {
-        return { id: "1" };
-      }).mapErr((error): DatabaseError => error),
-    });
+    const provided = op.provide(
+      DatabaseService.of({
+        query: Op(function* (_sql: string, _params: unknown[]) {
+          return { id: "1" };
+        }).mapErr((error): DatabaseError => error),
+      }),
+    );
 
     expectTypeOf(provided).toEqualTypeOf<Context.Op<User, DatabaseError, [], never>>();
     expectTypeOf(provided.run()).toEqualTypeOf<ReturnType<Op<User, DatabaseError, []>["run"]>>();
@@ -58,7 +60,7 @@ describe("withContext", () => {
     const op = Context.Op(function* (id: string) {
       const service = yield* Context.require(DatabaseService);
       return yield* service.query("user", [id]);
-    }).provide(DatabaseService, db);
+    }).provide(DatabaseService.of(db));
 
     const result = await op.run("123");
 
@@ -76,11 +78,13 @@ describe("withContext", () => {
       const user = yield* findUser(id);
       return `hello ${user.id}`;
     });
-    const runnable = greet.provide(DatabaseService, {
-      query: Op(function* (_sql: string, params: unknown[]) {
-        return { id: String(params[0]) };
-      }).mapErr((error): DatabaseError => error),
-    });
+    const runnable = greet.provide(
+      DatabaseService.of({
+        query: Op(function* (_sql: string, params: unknown[]) {
+          return { id: String(params[0]) };
+        }).mapErr((error): DatabaseError => error),
+      }),
+    );
 
     const result = await runnable.run("abc");
 
@@ -105,7 +109,7 @@ describe("withContext", () => {
     type OpRequirements = InferContextRequirements<typeof op>;
     expectTypeOf<OpRequirements>().toEqualTypeOf<TestService1 | TestService2 | TestService3>();
 
-    const provided = op.provide(TestService1, {});
+    const provided = op.provide(TestService1.of({}));
     expectTypeOf(provided).toEqualTypeOf<
       Context.Op<void, never, [], TestService2 | TestService3>
     >();
@@ -116,7 +120,7 @@ describe("withContext", () => {
     // @ts-expect-error - still missing TestService2 and TestService3
     void (await provided.run());
 
-    const provided2 = provided.provide(TestService2, {});
+    const provided2 = op.provide(TestService1.of({}), TestService2.of({}));
     expectTypeOf(provided2).toEqualTypeOf<Context.Op<void, never, [], TestService3>>();
     type Provided2Requirements = InferContextRequirements<typeof provided2>;
     expectTypeOf<Provided2Requirements>().toEqualTypeOf<TestService3>();
@@ -124,7 +128,7 @@ describe("withContext", () => {
     // @ts-expect-error - still missing TestService3
     void (await provided2.run());
 
-    const provided3 = provided2.provide(TestService3, {});
+    const provided3 = provided2.provide(TestService3.of({}));
     expectTypeOf(provided3).toEqualTypeOf<Context.Op<void, never, [], never>>();
 
     const result = await provided3.run();

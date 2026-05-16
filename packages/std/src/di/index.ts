@@ -27,6 +27,7 @@ export type ContextValue<C> = C extends abstract new (...args: never[]) => Conte
     ? T
     : never;
 type ContextRequirement<C> = C extends abstract new (...args: never[]) => infer I ? I : C;
+type AnyProvider = Context.Provider<AnyContext>;
 
 export type InferContextRequirements<C> =
   C extends Context.Op<infer _T, infer _E, infer _A, infer R> ? R : never;
@@ -51,6 +52,12 @@ export interface Context<T, Name extends string = string> {
 
 export namespace Context {
   export type Op<T, E, A extends readonly unknown[], R> = _WithContext<T, E, A, R>;
+  export type Provider<C extends AnyContext> = {
+    readonly _tag: "ContextProvider";
+    readonly context: C;
+    readonly value: ContextValue<C>;
+  };
+  export type ProviderRequirement<P> = P extends Provider<infer C> ? ContextRequirement<C> : never;
 }
 
 type ContextBuilder<Name extends string> = {
@@ -58,6 +65,7 @@ type ContextBuilder<Name extends string> = {
   readonly key: Name;
   readonly [CONTEXT_TOKEN]: never;
   [Symbol.iterator](): Generator<never, never, unknown>;
+  of<C extends AnyContext>(this: C, value: ContextValue<C>): Context.Provider<C>;
   new <T>(): Context<T, Name>;
 };
 
@@ -88,6 +96,13 @@ function createContext<const Name extends string>(key: Name): ContextBuilder<Nam
     static readonly _tag = "Context";
     static readonly key = key;
     static readonly [CONTEXT_TOKEN] = unsafeCoerce<never>(undefined);
+    static of<C extends AnyContext>(this: C, value: ContextValue<C>): Context.Provider<C> {
+      return {
+        _tag: "ContextProvider",
+        context: this,
+        value,
+      };
+    }
     static *[Symbol.iterator](): Generator<never, never, unknown> {
       throw new TypeError("Use Context.require(Service) to require a service");
     }
@@ -162,11 +177,10 @@ export interface WithContextBase<T, E, A extends readonly unknown[], R> {
   /** Runs a fully-provided wrapper with the same argument shape as the wrapped `Op`. */
   readonly run: [R] extends [never] ? (...args: A) => RunResult<T, E, A> : never;
 
-  /** Provides one service and removes it from the remaining requirement type. */
-  provide<C extends AnyContext>(
-    context: C,
-    value: ContextValue<C>,
-  ): Context.Op<T, E, A, Exclude<R, ContextRequirement<C>>>;
+  /** Provides services and removes them from the remaining requirement type. */
+  provide<const Providers extends readonly AnyProvider[]>(
+    ...providers: Providers
+  ): Context.Op<T, E, A, Exclude<R, Context.ProviderRequirement<Providers[number]>>>;
 
   withRetry(policy?: RetryPolicy): Context.Op<T, E, A, R>;
   withTimeout(timeoutMs: number): Context.Op<T, E | TimeoutError, A, R>;
@@ -211,12 +225,12 @@ export interface WithContextBase<T, E, A extends readonly unknown[], R> {
   >;
 }
 
-type _WithContext<T, E, A extends readonly unknown[], R> = WithContextBase<T, E, A, R> &
+type _WithContext<T, E, A extends readonly unknown[], R> = (WithContextBase<T, E, A, R> &
   (A extends []
     ? {
         [Symbol.iterator](): Generator<WithContextInstruction<T, E, R>, T, unknown>;
       }
-    : {});
+    : {})) & { [WITH_CONTEXT]: true };
 
 interface WithContextState<T, E, A extends readonly unknown[]> {
   readonly build: (env: Env) => Op<T, E, A>;
@@ -280,10 +294,13 @@ function makeWithContext<T, E, A extends readonly unknown[], R>(
       [WITH_CONTEXT]: true as const,
       toOp: (envOverride?: Env) => state.build(envOverride ?? state.env),
       run: (...args: A) => wrapped(state.build(state.env)).run(...args),
-      provide: (context: AnyContext, value: unknown) =>
+      provide: (...providers: readonly AnyProvider[]) =>
         makeWithContext({
           ...state,
-          env: extendEnv(state.env, context, value),
+          env: providers.reduce(
+            (env, provider) => extendEnv(env, provider.context, provider.value),
+            state.env,
+          ),
         }),
       withRetry: (policy?: RetryPolicy) =>
         makeWithContext({

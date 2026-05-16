@@ -17,7 +17,7 @@ const getUser = withContext(function* () {
   return yield* db.query("select * from users where id = ?", [1]);
 });
 
-const runnable = getUser.provide(DatabaseService, db);
+const runnable = getUser.provide(DatabaseService.of(db));
 const result = await runnable.run();
 ```
 

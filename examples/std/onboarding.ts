@@ -133,11 +133,12 @@ export function createExampleServices() {
 
 export function runnableRegisterUser() {
   const services = createExampleServices();
-  const op = registerUser
-    .provide(DatabaseService, services.db)
-    .provide(PasswordHasherService, services.hasher)
-    .provide(MailerService, services.mailer)
-    .provide(ClockService, services.clock);
+  const op = registerUser.provide(
+    DatabaseService.of(services.db),
+    PasswordHasherService.of(services.hasher),
+    MailerService.of(services.mailer),
+    ClockService.of(services.clock),
+  );
 
   return { op, services };
 }
