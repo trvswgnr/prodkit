@@ -335,4 +335,97 @@ describe("DI implementation hygiene", () => {
 
     expect(source).not.toContain("f.length");
   });
+
+  test("quick info for composed operations shows resolved dependency requirements", () => {
+    const cwd = ts.sys.getCurrentDirectory();
+    const configPath = `${cwd}/tsconfig.json`;
+    const sourcePath = `${cwd}/src/di/index.test.ts`;
+    const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
+
+    if (configFile.error) {
+      throw new Error(ts.flattenDiagnosticMessageText(configFile.error.messageText, "\n"));
+    }
+
+    const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, cwd);
+    const sourceText = ts.sys.readFile(sourcePath);
+    expect(sourceText).toBeDefined();
+    if (sourceText === undefined) return;
+
+    const sourceFile = ts.createSourceFile(
+      sourcePath,
+      sourceText,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+
+    let composedPosition = -1;
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.name.text === "composed"
+      ) {
+        composedPosition = node.name.getStart(sourceFile) + 1;
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+    expect(composedPosition).toBeGreaterThan(0);
+
+    const servicesHost: ts.LanguageServiceHost = {
+      getScriptFileNames: () => parsed.fileNames,
+      getScriptVersion: () => "0",
+      getScriptSnapshot: (fileName) => {
+        if (!ts.sys.fileExists(fileName)) return undefined;
+        return ts.ScriptSnapshot.fromString(ts.sys.readFile(fileName) ?? "");
+      },
+      getCurrentDirectory: () => cwd,
+      getCompilationSettings: () => parsed.options,
+      getDefaultLibFileName: (options) => ts.getDefaultLibFilePath(options),
+      fileExists: ts.sys.fileExists,
+      readFile: ts.sys.readFile,
+      readDirectory: ts.sys.readDirectory,
+    };
+
+    const languageService = ts.createLanguageService(servicesHost, ts.createDocumentRegistry());
+    const quickInfo = languageService.getQuickInfoAtPosition(sourcePath, composedPosition);
+    expect(quickInfo).toBeDefined();
+    if (quickInfo === undefined) return;
+
+    const display = ts.displayPartsToString(quickInfo.displayParts ?? []);
+    expect(display).toBe(
+      "const composed: DI.Op<string, DatabaseError, [], DatabaseDependency | TestDependency>",
+    );
+  });
+});
+
+describe("composition", () => {
+  test("dependencies bubble up to the operation return type", () => {
+    const op1 = DI.Op(function* () {
+      const db = yield* DI.require(DatabaseDependency);
+      return yield* db.query("select * from users where id = ?", ["1"]);
+    });
+
+    expectTypeOf(op1).toEqualTypeOf<DI.Op<User, DatabaseError, [], DatabaseDependency>>();
+
+    class TestDependency extends DI.Dependency("TestDependency")<{ a: string }> {}
+    const op2 = DI.Op(function* () {
+      const db = yield* DI.require(TestDependency);
+      return db.a;
+    });
+
+    expectTypeOf(op2).toEqualTypeOf<DI.Op<string, never, [], TestDependency>>();
+
+    // this name must not change for the hygiene test above to pass
+    const composed = DI.Op(function* () {
+      const a = yield* op1;
+      const b = yield* op2;
+      return `${a} ${b}`;
+    });
+
+    expectTypeOf(composed).toEqualTypeOf<
+      DI.Op<string, DatabaseError, [], DatabaseDependency | TestDependency>
+    >();
+  });
 });

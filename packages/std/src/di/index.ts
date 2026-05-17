@@ -4,22 +4,21 @@ import { InferErr as InferResultErr } from "better-result";
 import {
   DI_TOKEN,
   DI_TAG,
-  DiOpBase,
-  ConditionalIterable,
-  InferYieldReq,
-  DistributeReq,
   buildDependencyOp,
-  DependencyCtor,
-  DependencyReqInstruction,
-  DependencyValue,
-  Binding,
-  LazyBinding,
-  AnyDependency,
-  DependencyReq,
-  InferEmbedErr,
   createDependencyOp,
+  DependencyReqInstruction,
+  type DiOpBase,
+  type ConditionalIterable,
+  type DependencyCtor,
+  type DependencyValue,
+  type Binding,
+  type LazyBinding,
+  type AnyDependency,
+  type DependencyReq,
+  type InferEmbedErr,
   type UseEntry,
   type UseReq,
+  type EmbedDiOpInstruction,
 } from "./internal";
 
 export interface Dependency<T, Name extends string> {
@@ -33,15 +32,19 @@ export namespace DI {
     ConditionalIterable<T, E, A, R> & { readonly [DI_TOKEN]: T };
 }
 
-export const Op = <
-  Y,
-  T,
-  A extends readonly unknown[],
-  R extends InferYieldReq<Y> = DistributeReq<InferYieldReq<Y>>,
->(
+export const Op = <Y, T, A extends readonly unknown[]>(
   f: (...args: A) => Generator<Y, T, unknown>,
-): DI.Op<T, InferResultErr<Y> | InferEmbedErr<Y>, A, R> =>
-  createDependencyOp<T, InferResultErr<Y> | InferEmbedErr<Y>, A, R>({
+): DI.Op<
+  T,
+  InferResultErr<Y> | InferEmbedErr<Y>,
+  A,
+  Y extends unknown
+    ?
+        | (Y extends DependencyReqInstruction<unknown, infer R> ? R : never)
+        | (Y extends EmbedDiOpInstruction<unknown, unknown, infer R> ? R : never)
+    : never
+> =>
+  createDependencyOp({
     buildOp: (env) => buildDependencyOp(f, env),
     env: new Map(),
     iterable: true,
