@@ -160,7 +160,7 @@ export interface DiOpBase<T, E, A extends readonly unknown[], R> {
 
   /** Applies dependency bindings and removes them from the remaining req type. */
   use<const Entries extends readonly UseEntry[]>(
-    ...entries: [R] extends [never] ? never[] : Entries
+    ...entries: Entries
   ): DI.Op<T, E, A, Exclude<R, UseReq<Entries[number], R>>>;
 
   withRetry(policy?: RetryPolicy): DI.Op<T, E, A, R>;
