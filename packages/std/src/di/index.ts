@@ -16,8 +16,7 @@ import {
   type AnyDependency,
   type DependencyReq,
   type InferEmbedErr,
-  type UseEntry,
-  type UseReq,
+
   type EmbedDiOpInstruction,
 } from "./internal";
 
@@ -101,10 +100,10 @@ export const scoped = <C extends AnyDependency, V = unknown>(
   resolve,
 });
 
-export const provide = <T, E, A extends readonly unknown[], R, Entries extends readonly UseEntry[]>(
+export const provide = <T, E, A extends readonly unknown[], R>(
   op: DI.Op<T, E, A, R>,
-  ...entries: Entries
-): DI.Op<T, E, A, Exclude<R, UseReq<Entries[number], R>>> => op.use(...entries);
+  ...entries: Array<Binding<Extract<R, AnyDependency>, DependencyValue<Extract<R, AnyDependency>>> | LazyBinding<Extract<R, AnyDependency>, DependencyValue<Extract<R, AnyDependency>>>>
+): DI.Op<T, E, A, Exclude<R, DependencyReq<Extract<R, AnyDependency>> | DependencyReq<Extract<R, AnyDependency>>>> => op.use(...entries);
 
 export const DI = Object.freeze({
   Op,

@@ -64,6 +64,7 @@ export type LazyBinding<C extends AnyDependency, V = unknown> = {
 export type AnyLazyBinding = LazyBinding<AnyDependency>;
 
 export type InferReqs<C> = C extends DI.Op<infer _T, infer _E, infer _A, infer R> ? R : never;
+type InferName<C> = C extends Dependency<infer _T, infer Name> ? Name : never;
 
 /** Yielded by `DI.require` and bare dependency classes to ask the runtime for a dependency binding. */
 export class DependencyReqInstruction<T, R> {
@@ -159,9 +160,13 @@ export interface DiOpBase<T, E, A extends readonly unknown[], R> {
     : never;
 
   /** Applies dependency bindings and removes them from the remaining req type. */
-  use<const Entries extends readonly UseEntry[]>(
-    // TODO: this type is wrong. Entries should only be the ones that are not already in the env
-    ...entries: Entries
+  use<
+    const Entries extends ReadonlyArray<
+      | Binding<Extract<R, AnyDependency>, DependencyValue<Extract<R, AnyDependency>>>
+      | LazyBinding<Extract<R, AnyDependency>, DependencyValue<Extract<R, AnyDependency>>>
+    >,
+  >(
+    ...entries: Entries | Dependency<DependencyValue<Extract<R, AnyDependency>>, InferName<Extract<R, AnyDependency>>>[]
   ): DI.Op<T, E, A, Exclude<R, UseReq<Entries[number], R>>>;
 
   withRetry(policy?: RetryPolicy): DI.Op<T, E, A, R>;

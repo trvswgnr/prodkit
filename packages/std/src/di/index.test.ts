@@ -427,5 +427,28 @@ describe("composition", () => {
     expectTypeOf(composed).toEqualTypeOf<
       DI.Op<string, DatabaseError, [], DatabaseDependency | TestDependency>
     >();
+
+    type TestDependency2Value = { b: string };
+    class TestDependency2 extends DI.Dependency("TestDependency2")<TestDependency2Value> {}
+    class TestDep2Impl extends TestDependency2 implements TestDependency2Value {
+      b = "b";
+    }
+    const TestDep2Impl2 = DI.singleton(TestDependency2, { b: "b" });
+    // @ts-expect-error - TestDep2Impl is not a Dependency
+    const _a = composed.use(TestDep2Impl);
+    // @ts-expect-error - TestDep2Impl is not a Dependency
+    const _b = composed.use(new TestDep2Impl());
+    // @ts-expect-error - TestDep2Impl2 is not a Dependency
+    const _c = composed.use(TestDep2Impl2);
+
+    const TestDepImpl = DI.singleton(TestDependency, { a: "a" });
+    const _d = composed.use(TestDepImpl); // ok
+    type TestDepImplValue = { a: string };
+    class TestDepImpl2 extends TestDependency implements TestDepImplValue {
+      a = "a";
+    }
+    const _e = composed.use(new TestDepImpl2()); // ok
+    const _f = composed.use(DI.singleton(TestDependency, { a: "a" })); // ok
+    const _g = composed.use(TestDepImpl2); // ok
   });
 });
