@@ -85,14 +85,14 @@ export type RequireOne<T> = {
   [K in keyof T]: Identity<Required<Pick<T, K>> & Partial<Omit<T, K>>>;
 }[keyof T];
 
-export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends boolean> {
+export interface FluentOp<T, E, A extends readonly unknown[]> {
   /**
    * Wraps the operation in retry policy logic.
    *
    * @example
    * const resilient = Op.try(() => fetch("/ping")).withRetry();
    */
-  withRetry(policy?: RequireOne<RetryPolicy>): Op<T, E, A, Yieldable>;
+  withRetry(policy?: RequireOne<RetryPolicy>): Op<T, E, A>;
 
   /**
    * Applies a timeout budget in milliseconds to the wrapped operation.
@@ -100,7 +100,7 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
    * @example
    * const bounded = Op.try(() => fetch("/slow")).withTimeout(1000);
    */
-  withTimeout(timeoutMs: number): Op<T, E | TimeoutError, A, Yieldable>;
+  withTimeout(timeoutMs: number): Op<T, E | TimeoutError, A>;
 
   /**
    * Binds an external abort signal to the wrapped operation run.
@@ -108,7 +108,7 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
    * @example
    * const linked = Op.of(1).withSignal(new AbortController().signal);
    */
-  withSignal(signal: AbortSignal): Op<T, E, A, Yieldable>;
+  withSignal(signal: AbortSignal): Op<T, E, A>;
 
   /**
    * Registers release logic that runs after a successful value is produced.
@@ -116,7 +116,7 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
    * @example
    * const managed = Op.of({ close() {} }).withRelease((r) => r.close());
    */
-  withRelease(release: ReleaseFn<T>): Op<T, E, A, Yieldable>;
+  withRelease(release: ReleaseFn<T>): Op<T, E, A>;
 
   /**
    * Register a handler that runs before the operation body starts.
@@ -124,14 +124,14 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
    * @example
    * const withEnter = Op.of(1).on("enter", () => console.log("start"));
    */
-  on(event: "enter", initialize: EnterFn<A>): Op<T, E, A, Yieldable>;
+  on(event: "enter", initialize: EnterFn<A>): Op<T, E, A>;
   /**
    * Register a handler that runs after the operation settles.
    *
    * @example
    * const withExit = Op.of(1).on("exit", () => console.log("done"));
    */
-  on(event: "exit", finalize: ExitFn<T, E, A>): Op<T, E, A, Yieldable>;
+  on(event: "exit", finalize: ExitFn<T, E, A>): Op<T, E, A>;
 
   /**
    * Transforms the success value while preserving args and error channel.
@@ -139,7 +139,7 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
    * @example
    * const mapped = Op.of(2).map((n) => n * 2);
    */
-  map<U>(transform: (value: T) => U): Op<Awaited<U>, E, A, Yieldable>;
+  map<U>(transform: (value: T) => U): Op<Awaited<U>, E, A>;
 
   /**
    * Transforms the tracked typed error channel while preserving success values.
@@ -147,7 +147,7 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
    * @example
    * const mappedError = Op.fail("x" as const).mapErr((e) => ({ code: e }));
    */
-  mapErr<E2>(transform: (error: TrackedErr<E>) => E2): Op<T, E2, A, Yieldable>;
+  mapErr<E2>(transform: (error: TrackedErr<E>) => E2): Op<T, E2, A>;
 
   /**
    * Binds the success value into the next operation.
@@ -155,7 +155,7 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
    * @example
    * const chained = Op.of(1).flatMap((n) => Op.of(n + 1));
    */
-  flatMap<U, E2>(bind: (value: T) => Op<U, E2, []>): Op<U, E | E2, A, Yieldable>;
+  flatMap<U, E2>(bind: (value: T) => Op<U, E2, []>): Op<U, E | E2, A>;
 
   /**
    * Observes successful values without changing the success payload.
@@ -163,7 +163,7 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
    * @example
    * const observed = Op.of(1).tap((n) => console.log(n));
    */
-  tap<R>(observe: (value: T) => R): Op<T, E | InferOpErr<R>, A, Yieldable>;
+  tap<R>(observe: (value: T) => R): Op<T, E | InferOpErr<R>, A>;
 
   /**
    * Observes tracked errors without changing the original success payload.
@@ -171,9 +171,7 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
    * @example
    * const observedError = Op.fail("x" as const).tapErr((e) => console.error(e));
    */
-  tapErr<R>(
-    observe: (error: TrackedErr<E>) => R,
-  ): Op<T, TrackedErr<E> | InferOpErr<R>, A, Yieldable>;
+  tapErr<R>(observe: (error: TrackedErr<E>) => R): Op<T, TrackedErr<E> | InferOpErr<R>, A>;
 
   /**
    * Recovers selected typed failures into a fallback value or operation.
@@ -184,7 +182,7 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
   recover<ECaught extends TrackedErr<E>, R>(
     predicate: (error: TrackedErr<E>) => error is ECaught,
     handler: (error: ECaught) => R,
-  ): Op<T | InferOpOk<R>, TrackedErr<E, ECaught> | InferOpErr<R>, A, Yieldable>;
+  ): Op<T | InferOpOk<R>, TrackedErr<E, ECaught> | InferOpErr<R>, A>;
   /**
    * Recovers typed failures selected by a tagged predicate method.
    *
@@ -197,7 +195,7 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
   recover<ECaught extends TrackedErr<E>, R>(
     predicate: WithPredicateMethod<TrackedErr<ECaught>>,
     handler: (error: ECaught) => R,
-  ): Op<T | InferOpOk<R>, TrackedErr<E, ECaught> | InferOpErr<R>, A, Yieldable>;
+  ): Op<T | InferOpOk<R>, TrackedErr<E, ECaught> | InferOpErr<R>, A>;
   /**
    * Recovers failures selected by a boolean predicate over the error value.
    *
@@ -207,7 +205,7 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
   recover<R>(
     predicate: (error: TrackedErr<E>) => boolean,
     handler: (error: TrackedErr<E>) => R,
-  ): Op<T | InferOpOk<R>, TrackedErr<E> | InferOpErr<R>, A, Yieldable>;
+  ): Op<T | InferOpOk<R>, TrackedErr<E> | InferOpErr<R>, A>;
 }
 
 export interface OpIterable<T, E> {
@@ -219,9 +217,7 @@ export type OpInterface<
   E,
   A extends readonly unknown[],
   Yieldable extends boolean = A extends [] ? true : false,
-> = BaseOp<T, E, A> &
-  FluentOp<T, E, A, Yieldable> &
-  (Yieldable extends true ? OpIterable<T, E> : {});
+> = BaseOp<T, E, A> & FluentOp<T, E, A> & (Yieldable extends true ? OpIterable<T, E> : {});
 
 export interface OpHooks<T, E, TInner = unknown, EInner = unknown> {
   /** Inner op to push policy wrappers to (when present with `rebuild`). */

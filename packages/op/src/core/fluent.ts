@@ -490,7 +490,7 @@ export interface FluentHandlers<T, E, A extends readonly unknown[]> {
  * @warning This function is UNSAFE and should be used only when the type is known to be correct.
  */
 export function asOpInterface<T, E, A extends readonly unknown[], Yieldable extends boolean>(
-  op: Op<T, E, A, Yieldable>,
+  op: Op<T, E, A>,
 ): OpInterface<T, E, A, Yieldable> {
   // SAFETY: Op<T, E, A> is the public branded intersection over OpInterface<T, E, A>.
   return unsafeCoerce(op);
