@@ -166,7 +166,12 @@ export interface DiOpBase<T, E, A extends readonly unknown[], R> {
       | LazyBinding<Extract<R, AnyDependency>, DependencyValue<Extract<R, AnyDependency>>>
     >,
   >(
-    ...entries: Entries | Dependency<DependencyValue<Extract<R, AnyDependency>>, InferName<Extract<R, AnyDependency>>>[]
+    ...entries:
+      | Entries
+      | Dependency<
+          DependencyValue<Extract<R, AnyDependency>>,
+          InferName<Extract<R, AnyDependency>>
+        >[]
   ): DI.Op<T, E, A, Exclude<R, UseReq<Entries[number], R>>>;
 
   withRetry(policy?: RetryPolicy): DI.Op<T, E, A, R>;
