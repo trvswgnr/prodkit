@@ -6,13 +6,43 @@ import {
   RegisterExitFinalizerInstruction,
   SuspendInstruction,
 } from "./core/instructions.js";
-import type { Instruction } from "./core/types.js";
-import type { Op } from "./index.js";
+import {
+  CUSTOM_INSTRUCTION_META,
+  type CustomInstruction,
+  type EmptyMeta,
+  type Instruction,
+  type RunContext,
+} from "./core/types.js";
+import { Op, type Op as OpType } from "./index.js";
 import { UnhandledException } from "./errors.js";
 import { Result } from "./result.js";
 
-function makeRuntimeOp<T, E>(gen: () => Generator<Instruction<E>, T, unknown>): Op<T, E, []> {
-  const op: Op<T, E, []> = makeCoreOp(gen, {
+class ThrowingCustomInstruction implements CustomInstruction<never, EmptyMeta> {
+  readonly [CUSTOM_INSTRUCTION_META] = undefined as unknown as EmptyMeta;
+
+  resolve(_context: RunContext): never {
+    throw new Error("resolve-threw");
+  }
+
+  *[Symbol.iterator](): Generator<this, never, unknown> {
+    return (yield this) as never;
+  }
+}
+
+class RejectingCustomInstruction implements CustomInstruction<never, EmptyMeta> {
+  readonly [CUSTOM_INSTRUCTION_META] = undefined as unknown as EmptyMeta;
+
+  resolve(_context: RunContext): Promise<never> {
+    return Promise.reject(new Error("resolve-rejected"));
+  }
+
+  *[Symbol.iterator](): Generator<this, never, unknown> {
+    return (yield this) as never;
+  }
+}
+
+function makeRuntimeOp<T, E>(gen: () => Generator<Instruction<E>, T, unknown>): OpType<T, E, []> {
+  const op: OpType<T, E, []> = makeCoreOp(gen, {
     withRelease: (_release) => op,
     registerEnterInitialize: (_initialize) => op,
     registerExitFinalize: (_finalize) => op,
@@ -88,6 +118,34 @@ describe("drive runtime behavior", () => {
     assert(result.isOk(), "result should be Ok");
     expect(result.value).toBe(70);
     expect(seenSignal).toBe(signal);
+  });
+
+  test("resumeCustom converts a thrown resolve into Err(UnhandledException)", async () => {
+    const op: OpType<never, never, []> = Op(function* () {
+      return yield* new ThrowingCustomInstruction();
+    });
+
+    const result = await op.run();
+
+    assert(result.isErr(), "result should be Err");
+    expect(result.error).toBeInstanceOf(UnhandledException);
+    const cause = (result.error as UnhandledException).cause;
+    expect(cause).toBeInstanceOf(Error);
+    expect((cause as Error).message).toBe("resolve-threw");
+  });
+
+  test("resumeCustom converts a rejected resolve into Err(UnhandledException)", async () => {
+    const op: OpType<never, never, []> = Op(function* () {
+      return yield* new RejectingCustomInstruction();
+    });
+
+    const result = await op.run();
+
+    assert(result.isErr(), "result should be Err");
+    expect(result.error).toBeInstanceOf(UnhandledException);
+    const cause = (result.error as UnhandledException).cause;
+    expect(cause).toBeInstanceOf(Error);
+    expect((cause as Error).message).toBe("resolve-rejected");
   });
 
   test("invalid yielded instructions return Err(UnhandledException(TypeError))", async () => {
