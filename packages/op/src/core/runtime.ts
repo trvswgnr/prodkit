@@ -6,6 +6,7 @@ import {
   SuspendInstruction,
 } from "./instructions.js";
 import {
+  CUSTOM_INSTRUCTION_META,
   type CustomInstruction,
   type ExitContext,
   type Instruction,
@@ -28,6 +29,7 @@ function isCustomInstruction(
   return (
     typeof value === "object" &&
     value !== null &&
+    CUSTOM_INSTRUCTION_META in value &&
     "resolve" in value &&
     typeof value.resolve === "function"
   );
