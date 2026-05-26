@@ -23,7 +23,8 @@ export type NormalizeMeta<M> = [M] extends [never]
         : M
       : M;
 
-type StripEmpty<M> = [M] extends [never] ? {} : M extends EmptyMeta ? {} : M;
+export type StripEmpty<M> = [M] extends [never] ? {} : M extends EmptyMeta ? {} : M;
+export type Simplify<T> = T extends object ? { [K in keyof T]: T[K] } : T;
 type WithoutEmptyMeta<M> = M extends EmptyMeta ? never : M;
 type MergeMetaRight<B> = [WithoutEmptyMeta<B>] extends [never] ? EmptyMeta : WithoutEmptyMeta<B>;
 type AllMetaKeys<U> = U extends unknown ? keyof U : never;

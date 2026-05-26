@@ -24,4 +24,10 @@ export {
 export { SuspendInstruction } from "./core/instructions.js";
 export { createRunContext, drive } from "./core/runtime.js";
 export { CUSTOM_INSTRUCTION_META } from "./core/types.js";
-export type { CustomInstruction, RunContext } from "./core/types.js";
+export type {
+  CustomInstruction,
+  NormalizeMeta,
+  RunContext,
+  Simplify,
+  StripEmpty,
+} from "./core/types.js";

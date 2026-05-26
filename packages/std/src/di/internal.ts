@@ -7,7 +7,10 @@ import {
   drive,
   unsafeCoerce,
   type CustomInstruction,
+  type NormalizeMeta,
   type RunContext,
+  type Simplify,
+  type StripEmpty,
 } from "@prodkit/op/internal";
 import { Op, type EmptyMeta } from "@prodkit/op";
 import type { Dependency } from "./index.js";
@@ -88,18 +91,6 @@ export type LazyBinding<C extends AnyDependency, V = unknown> = {
   readonly resolve: () => DependencyValue<C, V>;
 };
 export type AnyLazyBinding = LazyBinding<AnyDependency>;
-
-type StripEmpty<M> = [M] extends [never] ? {} : M extends EmptyMeta ? {} : M;
-type Simplify<T> = T extends object ? { [K in keyof T]: T[K] } : T;
-type NormalizeMeta<M> = [M] extends [never]
-  ? EmptyMeta
-  : M extends EmptyMeta
-    ? EmptyMeta
-    : M extends object
-      ? keyof M extends never
-        ? EmptyMeta
-        : M
-      : M;
 
 export type WithDIMeta<M, R> = Simplify<
   Omit<StripEmpty<M> & {}, "requirements"> & { readonly requirements: R }
