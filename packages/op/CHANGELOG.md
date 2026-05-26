@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- No entries yet.
+
+## [0.1.69] - 2026-05-26
+
+### Added
+
 - Added the generic `Op<T, E, A, M>` metadata slot, branded `EmptyMeta`, metadata inference helpers,
   and custom-instruction metadata inference for extension packages.
 - Added `@prodkit/op/internal` entry for low-level helpers shared with extension packages
@@ -333,3 +339,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retry timing, and composed operation semantics).
 - Improved examples and parsing validation in places where earlier behavior
   could produce weaker diagnostics or drift from production expectations.
+
