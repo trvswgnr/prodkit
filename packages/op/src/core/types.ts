@@ -12,14 +12,7 @@ export type EmptyMeta = {
   readonly [EMPTY_META]: true;
 };
 
-type StripEmpty<M> = [M] extends [never] ? {} : M extends EmptyMeta ? {} : M;
-type Simplify<T> = T extends object ? { [K in keyof T]: T[K] } : T;
 type IsAny<T> = 0 extends 1 & T ? true : false;
-type UnionToIntersection<U> = (U extends unknown ? (value: U) => void : never) extends (
-  value: infer I,
-) => void
-  ? I
-  : never;
 export type NormalizeMeta<M> = [M] extends [never]
   ? EmptyMeta
   : M extends EmptyMeta
@@ -30,14 +23,28 @@ export type NormalizeMeta<M> = [M] extends [never]
         : M
       : M;
 
-export type InferMetaReqs<M> = M extends { readonly requirements: infer R } ? R : never;
+type StripEmpty<M> = [M] extends [never] ? {} : M extends EmptyMeta ? {} : M;
+type WithoutEmptyMeta<M> = M extends EmptyMeta ? never : M;
+type MergeMetaRight<B> = [WithoutEmptyMeta<B>] extends [never] ? EmptyMeta : WithoutEmptyMeta<B>;
+type AllMetaKeys<U> = U extends unknown ? keyof U : never;
 
-type MergeMetaObjects<A, B, R = InferMetaReqs<A> | InferMetaReqs<B>> = NormalizeMeta<
-  Simplify<
-    Omit<StripEmpty<A> & {}, "requirements"> &
-      Omit<StripEmpty<B> & {}, "requirements"> &
-      ([R] extends [never] ? {} : { readonly requirements: R })
-  >
+type MergeMetaObjects<A, B> = NormalizeMeta<{
+  readonly [K in keyof StripEmpty<A> | keyof StripEmpty<B>]: K extends keyof StripEmpty<A> &
+    keyof StripEmpty<B>
+    ? StripEmpty<A>[K] | StripEmpty<B>[K]
+    : K extends keyof StripEmpty<A>
+      ? StripEmpty<A>[K]
+      : K extends keyof StripEmpty<B>
+        ? StripEmpty<B>[K]
+        : never;
+}>;
+
+type MergeUnionMeta<U> = NormalizeMeta<
+  [U] extends [never]
+    ? EmptyMeta
+    : {
+        readonly [K in AllMetaKeys<U>]: U extends Record<K, infer V> ? V : never;
+      }
 >;
 
 export type MergeMeta<A, B> =
@@ -49,7 +56,7 @@ export type MergeMeta<A, B> =
         ? NormalizeMeta<B>
         : [B] extends [EmptyMeta]
           ? NormalizeMeta<A>
-          : MergeMetaObjects<A, B>;
+          : MergeMetaObjects<A, MergeMetaRight<B>>;
 
 export type TrackedErr<E, Excluded = never> = E extends UnhandledException
   ? never
@@ -61,7 +68,7 @@ export type InferOpOk<R> = R extends Op<infer T, any, [], any> ? T : Awaited<R>;
 
 export type InferOpErr<R> = R extends Op<any, infer E, [], any> ? E : never;
 
-export type InferOpMeta<R> = R extends Op<any, any, readonly unknown[], infer M> ? M : EmptyMeta;
+export type InferOpMeta<R> = R extends Op<any, any, infer _A, infer M> ? M : EmptyMeta;
 
 export interface CustomInstruction<T, _E = never, M = EmptyMeta> {
   readonly [CUSTOM_INSTRUCTION_META]: M;
@@ -73,16 +80,9 @@ type ExtractInstructionMeta<Y> = Y extends CustomInstruction<any, any, infer M> 
 
 type NonEmptyInstructionMeta<Y> = Exclude<ExtractInstructionMeta<Y>, EmptyMeta>;
 
-type MergeInstructionMetaUnion<M, R = InferMetaReqs<M>> = NormalizeMeta<
-  Simplify<
-    Omit<StripEmpty<UnionToIntersection<M>> & {}, "requirements"> &
-      ([R] extends [never] ? {} : { readonly requirements: R })
-  >
->;
-
 export type InferInstructionMeta<Y> = [NonEmptyInstructionMeta<Y>] extends [never]
   ? EmptyMeta
-  : MergeInstructionMetaUnion<NonEmptyInstructionMeta<Y>>;
+  : MergeUnionMeta<NonEmptyInstructionMeta<Y>>;
 
 type DropUnknown<E> = unknown extends E ? never : E;
 type ExtractInstructionErr<Y> =

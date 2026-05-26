@@ -12,6 +12,7 @@ import type { IsEqual, Assert } from "./type-test-utils.js";
 type DatabaseReq = { readonly requirements: "database" };
 type LoggerReq = { readonly requirements: "logger" };
 type CacheReq = { readonly requirements: "cache" };
+type SpanReq = { readonly spans: "auth" };
 
 class TestInstruction<T, M> implements CustomInstruction<T, never, M> {
   readonly [CUSTOM_INSTRUCTION_META]: M = undefined as M;
@@ -40,6 +41,14 @@ describe("metadata type contracts", () => {
     type _ = Assert<IsEqual<InferOpMeta<typeof op>, EmptyMeta>>;
   });
 
+  test("custom instructions contribute metadata on arity ops", () => {
+    const op = Op(function* (_id: string) {
+      return yield* new TestInstruction<number, DatabaseReq>(1);
+    });
+
+    type _ = Assert<IsEqual<InferOpMeta<typeof op>, DatabaseReq>>;
+  });
+
   test("custom instructions contribute metadata", () => {
     const op = Op(function* () {
       return yield* new TestInstruction<number, DatabaseReq>(1);
@@ -62,13 +71,19 @@ describe("metadata type contracts", () => {
     type _ = Assert<IsEqual<InferOpMeta<typeof outer>, DatabaseReq>>;
   });
 
-  test("merge metadata unions requirements", () => {
+  test("merge metadata unions values at shared keys", () => {
     type _ = Assert<
       IsEqual<MergeMeta<DatabaseReq, LoggerReq>, { readonly requirements: "database" | "logger" }>
     >;
     type _EmptyLeft = Assert<IsEqual<MergeMeta<EmptyMeta, DatabaseReq>, DatabaseReq>>;
     type _EmptyRight = Assert<IsEqual<MergeMeta<DatabaseReq, EmptyMeta>, DatabaseReq>>;
     type _EmptyBoth = Assert<IsEqual<MergeMeta<EmptyMeta, EmptyMeta>, EmptyMeta>>;
+    type _CrossKey = Assert<
+      IsEqual<
+        MergeMeta<DatabaseReq, SpanReq>,
+        { readonly requirements: "database"; readonly spans: "auth" }
+      >
+    >;
   });
 
   test("combinators preserve or merge metadata", () => {

@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, test } from "vitest";
-import { Op } from "@prodkit/op";
+import { Op, type InferOpMeta } from "@prodkit/op";
 import { DI, type Dependency } from "./index.js";
 import type {
   DependencyReq,
@@ -48,6 +48,27 @@ describe("DI cutover type contracts", () => {
     });
 
     type _ = Assert<IsEqual<InferReqs<typeof op>, DatabaseDependency>>;
+    type _Meta = Assert<
+      IsEqual<
+        InferOpMeta<typeof op>,
+        WithDIMeta<import("@prodkit/op").EmptyMeta, DatabaseDependency>
+      >
+    >;
+  });
+
+  test("DI.require contributes metadata on arity ops", () => {
+    const findUser = Op(function* (id: string) {
+      const db = yield* DI.require(DatabaseDependency);
+      return yield* db.query("user", [id]);
+    });
+
+    type _Reqs = Assert<IsEqual<InferReqs<typeof findUser>, DatabaseDependency>>;
+    type _Meta = Assert<
+      IsEqual<
+        InferOpMeta<typeof findUser>,
+        WithDIMeta<import("@prodkit/op").EmptyMeta, DatabaseDependency>
+      >
+    >;
   });
 
   test("multiple and nested requirements infer as a union", () => {
@@ -105,6 +126,32 @@ describe("DI cutover type contracts", () => {
     DI.provide(op, { log: () => {} });
   });
 
+  test("provide rejects bindings for dependencies the op does not require", () => {
+    const dbOnly = Op(function* () {
+      yield* DI.require(DatabaseDependency);
+    });
+    const db = {
+      query: Op(function* (_sql: string, _params: unknown[]) {
+        return { id: "1" };
+      }).mapErr((error): DatabaseError => error),
+    } satisfies Database;
+
+    DI.provide(
+      dbOnly,
+      // @ts-expect-error - LoggerDependency is not required by this op
+      DI.scoped(LoggerDependency, () => ({ log: () => {} })),
+    );
+
+    const satisfied = DI.provide(dbOnly, DI.singleton(DatabaseDependency, db));
+    type _Satisfied = Assert<IsEqual<InferReqs<typeof satisfied>, never>>;
+
+    DI.provide(
+      satisfied,
+      // @ts-expect-error - op has no remaining requirements
+      DI.scoped(LoggerDependency, () => ({ log: () => {} })),
+    );
+  });
+
   test("DI helper types expose the requirement math", () => {
     const dbBinding = DI.singleton(DatabaseDependency, {
       query: Op(function* (_sql: string, _params: unknown[]) {
@@ -143,6 +190,7 @@ describe("DI cutover type contracts", () => {
 
     expectTypeOf<InferReqs<typeof mapped>>().toEqualTypeOf<DatabaseDependency>();
     expectTypeOf<InferReqs<typeof timed>>().toEqualTypeOf<DatabaseDependency>();
+    type _TappedReqs = InferReqs<typeof tapped>;
     type _Tapped = Assert<IsEqual<InferReqs<typeof tapped>, DatabaseDependency | LoggerDependency>>;
     type _FlatMapped = Assert<
       IsEqual<InferReqs<typeof flatMapped>, DatabaseDependency | LoggerDependency>

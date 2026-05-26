@@ -30,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   op factories are treated as plain values unless they are explicitly invoked.
 - Preserved or merged operation metadata through fluent combinators so extension metadata survives
   `map`, `mapErr`, policies, lifecycle hooks, `flatMap`, `tap`, `tapErr`, and `recover`.
+- Replaced DI-specific metadata merge with generic key-level `MergeMeta` that unions values at
+  shared keys, so composed ops keep one metadata object (for example
+  `{ readonly requirements: A | B }`) instead of a union of per-op metadata objects.
+- Fixed `InferOpMeta` inference for ops with runtime arguments; it now matches any args tuple instead
+  of requiring `readonly unknown[]`.
 
 ## [0.1.68] - 2026-05-15
 
