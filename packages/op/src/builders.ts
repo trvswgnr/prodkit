@@ -190,6 +190,5 @@ export function fromGenFn<Y extends Instruction<any, any>, T, A extends readonly
     ),
   );
 
-  // SAFETY: makeArityOp preserves runtime behavior; the cast restores metadata inferred from Y.
-  return unsafeCoerce<Op<T, InferInstructionErr<Y>, A, InferInstructionMeta<Y>>>(op);
+  return op;
 }
