@@ -36,4 +36,5 @@
 - The project is currently alpha-stage with no production users, so intentional breaking changes are acceptable.
 - Workspace taxonomy: `packages/*` (publishable), `examples` (`@prodkit/examples`, consumer smoke workspace), `benchmarks/*` (performance harnesses), `tools` (`@prodkit/tools`, maintainer scripts), and `apps/*` reserved for runnable product/demo apps.
 - `@prodkit/std` is the standard-library package; dependency-injection helpers are imported directly from `@prodkit/std/di` and exposed as `di` on root namespace imports.
+- Root `pnpm run gate` runs Turborepo in two phases: `build`, `typecheck`, `test`, `lint`, and `fmt:check` first (upstream `build` before downstream `typecheck`), then `@prodkit/tools` pack smoke only; do not run `examples#smoke` in gate -- it races workspace `dist/` with tools smoke rebuilds and is already covered by the tools pack harness.
 - GitHub repository canonical path is `trvswgnr/prodkit` (renamed from `trvswgnr/op`).

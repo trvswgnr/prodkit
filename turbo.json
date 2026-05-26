@@ -31,10 +31,6 @@
     "fmt:check": {
       "inputs": ["src/**/*.ts", "**/*.ts"]
     },
-    "gate": {
-      "dependsOn": ["^gate"],
-      "cache": false
-    },
     "smoke": {
       "dependsOn": ["build", "^build"],
       "cache": false
