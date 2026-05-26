@@ -23,9 +23,7 @@ export function createRunContext(
   return { signal, args, extensions };
 }
 
-function isCustomInstruction(
-  value: unknown,
-): value is CustomInstruction<unknown, unknown, unknown> {
+function isCustomInstruction(value: unknown): value is CustomInstruction<unknown, unknown> {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -118,7 +116,7 @@ async function driveInternal<T, E, M>(
     iter: Iterator<Instruction<E, M>, T, unknown>,
   ) => iter.next(await awaitWithAbortInterrupt(instruction.suspend(context)));
   const resumeCustom = async (
-    instruction: CustomInstruction<unknown, unknown, unknown>,
+    instruction: CustomInstruction<unknown, unknown>,
     iter: Iterator<Instruction<E, M>, T, unknown>,
   ) => iter.next(await awaitWithAbortInterrupt(Promise.resolve(instruction.resolve(context))));
   const registerExitFinalizer = (

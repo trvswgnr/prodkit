@@ -14,7 +14,7 @@ type LoggerReq = { readonly requirements: "logger" };
 type CacheReq = { readonly requirements: "cache" };
 type SpanReq = { readonly spans: "auth" };
 
-class TestInstruction<T, M> implements CustomInstruction<T, never, M> {
+class TestInstruction<T, M> implements CustomInstruction<T, M> {
   readonly [CUSTOM_INSTRUCTION_META]: M = undefined as M;
   private readonly value: T;
 

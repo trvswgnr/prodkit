@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Removed the phantom `_E` type parameter from `CustomInstruction`; typed generator errors are inferred
+  only from yielded `Err` values and nested ops. Extension metadata remains on `M`.
 - Consolidated consumer examples into `examples/` (`@prodkit/examples`); consumer smoke now
   validates packed installs for both `@prodkit/op` and `@prodkit/std`.
 - Flattened maintainer scripts workspace from `tools/op` to `tools/` and renamed it to

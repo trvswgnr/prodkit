@@ -70,13 +70,23 @@ export type InferOpErr<R> = R extends Op<any, infer E, [], any> ? E : never;
 
 export type InferOpMeta<R> = R extends Op<any, any, infer _A, infer M> ? M : EmptyMeta;
 
-export interface CustomInstruction<T, _E = never, M = EmptyMeta> {
+/**
+ * Extension protocol for custom generator yield instructions.
+ *
+ * Implementations are detected at runtime via {@link CUSTOM_INSTRUCTION_META}
+ * and executed through {@link CustomInstruction.resolve}.
+ *
+ * Typed failures should be surfaced by yielding {@link Err} values from
+ * `[Symbol.iterator]` or from the enclosing generator; throws from `resolve`
+ * surface as {@link UnhandledException}.
+ */
+export interface CustomInstruction<T, M = EmptyMeta> {
   readonly [CUSTOM_INSTRUCTION_META]: M;
   resolve(context: RunContext<readonly unknown[]>): T | PromiseLike<T>;
   [Symbol.iterator](): Generator<this, T, unknown>;
 }
 
-type ExtractInstructionMeta<Y> = Y extends CustomInstruction<any, any, infer M> ? M : never;
+type ExtractInstructionMeta<Y> = Y extends CustomInstruction<any, infer M> ? M : never;
 
 type NonEmptyInstructionMeta<Y> = Exclude<ExtractInstructionMeta<Y>, EmptyMeta>;
 
@@ -85,11 +95,9 @@ export type InferInstructionMeta<Y> = [NonEmptyInstructionMeta<Y>] extends [neve
   : MergeUnionMeta<NonEmptyInstructionMeta<Y>>;
 
 type DropUnknown<E> = unknown extends E ? never : E;
-type ExtractInstructionErr<Y> =
-  Y extends CustomInstruction<any, infer E, any> ? DropUnknown<E> : never;
 type ExtractResultErr<Y> = Y extends Err<unknown, infer E> ? DropUnknown<E> : never;
 
-export type InferInstructionErr<Y> = ExtractResultErr<Y> | ExtractInstructionErr<Y>;
+export type InferInstructionErr<Y> = ExtractResultErr<Y>;
 
 /**
  * Passed to {@link ExitFn} when the run unwinds.
@@ -133,7 +141,7 @@ export type Instruction<E, M = EmptyMeta> =
   | Err<unknown, E>
   | SuspendInstruction
   | RegisterExitFinalizerInstruction
-  | CustomInstruction<unknown, E, M>;
+  | CustomInstruction<unknown, M>;
 
 export type ReleaseFn<T> = (value: T) => unknown;
 

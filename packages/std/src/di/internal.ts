@@ -151,7 +151,6 @@ export type ProvidedMeta<M, Entries extends readonly UseEntry[]> = UpdateProvide
 
 export class DependencyReqInstruction<T, R> implements CustomInstruction<
   T,
-  never,
   WithDIMeta<EmptyMeta, R>
 > {
   readonly _tag = "DependencyReqInstruction";
