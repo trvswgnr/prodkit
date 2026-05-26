@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- Changed dependency-aware programs to use plain `Op(...)` from `@prodkit/op` with `yield* DI.require(Dependency)`.
+- Renamed `DI.require` to `DI.inject` for requesting dependency bindings.
+- Changed dependency-aware programs to use plain `Op(...)` from `@prodkit/op` with `yield* DI.inject(Dependency)`.
 - Changed dependency provisioning to use `DI.provide(op, ...bindings)`.
 - Removed `DI.Op` and `.use(...)`; no dependency-aware wrapper operation path remains.
 - Added core metadata inference and propagation so DI requirements flow through plain `Op(...)`, nested `yield* op`, and fluent composition.

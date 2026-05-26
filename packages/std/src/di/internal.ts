@@ -1,4 +1,3 @@
-// oxlint-disable typescript-eslint/no-explicit-any
 import {
   CUSTOM_INSTRUCTION_META,
   NEVER,
@@ -98,7 +97,8 @@ export type WithDIMeta<M, R> = Simplify<
 
 export type InferMetaReqs<M> = M extends { readonly requirements: infer R } ? R : never;
 
-export type InferReqs<C> = C extends Op<any, any, infer _A, infer M> ? InferMetaReqs<M> : never;
+export type InferReqs<C> =
+  C extends Op<unknown, unknown, infer _A, infer M> ? InferMetaReqs<M> : never;
 
 export type DependencyReq<C> = C extends { readonly prototype: infer I } ? I : C;
 

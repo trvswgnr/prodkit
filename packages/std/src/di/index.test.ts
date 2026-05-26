@@ -38,7 +38,7 @@ describe("DI cutover runtime", () => {
   test("plain Op can require and run with provided singleton dependencies", async () => {
     const calls: string[] = [];
     const op = Op(function* (id: string) {
-      const db = yield* DI.require(DatabaseDependency);
+      const db = yield* DI.inject(DatabaseDependency);
       return yield* db.query("user", [id]);
     });
 
@@ -52,7 +52,7 @@ describe("DI cutover runtime", () => {
 
   test("missing dependency returns UnhandledException with MissingDependencyError cause", async () => {
     const op = Op(function* () {
-      yield* DI.require(DatabaseDependency);
+      yield* DI.inject(DatabaseDependency);
       return "unreachable";
     });
 
@@ -71,7 +71,7 @@ describe("DI cutover runtime", () => {
     }
 
     const op = Op(function* (id: string) {
-      const db = yield* DI.require(DatabaseDependency);
+      const db = yield* DI.inject(DatabaseDependency);
       return yield* db.query("user", [id]);
     });
 
@@ -83,8 +83,8 @@ describe("DI cutover runtime", () => {
   test("scoped dependencies resolve once per run and again on the next run", async () => {
     let resolves = 0;
     const op = Op(function* (id: string) {
-      const db1 = yield* DI.require(DatabaseDependency);
-      const db2 = yield* DI.require(DatabaseDependency);
+      const db1 = yield* DI.inject(DatabaseDependency);
+      const db2 = yield* DI.inject(DatabaseDependency);
       expect(db1).toBe(db2);
       return yield* db1.query("user", [id]);
     });
@@ -104,8 +104,8 @@ describe("DI cutover runtime", () => {
   test("nested DI.provide calls merge bindings", async () => {
     const seen: string[] = [];
     const op = Op(function* (id: string) {
-      const db = yield* DI.require(DatabaseDependency);
-      const logger = yield* DI.require(LoggerDependency);
+      const db = yield* DI.inject(DatabaseDependency);
+      const logger = yield* DI.inject(LoggerDependency);
       const user = yield* db.query("user", [id]);
       logger.log(user.id);
       return user;
@@ -124,7 +124,7 @@ describe("DI cutover runtime", () => {
 
   test("duplicate provisioning returns UnhandledException with AlreadyProvidedError cause", async () => {
     const op = Op(function* () {
-      const db = yield* DI.require(DatabaseDependency);
+      const db = yield* DI.inject(DatabaseDependency);
       return yield* db.query("user", ["1"]);
     });
 
@@ -143,7 +143,7 @@ describe("DI cutover runtime", () => {
   test("policy, lifecycle, release, and fluent paths keep DI context", async () => {
     const db = makeDatabase();
     const findUser = Op(function* (id: string) {
-      const dependency = yield* DI.require(DatabaseDependency);
+      const dependency = yield* DI.inject(DatabaseDependency);
       return yield* dependency.query("user", [id]);
     });
 
@@ -215,7 +215,7 @@ describe("DI cutover runtime", () => {
   test("timeout typing remains available around provisioned ops", () => {
     const op = DI.provide(
       Op(function* () {
-        yield* DI.require(DatabaseDependency);
+        yield* DI.inject(DatabaseDependency);
       }),
       DI.singleton(DatabaseDependency, makeDatabase()),
     ).withTimeout(1);

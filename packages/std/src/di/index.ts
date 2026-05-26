@@ -1,4 +1,3 @@
-// oxlint-disable typescript-eslint/no-explicit-any
 import { NEVER } from "@prodkit/op/internal";
 import type { Op as CoreOp } from "@prodkit/op";
 import {
@@ -38,14 +37,14 @@ export const Dependency = <const Name extends string>(key: Name): DependencyCtor
     static readonly [DI_TOKEN] = NEVER;
 
     static *[Symbol.iterator](): Generator<never, never, unknown> {
-      throw new TypeError("Use DI.require(dependency) to require a dependency binding");
+      throw new TypeError("Use DI.inject(dependency) to inject a dependency binding");
     }
   }
 
   return DependencyToken;
 };
 
-export const require = function* <C extends AnyDependency>(
+export const inject = function* <C extends AnyDependency>(
   dependency: C,
 ): Generator<
   DependencyReqInstruction<DependencyValue<C>, DependencyReq<C>>,
@@ -86,13 +85,13 @@ export const provide = <
 
 export const DI = Object.freeze({
   Dependency,
-  require,
+  inject,
   singleton,
   scoped,
   provide,
 });
 
-type OpLike<T, E, A extends readonly unknown[]> = CoreOp<T, E, A, any>;
+type OpLike<T, E, A extends readonly unknown[]> = CoreOp<T, E, A, unknown>;
 export type InferErr<X> = X extends OpLike<infer _T, infer E, infer _A> ? E : never;
 export type InferOk<X> = X extends OpLike<infer T, infer _E, infer _A> ? T : never;
 export type InferArgs<X> = X extends OpLike<infer _T, infer _E, infer A> ? A : never;

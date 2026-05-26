@@ -13,7 +13,7 @@ interface Database {
 class DatabaseDependency extends DI.Dependency("DatabaseDependency")<Database> {}
 
 const getUser = Op(function* () {
-  const db = yield* DI.require(DatabaseDependency);
+  const db = yield* DI.inject(DatabaseDependency);
   return yield* db.query("select * from users where id = ?", [1]);
 });
 

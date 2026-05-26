@@ -41,9 +41,9 @@ describe("DI cutover type contracts", () => {
     type _ = Assert<IsEqual<InferReqs<typeof op>, never>>;
   });
 
-  test("DI.require contributes requirements to plain Op", () => {
+  test("DI.inject contributes requirements to plain Op", () => {
     const op = Op(function* () {
-      const db = yield* DI.require(DatabaseDependency);
+      const db = yield* DI.inject(DatabaseDependency);
       return yield* db.query("user", ["1"]);
     });
 
@@ -56,9 +56,9 @@ describe("DI cutover type contracts", () => {
     >;
   });
 
-  test("DI.require contributes metadata on arity ops", () => {
+  test("DI.inject contributes metadata on arity ops", () => {
     const findUser = Op(function* (id: string) {
-      const db = yield* DI.require(DatabaseDependency);
+      const db = yield* DI.inject(DatabaseDependency);
       return yield* db.query("user", [id]);
     });
 
@@ -73,11 +73,11 @@ describe("DI cutover type contracts", () => {
 
   test("multiple and nested requirements infer as a union", () => {
     const findUser = Op(function* (id: string) {
-      const db = yield* DI.require(DatabaseDependency);
+      const db = yield* DI.inject(DatabaseDependency);
       return yield* db.query("user", [id]);
     });
     const greet = Op(function* (id: string) {
-      const logger = yield* DI.require(LoggerDependency);
+      const logger = yield* DI.inject(LoggerDependency);
       const user = yield* findUser(id);
       logger.log(user.id);
       return user.id;
@@ -88,8 +88,8 @@ describe("DI cutover type contracts", () => {
 
   test("provisioning removes only satisfied requirements", () => {
     const op = Op(function* () {
-      yield* DI.require(DatabaseDependency);
-      yield* DI.require(LoggerDependency);
+      yield* DI.inject(DatabaseDependency);
+      yield* DI.inject(LoggerDependency);
     });
     const db = {
       query: Op(function* (_sql: string, _params: unknown[]) {
@@ -115,8 +115,8 @@ describe("DI cutover type contracts", () => {
     }
 
     const op = Op(function* () {
-      yield* DI.require(DatabaseDependency);
-      yield* DI.require(LoggerDependency);
+      yield* DI.inject(DatabaseDependency);
+      yield* DI.inject(LoggerDependency);
     });
 
     const partial = DI.provide(op, new InMemoryDatabase());
@@ -128,7 +128,7 @@ describe("DI cutover type contracts", () => {
 
   test("provide rejects bindings for dependencies the op does not require", () => {
     const dbOnly = Op(function* () {
-      yield* DI.require(DatabaseDependency);
+      yield* DI.inject(DatabaseDependency);
     });
     const db = {
       query: Op(function* (_sql: string, _params: unknown[]) {
@@ -175,11 +175,11 @@ describe("DI cutover type contracts", () => {
 
   test("metadata propagates through fluent combinators", () => {
     const findUser = Op(function* (id: string) {
-      const db = yield* DI.require(DatabaseDependency);
+      const db = yield* DI.inject(DatabaseDependency);
       return yield* db.query("user", [id]);
     });
     const log = Op(function* () {
-      const logger = yield* DI.require(LoggerDependency);
+      const logger = yield* DI.inject(LoggerDependency);
       logger.log("ok");
     });
 

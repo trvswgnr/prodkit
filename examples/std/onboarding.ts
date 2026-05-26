@@ -50,7 +50,7 @@ export class MailerService extends DI.Dependency("MailerService")<Mailer> {}
 export class ClockService extends DI.Dependency("ClockService")<Clock> {}
 
 export const loadExistingUser = Op(function* (email: string) {
-  const db = yield* DI.require(DatabaseService);
+  const db = yield* DI.inject(DatabaseService);
   return yield* db.findUserByEmail(email);
 });
 
@@ -60,10 +60,10 @@ export const registerUser = Op(function* (email: string, password: string) {
     return yield* new DuplicateEmailError({ email });
   }
 
-  const db = yield* DI.require(DatabaseService);
-  const hasher = yield* DI.require(PasswordHasherService);
-  const mailer = yield* DI.require(MailerService);
-  const clock = yield* DI.require(ClockService);
+  const db = yield* DI.inject(DatabaseService);
+  const hasher = yield* DI.inject(PasswordHasherService);
+  const mailer = yield* DI.inject(MailerService);
+  const clock = yield* DI.inject(ClockService);
 
   const passwordHash = yield* hasher.hash(password);
   const createdAt = yield* clock.nowIso;
