@@ -1,5 +1,5 @@
 import { DI } from "@prodkit/std/di";
-import { InferOpMeta, Op } from "@prodkit/op";
+import { Op } from "@prodkit/op";
 import { TaggedError } from "better-result";
 
 export class DuplicateEmailError extends TaggedError("DuplicateEmailError")<{
