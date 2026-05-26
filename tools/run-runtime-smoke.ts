@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -211,18 +211,16 @@ async function smokeDeno(workspaceDir: string) {
   );
 }
 
+function rewriteBetterResultImports(content: string): string {
+  return content.replaceAll(/(from\s*["'])better-result(["'])/g, "$1./better-result.mjs$2");
+}
+
 async function smokeEdge(workspaceDir: string) {
   const edgeDir = path.join(workspaceDir, "edge");
   mkdirSync(edgeDir);
 
-  const opEntryPath = path.join(
-    workspaceDir,
-    "node_modules",
-    "@prodkit",
-    "op",
-    "dist",
-    "index.mjs",
-  );
+  const opDistDir = path.join(workspaceDir, "node_modules", "@prodkit", "op", "dist");
+  const opEntryPath = path.join(opDistDir, "index.mjs");
   const resultEntryPath = path.join(
     workspaceDir,
     "node_modules",
@@ -234,16 +232,15 @@ async function smokeEdge(workspaceDir: string) {
   if (!existsSync(resultEntryPath))
     throw new Error(`Missing better-result entry: ${resultEntryPath}`);
 
-  const opEntry = await readFile(opEntryPath, "utf8");
-  await writeFile(
-    path.join(edgeDir, "prodkit-op.mjs"),
-    opEntry.replaceAll(/(from\s*["'])better-result(["'])/g, "$1./better-result.mjs$2"),
-    "utf8",
-  );
+  for (const file of await readdir(opDistDir)) {
+    if (!file.endsWith(".mjs") || file === "internal.mjs") continue;
+    const content = await readFile(path.join(opDistDir, file), "utf8");
+    await writeFile(path.join(edgeDir, file), rewriteBetterResultImports(content), "utf8");
+  }
   await cp(resultEntryPath, path.join(edgeDir, "better-result.mjs"));
   await writeFile(
     path.join(edgeDir, "worker.mjs"),
-    `${smokeSource("./prodkit-op.mjs", "./better-result.mjs")}
+    `${smokeSource("./index.mjs", "./better-result.mjs")}
 
 export default {
   async fetch() {

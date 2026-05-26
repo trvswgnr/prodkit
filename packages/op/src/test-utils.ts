@@ -69,3 +69,5 @@ export function trackAbortListeners(signal: AbortSignal) {
 export const invalidConcurrencies = [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY];
 
 export const TRUE: boolean = true;
+
+export const discard = (f: () => unknown): void => void f;

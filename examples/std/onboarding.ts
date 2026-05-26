@@ -49,21 +49,21 @@ export class PasswordHasherService extends DI.Dependency("PasswordHasherService"
 export class MailerService extends DI.Dependency("MailerService")<Mailer> {}
 export class ClockService extends DI.Dependency("ClockService")<Clock> {}
 
-export const loadExistingUser = DI.Op(function* (email: string) {
-  const db = yield* DI.require(DatabaseService);
+export const loadExistingUser = Op(function* (email: string) {
+  const db = yield* DI.inject(DatabaseService);
   return yield* db.findUserByEmail(email);
 });
 
-export const registerUser = DI.Op(function* (email: string, password: string) {
+export const registerUser = Op(function* (email: string, password: string) {
   const existing = yield* loadExistingUser(email);
   if (existing !== undefined) {
     return yield* new DuplicateEmailError({ email });
   }
 
-  const db = yield* DI.require(DatabaseService);
-  const hasher = yield* DI.require(PasswordHasherService);
-  const mailer = yield* DI.require(MailerService);
-  const clock = yield* DI.require(ClockService);
+  const db = yield* DI.inject(DatabaseService);
+  const hasher = yield* DI.inject(PasswordHasherService);
+  const mailer = yield* DI.inject(MailerService);
+  const clock = yield* DI.inject(ClockService);
 
   const passwordHash = yield* hasher.hash(password);
   const createdAt = yield* clock.nowIso;
@@ -133,7 +133,8 @@ export function createExampleDependencies() {
 
 export function runnableRegisterUser() {
   const services = createExampleDependencies();
-  const op = registerUser.use(
+  const op = DI.provide(
+    registerUser,
     services.db, //
     services.hasher,
     services.mailer,

@@ -21,7 +21,7 @@
 - For issue hierarchies, prefers real GitHub parent/sub-issue links over markdown-only checklists.
 - Wants issue-work flows to keep `packages/op/CHANGELOG.md` `Unreleased` updated, but prefers to handle version/tag/publish release steps personally unless explicitly delegated.
 - Prefers hard-cutover transitions, not gradual deprecations and migrations (this project is in alpha, so intentional breaking changes are acceptable)
-- Prefers the library to avoid throws whenever possible (normalize when able, otherwise surface as `Err(UnhandledException)` at run time).
+- Prefers the library to avoid eager throws; normalize when able, otherwise surface failures as `Err(UnhandledException)` at run time.
 
 ## Learned Workspace Facts
 
@@ -36,4 +36,5 @@
 - The project is currently alpha-stage with no production users, so intentional breaking changes are acceptable.
 - Workspace taxonomy: `packages/*` (publishable), `examples` (`@prodkit/examples`, consumer smoke workspace), `benchmarks/*` (performance harnesses), `tools` (`@prodkit/tools`, maintainer scripts), and `apps/*` reserved for runnable product/demo apps.
 - `@prodkit/std` is the standard-library package; dependency-injection helpers are imported directly from `@prodkit/std/di` and exposed as `di` on root namespace imports.
+- Root `pnpm run gate` runs Turborepo in two phases: `build`, `typecheck`, `test`, `lint`, and `fmt:check` first (upstream `build` before downstream `typecheck`), then `@prodkit/tools` pack smoke only; do not run `examples#smoke` in gate -- it races workspace `dist/` with tools smoke rebuilds and is already covered by the tools pack harness.
 - GitHub repository canonical path is `trvswgnr/prodkit` (renamed from `trvswgnr/op`).

@@ -1,3 +1,4 @@
+// oxlint-disable typescript-eslint/no-explicit-any
 import { ErrorGroup, UnhandledException } from "./errors.js";
 import {
   type Instruction,
@@ -11,7 +12,7 @@ import { createRunContext, drive } from "./core/runtime.js";
 import { Result, type Err } from "./result.js";
 import { makeCoreOp, createDefaultHooks } from "./core/fluent.js";
 
-type AnyNullaryOp = Op<unknown, unknown, []>;
+type AnyNullaryOp = Op<any, any, [], any>;
 
 function makeCombinatorOp<T, E>(gen: () => Generator<Instruction<E>, T, unknown>): Op<T, E, []> {
   const self: Op<T, E, []> = makeCoreOp(
@@ -47,7 +48,7 @@ function fanOut<T, E>(
   const detach = () => outerContext.signal.removeEventListener("abort", cascade);
   const controllers = entries.map((e) => e.controller);
   const runs = entries.map((e) =>
-    drive(e.op, createRunContext(e.controller.signal, outerContext.args)),
+    drive(e.op, createRunContext(e.controller.signal, outerContext.args, outerContext.extensions)),
   );
 
   return { runs, controllers, detach };
@@ -164,7 +165,10 @@ async function driveAll<T, E>(
       const controller = new AbortController();
       controllers.add(controller);
       if (outerContext.signal.aborted) controller.abort(outerContext.signal.reason);
-      const res = await drive(op, createRunContext(controller.signal, outerContext.args));
+      const res = await drive(
+        op,
+        createRunContext(controller.signal, outerContext.args, outerContext.extensions),
+      );
       controllers.delete(controller);
       results[i] = res;
       if (res.isErr() && firstErr === undefined) {
@@ -287,7 +291,10 @@ async function driveAllSettled<T, E>(
       const controller = new AbortController();
       controllers.add(controller);
       if (outerContext.signal.aborted) controller.abort(outerContext.signal.reason);
-      results[i] = await drive(op, createRunContext(controller.signal, outerContext.args));
+      results[i] = await drive(
+        op,
+        createRunContext(controller.signal, outerContext.args, outerContext.extensions),
+      );
       controllers.delete(controller);
     }
   };

@@ -1,9 +1,17 @@
+// oxlint-disable typescript-eslint/no-explicit-any
 import type { Op } from "./index.js";
 import type { OpIterable } from "./core/types.js";
 
 export const EMPTY_TUPLE: [] = [];
 export const OP_BRAND: unique symbol = Symbol("prodkit.op");
 export const OP_BOUND_BRAND: unique symbol = Symbol("prodkit.op.bound");
+
+export function hasOwn<T extends object, K extends PropertyKey>(
+  object: T,
+  key: K,
+): object is T & Record<K, unknown> {
+  return Object.hasOwn(object, key);
+}
 
 /**
  * Narrow `AbortSignal` / userland stand-ins across runtimes without depending on DOM `lib`s.
@@ -52,17 +60,17 @@ export const NEVER: never =
   // SAFETY: centralized `never` sentinel; callers must treat this as proof-only at the type level.
   unsafeCoerce<never>(undefined);
 
-export function isOp(value: unknown): value is Op<unknown, unknown, readonly unknown[]> {
+export function isOp(value: unknown): value is Op<any, any, readonly unknown[], any> {
   return hasBrand(value, OP_BRAND);
 }
 
 export function isIterableOp(
   value: unknown,
-): value is Op<unknown, unknown, []> & OpIterable<unknown, unknown> {
+): value is Op<any, any, [], any> & OpIterable<any, any, any> {
   return isOp(value) && Symbol.iterator in value && typeof value[Symbol.iterator] === "function";
 }
 
-export function coerceToNullaryOp(value: unknown): Op<unknown, unknown, []> | undefined {
+export function coerceToNullaryOp(value: unknown): Op<any, any, [], any> | undefined {
   if (
     !isOp(value) ||
     !(OP_BOUND_BRAND in value) ||

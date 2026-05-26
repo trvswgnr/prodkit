@@ -5,15 +5,32 @@ import {
   RegisterExitFinalizerInstruction,
   SuspendInstruction,
 } from "./instructions.js";
-import { type ExitContext, type Instruction, type RunContext } from "./types.js";
+import {
+  CUSTOM_INSTRUCTION_META,
+  type CustomInstruction,
+  type ExitContext,
+  type Instruction,
+  type RunContext,
+} from "./types.js";
 import type { Op } from "../index.js";
 import { EMPTY_TUPLE } from "../shared.js";
 
 export function createRunContext(
   signal: AbortSignal,
   args: readonly unknown[] = EMPTY_TUPLE,
+  extensions: ReadonlyMap<unknown, unknown> = new Map(),
 ): RunContext<readonly unknown[]> {
-  return { signal, args };
+  return { signal, args, extensions };
+}
+
+function isCustomInstruction(value: unknown): value is CustomInstruction<unknown, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    CUSTOM_INSTRUCTION_META in value &&
+    "resolve" in value &&
+    typeof value.resolve === "function"
+  );
 }
 
 export function closeGenerator(iterator: Iterator<unknown, unknown, unknown>) {
@@ -41,22 +58,22 @@ export function chainCleanupFaults(faults: readonly unknown[]): unknown {
   return chain;
 }
 
-export async function drive<T, E>(
-  op: Op<T, E, []>,
+export async function drive<T, E, M>(
+  op: Op<T, E, [], M>,
   context: RunContext<readonly unknown[]>,
 ): Promise<Result<T, E | UnhandledException>> {
   return driveInternal(op, context, false);
 }
 
-export async function driveInterruptOnAbort<T, E>(
-  op: Op<T, E, []>,
+export async function driveInterruptOnAbort<T, E, M>(
+  op: Op<T, E, [], M>,
   context: RunContext<readonly unknown[]>,
 ): Promise<Result<T, E | UnhandledException>> {
   return driveInternal(op, context, true);
 }
 
-async function driveInternal<T, E>(
-  op: Op<T, E, []>,
+async function driveInternal<T, E, M>(
+  op: Op<T, E, [], M>,
   context: RunContext<readonly unknown[]>,
   interruptOnAbort: boolean,
 ): Promise<Result<T, E | UnhandledException>> {
@@ -96,11 +113,15 @@ async function driveInternal<T, E>(
   };
   const resumeSuspended = async (
     instruction: SuspendInstruction,
-    iter: Iterator<Instruction<E>, T, unknown>,
+    iter: Iterator<Instruction<E, M>, T, unknown>,
   ) => iter.next(await awaitWithAbortInterrupt(instruction.suspend(context)));
+  const resumeCustom = async (
+    instruction: CustomInstruction<unknown, unknown>,
+    iter: Iterator<Instruction<E, M>, T, unknown>,
+  ) => iter.next(await awaitWithAbortInterrupt(Promise.resolve(instruction.resolve(context))));
   const registerExitFinalizer = (
     instruction: RegisterExitFinalizerInstruction,
-    iter: Iterator<Instruction<E>, T, unknown>,
+    iter: Iterator<Instruction<E, M>, T, unknown>,
   ) => {
     const argsAtRegistration = instruction.args ?? runArgs;
     finalizers.push((ctx) =>
@@ -137,7 +158,7 @@ async function driveInternal<T, E>(
   };
   const settleWithCleanup = async (
     result: Result<T, E | UnhandledException>,
-    iter?: Iterator<Instruction<unknown>, T, unknown>,
+    iter?: Iterator<Instruction<unknown, M>, T, unknown>,
   ): Promise<Result<T, E | UnhandledException>> => {
     if (iter !== undefined) {
       closeGenerator(iter);
@@ -163,6 +184,10 @@ async function driveInternal<T, E>(
         const instr = step.value;
         if (instr instanceof RegisterExitFinalizerInstruction) {
           step = registerExitFinalizer(instr, iter);
+          continue;
+        }
+        if (isCustomInstruction(instr)) {
+          step = await resumeCustom(instr, iter);
           continue;
         }
         if (isErrInstruction<E>(instr)) {

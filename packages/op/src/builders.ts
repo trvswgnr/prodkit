@@ -1,19 +1,28 @@
+// oxlint-disable typescript-eslint/no-explicit-any
 import { UnhandledException } from "./errors.js";
 import { makeFluentOp, onOp } from "./core/fluent.js";
-import type { TrackedErr, AnyExitFn, Instruction, OpInterface } from "./core/types.js";
+import type {
+  AnyExitFn,
+  EmptyMeta,
+  InferInstructionErr,
+  InferInstructionMeta,
+  Instruction,
+  OpInterface,
+  TrackedErr,
+} from "./core/types.js";
 import type { Op } from "./index.js";
 import { RegisterExitFinalizerInstruction, SuspendInstruction } from "./core/instructions.js";
 import { withRetryOp, withTimeoutOp, withSignalOp } from "./policies.js";
-import { Result, type InferErr } from "./result.js";
+import { Result } from "./result.js";
 import { makeCoreOp, createDefaultHooks, withCleanupCoreOp } from "./core/fluent.js";
 import { unsafeCoerce, isAwaited, sleepWithSignal } from "./shared.js";
 
-export function succeed<T>(value: T | PromiseLike<T>): Op<Awaited<T>, never, []> {
+export function succeed<T>(value: T | PromiseLike<T>): Op<Awaited<T>, never, [], EmptyMeta> {
   if (!isAwaited(value)) {
     return _try(() => value);
   }
 
-  const op: Op<Awaited<T>, never, []> = makeCoreOp(
+  const op: Op<Awaited<T>, never, [], EmptyMeta> = makeCoreOp(
     function* () {
       return value;
     },
@@ -26,8 +35,8 @@ export function succeed<T>(value: T | PromiseLike<T>): Op<Awaited<T>, never, []>
 /*
  * Lifts a value into an operation that always fails
  */
-export function fail<E>(value: E): Op<never, E, []> {
-  const op: Op<never, E, []> = makeCoreOp(
+export function fail<E>(value: E): Op<never, E, [], EmptyMeta> {
+  const op: Op<never, E, [], EmptyMeta> = makeCoreOp(
     function* () {
       return yield* Result.err(value);
     },
@@ -37,8 +46,8 @@ export function fail<E>(value: E): Op<never, E, []> {
   return op;
 }
 
-export function defer(finalize: AnyExitFn): Op<void, never, []> {
-  const op: Op<void, never, []> = makeCoreOp(
+export function defer(finalize: AnyExitFn): Op<void, never, [], EmptyMeta> {
+  const op: Op<void, never, [], EmptyMeta> = makeCoreOp(
     function* () {
       yield new RegisterExitFinalizerInstruction((ctx) =>
         Promise.resolve(finalize(ctx)).then(() => {}),
@@ -49,7 +58,7 @@ export function defer(finalize: AnyExitFn): Op<void, never, []> {
   return op;
 }
 
-export function sleep(ms: number): Op<void, never, []> {
+export function sleep(ms: number): Op<void, never, [], EmptyMeta> {
   return _try((signal) => sleepWithSignal(ms, signal));
 }
 
@@ -62,8 +71,8 @@ export function sleep(ms: number): Op<void, never, []> {
 export function _try<T, E = UnhandledException>(
   f: (signal: AbortSignal) => T,
   onError?: (e: unknown) => E | PromiseLike<E>,
-): Op<Awaited<T>, TrackedErr<Awaited<E>>, []> {
-  const op: Op<Awaited<T>, TrackedErr<Awaited<E>>, []> = makeCoreOp(
+): Op<Awaited<T>, TrackedErr<Awaited<E>>, [], EmptyMeta> {
+  const op: Op<Awaited<T>, TrackedErr<Awaited<E>>, [], EmptyMeta> = makeCoreOp(
     function* () {
       const result: Result<
         Awaited<T>,
@@ -89,13 +98,13 @@ export function _try<T, E = UnhandledException>(
   return op;
 }
 
-function bindArityArgsToFinalizers<T>(
-  iterator: Generator<Instruction<unknown>, T, unknown>,
+function bindArityArgsToFinalizers<T, M>(
+  iterator: Generator<Instruction<unknown, M>, T, unknown>,
   args: readonly unknown[],
-): Generator<Instruction<unknown>, T, unknown> {
+): Generator<Instruction<unknown, M>, T, unknown> {
   const bindStep = (
-    step: IteratorResult<Instruction<unknown>, T>,
-  ): IteratorResult<Instruction<unknown>, T> => {
+    step: IteratorResult<Instruction<unknown, M>, T>,
+  ): IteratorResult<Instruction<unknown, M>, T> => {
     if (step.done) return step;
     if (!(step.value instanceof RegisterExitFinalizerInstruction)) return step;
     if (step.value.args !== undefined) return step;
@@ -121,10 +130,10 @@ function bindArityArgsToFinalizers<T>(
   };
 }
 
-function makeArityOp<T, E, A extends readonly unknown[]>(
-  invoke: (...args: A) => Op<T, E, []>,
-  makeIterable?: () => Op<T, E, []>,
-): OpInterface<T, E, A> {
+function makeArityOp<T, E, A extends readonly unknown[], M = EmptyMeta>(
+  invoke: (...args: A) => Op<T, E, [], M>,
+  makeIterable?: () => Op<T, E, [], M>,
+): OpInterface<T, E, A, M> {
   return makeFluentOp(
     invoke,
     (self) => ({
@@ -157,18 +166,18 @@ function makeArityOp<T, E, A extends readonly unknown[]>(
 /**
  * Turns a generator function into an {@link Op}
  */
-export function fromGenFn<Y extends Instruction<unknown>, T, A extends readonly unknown[]>(
+export function fromGenFn<Y extends Instruction<any, any>, T, A extends readonly unknown[]>(
   f: (...args: A) => Generator<Y, T, unknown>,
-): Op<T, InferErr<Y>, A> {
+): Op<T, InferInstructionErr<Y>, A, InferInstructionMeta<Y>> {
   // We intentionally always build through the tuple-arity lifting path, including for `A = []`.
   // This keeps runtime behavior uniform while preserving exact tuple signatures at the type level.
   const invoke = (...args: A) => {
-    const bound: Op<T, InferErr<Y>, []> = makeCoreOp(
+    const bound: Op<T, InferInstructionErr<Y>, [], InferInstructionMeta<Y>> = makeCoreOp(
       () =>
         // SAFETY: TS cannot model `Generator<Y, T, unknown>` as the internal instruction supertype.
-        unsafeCoerce<Generator<Instruction<InferErr<Y>>, T, unknown>>(
-          bindArityArgsToFinalizers(f(...args), args),
-        ),
+        unsafeCoerce<
+          Generator<Instruction<InferInstructionErr<Y>, InferInstructionMeta<Y>>, T, unknown>
+        >(bindArityArgsToFinalizers(f(...args), args)),
       createDefaultHooks(() => bound),
     );
     return bound;

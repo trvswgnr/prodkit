@@ -3,8 +3,8 @@
 Standard library utilities for `@prodkit/op`.
 
 ```ts
-import { DI } from "@prodkit/std/di";
 import { Op } from "@prodkit/op";
+import { DI } from "@prodkit/std/di";
 
 interface Database {
   query: Op<unknown, DatabaseError, [sql: string, params: unknown[]]>;
@@ -12,12 +12,12 @@ interface Database {
 
 class DatabaseDependency extends DI.Dependency("DatabaseDependency")<Database> {}
 
-const getUser = DI.Op(function* () {
-  const db = yield* DI.require(DatabaseDependency);
+const getUser = Op(function* () {
+  const db = yield* DI.inject(DatabaseDependency);
   return yield* db.query("select * from users where id = ?", [1]);
 });
 
-const runnable = getUser.use(DI.singleton(DatabaseDependency, db));
+const runnable = DI.provide(getUser, DI.singleton(DatabaseDependency, db));
 const result = await runnable.run();
 ```
 
@@ -25,10 +25,11 @@ Lifetimes:
 
 - `DI.singleton(Dependency, value)` binds one value reused across runs.
 - `DI.scoped(Dependency, resolve)` resolves once per op run and caches for that run.
-- `op.use(new DependencyImpl())` binds a class instance directly (useful when an implementation class extends the dependency token).
+- `DI.provide(op, new DependencyImpl())` binds a class instance directly when an implementation class extends the dependency token.
 
 ```ts
-const op = getUser.use(
+const op = DI.provide(
+  getUser,
   DI.scoped(DatabaseDependency, () => connectDatabase()),
 );
 

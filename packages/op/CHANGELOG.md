@@ -9,15 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added the generic `Op<T, E, A, M>` metadata slot, branded `EmptyMeta`, metadata inference helpers,
+  and custom-instruction metadata inference for extension packages.
 - Added `@prodkit/op/internal` entry for low-level helpers shared with extension packages
   (for example `@prodkit/std`).
 - Exported `AbortSignalLike`, `functionHasTruthyBrand`, and `NEVER` via `@prodkit/op/internal`
   for runtime-agnostic extension code.
 - Added regression coverage for generator-built operation callback sequencing without relying on
   function arity reflection.
+- Added the generic `Blocking<T>` metadata brand for extension packages, exported
+  `withBlocking(..., key)` / `BlockingOp` for marking operations that are not ready to run, and kept
+  `IsRunnable<M>` and `SetBlockingMeta` on `@prodkit/op/internal` for extension inference.
 
 ### Changed
 
+- Removed the phantom `_E` type parameter from `CustomInstruction`; typed generator errors are inferred
+  only from yielded `Err` values and nested ops. Extension metadata remains on `M`.
 - Consolidated consumer examples into `examples/` (`@prodkit/examples`); consumer smoke now
   validates packed installs for both `@prodkit/op` and `@prodkit/std`.
 - Flattened maintainer scripts workspace from `tools/op` to `tools/` and renamed it to
@@ -26,6 +33,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   real `AbortSignal` implementations).
 - Changed fluent callback sequencing to drive only bound nullary ops, so returned generator-built
   op factories are treated as plain values unless they are explicitly invoked.
+- Preserved or merged operation metadata through fluent combinators so extension metadata survives
+  `map`, `mapErr`, policies, lifecycle hooks, `flatMap`, `tap`, `tapErr`, and `recover`.
+- Replaced DI-specific metadata merge with generic key-level `MergeMeta` that unions values at
+  shared keys, so composed ops keep one metadata object (for example
+  `{ readonly requirements: A | B }`) instead of a union of per-op metadata objects.
+- Fixed `InferOpMeta` inference for ops with runtime arguments; it now matches any args tuple instead
+  of requiring `readonly unknown[]`.
+- `.run()` and `Op.run(...)` are available by default and blocked when operation metadata
+  carries any unsatisfied `Blocking<T>` value or the op was wrapped with `withBlocking(..., key)`.
 
 ## [0.1.68] - 2026-05-15
 

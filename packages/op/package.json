@@ -45,7 +45,6 @@
   "scripts": {
     "build": "tsdown",
     "changelog:check": "node ../../tools/check-changelog-version.ts",
-    "gate": "pnpm run build && pnpm run typecheck && pnpm run test && pnpm run lint && pnpm run fmt:check",
     "fix": "pnpm run lint:fix && pnpm run fmt",
     "fmt": "oxfmt \"src/**/*.ts\" \"*.ts\"",
     "fmt:check": "oxfmt --check \"src/**/*.ts\" \"*.ts\"",

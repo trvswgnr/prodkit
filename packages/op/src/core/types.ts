@@ -1,8 +1,63 @@
+// oxlint-disable typescript/no-explicit-any
 import type { TimeoutError, UnhandledException } from "../errors.js";
 import type { Err, Result } from "../result.js";
 import type { RetryPolicy } from "../policies.js";
 import type { RegisterExitFinalizerInstruction, SuspendInstruction } from "./instructions.js";
 import type { Op } from "../index.js";
+
+declare const EMPTY_META: unique symbol;
+declare const BLOCKING: unique symbol;
+export const CUSTOM_INSTRUCTION_META = Symbol("prodkit.op.custom-instruction-meta");
+
+type MergeBlockingValue<VA, VB> =
+  VA extends Blocking<infer TA>
+    ? VB extends Blocking<infer TB>
+      ? Blocking<TA | TB>
+      : Blocking<TA>
+    : VB extends Blocking<infer TB>
+      ? Blocking<TB>
+      : VA | VB;
+
+type MergeMetaValue<A, B, K extends PropertyKey> = K extends keyof StripEmpty<A> &
+  keyof StripEmpty<B>
+  ? MergeBlockingValue<StripEmpty<A>[K], StripEmpty<B>[K]>
+  : K extends keyof StripEmpty<A>
+    ? StripEmpty<A>[K]
+    : K extends keyof StripEmpty<B>
+      ? StripEmpty<B>[K]
+      : never;
+
+type MergeMetaObjects<A, B> = NormalizeMeta<{
+  readonly [K in keyof StripEmpty<A> | keyof StripEmpty<B>]: MergeMetaValue<A, B, K>;
+}>;
+
+type UnionMetaValueAt<U, K extends PropertyKey> = U extends Record<K, infer V> ? V : never;
+
+type CollectBlockingPayload<U, K extends PropertyKey> =
+  U extends Record<K, Blocking<infer R>> ? R : never;
+
+type MergeUnionMetaValue<U, K extends PropertyKey> = [CollectBlockingPayload<U, K>] extends [never]
+  ? UnionMetaValueAt<U, K>
+  : Blocking<CollectBlockingPayload<U, K>>;
+
+type MergeUnionMeta<U> = NormalizeMeta<
+  [U] extends [never]
+    ? EmptyMeta
+    : {
+        readonly [K in AllMetaKeys<U>]: MergeUnionMetaValue<U, K>;
+      }
+>;
+
+export type MergeMeta<A, B> =
+  IsAny<A> extends true
+    ? any
+    : IsAny<B> extends true
+      ? any
+      : [A] extends [EmptyMeta]
+        ? NormalizeMeta<B>
+        : [B] extends [EmptyMeta]
+          ? NormalizeMeta<A>
+          : MergeMetaObjects<A, MergeMetaRight<B>>;
 
 export type TrackedErr<E, Excluded = never> = E extends UnhandledException
   ? never
@@ -10,9 +65,89 @@ export type TrackedErr<E, Excluded = never> = E extends UnhandledException
     ? never
     : E;
 
-export type InferOpOk<R> = R extends Op<infer T, unknown, []> ? T : Awaited<R>;
+export type InferOpOk<R> = R extends Op<infer T, any, [], any> ? T : Awaited<R>;
 
-export type InferOpErr<R> = R extends Op<unknown, infer E, []> ? E : never;
+export type InferOpErr<R> = R extends Op<any, infer E, [], any> ? E : never;
+
+export type InferOpMeta<R> = R extends Op<any, any, infer _A, infer M> ? M : EmptyMeta;
+
+export type SetBlockingMeta<M, K extends PropertyKey, T> = NormalizeMeta<
+  Simplify<StripEmpty<M> & { readonly [P in K]: Blocking<T> }>
+>;
+
+/**
+ * Whether top-level {@link BaseOp.run} is available from operation metadata.
+ *
+ * Operations are runnable by default. Extension packages block `.run()` by placing
+ * a {@link Blocking} value on a metadata key, or by wrapping with `withBlocking(...)`.
+ */
+export type IsRunnable<M> =
+  IsAny<M> extends true ? true : [HasBlocking<M>] extends [true] ? false : true;
+
+type HasBlocking<M> = keyof StripEmpty<M> extends never
+  ? false
+  : {
+        [K in keyof StripEmpty<M>]: StripEmpty<M>[K] extends Blocking<infer R>
+          ? [R] extends [never]
+            ? false
+            : true
+          : false;
+      }[keyof StripEmpty<M>] extends true
+    ? true
+    : false;
+
+export type EmptyMeta = {
+  readonly [EMPTY_META]: true;
+};
+
+/** Branded metadata value that blocks top-level `.run()` until its payload is satisfied. */
+export type Blocking<T> = { readonly [BLOCKING]: T };
+
+type IsAny<T> = 0 extends 1 & T ? true : false;
+export type NormalizeMeta<M> = [M] extends [never]
+  ? EmptyMeta
+  : M extends EmptyMeta
+    ? EmptyMeta
+    : M extends object
+      ? keyof M extends never
+        ? EmptyMeta
+        : M
+      : M;
+
+export type StripEmpty<M> = [M] extends [never] ? {} : M extends EmptyMeta ? {} : M;
+export type Simplify<T> = T extends object ? { [K in keyof T]: T[K] } : T;
+type WithoutEmptyMeta<M> = M extends EmptyMeta ? never : M;
+type MergeMetaRight<B> = [WithoutEmptyMeta<B>] extends [never] ? EmptyMeta : WithoutEmptyMeta<B>;
+type AllMetaKeys<U> = U extends unknown ? keyof U : never;
+
+/**
+ * Extension protocol for custom generator yield instructions.
+ *
+ * Implementations are detected at runtime via {@link CUSTOM_INSTRUCTION_META}
+ * and executed through {@link CustomInstruction.resolve}.
+ *
+ * Typed failures should be surfaced by yielding {@link Err} values from
+ * `[Symbol.iterator]` or from the enclosing generator; throws from `resolve`
+ * surface as {@link UnhandledException}.
+ */
+export interface CustomInstruction<T, M = EmptyMeta> {
+  readonly [CUSTOM_INSTRUCTION_META]: M;
+  resolve(context: RunContext<readonly unknown[]>): T | PromiseLike<T>;
+  [Symbol.iterator](): Generator<this, T, unknown>;
+}
+
+type ExtractInstructionMeta<Y> = Y extends CustomInstruction<any, infer M> ? M : never;
+
+type NonEmptyInstructionMeta<Y> = Exclude<ExtractInstructionMeta<Y>, EmptyMeta>;
+
+export type InferInstructionMeta<Y> = [NonEmptyInstructionMeta<Y>] extends [never]
+  ? EmptyMeta
+  : MergeUnionMeta<NonEmptyInstructionMeta<Y>>;
+
+type DropUnknown<E> = unknown extends E ? never : E;
+type ExtractResultErr<Y> = Y extends Err<unknown, infer E> ? DropUnknown<E> : never;
+
+export type InferInstructionErr<Y> = ExtractResultErr<Y>;
 
 /**
  * Passed to {@link ExitFn} when the run unwinds.
@@ -38,6 +173,7 @@ export interface EnterContext<A extends readonly unknown[] = []> {
 export interface RunContext<A extends readonly unknown[] = readonly unknown[]> {
   readonly signal: AbortSignal;
   readonly args: A;
+  readonly extensions: ReadonlyMap<unknown, unknown>;
 }
 
 export type EnterFn<A extends readonly unknown[] = []> = (ctx: EnterContext<A>) => unknown;
@@ -51,10 +187,11 @@ export type LifecycleFn<T = unknown, E = unknown, A extends readonly unknown[] =
 /** Widened hook for {@link builders.defer} where enclosing `Op` `T`/`E` are not inferred. */
 export type AnyExitFn = ExitFn<unknown, unknown, readonly unknown[]>;
 
-export type Instruction<E> =
+export type Instruction<E, M = EmptyMeta> =
   | Err<unknown, E>
   | SuspendInstruction
-  | RegisterExitFinalizerInstruction;
+  | RegisterExitFinalizerInstruction
+  | CustomInstruction<unknown, M>;
 
 export type ReleaseFn<T> = (value: T) => unknown;
 
@@ -63,12 +200,12 @@ export type OpLifecycleHook = "enter" | "exit";
 
 export type WithPredicateMethod<E> = { is: (value: unknown) => value is E };
 
-export interface BaseOp<T, E, A extends readonly unknown[]> {
+export interface BaseOp<T, E, A extends readonly unknown[], M = EmptyMeta> {
   /** Type discriminant for an `Op` instance. */
   readonly _tag: "Op";
 
   /** Provides the operation with runtime arguments. */
-  (...args: A): Op<T, E, []>;
+  (...args: A): Op<T, E, [], M>;
 
   /**
    * Executes the operation with runtime arguments and returns a `Result`.
@@ -76,23 +213,32 @@ export interface BaseOp<T, E, A extends readonly unknown[]> {
    * @example
    * const result = await Op.of(1).run();
    */
-  run(...args: A): Promise<Result<T, E | UnhandledException>>;
+  run: [IsRunnable<M>] extends [false]
+    ? never
+    : (...args: A) => Promise<Result<T, E | UnhandledException>>;
 }
 
-export type Identity<T> =
-  T extends Record<PropertyKey, unknown> ? { [K in keyof T]: T[K] } & {} : T;
+type ObjectNotFunction<T> = T extends object
+  ? T extends (...args: never[]) => unknown
+    ? never
+    : T
+  : never;
+
+export type Identity<T> = T extends ObjectNotFunction<T> ? { [K in keyof T]: T[K] } & {} : T;
+export type DeepIdentity<T> =
+  T extends ObjectNotFunction<T> ? { [K in keyof T]: DeepIdentity<T[K]> } & {} : T;
 export type RequireOne<T> = {
   [K in keyof T]: Identity<Required<Pick<T, K>> & Partial<Omit<T, K>>>;
 }[keyof T];
 
-export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends boolean> {
+export interface FluentOp<T, E, A extends readonly unknown[], M = EmptyMeta> {
   /**
    * Wraps the operation in retry policy logic.
    *
    * @example
    * const resilient = Op.try(() => fetch("/ping")).withRetry();
    */
-  withRetry(policy?: RequireOne<RetryPolicy>): Op<T, E, A, Yieldable>;
+  withRetry(policy?: RequireOne<RetryPolicy>): Op<T, E, A, M>;
 
   /**
    * Applies a timeout budget in milliseconds to the wrapped operation.
@@ -100,7 +246,7 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
    * @example
    * const bounded = Op.try(() => fetch("/slow")).withTimeout(1000);
    */
-  withTimeout(timeoutMs: number): Op<T, E | TimeoutError, A, Yieldable>;
+  withTimeout(timeoutMs: number): Op<T, E | TimeoutError, A, M>;
 
   /**
    * Binds an external abort signal to the wrapped operation run.
@@ -108,7 +254,7 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
    * @example
    * const linked = Op.of(1).withSignal(new AbortController().signal);
    */
-  withSignal(signal: AbortSignal): Op<T, E, A, Yieldable>;
+  withSignal(signal: AbortSignal): Op<T, E, A, M>;
 
   /**
    * Registers release logic that runs after a successful value is produced.
@@ -116,7 +262,7 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
    * @example
    * const managed = Op.of({ close() {} }).withRelease((r) => r.close());
    */
-  withRelease(release: ReleaseFn<T>): Op<T, E, A, Yieldable>;
+  withRelease(release: ReleaseFn<T>): Op<T, E, A, M>;
 
   /**
    * Register a handler that runs before the operation body starts.
@@ -124,14 +270,14 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
    * @example
    * const withEnter = Op.of(1).on("enter", () => console.log("start"));
    */
-  on(event: "enter", initialize: EnterFn<A>): Op<T, E, A, Yieldable>;
+  on(event: "enter", initialize: EnterFn<A>): Op<T, E, A, M>;
   /**
    * Register a handler that runs after the operation settles.
    *
    * @example
    * const withExit = Op.of(1).on("exit", () => console.log("done"));
    */
-  on(event: "exit", finalize: ExitFn<T, E, A>): Op<T, E, A, Yieldable>;
+  on(event: "exit", finalize: ExitFn<T, E, A>): Op<T, E, A, M>;
 
   /**
    * Transforms the success value while preserving args and error channel.
@@ -139,7 +285,7 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
    * @example
    * const mapped = Op.of(2).map((n) => n * 2);
    */
-  map<U>(transform: (value: T) => U): Op<Awaited<U>, E, A, Yieldable>;
+  map<U>(transform: (value: T) => U): Op<Awaited<U>, E, A, M>;
 
   /**
    * Transforms the tracked typed error channel while preserving success values.
@@ -147,7 +293,7 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
    * @example
    * const mappedError = Op.fail("x" as const).mapErr((e) => ({ code: e }));
    */
-  mapErr<E2>(transform: (error: TrackedErr<E>) => E2): Op<T, E2, A, Yieldable>;
+  mapErr<E2>(transform: (error: TrackedErr<E>) => E2): Op<T, E2, A, M>;
 
   /**
    * Binds the success value into the next operation.
@@ -155,7 +301,9 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
    * @example
    * const chained = Op.of(1).flatMap((n) => Op.of(n + 1));
    */
-  flatMap<U, E2>(bind: (value: T) => Op<U, E2, []>): Op<U, E | E2, A, Yieldable>;
+  flatMap<R extends Op<any, any, [], any>>(
+    bind: (value: T) => R,
+  ): Op<InferOpOk<R>, E | InferOpErr<R>, A, MergeMeta<M, InferOpMeta<R>>>;
 
   /**
    * Observes successful values without changing the success payload.
@@ -163,7 +311,7 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
    * @example
    * const observed = Op.of(1).tap((n) => console.log(n));
    */
-  tap<R>(observe: (value: T) => R): Op<T, E | InferOpErr<R>, A, Yieldable>;
+  tap<R>(observe: (value: T) => R): Op<T, E | InferOpErr<R>, A, MergeMeta<M, InferOpMeta<R>>>;
 
   /**
    * Observes tracked errors without changing the original success payload.
@@ -173,7 +321,7 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
    */
   tapErr<R>(
     observe: (error: TrackedErr<E>) => R,
-  ): Op<T, TrackedErr<E> | InferOpErr<R>, A, Yieldable>;
+  ): Op<T, TrackedErr<E> | InferOpErr<R>, A, MergeMeta<M, InferOpMeta<R>>>;
 
   /**
    * Recovers selected typed failures into a fallback value or operation.
@@ -184,7 +332,7 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
   recover<ECaught extends TrackedErr<E>, R>(
     predicate: (error: TrackedErr<E>) => error is ECaught,
     handler: (error: ECaught) => R,
-  ): Op<T | InferOpOk<R>, TrackedErr<E, ECaught> | InferOpErr<R>, A, Yieldable>;
+  ): Op<T | InferOpOk<R>, TrackedErr<E, ECaught> | InferOpErr<R>, A, MergeMeta<M, InferOpMeta<R>>>;
   /**
    * Recovers typed failures selected by a tagged predicate method.
    *
@@ -197,7 +345,7 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
   recover<ECaught extends TrackedErr<E>, R>(
     predicate: WithPredicateMethod<TrackedErr<ECaught>>,
     handler: (error: ECaught) => R,
-  ): Op<T | InferOpOk<R>, TrackedErr<E, ECaught> | InferOpErr<R>, A, Yieldable>;
+  ): Op<T | InferOpOk<R>, TrackedErr<E, ECaught> | InferOpErr<R>, A, MergeMeta<M, InferOpMeta<R>>>;
   /**
    * Recovers failures selected by a boolean predicate over the error value.
    *
@@ -207,34 +355,33 @@ export interface FluentOp<T, E, A extends readonly unknown[], Yieldable extends 
   recover<R>(
     predicate: (error: TrackedErr<E>) => boolean,
     handler: (error: TrackedErr<E>) => R,
-  ): Op<T | InferOpOk<R>, TrackedErr<E> | InferOpErr<R>, A, Yieldable>;
+  ): Op<T | InferOpOk<R>, TrackedErr<E> | InferOpErr<R>, A, MergeMeta<M, InferOpMeta<R>>>;
 }
 
-export interface OpIterable<T, E> {
-  [Symbol.iterator](): Generator<Instruction<E>, T, unknown>;
+export interface OpIterable<T, E, M = EmptyMeta> {
+  [Symbol.iterator](): Generator<Instruction<E, M>, T, unknown>;
 }
 
 export type OpInterface<
   T,
   E,
   A extends readonly unknown[],
+  M = EmptyMeta,
   Yieldable extends boolean = A extends [] ? true : false,
-> = BaseOp<T, E, A> &
-  FluentOp<T, E, A, Yieldable> &
-  (Yieldable extends true ? OpIterable<T, E> : {});
+> = BaseOp<T, E, A, M> & FluentOp<T, E, A, M> & (Yieldable extends true ? OpIterable<T, E, M> : {});
 
-export interface OpHooks<T, E, TInner = unknown, EInner = unknown> {
+export interface OpHooks<T, E, M = EmptyMeta, TInner = unknown, EInner = unknown> {
   /** Inner op to push policy wrappers to (when present with `rebuild`). */
-  inner?: Op<TInner, EInner, []>;
+  inner?: Op<TInner, EInner, [], any>;
   /** Rebuild this operator around a new inner op for push-through policy behavior. */
-  rebuild?: (newInner: Op<TInner, EInner, []>) => Op<T, E, []>;
+  rebuild?: (newInner: Op<TInner, EInner, [], any>) => Op<T, E, [], M>;
   /** Optional timeout-specific rebuild for error-channel widening edge cases. */
   rebuildForTimeout?: (
-    newInner: Op<TInner, EInner | TimeoutError, []>,
-  ) => Op<T, E | TimeoutError, []>;
-  withRelease: (release: ReleaseFn<T>) => Op<T, E, []>;
+    newInner: Op<TInner, EInner | TimeoutError, [], any>,
+  ) => Op<T, E | TimeoutError, [], M>;
+  withRelease: (release: ReleaseFn<T>) => Op<T, E, [], M>;
   /** Backs public `.on("enter", fn)` on ops built from these hooks. */
-  registerEnterInitialize: (initialize: EnterFn<[]>) => Op<T, E, []>;
+  registerEnterInitialize: (initialize: EnterFn<[]>) => Op<T, E, [], M>;
   /** Backs public `.on("exit", fn)` on ops built from these hooks. */
-  registerExitFinalize: (finalize: ExitFn<T, E, []>) => Op<T, E, []>;
+  registerExitFinalize: (finalize: ExitFn<T, E, []>) => Op<T, E, [], M>;
 }

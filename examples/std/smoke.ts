@@ -5,6 +5,7 @@ import {
   runnableRegisterUser,
 } from "./onboarding.ts";
 import { assert } from "../assert.ts";
+import { DI } from "@prodkit/std/di";
 
 async function runSuccessfulRegistrationSmoke() {
   const { op, services } = runnableRegisterUser();
@@ -23,7 +24,13 @@ async function runSuccessfulRegistrationSmoke() {
 
 async function runDuplicateRegistrationSmoke() {
   const services = createExampleDependencies();
-  const op = registerUser.use(services.db).use(services.hasher, services.mailer, services.clock);
+  const op = DI.provide(
+    registerUser,
+    services.db,
+    services.hasher,
+    services.mailer,
+    services.clock,
+  );
 
   const first = await op.run("existing@example.test", "first");
   assert(first.isOk(), "first registration should succeed");

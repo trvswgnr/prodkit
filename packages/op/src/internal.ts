@@ -20,4 +20,19 @@ export {
   sleepWithSignal,
   type AbortSignalLike,
   unsafeCoerce,
+  hasOwn,
 } from "./shared.js";
+export { SuspendInstruction } from "./core/instructions.js";
+export { createRunContext, drive } from "./core/runtime.js";
+export { CUSTOM_INSTRUCTION_META } from "./core/types.js";
+export type {
+  Blocking,
+  CustomInstruction,
+  IsRunnable,
+  NormalizeMeta,
+  RunContext,
+  SetBlockingMeta,
+  Simplify,
+  StripEmpty,
+} from "./core/types.js";
+export { withBlocking, type BlockingOp } from "./blocking.js";
