@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for runtime-agnostic extension code.
 - Added regression coverage for generator-built operation callback sequencing without relying on
   function arity reflection.
+- Added the internal namespaced `NEEDS` metadata latch for extension packages, exported
+  `Needs(..., namespace)` / `NeedsOp` for marking operations that are not ready to run, and kept
+  `IsRunnable<M>`, `SetNeedsNamespace`, and `ClearNeedsNamespace` on `@prodkit/op/internal` for
+  extension inference.
 
 ### Changed
 
@@ -37,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `{ readonly requirements: A | B }`) instead of a union of per-op metadata objects.
 - Fixed `InferOpMeta` inference for ops with runtime arguments; it now matches any args tuple instead
   of requiring `readonly unknown[]`.
+- `.run()` and `Op.run(...)` are available by default and blocked when operation metadata
+  carries any namespaced needs latch entry or the op was wrapped with `Needs(..., namespace)`.
 
 ## [0.1.68] - 2026-05-15
 

@@ -1,18 +1,34 @@
 import { describe, expectTypeOf, test } from "vitest";
 import {
+  Needs,
   Op,
   type EmptyMeta,
   type InferInstructionMeta,
   type InferOpMeta,
   type MergeMeta,
+  type NeedsOp,
 } from "./index.js";
-import { CUSTOM_INSTRUCTION_META, type CustomInstruction, type RunContext } from "./core/types.js";
+import {
+  CUSTOM_INSTRUCTION_META,
+  NEEDS,
+  type ClearNeedsNamespace,
+  type CustomInstruction,
+  type IsRunnable,
+  type NeedsLatchMeta,
+  type RunContext,
+  type SetNeedsNamespace,
+} from "./internal.js";
 import type { IsEqual, Assert } from "./type-test-utils.js";
+import type { Result } from "./result.js";
+import type { UnhandledException } from "./errors.js";
 
 type DatabaseReq = { readonly requirements: "database" };
 type LoggerReq = { readonly requirements: "logger" };
 type CacheReq = { readonly requirements: "cache" };
 type SpanReq = { readonly spans: "auth" };
+type DiNeeds = NeedsLatchMeta<EmptyMeta, "di">;
+type AuthNeeds = NeedsLatchMeta<EmptyMeta, "auth">;
+type DiAndAuthNeeds = SetNeedsNamespace<SetNeedsNamespace<EmptyMeta, "di">, "auth">;
 
 class TestInstruction<T, M> implements CustomInstruction<T, M> {
   readonly [CUSTOM_INSTRUCTION_META]: M = undefined as M;
@@ -86,6 +102,11 @@ describe("metadata type contracts", () => {
     >;
   });
 
+  test("needs metadata merges by namespace instead of unioning records", () => {
+    type _ = Assert<IsEqual<MergeMeta<DiNeeds, AuthNeeds>, DiAndAuthNeeds>>;
+    type _StillBlocked = Assert<IsEqual<IsRunnable<DiAndAuthNeeds>, false>>;
+  });
+
   test("combinators preserve or merge metadata", () => {
     const source = Op(function* () {
       return yield* new TestInstruction<number, DatabaseReq>(1);
@@ -131,6 +152,65 @@ describe("metadata type contracts", () => {
 
     type _ = Assert<
       IsEqual<MergeMeta<DatabaseReq, CacheReq>, { readonly requirements: "database" | "cache" }>
+    >;
+  });
+});
+
+describe("Needs type contracts", () => {
+  test("plain ops are runnable by default", () => {
+    const op = Op(function* () {
+      return yield* new TestInstruction<number, SpanReq>(1);
+    });
+
+    const result = op.run();
+
+    expectTypeOf(result).toEqualTypeOf<Promise<Result<number, UnhandledException>>>();
+    type _ = Assert<IsEqual<IsRunnable<InferOpMeta<typeof op>>, true>>;
+  });
+
+  test("Needs blocks .run() for a namespace until that namespace is cleared", () => {
+    const ready = Op(function* () {
+      return 1;
+    });
+    const blocked = Needs(ready, "demo");
+
+    type _Blocked = Assert<IsEqual<IsRunnable<InferOpMeta<typeof blocked>>, false>>;
+    type _Needs = Assert<
+      IsEqual<InferOpMeta<typeof blocked>, { readonly [NEEDS]: { readonly demo: true } }>
+    >;
+    type _NeedsOp = Assert<IsEqual<typeof blocked, NeedsOp<number, never, [], EmptyMeta, "demo">>>;
+
+    // @ts-expect-error - wrapped in Needs
+    blocked.run();
+    expectTypeOf(ready.run()).toMatchTypeOf<Promise<unknown>>();
+  });
+
+  test("internal needs latch blocks run without Needs wrapper", () => {
+    const blocked = Op(function* () {
+      return yield* new TestInstruction<number, DiNeeds>(1);
+    });
+
+    type _ = Assert<IsEqual<IsRunnable<InferOpMeta<typeof blocked>>, false>>;
+
+    // @ts-expect-error - needs latch present
+    blocked.run();
+  });
+
+  test("clearing one namespace keeps other namespaces blocked", () => {
+    type _ClearedDi = Assert<
+      IsEqual<
+        ClearNeedsNamespace<DiAndAuthNeeds, "di">,
+        { readonly [NEEDS]: { readonly auth: true } }
+      >
+    >;
+    type _StillBlocked = Assert<
+      IsEqual<IsRunnable<ClearNeedsNamespace<DiAndAuthNeeds, "di">>, false>
+    >;
+    type _FullyCleared = Assert<
+      IsEqual<ClearNeedsNamespace<DiAndAuthNeeds, "di" | "auth">, EmptyMeta>
+    >;
+    type _Runnable = Assert<
+      IsEqual<IsRunnable<ClearNeedsNamespace<DiAndAuthNeeds, "di" | "auth">>, true>
     >;
   });
 });

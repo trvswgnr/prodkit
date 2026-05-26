@@ -6,6 +6,7 @@ import type { RegisterExitFinalizerInstruction, SuspendInstruction } from "./ins
 import type { Op } from "../index.js";
 
 declare const EMPTY_META: unique symbol;
+export const NEEDS = Symbol("prodkit.op.needs");
 export const CUSTOM_INSTRUCTION_META = Symbol("prodkit.op.custom-instruction-meta");
 
 export type EmptyMeta = {
@@ -29,22 +30,58 @@ type WithoutEmptyMeta<M> = M extends EmptyMeta ? never : M;
 type MergeMetaRight<B> = [WithoutEmptyMeta<B>] extends [never] ? EmptyMeta : WithoutEmptyMeta<B>;
 type AllMetaKeys<U> = U extends unknown ? keyof U : never;
 
-type MergeMetaObjects<A, B> = NormalizeMeta<{
-  readonly [K in keyof StripEmpty<A> | keyof StripEmpty<B>]: K extends keyof StripEmpty<A> &
-    keyof StripEmpty<B>
+export type NeedsRecord = { readonly [k: string]: true };
+
+type ReadNeeds<M> = typeof NEEDS extends keyof StripEmpty<M>
+  ? StripEmpty<M>[typeof NEEDS] extends NeedsRecord
+    ? StripEmpty<M>[typeof NEEDS]
+    : {}
+  : {};
+
+type DropNeedsNamespace<R, NS extends string> = R extends NeedsRecord
+  ? { readonly [K in Exclude<keyof R, NS>]: true }
+  : {};
+
+type MergeNeedsRecords<A, B> = Simplify<
+  (A extends NeedsRecord ? A : {}) & (B extends NeedsRecord ? B : {})
+>;
+
+type NeedsRecordFromMeta<U> = U extends { readonly [NEEDS]: infer R extends NeedsRecord }
+  ? R
+  : never;
+
+type MergeNeedsUnion<U> = {
+  readonly [K in NeedsRecordFromMeta<U> extends NeedsRecord
+    ? keyof NeedsRecordFromMeta<U>
+    : never]: true;
+};
+
+type MergeMetaValue<A, B, K extends PropertyKey> = K extends typeof NEEDS
+  ? MergeNeedsRecords<
+      K extends keyof StripEmpty<A> ? ReadNeeds<A> : {},
+      K extends keyof StripEmpty<B> ? ReadNeeds<B> : {}
+    >
+  : K extends keyof StripEmpty<A> & keyof StripEmpty<B>
     ? StripEmpty<A>[K] | StripEmpty<B>[K]
     : K extends keyof StripEmpty<A>
       ? StripEmpty<A>[K]
       : K extends keyof StripEmpty<B>
         ? StripEmpty<B>[K]
         : never;
+
+type MergeMetaObjects<A, B> = NormalizeMeta<{
+  readonly [K in keyof StripEmpty<A> | keyof StripEmpty<B>]: MergeMetaValue<A, B, K>;
 }>;
 
 type MergeUnionMeta<U> = NormalizeMeta<
   [U] extends [never]
     ? EmptyMeta
     : {
-        readonly [K in AllMetaKeys<U>]: U extends Record<K, infer V> ? V : never;
+        readonly [K in AllMetaKeys<U>]: K extends typeof NEEDS
+          ? DeepIdentity<MergeNeedsUnion<U>>
+          : U extends Record<K, infer V>
+            ? V
+            : never;
       }
 >;
 
@@ -70,6 +107,44 @@ export type InferOpOk<R> = R extends Op<infer T, any, [], any> ? T : Awaited<R>;
 export type InferOpErr<R> = R extends Op<any, infer E, [], any> ? E : never;
 
 export type InferOpMeta<R> = R extends Op<any, any, infer _A, infer M> ? M : EmptyMeta;
+
+export type SetNeedsNamespace<M, NS extends string> = NormalizeMeta<
+  Simplify<
+    Omit<StripEmpty<M>, typeof NEEDS> & {
+      readonly [NEEDS]: Simplify<ReadNeeds<M> & { readonly [K in NS]: true }>;
+    }
+  >
+>;
+
+export type ClearNeedsNamespace<M, NS extends string> =
+  DropNeedsNamespace<ReadNeeds<M>, NS> extends infer Remaining
+    ? [keyof Remaining] extends [never]
+      ? NormalizeMeta<Omit<StripEmpty<M>, typeof NEEDS>>
+      : NormalizeMeta<Simplify<Omit<StripEmpty<M>, typeof NEEDS> & { readonly [NEEDS]: Remaining }>>
+    : never;
+
+export type NeedsLatchMeta<M = EmptyMeta, NS extends string = never> = NS extends never
+  ? never
+  : SetNeedsNamespace<M, NS>;
+
+/**
+ * Whether top-level {@link BaseOp.run} is available from operation metadata.
+ *
+ * Operations are runnable by default. Extension packages mark blocked operations
+ * with namespaced entries under the internal needs latch or the public `Needs(...)`
+ * wrapper.
+ */
+export type IsRunnable<M> =
+  IsAny<M> extends true ? true : [HasNeeds<M>] extends [true] ? false : true;
+
+type HasNeeds<M> =
+  NeedsRecordFromMeta<StripEmpty<M>> extends infer R
+    ? [R] extends [never]
+      ? false
+      : [keyof R & string] extends [never]
+        ? false
+        : true
+    : false;
 
 /**
  * Extension protocol for custom generator yield instructions.
@@ -164,11 +239,20 @@ export interface BaseOp<T, E, A extends readonly unknown[], M = EmptyMeta> {
    * @example
    * const result = await Op.of(1).run();
    */
-  run(...args: A): Promise<Result<T, E | UnhandledException>>;
+  run: [IsRunnable<M>] extends [false]
+    ? never
+    : (...args: A) => Promise<Result<T, E | UnhandledException>>;
 }
 
-export type Identity<T> =
-  T extends Record<PropertyKey, unknown> ? { [K in keyof T]: T[K] } & {} : T;
+type ObjectNotFunction<T> = T extends object
+  ? T extends (...args: never[]) => unknown
+    ? never
+    : T
+  : never;
+
+export type Identity<T> = T extends ObjectNotFunction<T> ? { [K in keyof T]: T[K] } & {} : T;
+export type DeepIdentity<T> =
+  T extends ObjectNotFunction<T> ? { [K in keyof T]: DeepIdentity<T[K]> } & {} : T;
 export type RequireOne<T> = {
   [K in keyof T]: Identity<Required<Pick<T, K>> & Partial<Omit<T, K>>>;
 }[keyof T];

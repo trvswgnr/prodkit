@@ -16,3 +16,6 @@
 - Changed DI provisioning to use `DI.Dependency(...)`, `DI.singleton(Dependency, value)` binding values, direct dependency implementation instances, and variadic provisioning calls.
 - Added `DI.scoped(Dependency, resolve)` for scoped (per-run) dependency resolution with in-run memoization.
 - Changed DI operation construction to avoid inspecting generator `Function.length`.
+- Dependency-aware ops carry the internal `di` needs latch until `DI.provide(...)` satisfies all
+  requirements; `.run()` is unavailable until then. Clearing `di` does not clear other extension
+  namespaces on the same op.

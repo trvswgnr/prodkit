@@ -6,6 +6,13 @@ export const EMPTY_TUPLE: [] = [];
 export const OP_BRAND: unique symbol = Symbol("prodkit.op");
 export const OP_BOUND_BRAND: unique symbol = Symbol("prodkit.op.bound");
 
+export function hasOwn<T extends object, K extends PropertyKey>(
+  object: T,
+  key: K,
+): object is T & Record<K, unknown> {
+  return Object.hasOwn(object, key);
+}
+
 /**
  * Narrow `AbortSignal` / userland stand-ins across runtimes without depending on DOM `lib`s.
  *

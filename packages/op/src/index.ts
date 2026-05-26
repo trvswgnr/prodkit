@@ -8,12 +8,14 @@ import {
   type CustomInstruction,
   type InferInstructionMeta,
   type InferOpMeta,
+  type IsRunnable,
   type MergeMeta,
   type OpLifecycleHook,
   OpInterface,
 } from "./core/types.js";
 import { runOp } from "./core/run-op.js";
 import { exponentialBackoff } from "./policies.js";
+import { Needs, type NeedsOp } from "./needs.js";
 import { Tagged } from "./tagged.js";
 import { type Result } from "./result.js";
 
@@ -50,7 +52,7 @@ export const Op = Object.assign(fromGenFn, {
    * const value = await Op.run(Op.of(1));
    */
   run: <T, E, A extends readonly unknown[], M>(
-    op: Op<T, E, A, M>,
+    op: [IsRunnable<M>] extends [false] ? never : Op<T, E, A, M>,
     ...args: A
   ): Promise<Result<T, E | UnhandledException>> => {
     return runOp(op(...args));
@@ -187,6 +189,7 @@ export type {
   MergeMeta,
   OpLifecycleHook,
 };
+export { Needs, type NeedsOp };
 export type { BackoffOptions, RetryPolicy } from "./policies.js";
 
 export { TimeoutError, ErrorGroup, exponentialBackoff };

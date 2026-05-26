@@ -1,9 +1,16 @@
 import { describe, expectTypeOf, test } from "vitest";
-import { Op, type InferOpMeta } from "@prodkit/op";
+import { Op, type EmptyMeta, type InferOpMeta } from "@prodkit/op";
+import {
+  NEEDS,
+  type ClearNeedsNamespace,
+  type IsRunnable,
+  type SetNeedsNamespace,
+} from "@prodkit/op/internal";
 import { DI, type Dependency } from "./index.js";
 import type {
   DependencyReq,
   DependencyValue,
+  DI_NEEDS_NAMESPACE,
   InferMetaReqs,
   InferReqs,
   ProvidedReq,
@@ -48,12 +55,9 @@ describe("DI cutover type contracts", () => {
     });
 
     type _ = Assert<IsEqual<InferReqs<typeof op>, DatabaseDependency>>;
-    type _Meta = Assert<
-      IsEqual<
-        InferOpMeta<typeof op>,
-        WithDIMeta<import("@prodkit/op").EmptyMeta, DatabaseDependency>
-      >
-    >;
+    type Meta = InferOpMeta<typeof op>;
+    type _Req = Assert<IsEqual<Meta["requirements"], DatabaseDependency>>;
+    type _Needs = Assert<IsEqual<Meta[typeof NEEDS], { readonly di: true }>>;
   });
 
   test("DI.inject contributes metadata on arity ops", () => {
@@ -63,12 +67,9 @@ describe("DI cutover type contracts", () => {
     });
 
     type _Reqs = Assert<IsEqual<InferReqs<typeof findUser>, DatabaseDependency>>;
-    type _Meta = Assert<
-      IsEqual<
-        InferOpMeta<typeof findUser>,
-        WithDIMeta<import("@prodkit/op").EmptyMeta, DatabaseDependency>
-      >
-    >;
+    type Meta = InferOpMeta<typeof findUser>;
+    type _Req = Assert<IsEqual<Meta["requirements"], DatabaseDependency>>;
+    type _Needs = Assert<IsEqual<Meta[typeof NEEDS], { readonly di: true }>>;
   });
 
   test("multiple and nested requirements infer as a union", () => {
@@ -195,5 +196,64 @@ describe("DI cutover type contracts", () => {
     type _FlatMapped = Assert<
       IsEqual<InferReqs<typeof flatMapped>, DatabaseDependency | LoggerDependency>
     >;
+  });
+
+  test("unprovisioned ops cannot call .run()", () => {
+    const op = Op(function* () {
+      yield* DI.inject(DatabaseDependency);
+    });
+
+    // @ts-expect-error - not provisioned
+    op.run();
+  });
+
+  test("partially provisioned ops cannot call .run()", () => {
+    const op = Op(function* () {
+      yield* DI.inject(DatabaseDependency);
+      yield* DI.inject(LoggerDependency);
+    });
+    const db = {
+      query: Op(function* (_sql: string, _params: unknown[]) {
+        return { id: "1" };
+      }).mapErr((error): DatabaseError => error),
+    } satisfies Database;
+
+    const partial = DI.provide(op, DI.singleton(DatabaseDependency, db));
+
+    // @ts-expect-error - requirements remain
+    partial.run();
+  });
+
+  test("fully provisioned ops can call .run()", () => {
+    const op = Op(function* () {
+      yield* DI.inject(DatabaseDependency);
+    });
+    const db = {
+      query: Op(function* (_sql: string, _params: unknown[]) {
+        return { id: "1" };
+      }).mapErr((error): DatabaseError => error),
+    } satisfies Database;
+
+    const runnable = DI.provide(op, DI.singleton(DatabaseDependency, db));
+
+    expectTypeOf(runnable.run).toBeFunction();
+    type _ = Assert<IsEqual<InferReqs<typeof runnable>, never>>;
+  });
+
+  test("full DI provision clears only the di needs namespace", () => {
+    type WithAuth = SetNeedsNamespace<WithDIMeta<EmptyMeta, DatabaseDependency>, "auth">;
+    type _StillBlocked = Assert<IsEqual<IsRunnable<WithAuth>, false>>;
+
+    type ClearedDi = ClearNeedsNamespace<
+      Omit<WithDIMeta<EmptyMeta, never>, "requirements">,
+      typeof DI_NEEDS_NAMESPACE
+    >;
+    type _AuthRemains = Assert<
+      IsEqual<
+        ClearNeedsNamespace<WithAuth, typeof DI_NEEDS_NAMESPACE>[typeof NEEDS],
+        { readonly auth: true }
+      >
+    >;
+    type _DiOnly = Assert<IsEqual<ClearedDi, EmptyMeta>>;
   });
 });

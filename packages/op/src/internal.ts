@@ -20,14 +20,21 @@ export {
   sleepWithSignal,
   type AbortSignalLike,
   unsafeCoerce,
+  hasOwn,
 } from "./shared.js";
 export { SuspendInstruction } from "./core/instructions.js";
 export { createRunContext, drive } from "./core/runtime.js";
-export { CUSTOM_INSTRUCTION_META } from "./core/types.js";
+export { CUSTOM_INSTRUCTION_META, NEEDS } from "./core/types.js";
 export type {
+  ClearNeedsNamespace,
   CustomInstruction,
+  IsRunnable,
+  NeedsLatchMeta,
+  NeedsRecord,
   NormalizeMeta,
   RunContext,
+  SetNeedsNamespace,
   Simplify,
   StripEmpty,
 } from "./core/types.js";
+export { Needs, type NeedsOp } from "./needs.js";

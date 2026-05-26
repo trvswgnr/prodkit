@@ -582,10 +582,17 @@ export function makeFluentOp<
       tapErr: <R>(observe: (error: E) => R) =>
         liftOp(
           self,
-          (resolved) => tapErrCoreOp(resolved, observe),
           (resolved) =>
-            tapErrCoreOp(resolved, (error) =>
-              TimeoutError.is(error) ? undefined : observe(error),
+            // SAFETY: tapErr metadata matches the timeout-filtered observer path.
+            unsafeCoerce<Op<T, E | InferOpErr<R>, [], MergeMeta<M, InferOpMeta<R>>>>(
+              tapErrCoreOp(resolved, observe),
+            ),
+          (resolved) =>
+            // SAFETY: tapErr metadata matches the timeout-filtered observer path.
+            unsafeCoerce<Op<T, E | InferOpErr<R> | TimeoutError, [], MergeMeta<M, InferOpMeta<R>>>>(
+              tapErrCoreOp(resolved, (error) =>
+                TimeoutError.is(error) ? undefined : observe(error),
+              ),
             ),
         ),
       recover: <R>(predicate: (error: E) => boolean, handler: (error: E) => R) =>

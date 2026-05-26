@@ -56,6 +56,7 @@ describe("DI cutover runtime", () => {
       return "unreachable";
     });
 
+    // @ts-expect-error - intentional runtime check for missing provision
     const result = await op.run();
     const cause = getUnhandledCause(result);
 

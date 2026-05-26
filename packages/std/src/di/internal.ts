@@ -5,24 +5,17 @@ import {
   createRunContext,
   drive,
   unsafeCoerce,
+  hasOwn,
   type CustomInstruction,
-  type NormalizeMeta,
+  type ClearNeedsNamespace,
+  type NeedsLatchMeta,
   type RunContext,
+  type SetNeedsNamespace,
   type Simplify,
   type StripEmpty,
 } from "@prodkit/op/internal";
 import { Op, type EmptyMeta } from "@prodkit/op";
 import type { Dependency } from "./index.js";
-
-declare global {
-  interface ObjectConstructor {
-    hasOwn<T extends object, K extends PropertyKey>(
-      object: T,
-      key: K,
-    ): object is T & Record<K, unknown>;
-  }
-}
-
 export class MissingDependencyError extends Error {
   override readonly name = "MissingDependencyError";
   readonly _tag = "MissingDependencyError";
@@ -91,8 +84,12 @@ export type LazyBinding<C extends AnyDependency, V = unknown> = {
 };
 export type AnyLazyBinding = LazyBinding<AnyDependency>;
 
+export const DI_NEEDS_NAMESPACE = "di" as const;
+
 export type WithDIMeta<M, R> = Simplify<
-  Omit<StripEmpty<M> & {}, "requirements"> & { readonly requirements: R }
+  NeedsLatchMeta<Omit<StripEmpty<M> & {}, "requirements">, typeof DI_NEEDS_NAMESPACE> & {
+    readonly requirements: R;
+  }
 >;
 
 export type InferMetaReqs<M> = M extends { readonly requirements: infer R } ? R : never;
@@ -128,12 +125,12 @@ export type ValidUseEntries<Entries extends readonly UseEntry[], R> = [
   ? Entries
   : never;
 
-type UpdateProvidedMeta<M, R> = NormalizeMeta<
-  Simplify<
-    Omit<StripEmpty<M> & {}, "requirements"> &
-      ([R] extends [never] ? {} : { readonly requirements: R })
-  >
->;
+type UpdateProvidedMeta<M, R> = [R] extends [never]
+  ? ClearNeedsNamespace<Omit<StripEmpty<M> & {}, "requirements">, typeof DI_NEEDS_NAMESPACE>
+  : SetNeedsNamespace<
+      Simplify<Omit<StripEmpty<M> & {}, "requirements"> & { readonly requirements: R }>,
+      typeof DI_NEEDS_NAMESPACE
+    >;
 
 export type ProvidedMeta<M, Entries extends readonly UseEntry[]> = UpdateProvidedMeta<
   M,
@@ -176,7 +173,7 @@ function isDependencyBinding(value: unknown): value is AnyBinding {
   return (
     typeof value === "object" &&
     value !== null &&
-    Object.hasOwn(value, "_tag") &&
+    hasOwn(value, "_tag") &&
     value._tag === "DependencyBinding"
   );
 }
@@ -185,7 +182,7 @@ function isDependencyLazyBinding(value: unknown): value is AnyLazyBinding {
   return (
     typeof value === "object" &&
     value !== null &&
-    Object.hasOwn(value, "_tag") &&
+    hasOwn(value, "_tag") &&
     value._tag === "DependencyLazyBinding"
   );
 }
@@ -197,10 +194,10 @@ function dependencyTokenFromEntry(entry: AnyDependency): AnyDependency {
   let current: unknown = ctor;
   while (typeof current === "function") {
     if (
-      Object.hasOwn(current, "_tag") &&
+      hasOwn(current, "_tag") &&
       current._tag === DI_TAG &&
-      Object.hasOwn(current, "key") &&
-      Object.hasOwn(current, DI_TOKEN)
+      hasOwn(current, "key") &&
+      hasOwn(current, DI_TOKEN)
     ) {
       return unsafeCoerce<AnyDependency>(current);
     }
@@ -289,5 +286,5 @@ export function provideOp<
     return result.value;
   });
 
-  return unsafeCoerce<Op<T, E, A, ProvidedMeta<M, Entries>>>(provided);
+  return unsafeCoerce(provided);
 }

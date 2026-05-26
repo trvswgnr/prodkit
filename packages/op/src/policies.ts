@@ -237,7 +237,13 @@ export function withRetryOp<T, E, A extends readonly unknown[], M>(
   return unsafeCoerce(
     makePolicyLiftedOp<T, E, A, M>(
       (...args: A) => withRetryCoreOp(op(...args), policy),
-      isIterableOp(op) ? () => withRetryCoreOp(op(), policy) : undefined,
+      isIterableOp(op)
+        ? () => {
+            // SAFETY: `isIterableOp` proves `op()` is the nullary iterable surface for this op.
+            const iterable = unsafeCoerce<Op<T, E, [], M>>(op());
+            return withRetryCoreOp(iterable, policy);
+          }
+        : undefined,
       coerceToNullaryOp(op) !== undefined,
     ),
   );
@@ -271,7 +277,13 @@ export function withSignalOp<T, E, A extends readonly unknown[], M>(
   return unsafeCoerce(
     makePolicyLiftedOp<T, E, A, M>(
       (...args: A) => withSignalCoreOp(op(...args), signal),
-      isIterableOp(op) ? () => withSignalCoreOp(op(), signal) : undefined,
+      isIterableOp(op)
+        ? () => {
+            // SAFETY: `isIterableOp` proves `op()` is the nullary iterable surface for this op.
+            const iterable = unsafeCoerce<Op<T, E, [], M>>(op());
+            return withSignalCoreOp(iterable, signal);
+          }
+        : undefined,
       coerceToNullaryOp(op) !== undefined,
     ),
   );

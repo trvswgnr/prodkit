@@ -1,5 +1,5 @@
 import { NEVER } from "@prodkit/op/internal";
-import type { Op as CoreOp } from "@prodkit/op";
+import type { Op } from "@prodkit/op";
 import {
   DI_TAG,
   DI_TOKEN,
@@ -11,9 +11,10 @@ import {
   type DependencyReq,
   type DependencyValue,
   type LazyBinding,
-  type ProvidedMeta,
   type UseEntry,
   type ValidUseEntries,
+  type InferMetaReqs,
+  ProvidedMeta,
 } from "./internal.js";
 
 export interface Dependency<T, Name extends string> {
@@ -79,9 +80,9 @@ export const provide = <
   M,
   const Entries extends readonly UseEntry[],
 >(
-  op: CoreOp<T, E, A, M>,
-  ...entries: ValidUseEntries<Entries, import("./internal.js").InferMetaReqs<M>>
-): CoreOp<T, E, A, ProvidedMeta<M, Entries>> => provideOp(op, entries);
+  op: Op<T, E, A, M>,
+  ...entries: ValidUseEntries<Entries, InferMetaReqs<M>>
+): Op<T, E, A, ProvidedMeta<M, Entries>> => provideOp(op, entries);
 
 export const DI = Object.freeze({
   Dependency,
@@ -91,8 +92,7 @@ export const DI = Object.freeze({
   provide,
 });
 
-type OpLike<T, E, A extends readonly unknown[]> = CoreOp<T, E, A, unknown>;
-export type InferErr<X> = X extends OpLike<infer _T, infer E, infer _A> ? E : never;
-export type InferOk<X> = X extends OpLike<infer T, infer _E, infer _A> ? T : never;
-export type InferArgs<X> = X extends OpLike<infer _T, infer _E, infer A> ? A : never;
-export type InferReqs<X> = import("./internal.js").InferReqs<X>;
+export type InferErr<X> = X extends Op<infer _T, infer E, infer _A> ? E : never;
+export type InferOk<X> = X extends Op<infer T, infer _E, infer _A> ? T : never;
+export type InferArgs<X> = X extends Op<infer _T, infer _E, infer A> ? A : never;
+export type { InferReqs } from "./internal.js";
