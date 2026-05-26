@@ -49,12 +49,12 @@ export class PasswordHasherService extends DI.Dependency("PasswordHasherService"
 export class MailerService extends DI.Dependency("MailerService")<Mailer> {}
 export class ClockService extends DI.Dependency("ClockService")<Clock> {}
 
-export const loadExistingUser = DI.Op(function* (email: string) {
+export const loadExistingUser = Op(function* (email: string) {
   const db = yield* DI.require(DatabaseService);
   return yield* db.findUserByEmail(email);
 });
 
-export const registerUser = DI.Op(function* (email: string, password: string) {
+export const registerUser = Op(function* (email: string, password: string) {
   const existing = yield* loadExistingUser(email);
   if (existing !== undefined) {
     return yield* new DuplicateEmailError({ email });
@@ -133,7 +133,8 @@ export function createExampleDependencies() {
 
 export function runnableRegisterUser() {
   const services = createExampleDependencies();
-  const op = registerUser.use(
+  const op = DI.provide(
+    registerUser,
     services.db, //
     services.hasher,
     services.mailer,

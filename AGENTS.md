@@ -21,7 +21,7 @@
 - For issue hierarchies, prefers real GitHub parent/sub-issue links over markdown-only checklists.
 - Wants issue-work flows to keep `packages/op/CHANGELOG.md` `Unreleased` updated, but prefers to handle version/tag/publish release steps personally unless explicitly delegated.
 - Prefers hard-cutover transitions, not gradual deprecations and migrations (this project is in alpha, so intentional breaking changes are acceptable)
-- Prefers the library to avoid throws whenever possible (normalize when able, otherwise surface as `Err(UnhandledException)` at run time).
+- Prefers the library to avoid eager throws; normalize when able, otherwise surface failures as `Err(UnhandledException)` at run time.
 
 ## Learned Workspace Facts
 

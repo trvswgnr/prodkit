@@ -4,6 +4,7 @@ import { makeFluentOp, onOp, withCleanupCoreOp } from "./core/fluent.js";
 import {
   RequireOne,
   TrackedErr,
+  type EmptyMeta,
   type Instruction,
   type OpInterface,
   type RunContext,
@@ -82,11 +83,11 @@ export const DEFAULT_RETRY_POLICY = Object.freeze({
   getDelay: exponentialBackoff.DEFAULT,
 }) satisfies RetryPolicy;
 
-function makePolicyLiftedOp<T, E, A extends readonly unknown[]>(
-  invoke: (...args: A) => Op<T, E, []>,
-  makeIterable?: () => Op<T, E, []>,
+function makePolicyLiftedOp<T, E, A extends readonly unknown[], M = EmptyMeta>(
+  invoke: (...args: A) => Op<T, E, [], M>,
+  makeIterable?: () => Op<T, E, [], M>,
   bound = false,
-): OpInterface<T, E, A> {
+): OpInterface<T, E, A, M> {
   return makeFluentOp(
     invoke,
     (self) => ({
@@ -121,10 +122,10 @@ function makePolicyLiftedOp<T, E, A extends readonly unknown[]>(
   );
 }
 
-function makePolicyCoreOp<T, E>(
-  gen: () => Generator<Instruction<E>, T, unknown>,
-): Op<T, TrackedErr<E>, []> {
-  const self: Op<T, TrackedErr<E>, []> = makeCoreOp(
+function makePolicyCoreOp<T, E, M = EmptyMeta>(
+  gen: () => Generator<Instruction<E, M>, T, unknown>,
+): Op<T, TrackedErr<E>, [], M> {
+  const self: Op<T, TrackedErr<E>, [], M> = makeCoreOp(
     gen,
     createDefaultHooks(() => self),
   );
@@ -145,11 +146,11 @@ function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
  * - Retries only re-run the same op; the exposed typed error channel remains `E`
  * - Internally we include `UnhandledException` for runtime safety in `drive`
  */
-function withRetryCoreOp<T, E>(
-  op: Op<T, E, []>,
+function withRetryCoreOp<T, E, M>(
+  op: Op<T, E, [], M>,
   policy: RetryPolicy = DEFAULT_RETRY_POLICY,
-): Op<T, E, []> {
-  return makePolicyCoreOp(function* () {
+): Op<T, E, [], M> {
+  return makePolicyCoreOp<T, E | UnhandledException, M>(function* () {
     let attempt = 1;
 
     while (true) {
@@ -190,10 +191,13 @@ function withRetryCoreOp<T, E>(
  * - `drive` can still surface `UnhandledException` internally
  * - We intentionally expose only he public contract of `E | TimeoutError` for fluent API stability
  */
-function withTimeoutCoreOp<T, E>(op: Op<T, E, []>, timeoutMs: number): Op<T, E | TimeoutError, []> {
+function withTimeoutCoreOp<T, E, M>(
+  op: Op<T, E, [], M>,
+  timeoutMs: number,
+): Op<T, E | TimeoutError, [], M> {
   const clampedTimeoutMs = Math.max(0, timeoutMs);
 
-  return makePolicyCoreOp(function* () {
+  return makePolicyCoreOp<T, E | UnhandledException | TimeoutError, M>(function* () {
     const result: Result<T, E | UnhandledException | TimeoutError> = yield* new SuspendInstruction(
       (outerContext) =>
         raceTimeout(
@@ -213,8 +217,8 @@ function withTimeoutCoreOp<T, E>(op: Op<T, E, []>, timeoutMs: number): Op<T, E |
  *
  * - Same contract as source op: binding a signal does not widen the typed error channel
  */
-function withSignalCoreOp<T, E>(op: Op<T, E, []>, signal: AbortSignal): Op<T, E, []> {
-  return makePolicyCoreOp(function* () {
+function withSignalCoreOp<T, E, M>(op: Op<T, E, [], M>, signal: AbortSignal): Op<T, E, [], M> {
+  return makePolicyCoreOp<T, E | UnhandledException, M>(function* () {
     const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
       (outerContext) =>
         runWithBoundSignal((mergedContext) => drive(op, mergedContext), signal, outerContext),
@@ -225,13 +229,13 @@ function withSignalCoreOp<T, E>(op: Op<T, E, []>, signal: AbortSignal): Op<T, E,
   });
 }
 
-export function withRetryOp<T, E, A extends readonly unknown[]>(
-  op: Op<T, E, A>,
+export function withRetryOp<T, E, A extends readonly unknown[], M>(
+  op: Op<T, E, A, M>,
   policy: RetryPolicy = DEFAULT_RETRY_POLICY,
-): Op<T, E, A> {
+): Op<T, E, A, M> {
   // SAFETY: makePolicyLiftedOp preserves the source op arity and only changes run behavior.
   return unsafeCoerce(
-    makePolicyLiftedOp(
+    makePolicyLiftedOp<T, E, A, M>(
       (...args: A) => withRetryCoreOp(op(...args), policy),
       isIterableOp(op) ? () => withRetryCoreOp(op(), policy) : undefined,
       coerceToNullaryOp(op) !== undefined,
@@ -239,27 +243,33 @@ export function withRetryOp<T, E, A extends readonly unknown[]>(
   );
 }
 
-export function withTimeoutOp<T, E, A extends readonly unknown[]>(
-  op: Op<T, E, A>,
+export function withTimeoutOp<T, E, A extends readonly unknown[], M>(
+  op: Op<T, E, A, M>,
   timeoutMs: number,
-): Op<T, E | TimeoutError, A> {
+): Op<T, E | TimeoutError, A, M> {
   // SAFETY: makePolicyLiftedOp preserves arity while withTimeoutCoreOp widens only the error type.
   return unsafeCoerce(
-    makePolicyLiftedOp(
+    makePolicyLiftedOp<T, E | TimeoutError, A, M>(
       (...args: A) => withTimeoutCoreOp(op(...args), timeoutMs),
-      isIterableOp(op) ? () => withTimeoutCoreOp(op(), timeoutMs) : undefined,
+      isIterableOp(op)
+        ? () => {
+            // SAFETY: `isIterableOp` proves `op()` is the nullary iterable surface for this op.
+            const iterable = unsafeCoerce<Op<T, E, [], M>>(op());
+            return withTimeoutCoreOp(iterable, timeoutMs);
+          }
+        : undefined,
       coerceToNullaryOp(op) !== undefined,
     ),
   );
 }
 
-export function withSignalOp<T, E, A extends readonly unknown[]>(
-  op: Op<T, E, A>,
+export function withSignalOp<T, E, A extends readonly unknown[], M>(
+  op: Op<T, E, A, M>,
   signal: AbortSignal,
-): Op<T, E, A> {
+): Op<T, E, A, M> {
   // SAFETY: makePolicyLiftedOp preserves the source op arity and error channel.
   return unsafeCoerce(
-    makePolicyLiftedOp(
+    makePolicyLiftedOp<T, E, A, M>(
       (...args: A) => withSignalCoreOp(op(...args), signal),
       isIterableOp(op) ? () => withSignalCoreOp(op(), signal) : undefined,
       coerceToNullaryOp(op) !== undefined,
@@ -282,7 +292,11 @@ async function runWithBoundSignal<T, E>(
   outerContext: RunContext<readonly unknown[]>,
 ): Promise<Result<T, E>> {
   const controller = new AbortController();
-  const runContext = createRunContext(controller.signal, outerContext.args);
+  const runContext = createRunContext(
+    controller.signal,
+    outerContext.args,
+    outerContext.extensions,
+  );
 
   const forwardBoundAbort = () => controller.abort(boundSignal.reason);
   if (boundSignal.aborted) forwardBoundAbort();
@@ -318,7 +332,11 @@ async function raceTimeout<T, E>(
   outerContext: RunContext<readonly unknown[]>,
 ): Promise<Result<T, E | TimeoutError>> {
   const controller = new AbortController();
-  const runContext = createRunContext(controller.signal, outerContext.args);
+  const runContext = createRunContext(
+    controller.signal,
+    outerContext.args,
+    outerContext.extensions,
+  );
   const cascade = () => controller.abort(outerContext.signal.reason);
 
   if (outerContext.signal.aborted) cascade();

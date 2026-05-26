@@ -21,3 +21,7 @@ export {
   type AbortSignalLike,
   unsafeCoerce,
 } from "./shared.js";
+export { SuspendInstruction } from "./core/instructions.js";
+export { createRunContext, drive } from "./core/runtime.js";
+export { CUSTOM_INSTRUCTION_META } from "./core/types.js";
+export type { CustomInstruction, RunContext } from "./core/types.js";

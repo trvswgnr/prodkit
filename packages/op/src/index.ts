@@ -2,8 +2,13 @@ import { defer, fail, fromGenFn, sleep, succeed, _try } from "./builders.js";
 import { allOp, allSettledOp, anyOp, raceOp, settleOp } from "./combinators.js";
 import { ErrorGroup, TimeoutError, type UnhandledException } from "./errors.js";
 import {
+  type EmptyMeta,
   type EnterContext,
   type ExitContext,
+  type CustomInstruction,
+  type InferInstructionMeta,
+  type InferOpMeta,
+  type MergeMeta,
   type OpLifecycleHook,
   OpInterface,
 } from "./core/types.js";
@@ -44,8 +49,8 @@ export const Op = Object.assign(fromGenFn, {
    * @example
    * const value = await Op.run(Op.of(1));
    */
-  run: <T, E, A extends readonly unknown[]>(
-    op: Op<T, E, A>,
+  run: <T, E, A extends readonly unknown[], M>(
+    op: Op<T, E, A, M>,
     ...args: A
   ): Promise<Result<T, E | UnhandledException>> => {
     return runOp(op(...args));
@@ -169,9 +174,19 @@ export const Op = Object.assign(fromGenFn, {
   empty,
 });
 
-export type Op<T, E, A extends readonly unknown[]> = OpInterface<T, E, A> & Tagged<"Op">;
+export type Op<T, E, A extends readonly unknown[], M = EmptyMeta> = OpInterface<T, E, A, M> &
+  Tagged<"Op">;
 
-export type { EnterContext, ExitContext, OpLifecycleHook };
+export type {
+  EmptyMeta,
+  CustomInstruction,
+  EnterContext,
+  ExitContext,
+  InferInstructionMeta,
+  InferOpMeta,
+  MergeMeta,
+  OpLifecycleHook,
+};
 export type { BackoffOptions, RetryPolicy } from "./policies.js";
 
 export { TimeoutError, ErrorGroup, exponentialBackoff };

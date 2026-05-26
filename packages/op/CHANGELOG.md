@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added the generic `Op<T, E, A, M>` metadata slot, branded `EmptyMeta`, metadata inference helpers,
+  and custom-instruction metadata inference for extension packages.
 - Added `@prodkit/op/internal` entry for low-level helpers shared with extension packages
   (for example `@prodkit/std`).
 - Exported `AbortSignalLike`, `functionHasTruthyBrand`, and `NEVER` via `@prodkit/op/internal`
@@ -26,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   real `AbortSignal` implementations).
 - Changed fluent callback sequencing to drive only bound nullary ops, so returned generator-built
   op factories are treated as plain values unless they are explicitly invoked.
+- Preserved or merged operation metadata through fluent combinators so extension metadata survives
+  `map`, `mapErr`, policies, lifecycle hooks, `flatMap`, `tap`, `tapErr`, and `recover`.
 
 ## [0.1.68] - 2026-05-15
 
