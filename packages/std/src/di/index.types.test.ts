@@ -1,16 +1,10 @@
 import { describe, expectTypeOf, test } from "vitest";
-import { Op, type EmptyMeta, type InferOpMeta } from "@prodkit/op";
-import {
-  NEEDS,
-  type ClearNeedsNamespace,
-  type IsRunnable,
-  type SetNeedsNamespace,
-} from "@prodkit/op/internal";
+import { Op, type EmptyMeta, type InferOpMeta, type Blocking } from "@prodkit/op";
+import { type IsRunnable } from "@prodkit/op/internal";
 import { DI, type Dependency } from "./index.js";
 import type {
   DependencyReq,
   DependencyValue,
-  DI_NEEDS_NAMESPACE,
   InferMetaReqs,
   InferReqs,
   ProvidedReq,
@@ -56,8 +50,7 @@ describe("DI cutover type contracts", () => {
 
     type _ = Assert<IsEqual<InferReqs<typeof op>, DatabaseDependency>>;
     type Meta = InferOpMeta<typeof op>;
-    type _Req = Assert<IsEqual<Meta["requirements"], DatabaseDependency>>;
-    type _Needs = Assert<IsEqual<Meta[typeof NEEDS], { readonly di: true }>>;
+    type _Req = Assert<IsEqual<Meta["requirements"], Blocking<DatabaseDependency>>>;
   });
 
   test("DI.inject contributes metadata on arity ops", () => {
@@ -68,8 +61,7 @@ describe("DI cutover type contracts", () => {
 
     type _Reqs = Assert<IsEqual<InferReqs<typeof findUser>, DatabaseDependency>>;
     type Meta = InferOpMeta<typeof findUser>;
-    type _Req = Assert<IsEqual<Meta["requirements"], DatabaseDependency>>;
-    type _Needs = Assert<IsEqual<Meta[typeof NEEDS], { readonly di: true }>>;
+    type _Req = Assert<IsEqual<Meta["requirements"], Blocking<DatabaseDependency>>>;
   });
 
   test("multiple and nested requirements infer as a union", () => {
@@ -105,6 +97,9 @@ describe("DI cutover type contracts", () => {
     );
 
     type _PartialReqs = Assert<IsEqual<InferReqs<typeof partial>, LoggerDependency>>;
+    type _PartialMeta = Assert<
+      IsEqual<InferOpMeta<typeof partial>["requirements"], Blocking<LoggerDependency>>
+    >;
     type _FullReqs = Assert<IsEqual<InferReqs<typeof full>, never>>;
   });
 
@@ -240,20 +235,13 @@ describe("DI cutover type contracts", () => {
     type _ = Assert<IsEqual<InferReqs<typeof runnable>, never>>;
   });
 
-  test("full DI provision clears only the di needs namespace", () => {
-    type WithAuth = SetNeedsNamespace<WithDIMeta<EmptyMeta, DatabaseDependency>, "auth">;
+  test("full DI provision clears requirements while other blocking keys remain", () => {
+    type WithAuth = WithDIMeta<EmptyMeta, DatabaseDependency> & { readonly auth: Blocking<true> };
     type _StillBlocked = Assert<IsEqual<IsRunnable<WithAuth>, false>>;
 
-    type ClearedDi = ClearNeedsNamespace<
-      Omit<WithDIMeta<EmptyMeta, never>, "requirements">,
-      typeof DI_NEEDS_NAMESPACE
-    >;
-    type _AuthRemains = Assert<
-      IsEqual<
-        ClearNeedsNamespace<WithAuth, typeof DI_NEEDS_NAMESPACE>[typeof NEEDS],
-        { readonly auth: true }
-      >
-    >;
-    type _DiOnly = Assert<IsEqual<ClearedDi, EmptyMeta>>;
+    type ClearedReqs = Omit<WithAuth, "requirements">;
+    type _AuthRemains = Assert<IsEqual<ClearedReqs["auth"], Blocking<true>>>;
+    type _RunnableAfterAuthOnly = Assert<IsEqual<IsRunnable<ClearedReqs>, false>>;
+    type _DiOnly = Assert<IsEqual<WithDIMeta<EmptyMeta, never>, EmptyMeta>>;
   });
 });

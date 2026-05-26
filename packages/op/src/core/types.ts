@@ -6,82 +6,45 @@ import type { RegisterExitFinalizerInstruction, SuspendInstruction } from "./ins
 import type { Op } from "../index.js";
 
 declare const EMPTY_META: unique symbol;
-export const NEEDS = Symbol("prodkit.op.needs");
+declare const BLOCKING: unique symbol;
 export const CUSTOM_INSTRUCTION_META = Symbol("prodkit.op.custom-instruction-meta");
 
-export type EmptyMeta = {
-  readonly [EMPTY_META]: true;
-};
+type MergeBlockingValue<VA, VB> =
+  VA extends Blocking<infer TA>
+    ? VB extends Blocking<infer TB>
+      ? Blocking<TA | TB>
+      : Blocking<TA>
+    : VB extends Blocking<infer TB>
+      ? Blocking<TB>
+      : VA | VB;
 
-type IsAny<T> = 0 extends 1 & T ? true : false;
-export type NormalizeMeta<M> = [M] extends [never]
-  ? EmptyMeta
-  : M extends EmptyMeta
-    ? EmptyMeta
-    : M extends object
-      ? keyof M extends never
-        ? EmptyMeta
-        : M
-      : M;
-
-export type StripEmpty<M> = [M] extends [never] ? {} : M extends EmptyMeta ? {} : M;
-export type Simplify<T> = T extends object ? { [K in keyof T]: T[K] } : T;
-type WithoutEmptyMeta<M> = M extends EmptyMeta ? never : M;
-type MergeMetaRight<B> = [WithoutEmptyMeta<B>] extends [never] ? EmptyMeta : WithoutEmptyMeta<B>;
-type AllMetaKeys<U> = U extends unknown ? keyof U : never;
-
-export type NeedsRecord = { readonly [k: string]: true };
-
-type ReadNeeds<M> = typeof NEEDS extends keyof StripEmpty<M>
-  ? StripEmpty<M>[typeof NEEDS] extends NeedsRecord
-    ? StripEmpty<M>[typeof NEEDS]
-    : {}
-  : {};
-
-type DropNeedsNamespace<R, NS extends string> = R extends NeedsRecord
-  ? { readonly [K in Exclude<keyof R, NS>]: true }
-  : {};
-
-type MergeNeedsRecords<A, B> = Simplify<
-  (A extends NeedsRecord ? A : {}) & (B extends NeedsRecord ? B : {})
->;
-
-type NeedsRecordFromMeta<U> = U extends { readonly [NEEDS]: infer R extends NeedsRecord }
-  ? R
-  : never;
-
-type MergeNeedsUnion<U> = {
-  readonly [K in NeedsRecordFromMeta<U> extends NeedsRecord
-    ? keyof NeedsRecordFromMeta<U>
-    : never]: true;
-};
-
-type MergeMetaValue<A, B, K extends PropertyKey> = K extends typeof NEEDS
-  ? MergeNeedsRecords<
-      K extends keyof StripEmpty<A> ? ReadNeeds<A> : {},
-      K extends keyof StripEmpty<B> ? ReadNeeds<B> : {}
-    >
-  : K extends keyof StripEmpty<A> & keyof StripEmpty<B>
-    ? StripEmpty<A>[K] | StripEmpty<B>[K]
-    : K extends keyof StripEmpty<A>
-      ? StripEmpty<A>[K]
-      : K extends keyof StripEmpty<B>
-        ? StripEmpty<B>[K]
-        : never;
+type MergeMetaValue<A, B, K extends PropertyKey> = K extends keyof StripEmpty<A> &
+  keyof StripEmpty<B>
+  ? MergeBlockingValue<StripEmpty<A>[K], StripEmpty<B>[K]>
+  : K extends keyof StripEmpty<A>
+    ? StripEmpty<A>[K]
+    : K extends keyof StripEmpty<B>
+      ? StripEmpty<B>[K]
+      : never;
 
 type MergeMetaObjects<A, B> = NormalizeMeta<{
   readonly [K in keyof StripEmpty<A> | keyof StripEmpty<B>]: MergeMetaValue<A, B, K>;
 }>;
 
+type UnionMetaValueAt<U, K extends PropertyKey> = U extends Record<K, infer V> ? V : never;
+
+type CollectBlockingPayload<U, K extends PropertyKey> =
+  U extends Record<K, Blocking<infer R>> ? R : never;
+
+type MergeUnionMetaValue<U, K extends PropertyKey> = [CollectBlockingPayload<U, K>] extends [never]
+  ? UnionMetaValueAt<U, K>
+  : Blocking<CollectBlockingPayload<U, K>>;
+
 type MergeUnionMeta<U> = NormalizeMeta<
   [U] extends [never]
     ? EmptyMeta
     : {
-        readonly [K in AllMetaKeys<U>]: K extends typeof NEEDS
-          ? DeepIdentity<MergeNeedsUnion<U>>
-          : U extends Record<K, infer V>
-            ? V
-            : never;
+        readonly [K in AllMetaKeys<U>]: MergeUnionMetaValue<U, K>;
       }
 >;
 
@@ -108,43 +71,54 @@ export type InferOpErr<R> = R extends Op<any, infer E, [], any> ? E : never;
 
 export type InferOpMeta<R> = R extends Op<any, any, infer _A, infer M> ? M : EmptyMeta;
 
-export type SetNeedsNamespace<M, NS extends string> = NormalizeMeta<
-  Simplify<
-    Omit<StripEmpty<M>, typeof NEEDS> & {
-      readonly [NEEDS]: Simplify<ReadNeeds<M> & { readonly [K in NS]: true }>;
-    }
-  >
+export type SetBlockingMeta<M, K extends PropertyKey, T> = NormalizeMeta<
+  Simplify<StripEmpty<M> & { readonly [P in K]: Blocking<T> }>
 >;
-
-export type ClearNeedsNamespace<M, NS extends string> =
-  DropNeedsNamespace<ReadNeeds<M>, NS> extends infer Remaining
-    ? [keyof Remaining] extends [never]
-      ? NormalizeMeta<Omit<StripEmpty<M>, typeof NEEDS>>
-      : NormalizeMeta<Simplify<Omit<StripEmpty<M>, typeof NEEDS> & { readonly [NEEDS]: Remaining }>>
-    : never;
-
-export type NeedsLatchMeta<M = EmptyMeta, NS extends string = never> = NS extends never
-  ? never
-  : SetNeedsNamespace<M, NS>;
 
 /**
  * Whether top-level {@link BaseOp.run} is available from operation metadata.
  *
- * Operations are runnable by default. Extension packages mark blocked operations
- * with namespaced entries under the internal needs latch or the public `Needs(...)`
- * wrapper.
+ * Operations are runnable by default. Extension packages block `.run()` by placing
+ * a {@link Blocking} value on a metadata key, or by wrapping with `withBlocking(...)`.
  */
 export type IsRunnable<M> =
-  IsAny<M> extends true ? true : [HasNeeds<M>] extends [true] ? false : true;
+  IsAny<M> extends true ? true : [HasBlocking<M>] extends [true] ? false : true;
 
-type HasNeeds<M> =
-  NeedsRecordFromMeta<StripEmpty<M>> extends infer R
-    ? [R] extends [never]
-      ? false
-      : [keyof R & string] extends [never]
-        ? false
-        : true
+type HasBlocking<M> = keyof StripEmpty<M> extends never
+  ? false
+  : {
+        [K in keyof StripEmpty<M>]: StripEmpty<M>[K] extends Blocking<infer R>
+          ? [R] extends [never]
+            ? false
+            : true
+          : false;
+      }[keyof StripEmpty<M>] extends true
+    ? true
     : false;
+
+export type EmptyMeta = {
+  readonly [EMPTY_META]: true;
+};
+
+/** Branded metadata value that blocks top-level `.run()` until its payload is satisfied. */
+export type Blocking<T> = { readonly [BLOCKING]: T };
+
+type IsAny<T> = 0 extends 1 & T ? true : false;
+export type NormalizeMeta<M> = [M] extends [never]
+  ? EmptyMeta
+  : M extends EmptyMeta
+    ? EmptyMeta
+    : M extends object
+      ? keyof M extends never
+        ? EmptyMeta
+        : M
+      : M;
+
+export type StripEmpty<M> = [M] extends [never] ? {} : M extends EmptyMeta ? {} : M;
+export type Simplify<T> = T extends object ? { [K in keyof T]: T[K] } : T;
+type WithoutEmptyMeta<M> = M extends EmptyMeta ? never : M;
+type MergeMetaRight<B> = [WithoutEmptyMeta<B>] extends [never] ? EmptyMeta : WithoutEmptyMeta<B>;
+type AllMetaKeys<U> = U extends unknown ? keyof U : never;
 
 /**
  * Extension protocol for custom generator yield instructions.

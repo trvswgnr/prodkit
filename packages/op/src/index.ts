@@ -2,6 +2,7 @@ import { defer, fail, fromGenFn, sleep, succeed, _try } from "./builders.js";
 import { allOp, allSettledOp, anyOp, raceOp, settleOp } from "./combinators.js";
 import { ErrorGroup, TimeoutError, type UnhandledException } from "./errors.js";
 import {
+  type Blocking,
   type EmptyMeta,
   type EnterContext,
   type ExitContext,
@@ -15,7 +16,7 @@ import {
 } from "./core/types.js";
 import { runOp } from "./core/run-op.js";
 import { exponentialBackoff } from "./policies.js";
-import { Needs, type NeedsOp } from "./needs.js";
+import { withBlocking, type BlockingOp } from "./blocking.js";
 import { Tagged } from "./tagged.js";
 import { type Result } from "./result.js";
 
@@ -180,6 +181,7 @@ export type Op<T, E, A extends readonly unknown[], M = EmptyMeta> = OpInterface<
   Tagged<"Op">;
 
 export type {
+  Blocking,
   EmptyMeta,
   CustomInstruction,
   EnterContext,
@@ -189,7 +191,7 @@ export type {
   MergeMeta,
   OpLifecycleHook,
 };
-export { Needs, type NeedsOp };
+export { withBlocking, type BlockingOp };
 export type { BackoffOptions, RetryPolicy } from "./policies.js";
 
 export { TimeoutError, ErrorGroup, exponentialBackoff };

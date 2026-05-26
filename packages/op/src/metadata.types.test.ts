@@ -1,22 +1,20 @@
 import { describe, expectTypeOf, test } from "vitest";
 import {
-  Needs,
+  withBlocking,
   Op,
   type EmptyMeta,
   type InferInstructionMeta,
   type InferOpMeta,
   type MergeMeta,
-  type NeedsOp,
+  type Blocking,
+  type BlockingOp,
 } from "./index.js";
 import {
   CUSTOM_INSTRUCTION_META,
-  NEEDS,
-  type ClearNeedsNamespace,
   type CustomInstruction,
   type IsRunnable,
-  type NeedsLatchMeta,
+  type NormalizeMeta,
   type RunContext,
-  type SetNeedsNamespace,
 } from "./internal.js";
 import type { IsEqual, Assert } from "./type-test-utils.js";
 import type { Result } from "./result.js";
@@ -26,9 +24,9 @@ type DatabaseReq = { readonly requirements: "database" };
 type LoggerReq = { readonly requirements: "logger" };
 type CacheReq = { readonly requirements: "cache" };
 type SpanReq = { readonly spans: "auth" };
-type DiNeeds = NeedsLatchMeta<EmptyMeta, "di">;
-type AuthNeeds = NeedsLatchMeta<EmptyMeta, "auth">;
-type DiAndAuthNeeds = SetNeedsNamespace<SetNeedsNamespace<EmptyMeta, "di">, "auth">;
+type DiMeta = { readonly requirements: Blocking<"database"> };
+type AuthMeta = { readonly auth: Blocking<true> };
+type DiAndAuthMeta = MergeMeta<DiMeta, AuthMeta>;
 
 class TestInstruction<T, M> implements CustomInstruction<T, M> {
   readonly [CUSTOM_INSTRUCTION_META]: M = undefined as M;
@@ -102,9 +100,18 @@ describe("metadata type contracts", () => {
     >;
   });
 
-  test("needs metadata merges by namespace instead of unioning records", () => {
-    type _ = Assert<IsEqual<MergeMeta<DiNeeds, AuthNeeds>, DiAndAuthNeeds>>;
-    type _StillBlocked = Assert<IsEqual<IsRunnable<DiAndAuthNeeds>, false>>;
+  test("blocking metadata merges payloads at shared keys", () => {
+    type _ = Assert<
+      IsEqual<
+        MergeMeta<
+          { readonly requirements: Blocking<"database"> },
+          { readonly requirements: Blocking<"logger"> }
+        >,
+        { readonly requirements: Blocking<"database" | "logger"> }
+      >
+    >;
+    type _CrossKey = Assert<IsEqual<MergeMeta<DiMeta, AuthMeta>, DiAndAuthMeta>>;
+    type _StillBlocked = Assert<IsEqual<IsRunnable<DiAndAuthMeta>, false>>;
   });
 
   test("combinators preserve or merge metadata", () => {
@@ -156,7 +163,7 @@ describe("metadata type contracts", () => {
   });
 });
 
-describe("Needs type contracts", () => {
+describe("Blocking type contracts", () => {
   test("plain ops are runnable by default", () => {
     const op = Op(function* () {
       return yield* new TestInstruction<number, SpanReq>(1);
@@ -168,49 +175,45 @@ describe("Needs type contracts", () => {
     type _ = Assert<IsEqual<IsRunnable<InferOpMeta<typeof op>>, true>>;
   });
 
-  test("Needs blocks .run() for a namespace until that namespace is cleared", () => {
+  test("Blocking blocks .run() until the metadata payload is satisfied", () => {
     const ready = Op(function* () {
       return 1;
     });
-    const blocked = Needs(ready, "demo");
+    const blocked = withBlocking(ready, "demo");
 
     type _Blocked = Assert<IsEqual<IsRunnable<InferOpMeta<typeof blocked>>, false>>;
-    type _Needs = Assert<
-      IsEqual<InferOpMeta<typeof blocked>, { readonly [NEEDS]: { readonly demo: true } }>
+    type _Blocking = Assert<
+      IsEqual<InferOpMeta<typeof blocked>, { readonly demo: Blocking<true> }>
     >;
-    type _NeedsOp = Assert<IsEqual<typeof blocked, NeedsOp<number, never, [], EmptyMeta, "demo">>>;
+    type _BlockingOp = Assert<
+      IsEqual<typeof blocked, BlockingOp<number, never, [], EmptyMeta, "demo", true>>
+    >;
 
-    // @ts-expect-error - wrapped in Needs
+    // @ts-expect-error - wrapped in Blocking
     blocked.run();
     expectTypeOf(ready.run()).toMatchTypeOf<Promise<unknown>>();
   });
 
-  test("internal needs latch blocks run without Needs wrapper", () => {
+  test("Blocking metadata blocks run without the Blocking wrapper", () => {
     const blocked = Op(function* () {
-      return yield* new TestInstruction<number, DiNeeds>(1);
+      return yield* new TestInstruction<number, DiMeta>(1);
     });
 
     type _ = Assert<IsEqual<IsRunnable<InferOpMeta<typeof blocked>>, false>>;
 
-    // @ts-expect-error - needs latch present
+    // @ts-expect-error - blocking metadata present
     blocked.run();
   });
 
-  test("clearing one namespace keeps other namespaces blocked", () => {
-    type _ClearedDi = Assert<
-      IsEqual<
-        ClearNeedsNamespace<DiAndAuthNeeds, "di">,
-        { readonly [NEEDS]: { readonly auth: true } }
-      >
-    >;
-    type _StillBlocked = Assert<
-      IsEqual<IsRunnable<ClearNeedsNamespace<DiAndAuthNeeds, "di">>, false>
-    >;
+  test("satisfying one blocking key keeps other blocking keys blocked", () => {
+    type ClearedAuth = Omit<DiAndAuthMeta, "requirements">;
+    type _ClearedAuth = Assert<IsEqual<ClearedAuth, { readonly auth: Blocking<true> }>>;
+    type _StillBlocked = Assert<IsEqual<IsRunnable<ClearedAuth>, false>>;
     type _FullyCleared = Assert<
-      IsEqual<ClearNeedsNamespace<DiAndAuthNeeds, "di" | "auth">, EmptyMeta>
+      IsEqual<NormalizeMeta<Omit<DiAndAuthMeta, "requirements" | "auth">>, EmptyMeta>
     >;
     type _Runnable = Assert<
-      IsEqual<IsRunnable<ClearNeedsNamespace<DiAndAuthNeeds, "di" | "auth">>, true>
+      IsEqual<IsRunnable<NormalizeMeta<Omit<DiAndAuthMeta, "requirements" | "auth">>>, true>
     >;
   });
 });

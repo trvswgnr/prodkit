@@ -7,10 +7,9 @@ import {
   unsafeCoerce,
   hasOwn,
   type CustomInstruction,
-  type ClearNeedsNamespace,
-  type NeedsLatchMeta,
+  type Blocking,
+  type NormalizeMeta,
   type RunContext,
-  type SetNeedsNamespace,
   type Simplify,
   type StripEmpty,
 } from "@prodkit/op/internal";
@@ -84,15 +83,11 @@ export type LazyBinding<C extends AnyDependency, V = unknown> = {
 };
 export type AnyLazyBinding = LazyBinding<AnyDependency>;
 
-export const DI_NEEDS_NAMESPACE = "di" as const;
+export type WithDIMeta<M, R> = [R] extends [never]
+  ? NormalizeMeta<Omit<StripEmpty<M>, "requirements">>
+  : Simplify<Omit<StripEmpty<M>, "requirements"> & { readonly requirements: Blocking<R> }>;
 
-export type WithDIMeta<M, R> = Simplify<
-  NeedsLatchMeta<Omit<StripEmpty<M> & {}, "requirements">, typeof DI_NEEDS_NAMESPACE> & {
-    readonly requirements: R;
-  }
->;
-
-export type InferMetaReqs<M> = M extends { readonly requirements: infer R } ? R : never;
+export type InferMetaReqs<M> = M extends { readonly requirements: Blocking<infer R> } ? R : never;
 
 export type InferReqs<C> =
   C extends Op<unknown, unknown, infer _A, infer M> ? InferMetaReqs<M> : never;
@@ -126,11 +121,8 @@ export type ValidUseEntries<Entries extends readonly UseEntry[], R> = [
   : never;
 
 type UpdateProvidedMeta<M, R> = [R] extends [never]
-  ? ClearNeedsNamespace<Omit<StripEmpty<M> & {}, "requirements">, typeof DI_NEEDS_NAMESPACE>
-  : SetNeedsNamespace<
-      Simplify<Omit<StripEmpty<M> & {}, "requirements"> & { readonly requirements: R }>,
-      typeof DI_NEEDS_NAMESPACE
-    >;
+  ? NormalizeMeta<Omit<StripEmpty<M>, "requirements">>
+  : Simplify<Omit<StripEmpty<M>, "requirements"> & { readonly requirements: Blocking<R> }>;
 
 export type ProvidedMeta<M, Entries extends readonly UseEntry[]> = UpdateProvidedMeta<
   M,

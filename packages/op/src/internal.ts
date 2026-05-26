@@ -24,17 +24,15 @@ export {
 } from "./shared.js";
 export { SuspendInstruction } from "./core/instructions.js";
 export { createRunContext, drive } from "./core/runtime.js";
-export { CUSTOM_INSTRUCTION_META, NEEDS } from "./core/types.js";
+export { CUSTOM_INSTRUCTION_META } from "./core/types.js";
 export type {
-  ClearNeedsNamespace,
+  Blocking,
   CustomInstruction,
   IsRunnable,
-  NeedsLatchMeta,
-  NeedsRecord,
   NormalizeMeta,
   RunContext,
-  SetNeedsNamespace,
+  SetBlockingMeta,
   Simplify,
   StripEmpty,
 } from "./core/types.js";
-export { Needs, type NeedsOp } from "./needs.js";
+export { withBlocking, type BlockingOp } from "./blocking.js";
