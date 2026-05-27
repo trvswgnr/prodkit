@@ -5,6 +5,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- No entries yet.
+
+## [0.1.1] - 2026-05-27
+
 ### Changed
 
 - Documented `@prodkit/std` peer dependencies (`@prodkit/op`, `better-result`) and pointed to
@@ -34,3 +40,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added the initial `@prodkit/std` package with `@prodkit/std/di` helpers for yieldable dependency tokens.
+
