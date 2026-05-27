@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Documented `@prodkit/std` peer dependencies (`@prodkit/op`, `better-result`) and pointed to
+  `@prodkit/op` for the shared `better-result` public API coupling notes.
 - Documented `@prodkit/std` scope in the package README: DI is the only shipped module today, with tracing and typed env/config called out as likely future directions.
 - Renamed DI metadata key from `requirements` to `deps`.
 - Metadata keys on composed ops now display without per-key `readonly` modifiers (for example `{ deps: Blocking<...> }`).

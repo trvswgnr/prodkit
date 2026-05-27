@@ -2,6 +2,18 @@
 
 Companion standard library for `@prodkit/op` programs. Modules are runtime-agnostic and usually build on `Op`, but Op integration is not required for every module.
 
+## Dependencies
+
+`@prodkit/std` declares peer dependencies on `@prodkit/op` (`^0.1.0`) and `better-result` (`^2.9.0`).
+Install compatible versions of all three packages in the same application.
+
+`@prodkit/std` does not re-export `better-result` types. When you handle `.run()` results from
+dependency-aware ops, import `Result` and `UnhandledException` from `better-result` the same way as
+for plain `@prodkit/op` programs. For which `better-result` symbols are part of the public contract,
+peer range notes, and what ships from `@prodkit/op` itself, see
+[Dependencies (`better-result`)](https://github.com/trvswgnr/prodkit/blob/main/packages/op/README.md#dependencies-better-result)
+in the `@prodkit/op` README.
+
 ## Scope
 
 ### Today

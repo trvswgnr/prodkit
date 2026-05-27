@@ -36,11 +36,50 @@ CI publishes a Vitest coverage artifact for this package. The test suite include
 integration, type-level, and property-based law checks, plus separate packed-package smoke checks
 for Node, Bun, Deno, and a Cloudflare Workers-like runtime.
 
-`@prodkit/op` pairs naturally with `better-result` and declares it as a peer dependency.
+## Dependencies (`better-result`)
 
-<sub>If your package manager does not auto-install peers, install it explicitly:
-`npm i better-result`.
-Import `Result`/`TaggedError`/`UnhandledException` directly from `better-result`.</sub>
+`@prodkit/op` is built on [`better-result`](https://github.com/dmmulroy/better-result) for typed
+outcomes, tagged domain errors, and the runtime `UnhandledException` channel. The package declares
+`better-result` as a peer dependency so your app installs one copy and TypeScript resolves the
+same `Result` types that `.run()` returns.
+
+### Peer dependency range
+
+```json
+"better-result": "^2.9.0"
+```
+
+Install it alongside `@prodkit/op`. If your package manager does not install peers automatically,
+run `npm i better-result` explicitly.
+
+**Compatibility:** releases in the current alpha series target `better-result` 2.x versions that
+satisfy `^2.9.0`. Patch and minor updates within that range should stay compatible with the symbols
+prodkit uses in public types and runtime behavior. A future `better-result` major would require a
+matching `@prodkit/op` release that updates the peer range before you upgrade.
+
+### Public API surface
+
+Most `better-result` symbols are part of prodkit's public contract but are **not** re-exported from
+the `@prodkit/op` package entry. Import them from `better-result` in application code; import
+operation APIs from `@prodkit/op`.
+
+From **`better-result`** (recommended import path):
+
+- `Result` -- return type of `.run()` and `Op.run()`; also appears on `ExitContext.result`, `Op.settle`,
+  and `Op.allSettled`
+- `TaggedError` -- factory for typed domain errors (`yield* new MyError()`)
+- `UnhandledException` -- normalized failure channel; always included on `.run()` error unions
+- `TaggedErrorInstance` -- instance typing for tagged errors
+- `Err`, `Ok`, `InferErr` -- optional advanced result typing (not re-exported from `@prodkit/op`)
+
+From **`@prodkit/op`**:
+
+- `TimeoutError` -- built-in timeout failure from `.withTimeout(...)`; uses the same `TaggedError`
+  pattern as domain errors from `better-result`
+- `ErrorGroup` -- aggregate error from `Op.any` when every branch fails (prodkit-specific, not from
+  `better-result`)
+
+No other `better-result` exports are published from `@prodkit/op` today.
 
 ## Quick start
 

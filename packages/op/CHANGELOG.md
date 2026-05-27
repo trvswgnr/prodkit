@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Documented `better-result` peer dependency range, semver expectations, and which symbols callers
+  import from `better-result` versus `@prodkit/op` in the package README.
+
+### Added
+
 - Documented core/fluent structural decisions in `docs/adr/` (nullary core vs lifted arity,
   `OpHooks` push-through rebuild, timeout rebuild hook asymmetry, three cleanup channels,
   combinator loser finalization waits, `UnhandledException` runtime channel, args-only `.run()`).
