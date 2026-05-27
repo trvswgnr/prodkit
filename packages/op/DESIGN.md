@@ -192,5 +192,7 @@ Cancellation and cooperative `AbortSignal` behavior show up wherever `SuspendIns
 signal, plus README's `Op.defer` / `.on("exit")` notes and checks in `packages/op/src/policies.test.ts` and
 `packages/op/src/lifecycle.test.ts`. Type-level contracts collected in `packages/op/src/types.test.ts`.
 
-For why the fluent layer splits nullary core ops from lifted tuple-arity ops, and why some
-combinators define timeout-specific rebuild hooks, see `docs/adr/` (companion to this document).
+For structural rationale that complements these invariants, see `docs/adr/`: nullary core vs lifted
+arity, `OpHooks` push-through and timeout rebuild asymmetry, three cleanup channels, combinator
+loser finalization waits, the `UnhandledException` runtime channel, and args-only `.run()` with
+fluent policy composition.

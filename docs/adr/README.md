@@ -57,5 +57,9 @@ real trade-off. Skip obvious or easily reversed choices.
 | --- | --- | --- |
 | [0001](0001-core-nullary-vs-lifted-arity.md) | `@prodkit/op` | Core driver uses nullary ops; public API preserves tuple arity |
 | [0002](0002-ophooks-rebuild-and-timeout-asymmetry.md) | `@prodkit/op` | OpHooks push-through rebuild and timeout-specific rebuild hooks |
+| [0003](0003-three-cleanup-channels.md) | `@prodkit/op` | Three cleanup channels stay separate by design |
+| [0004](0004-combinators-wait-for-loser-finalization.md) | `@prodkit/op` | Op.any and Op.race wait for loser finalization before run settles |
+| [0005](0005-unhandled-exception-runtime-channel.md) | `@prodkit/op` | UnhandledException is the non-recoverable runtime error channel |
+| [0006](0006-run-args-only-fluent-policy-composition.md) | `@prodkit/op` | run takes args only; cancellation and policy compose fluently |
 
 <!-- adr-index:end -->

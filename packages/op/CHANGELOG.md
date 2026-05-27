@@ -14,7 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Documented core/fluent structural decisions in `docs/adr/` (nullary core vs lifted arity,
-  `OpHooks` push-through rebuild, timeout rebuild hook asymmetry).
+  `OpHooks` push-through rebuild, timeout rebuild hook asymmetry, three cleanup channels,
+  combinator loser finalization waits, `UnhandledException` runtime channel, args-only `.run()`).
 
 ## [0.1.69] - 2026-05-26
 
