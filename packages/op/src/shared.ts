@@ -1,4 +1,3 @@
-// oxlint-disable typescript-eslint/no-explicit-any
 import type { Op } from "./index.js";
 import type { OpIterable } from "./core/types.js";
 
@@ -60,17 +59,17 @@ export const NEVER: never =
   // SAFETY: centralized `never` sentinel; callers must treat this as proof-only at the type level.
   unsafeCoerce<never>(undefined);
 
-export function isOp(value: unknown): value is Op<any, any, readonly unknown[], any> {
+export function isOp(value: unknown): value is Op<unknown, unknown, readonly unknown[], unknown> {
   return hasBrand(value, OP_BRAND);
 }
 
 export function isIterableOp(
   value: unknown,
-): value is Op<any, any, [], any> & OpIterable<any, any, any> {
+): value is Op<unknown, unknown, [], unknown> & OpIterable<unknown, unknown, unknown> {
   return isOp(value) && Symbol.iterator in value && typeof value[Symbol.iterator] === "function";
 }
 
-export function coerceToNullaryOp(value: unknown): Op<any, any, [], any> | undefined {
+export function coerceToNullaryOp(value: unknown): Op<unknown, unknown, [], unknown> | undefined {
   if (
     !isOp(value) ||
     !(OP_BOUND_BRAND in value) ||

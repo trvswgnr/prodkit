@@ -1,4 +1,3 @@
-// oxlint-disable typescript-eslint/no-explicit-any
 import { ErrorGroup, UnhandledException } from "./errors.js";
 import {
   type Instruction,
@@ -11,8 +10,7 @@ import { SuspendInstruction } from "./core/instructions.js";
 import { createRunContext, drive } from "./core/runtime.js";
 import { Result, type Err } from "./result.js";
 import { makeCoreOp, createDefaultHooks } from "./core/fluent.js";
-
-type AnyNullaryOp = Op<any, any, [], any>;
+import type { AnyNullaryOp } from "./core/types.js";
 
 function makeCombinatorOp<T, E>(gen: () => Generator<Instruction<E>, T, unknown>): Op<T, E, []> {
   const self: Op<T, E, []> = makeCoreOp(

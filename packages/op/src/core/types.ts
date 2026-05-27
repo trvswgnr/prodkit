@@ -149,6 +149,8 @@ type ExtractResultErr<Y> = Y extends Err<unknown, infer E> ? DropUnknown<E> : ne
 
 export type InferInstructionErr<Y> = ExtractResultErr<Y>;
 
+export type AnyNullaryOp = Op<unknown, unknown, [], any>;
+
 /**
  * Passed to {@link ExitFn} when the run unwinds.
  *

@@ -1,4 +1,3 @@
-// oxlint-disable typescript-eslint/no-explicit-any
 import { UnhandledException } from "./errors.js";
 import { makeFluentOp, onOp } from "./core/fluent.js";
 import type {
@@ -166,7 +165,7 @@ function makeArityOp<T, E, A extends readonly unknown[], M = EmptyMeta>(
 /**
  * Turns a generator function into an {@link Op}
  */
-export function fromGenFn<Y extends Instruction<any, any>, T, A extends readonly unknown[]>(
+export function fromGenFn<Y extends Instruction<unknown, unknown>, T, A extends readonly unknown[]>(
   f: (...args: A) => Generator<Y, T, unknown>,
 ): Op<T, InferInstructionErr<Y>, A, InferInstructionMeta<Y>> {
   // We intentionally always build through the tuple-arity lifting path, including for `A = []`.

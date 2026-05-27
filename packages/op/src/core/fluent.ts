@@ -1,4 +1,3 @@
-// oxlint-disable typescript-eslint/no-explicit-any
 import { TimeoutError, UnhandledException } from "../errors.js";
 import { Result } from "../result.js";
 import { withRetryOp, withSignalOp, withTimeoutOp, type RetryPolicy } from "../policies.js";
@@ -20,6 +19,7 @@ import type {
   ReleaseFn,
   TrackedErr,
   WithPredicateMethod,
+  AnyNullaryOp,
 } from "./types.js";
 import type { Op } from "../index.js";
 import { RegisterExitFinalizerInstruction, SuspendInstruction } from "./instructions.js";
@@ -104,7 +104,7 @@ export function makeCoreOp<T, E, M = EmptyMeta>(
       dispatchLifecycleCore(hooks, event, handler),
     map: <U>(transform: (value: T) => U) => mapCoreOp(self, transform),
     mapErr: <E2>(transform: (error: E) => E2) => mapErrCoreOp(self, transform),
-    flatMap: <R extends Op<any, any, [], any>>(bind: (value: T) => R) => flatMapCoreOp(self, bind),
+    flatMap: <R extends AnyNullaryOp>(bind: (value: T) => R) => flatMapCoreOp(self, bind),
     tap: <R>(observe: (value: T) => R) => tapCoreOp(self, observe),
     tapErr: <R>(observe: (error: E) => R) => tapErrCoreOp(self, observe),
     recover: <R>(predicate: (error: E) => boolean, handler: (error: E) => R) =>
@@ -280,7 +280,7 @@ export function mapCoreOp<T, E, U, M>(
   );
 }
 
-export function flatMapCoreOp<T, E, R extends Op<any, any, [], any>, M>(
+export function flatMapCoreOp<T, E, R extends AnyNullaryOp, M>(
   op: Op<T, E, [], M>,
   bind: (value: T) => R,
 ): Op<InferOpOk<R>, E | InferOpErr<R>, [], MergeMeta<M, InferOpMeta<R>>> {
@@ -325,7 +325,7 @@ export function tapCoreOp<T, E, R, M>(
       const observed: R = yield* new SuspendInstruction(() =>
         Promise.resolve(observe(source.value)),
       );
-      const observedOp: Op<any, any, [], any> | undefined = yield* new SuspendInstruction(() =>
+      const observedOp: AnyNullaryOp | undefined = yield* new SuspendInstruction(() =>
         Promise.resolve(coerceToNullaryOp(observed)),
       );
 
@@ -368,7 +368,7 @@ export function tapErrCoreOp<T, E, R, M>(
       const observed: R = yield* new SuspendInstruction(() =>
         Promise.resolve(observe(sourceError)),
       );
-      const observedOp: Op<any, any, [], any> | undefined = yield* new SuspendInstruction(() =>
+      const observedOp: AnyNullaryOp | undefined = yield* new SuspendInstruction(() =>
         Promise.resolve(coerceToNullaryOp(observed)),
       );
 
@@ -468,7 +468,7 @@ export function recoverCoreOp<T, E, R, M>(
       const recovered: InferOpOk<R> = yield* new SuspendInstruction(() =>
         Promise.resolve(handler(error)),
       );
-      const recoveredOp: Op<any, any, [], any> | undefined = yield* new SuspendInstruction(() =>
+      const recoveredOp: AnyNullaryOp | undefined = yield* new SuspendInstruction(() =>
         Promise.resolve(coerceToNullaryOp(recovered)),
       );
 
@@ -567,7 +567,7 @@ export function makeFluentOp<
           (resolved) =>
             mapErrCoreOp(resolved, (error) => (TimeoutError.is(error) ? error : transform(error))),
         ),
-      flatMap: <R extends Op<any, any, [], any>>(bind: (value: T) => R) =>
+      flatMap: <R extends AnyNullaryOp>(bind: (value: T) => R) =>
         liftOp(
           self,
           (resolved) => flatMapCoreOp(resolved, bind),
