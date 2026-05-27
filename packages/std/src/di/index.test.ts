@@ -132,7 +132,7 @@ describe("DI cutover runtime", () => {
     const partiallyProvided = DI.provide(op, DI.singleton(DatabaseDependency, makeDatabase()));
     const result = await DI.provide(
       partiallyProvided,
-      // @ts-expect-error - op has no remaining requirements, specifically testing the runtime guard
+      // @ts-expect-error - op has no remaining deps, specifically testing the runtime guard
       DI.singleton(DatabaseDependency, makeDatabase()),
     ).run();
     const cause = getUnhandledCause(result);

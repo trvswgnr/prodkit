@@ -20,11 +20,11 @@ import type { IsEqual, Assert } from "./type-test-utils.js";
 import type { Result } from "./result.js";
 import type { UnhandledException } from "./errors.js";
 
-type DatabaseReq = { readonly requirements: "database" };
-type LoggerReq = { readonly requirements: "logger" };
-type CacheReq = { readonly requirements: "cache" };
+type DatabaseReq = { readonly deps: "database" };
+type LoggerReq = { readonly deps: "logger" };
+type CacheReq = { readonly deps: "cache" };
 type SpanReq = { readonly spans: "auth" };
-type DiMeta = { readonly requirements: Blocking<"database"> };
+type DiMeta = { readonly deps: Blocking<"database"> };
 type AuthMeta = { readonly auth: Blocking<true> };
 type DiAndAuthMeta = MergeMeta<DiMeta, AuthMeta>;
 
@@ -87,7 +87,7 @@ describe("metadata type contracts", () => {
 
   test("merge metadata unions values at shared keys", () => {
     type _ = Assert<
-      IsEqual<MergeMeta<DatabaseReq, LoggerReq>, { readonly requirements: "database" | "logger" }>
+      IsEqual<MergeMeta<DatabaseReq, LoggerReq>, { readonly deps: "database" | "logger" }>
     >;
     type _EmptyLeft = Assert<IsEqual<MergeMeta<EmptyMeta, DatabaseReq>, DatabaseReq>>;
     type _EmptyRight = Assert<IsEqual<MergeMeta<DatabaseReq, EmptyMeta>, DatabaseReq>>;
@@ -95,7 +95,7 @@ describe("metadata type contracts", () => {
     type _CrossKey = Assert<
       IsEqual<
         MergeMeta<DatabaseReq, SpanReq>,
-        { readonly requirements: "database"; readonly spans: "auth" }
+        { readonly deps: "database"; readonly spans: "auth" }
       >
     >;
   });
@@ -103,11 +103,8 @@ describe("metadata type contracts", () => {
   test("blocking metadata merges payloads at shared keys", () => {
     type _ = Assert<
       IsEqual<
-        MergeMeta<
-          { readonly requirements: Blocking<"database"> },
-          { readonly requirements: Blocking<"logger"> }
-        >,
-        { readonly requirements: Blocking<"database" | "logger"> }
+        MergeMeta<{ readonly deps: Blocking<"database"> }, { readonly deps: Blocking<"logger"> }>,
+        { readonly deps: Blocking<"database" | "logger"> }
       >
     >;
     type _CrossKey = Assert<IsEqual<MergeMeta<DiMeta, AuthMeta>, DiAndAuthMeta>>;
@@ -147,18 +144,18 @@ describe("metadata type contracts", () => {
     type _Entered = Assert<IsEqual<InferOpMeta<typeof entered>, DatabaseReq>>;
     type _Exited = Assert<IsEqual<InferOpMeta<typeof exited>, DatabaseReq>>;
     type _FlatMapped = Assert<
-      IsEqual<InferOpMeta<typeof flatMapped>, { readonly requirements: "database" | "logger" }>
+      IsEqual<InferOpMeta<typeof flatMapped>, { readonly deps: "database" | "logger" }>
     >;
     type _Tapped = Assert<
-      IsEqual<InferOpMeta<typeof tapped>, { readonly requirements: "database" | "logger" }>
+      IsEqual<InferOpMeta<typeof tapped>, { readonly deps: "database" | "logger" }>
     >;
     type _TappedErr = Assert<
-      IsEqual<InferOpMeta<typeof tappedErr>, { readonly requirements: "database" | "logger" }>
+      IsEqual<InferOpMeta<typeof tappedErr>, { readonly deps: "database" | "logger" }>
     >;
     type _Recovered = Assert<IsEqual<InferOpMeta<typeof recovered>, LoggerReq>>;
 
     type _ = Assert<
-      IsEqual<MergeMeta<DatabaseReq, CacheReq>, { readonly requirements: "database" | "cache" }>
+      IsEqual<MergeMeta<DatabaseReq, CacheReq>, { readonly deps: "database" | "cache" }>
     >;
   });
 });
@@ -206,14 +203,14 @@ describe("Blocking type contracts", () => {
   });
 
   test("satisfying one blocking key keeps other blocking keys blocked", () => {
-    type ClearedAuth = Omit<DiAndAuthMeta, "requirements">;
+    type ClearedAuth = Omit<DiAndAuthMeta, "deps">;
     type _ClearedAuth = Assert<IsEqual<ClearedAuth, { readonly auth: Blocking<true> }>>;
     type _StillBlocked = Assert<IsEqual<IsRunnable<ClearedAuth>, false>>;
     type _FullyCleared = Assert<
-      IsEqual<NormalizeMeta<Omit<DiAndAuthMeta, "requirements" | "auth">>, EmptyMeta>
+      IsEqual<NormalizeMeta<Omit<DiAndAuthMeta, "deps" | "auth">>, EmptyMeta>
     >;
     type _Runnable = Assert<
-      IsEqual<IsRunnable<NormalizeMeta<Omit<DiAndAuthMeta, "requirements" | "auth">>>, true>
+      IsEqual<IsRunnable<NormalizeMeta<Omit<DiAndAuthMeta, "deps" | "auth">>>, true>
     >;
   });
 });

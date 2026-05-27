@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Renamed DI metadata key from `requirements` to `deps` in composed operation metadata examples.
+
 ### Added
 
 - No entries yet.
@@ -43,7 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `map`, `mapErr`, policies, lifecycle hooks, `flatMap`, `tap`, `tapErr`, and `recover`.
 - Replaced DI-specific metadata merge with generic key-level `MergeMeta` that unions values at
   shared keys, so composed ops keep one metadata object (for example
-  `{ readonly requirements: A | B }`) instead of a union of per-op metadata objects.
+  `{ readonly deps: A | B }`) instead of a union of per-op metadata objects.
 - Fixed `InferOpMeta` inference for ops with runtime arguments; it now matches any args tuple instead
   of requiring `readonly unknown[]`.
 - `.run()` and `Op.run(...)` are available by default and blocked when operation metadata

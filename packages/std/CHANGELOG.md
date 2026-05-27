@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Renamed DI metadata key from `requirements` to `deps`.
 - Renamed `DI.require` to `DI.inject` for requesting dependency bindings.
 - Changed dependency-aware programs to use plain `Op(...)` from `@prodkit/op` with `yield* DI.inject(Dependency)`.
 - Changed dependency provisioning to use `DI.provide(op, ...bindings)`.
@@ -16,6 +17,6 @@
 - Changed DI provisioning to use `DI.Dependency(...)`, `DI.singleton(Dependency, value)` binding values, direct dependency implementation instances, and variadic provisioning calls.
 - Added `DI.scoped(Dependency, resolve)` for scoped (per-run) dependency resolution with in-run memoization.
 - Changed DI operation construction to avoid inspecting generator `Function.length`.
-- Dependency-aware ops carry `requirements: Blocking<...>` until `DI.provide(...)` satisfies all
-  requirements; `.run()` is unavailable until then. Clearing requirements does not clear other
+- Dependency-aware ops carry `deps: Blocking<...>` until `DI.provide(...)` satisfies all
+  deps; `.run()` is unavailable until then. Clearing deps does not clear other
   `Blocking<T>` metadata keys on the same op.

@@ -34,7 +34,7 @@ class LoggerDependency extends DI.Dependency("LoggerDependency")<{
 }> {}
 
 describe("DI cutover type contracts", () => {
-  test("plain non-DI ops have no requirements", () => {
+  test("plain non-DI ops have no deps", () => {
     const op = Op(function* () {
       return 1;
     });
@@ -42,7 +42,7 @@ describe("DI cutover type contracts", () => {
     type _ = Assert<IsEqual<InferReqs<typeof op>, never>>;
   });
 
-  test("DI.inject contributes requirements to plain Op", () => {
+  test("DI.inject contributes deps to plain Op", () => {
     const op = Op(function* () {
       const db = yield* DI.inject(DatabaseDependency);
       return yield* db.query("user", ["1"]);
@@ -50,7 +50,7 @@ describe("DI cutover type contracts", () => {
 
     type _ = Assert<IsEqual<InferReqs<typeof op>, DatabaseDependency>>;
     type Meta = InferOpMeta<typeof op>;
-    type _Req = Assert<IsEqual<Meta["requirements"], Blocking<DatabaseDependency>>>;
+    type _Req = Assert<IsEqual<Meta["deps"], Blocking<DatabaseDependency>>>;
   });
 
   test("DI.inject contributes metadata on arity ops", () => {
@@ -61,10 +61,10 @@ describe("DI cutover type contracts", () => {
 
     type _Reqs = Assert<IsEqual<InferReqs<typeof findUser>, DatabaseDependency>>;
     type Meta = InferOpMeta<typeof findUser>;
-    type _Req = Assert<IsEqual<Meta["requirements"], Blocking<DatabaseDependency>>>;
+    type _Req = Assert<IsEqual<Meta["deps"], Blocking<DatabaseDependency>>>;
   });
 
-  test("multiple and nested requirements infer as a union", () => {
+  test("multiple and nested deps infer as a union", () => {
     const findUser = Op(function* (id: string) {
       const db = yield* DI.inject(DatabaseDependency);
       return yield* db.query("user", [id]);
@@ -79,7 +79,7 @@ describe("DI cutover type contracts", () => {
     expectTypeOf<InferReqs<typeof greet>>().toEqualTypeOf<DatabaseDependency | LoggerDependency>();
   });
 
-  test("provisioning removes only satisfied requirements", () => {
+  test("provisioning removes only satisfied deps", () => {
     const op = Op(function* () {
       yield* DI.inject(DatabaseDependency);
       yield* DI.inject(LoggerDependency);
@@ -98,7 +98,7 @@ describe("DI cutover type contracts", () => {
 
     type _PartialReqs = Assert<IsEqual<InferReqs<typeof partial>, LoggerDependency>>;
     type _PartialMeta = Assert<
-      IsEqual<InferOpMeta<typeof partial>["requirements"], Blocking<LoggerDependency>>
+      IsEqual<InferOpMeta<typeof partial>["deps"], Blocking<LoggerDependency>>
     >;
     type _FullReqs = Assert<IsEqual<InferReqs<typeof full>, never>>;
   });
@@ -143,7 +143,7 @@ describe("DI cutover type contracts", () => {
 
     DI.provide(
       satisfied,
-      // @ts-expect-error - op has no remaining requirements
+      // @ts-expect-error - op has no remaining deps
       DI.scoped(LoggerDependency, () => ({ log: () => {} })),
     );
   });
@@ -215,7 +215,7 @@ describe("DI cutover type contracts", () => {
 
     const partial = DI.provide(op, DI.singleton(DatabaseDependency, db));
 
-    // @ts-expect-error - requirements remain
+    // @ts-expect-error - deps remain
     partial.run();
   });
 
@@ -235,11 +235,11 @@ describe("DI cutover type contracts", () => {
     type _ = Assert<IsEqual<InferReqs<typeof runnable>, never>>;
   });
 
-  test("full DI provision clears requirements while other blocking keys remain", () => {
+  test("full DI provision clears deps while other blocking keys remain", () => {
     type WithAuth = WithDIMeta<EmptyMeta, DatabaseDependency> & { readonly auth: Blocking<true> };
     type _StillBlocked = Assert<IsEqual<IsRunnable<WithAuth>, false>>;
 
-    type ClearedReqs = Omit<WithAuth, "requirements">;
+    type ClearedReqs = Omit<WithAuth, "deps">;
     type _AuthRemains = Assert<IsEqual<ClearedReqs["auth"], Blocking<true>>>;
     type _RunnableAfterAuthOnly = Assert<IsEqual<IsRunnable<ClearedReqs>, false>>;
     type _DiOnly = Assert<IsEqual<WithDIMeta<EmptyMeta, never>, EmptyMeta>>;
