@@ -99,6 +99,147 @@ Use a strict two-tier model so behavior has one clear home. **`@prodkit/op`** us
   Each ADR declares `title`, `status`, and `packages` in YAML frontmatter; run
   `pnpm --filter @prodkit/tools run adr:sync` after adding or editing one.
 
+## Core runtime architecture (`@prodkit/op`)
+
+This section is an execution-level map of how a single `Op` run moves through the codebase.
+Correctness invariants (cleanup ordering, combinator semantics, settlement rules) live in
+[`packages/op/DESIGN.md`](packages/op/DESIGN.md). ADRs under [`docs/adr/`](docs/adr/) explain
+why the core/fluent split and policy hooks are shaped the way they are.
+
+### Module dependency graph
+
+At a high level, public entrypoints fan into builders and combinators, both of which compose
+nullary core ops and always settle through the same driver:
+
+```text
+packages/op/src/index.ts          (Op factory, Op.run, re-exports)
+  |-- builders.ts                 (Op.of, Op.try, fromGenFn, Op.defer, ...)
+  |-- combinators.ts              (Op.all, Op.any, Op.race, ...)
+  |-- policies.ts                 (withRetry / withTimeout / withSignal wrappers)
+  |-- core/run-op.ts              (runOp -> drive)
+  |-- core/fluent.ts              (makeFluentOp, liftOp, fluent transforms)
+  |-- core/fluent-nullary.ts      (makeCoreOp, core transforms)
+  |-- core/runtime.ts             (createRunContext, drive)  <-- single execution engine
+  |-- core/instructions.ts        (Suspend, RegisterExitFinalizer, Err yields)
+
+packages/std/src/di/              (DI.provide, DI.inject via CustomInstruction + extensions)
+  '-- uses @prodkit/op/internal   (drive, createRunContext, SuspendInstruction)
+```
+
+`packages/op/src/internal.ts` is the supported extension surface for workspace packages such as
+`@prodkit/std` that need driver primitives without importing private module paths.
+
+### From `Op.run()` to `drive()`
+
+1. **Call site.** `await op.run(...args)` or `await Op.run(op, ...args)` both end in
+   `runOp` (`packages/op/src/core/run-op.ts`), which calls
+   `drive(op, createRunContext(signal, args))`. Tuple args flow into `RunContext.args` for
+   enter/exit hooks; they are not an options bag ([ADR 0006](docs/adr/0006-run-args-only-fluent-policy-composition.md)).
+2. **Arity binding.** For generator-defined ops, `fromGenFn` in `builders.ts` wraps the user
+   generator in `makeCoreOp` once per `op(...args)` call, binds defer args via
+   `bindArityArgsToFinalizers`, and exposes the callable through `makeArityOp` / `makeFluentOp`
+   ([ADR 0001](docs/adr/0001-core-nullary-vs-lifted-arity.md)).
+3. **Nullary execution.** `drive` only accepts `Op<T, E, [], M>`: a nullary op whose body is a
+   generator function `() => Generator<Instruction, T>`. Everything that participates in `yield*`
+   composition (policies, combinators, `flatMap`, DI `provide`) runs at this arity internally;
+   lifting re-attaches tuple call signatures at the public boundary.
+4. **Settlement.** `drive` walks instructions until the generator completes or yields a terminal
+   `Result.err`, then runs registered exit finalizers LIFO and may override the body result with
+   `Err(UnhandledException)` when teardown fails ([ADR 0003](docs/adr/0003-three-cleanup-channels.md),
+   [ADR 0005](docs/adr/0005-unhandled-exception-runtime-channel.md)).
+
+Fluent policies (retry, timeout, signal) attach on the op value **before** `.run()`, not as extra
+`run` parameters ([ADR 0006](docs/adr/0006-run-args-only-fluent-policy-composition.md)).
+
+### Instruction lifecycle
+
+Each `yield` from an op generator produces an `Instruction` discriminant. `drive` in
+`packages/op/src/core/runtime.ts` dispatches on the yielded value:
+
+| Yielded value | Driver action |
+| --- | --- |
+| `SuspendInstruction` | Await `suspend(runContext)` (abort-aware when `driveInterruptOnAbort` is used), resume generator with the settled value |
+| `RegisterExitFinalizerInstruction` | Push `finalize` onto a per-run LIFO stack (optional frozen `args` for arity-bound defers) |
+| `CustomInstruction` | Await `resolve(runContext)` and resume (extension hook; see DI below) |
+| `Result.err(...)` (`Err` instruction) | Short-circuit to `Err` and run exit finalizers |
+| Anything else | `Err(UnhandledException)` for invalid yields |
+
+Suspends are how policies and combinators nest work: they call `drive` (or `driveInterruptOnAbort`)
+on child ops with child or merged `RunContext` values rather than blocking the outer generator
+thread.
+
+### Policy wrappers (retry, timeout, signal)
+
+Policy methods on `OpInterface` (`withRetry`, `withTimeout`, `withSignal` in
+`packages/op/src/core/fluent.ts` and `packages/op/src/policies.ts`) wrap the inner op in new
+nullary core ops via `makePolicyCoreOp` / `makePolicyLiftedOp`:
+
+- **Retry** (`withRetryCoreOp`): loops `drive(inner, context)` inside a `SuspendInstruction`,
+  applies `RetryPolicy` delay via abortable sleep, and stops on success, non-retryable `Err`, or
+  abort.
+- **Timeout** (`withTimeoutCoreOp`): races inner `driveInterruptOnAbort` against a timer;
+  surfaces `TimeoutError` on the typed channel. Transforms that change error types use timeout-specific
+  rebuild hooks ([ADR 0002](docs/adr/0002-ophooks-rebuild-and-timeout-asymmetry.md)).
+- **Signal** (`withSignalCoreOp`): merges a caller-supplied `AbortSignal` with the run context
+  signal through a composed `AbortController` so either parent or bound signal can cancel the
+  inner `drive`.
+
+Method order on the fluent object defines wrapper nesting (outermost policy is applied last in
+the chain). See policy ordering notes in `packages/op/DESIGN.md`.
+
+### DI integration via `RunContext.extensions`
+
+`@prodkit/std/di` extends the runtime without forking the driver:
+
+1. **`DI.inject(dependency)`** yields a `DependencyReqInstruction`, a `CustomInstruction` whose
+   `resolve(context)` reads bindings from `context.extensions`.
+2. **`DI.provide(op, entries)`** (`provideOp` in `packages/std/src/di/internal.ts`) wraps the
+   user op in a suspend that calls `drive(inner, extendContext(context, entries))`, cloning
+   `extensions` and storing the binding `Map` under an internal extension key.
+3. **Metadata.** Provided dependencies block bare `.run()` until satisfied via `ProvidedMeta`
+   / `withBlocking` on the op type surface.
+
+Custom instructions are the supported extension point for other packages that need run-scoped
+state visible inside `SuspendInstruction` and `CustomInstruction.resolve` callbacks.
+
+### Combinators and nested `drive`
+
+`packages/op/src/combinators.ts` runs multiple child `drive` calls (often with per-child
+`AbortController` signals) and enforces ordering contracts documented in `DESIGN.md`.
+`Op.any` and `Op.race` wait for loser finalization before the parent `run()` settles
+([ADR 0004](docs/adr/0004-combinators-wait-for-loser-finalization.md)).
+
+### Driver loop (call flow)
+
+```mermaid
+flowchart TD
+  run["op.run(...args) or Op.run(op, ...args)"]
+  runOp["runOp: createRunContext(signal, args)"]
+  drive["drive(nullaryOp, context)"]
+  next["iter.next()"]
+  dispatch{"yielded instruction?"}
+  suspend["Suspend: await suspend(context)"]
+  finalizer["RegisterExitFinalizer: push finalize"]
+  custom["CustomInstruction: await resolve(context)"]
+  err["Err instruction: settle Err"]
+  invalid["invalid yield: UnhandledException"]
+  done["generator return value"]
+  settle["settleWithCleanup: closeGenerator + LIFO finalizers"]
+  ok["Result.ok(value)"]
+
+  run --> runOp --> drive --> next --> dispatch
+  dispatch -->|SuspendInstruction| suspend --> next
+  dispatch -->|RegisterExitFinalizer| finalizer --> next
+  dispatch -->|CustomInstruction| custom --> next
+  dispatch -->|Err| err --> settle
+  dispatch -->|other| invalid --> settle
+  dispatch -->|done| done --> settle
+  settle --> ok
+```
+
+For a traced example, start from [`examples/op/`](examples/op/) (especially defer, signal, and
+combinator samples) and follow imports into `core/runtime.ts`.
+
 ## Source layout (`@prodkit/std`)
 
 - Source under `packages/std/src/`; published entrypoints are `@prodkit/std` and `@prodkit/std/di`.
