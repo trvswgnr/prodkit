@@ -135,7 +135,7 @@ export function runnableRegisterUser() {
   const services = createExampleDependencies();
   const op = DI.provide(
     registerUser,
-    services.db, //
+    services.db,
     services.hasher,
     services.mailer,
     services.clock,
