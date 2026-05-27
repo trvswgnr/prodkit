@@ -14,7 +14,7 @@
     "lint": "turbo run lint --log-order=grouped",
     "fmt": "turbo run fmt --log-order=grouped",
     "fmt:check": "turbo run fmt:check --log-order=grouped",
-    "gate": "turbo run build typecheck test lint fmt:check --log-order=grouped && turbo run smoke --filter=@prodkit/tools --log-order=grouped",
+    "gate": "turbo run build typecheck test lint fmt:check --log-order=grouped && pnpm --filter @prodkit/tools run adr:check && turbo run smoke --filter=@prodkit/tools --log-order=grouped",
     "bench": "turbo run bench --filter=@prodkit/op-benchmarks --log-order=grouped",
     "clean": "git clean -Xfd"
   },

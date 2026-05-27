@@ -95,6 +95,9 @@ Use a strict two-tier model so behavior has one clear home. **`@prodkit/op`** us
   - `packages/op/src/monad-laws.test.ts` for algebraic contract checks
   - `packages/op/src/types.test.ts` for compile-time type contracts
 - Runtime invariants and execution semantics are documented in `packages/op/DESIGN.md`.
+- Structural rationale for core/fluent choices (why separate paths exist) lives in `docs/adr/`.
+  Each ADR declares `title`, `status`, and `packages` in YAML frontmatter; run
+  `pnpm --filter @prodkit/tools run adr:sync` after adding or editing one.
 
 ## Source layout (`@prodkit/std`)
 

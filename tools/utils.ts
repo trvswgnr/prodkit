@@ -30,6 +30,11 @@ export const getOwnPropertyValue = <T, K extends PropertyKey>(
   ) as never;
 };
 
+type RaiseFn = (cause: unknown) => never;
+const raise: RaiseFn = (cause) => {
+  throw cause;
+};
+
 export class InvalidJsonError extends TaggedError("InvalidJsonError")<{
   cause: SyntaxError;
   input: string;
@@ -110,13 +115,12 @@ export const writeFile = Op(function* (params: {
   const { filepath, content, encoding = "utf8" } = params;
   return yield* Op.try(
     (signal) => fs.writeFile(filepath, content, { encoding, signal }),
-    (cause) => new FileError({ type: "write", cause, path: filepath.toString() }),
+    (cause) => new FileError({ type: "write", path: filepath.toString(), cause }),
   );
 });
 
 export const readPackageJson = Op(function* (filepath: string) {
-  if (!existsSync(filepath)) return yield* new NoEntError({ path: filepath });
-  if (statSync(filepath).isDirectory()) {
+  if (!existsSync(filepath) || statSync(filepath).isDirectory()) {
     return yield* new NoEntError({ path: filepath });
   }
   const parsedJson = yield* parseJson(readFileSync(filepath, "utf8"));
@@ -124,21 +128,30 @@ export const readPackageJson = Op(function* (filepath: string) {
 });
 
 let cachedRepoRoot: string | undefined = undefined;
-export const getRepoRoot = Op(function* () {
-  if (cachedRepoRoot) return cachedRepoRoot;
+
+function resolveGitRepoRoot(): string {
   const output = execFileSync("git", ["rev-parse", "--path-format=absolute", "--show-toplevel"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
   }).trim();
   if (!output) {
-    throw new Error("Expected to get the repo root from git, but got an empty output");
+    raise(new Error("Expected to get the repo root from git, but got an empty output"));
   }
-  if (!existsSync(output)) {
-    return yield* new NoEntError({ path: output });
-  }
+  return output;
+}
+
+/** Synchronous repo root for maintainer scripts. */
+export function readRepoRoot(): string {
+  if (cachedRepoRoot) return cachedRepoRoot;
+  const output = resolveGitRepoRoot();
+  if (!existsSync(output)) throw new NoEntError({ path: output });
   cachedRepoRoot = output;
   return output;
-});
+}
+
+export const getRepoRoot = Op.try(readRepoRoot, (cause) =>
+  cause instanceof NoEntError ? cause : raise(cause),
+);
 
 export const fromRepoRoot = Op(function* (relativePath: string) {
   const repoRoot = yield* getRepoRoot();
