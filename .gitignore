@@ -24,3 +24,4 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .pnpm-store/
 pnpm-debug.log*
 var/
+.tmp/
