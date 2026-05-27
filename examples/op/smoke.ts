@@ -388,6 +388,7 @@ async function runSignalPropagationExampleSmoke() {
 
   const controller = new AbortController();
   const cancelledRun = cancelApp.loadProductPage.withSignal(controller.signal).run("sku-1");
+  // oxlint-disable-next-line no-unmodified-loop-condition
   for (let attempt = 0; attempt < 20 && !pricingStarted; attempt += 1) {
     await Promise.resolve();
   }
