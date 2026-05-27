@@ -1,6 +1,6 @@
 import { assert, describe, expect, test } from "vitest";
 import { chainCleanupFaults, closeGenerator, createRunContext, drive } from "./core/runtime.js";
-import { makeCoreOp } from "./core/fluent.js";
+import { makeCoreOp } from "./core/fluent-nullary.js";
 import {
   isErrInstruction,
   RegisterExitFinalizerInstruction,

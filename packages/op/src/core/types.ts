@@ -376,7 +376,21 @@ export type OpInterface<
   Yieldable extends boolean = A extends [] ? true : false,
 > = BaseOp<T, E, A, M> & FluentOp<T, E, A, M> & (Yieldable extends true ? OpIterable<T, E, M> : {});
 
-export interface OpHooks<T, E, M = EmptyMeta, TInner = unknown, EInner = unknown> {
+export interface DefaultHooks<T, E, M> {
+  withRelease: (release: ReleaseFn<T>) => Op<T, E, [], M>;
+  /** Backs public `.on("enter", fn)` on ops built from these hooks. */
+  registerEnterInitialize: (initialize: EnterFn<[]>) => Op<T, E, [], M>;
+  /** Backs public `.on("exit", fn)` on ops built from these hooks. */
+  registerExitFinalize: (finalize: ExitFn<T, E, []>) => Op<T, E, [], M>;
+}
+
+export interface OpHooks<
+  T,
+  E,
+  M = EmptyMeta,
+  TInner = unknown,
+  EInner = unknown,
+> extends DefaultHooks<T, E, M> {
   /** Inner op to push policy wrappers to (when present with `rebuild`). */
   inner?: Op<TInner, EInner, [], any>;
   /** Rebuild this operator around a new inner op for push-through policy behavior. */
@@ -385,9 +399,4 @@ export interface OpHooks<T, E, M = EmptyMeta, TInner = unknown, EInner = unknown
   rebuildForTimeout?: (
     newInner: Op<TInner, EInner | TimeoutError, [], any>,
   ) => Op<T, E | TimeoutError, [], M>;
-  withRelease: (release: ReleaseFn<T>) => Op<T, E, [], M>;
-  /** Backs public `.on("enter", fn)` on ops built from these hooks. */
-  registerEnterInitialize: (initialize: EnterFn<[]>) => Op<T, E, [], M>;
-  /** Backs public `.on("exit", fn)` on ops built from these hooks. */
-  registerExitFinalize: (finalize: ExitFn<T, E, []>) => Op<T, E, [], M>;
 }

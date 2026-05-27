@@ -51,14 +51,10 @@ describe("DI cutover type contracts", () => {
     type _ = Assert<IsEqual<InferReqs<typeof op>, DatabaseDependency>>;
     type Meta = InferOpMeta<typeof op>;
     type _Req = Assert<IsEqual<Meta["deps"], Blocking<DatabaseDependency>>>;
-    type _Annotated = typeof op extends Op<
-      User,
-      DatabaseError,
-      [],
-      { deps: Blocking<DatabaseDependency> }
-    >
-      ? true
-      : false;
+    type _Annotated =
+      typeof op extends Op<User, DatabaseError, [], { deps: Blocking<DatabaseDependency> }>
+        ? true
+        : false;
     type _Annotation = Assert<IsEqual<_Annotated, true>>;
   });
 
