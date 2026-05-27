@@ -114,8 +114,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build package
-        run: pnpm --filter "$NPM_FILTER" run build
+      - name: Build release artifacts
+        run: |
+          pnpm --filter @prodkit/op run build
+          if [ "$NPM_FILTER" != "@prodkit/op" ]; then
+            pnpm --filter "$NPM_FILTER" run build
+          fi
 
       - name: Verify changelog includes current package version
         run: pnpm --filter "$NPM_FILTER" run changelog:check
