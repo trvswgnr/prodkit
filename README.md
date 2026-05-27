@@ -38,14 +38,18 @@ pnpm run gate
 
 ## release flow
 
-Pushing a semver tag (`v*`) triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which today publishes **`@prodkit/op`** only (trusted publishing + provenance). Release helpers live on that package:
+Pushing a package-scoped tag (`op-v*`, `std-v*`) triggers
+[`.github/workflows/release.yml`](.github/workflows/release.yml), which publishes the matching
+npm package with trusted publishing and provenance. Release helpers live on each publishable
+package:
 
 ```bash
 pnpm --filter @prodkit/op run release:patch
 pnpm --filter @prodkit/op run release:push
-```
 
-`@prodkit/std` can be published manually from a clean `main` when needed (`pnpm --filter @prodkit/std publish ...` after version bump and changelog); there is no separate tag-driven workflow for it yet.
+pnpm --filter @prodkit/std run release:patch
+pnpm --filter @prodkit/std run release:push
+```
 
 ## license
 

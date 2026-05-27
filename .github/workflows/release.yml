@@ -3,7 +3,8 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - "op-v*"
+      - "std-v*"
 
 permissions:
   contents: read
@@ -14,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       allow_publish: ${{ steps.validate.outputs.allow_publish }}
+      package_id: ${{ steps.validate.outputs.package_id }}
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
@@ -30,26 +32,46 @@ jobs:
         id: validate
         run: |
           set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          package_id="${tag%%-v*}"
+
+          case "$package_id" in
+            op|std) ;;
+            *)
+              echo "Unsupported release tag prefix: ${tag}"
+              echo "allow_publish=false" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+          esac
+
+          version="${tag#${package_id}-v}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Unsupported release tag version: ${tag}"
+            echo "allow_publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           git fetch --force --tags origin main
           if ! git merge-base --is-ancestor "${GITHUB_SHA}" "origin/main"; then
-            echo "Tag ${GITHUB_REF_NAME} is not on main; skipping publish."
+            echo "Tag ${tag} is not on main; skipping publish."
             echo "allow_publish=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          latest_tag="$(git tag --merged "origin/main" --list "v*" | sort -V | tail -n 1)"
+          latest_tag="$(git tag --merged "origin/main" --list "${package_id}-v*" | sort -V | tail -n 1)"
           if [ -z "$latest_tag" ]; then
-            echo "No release tags found on main; skipping publish."
+            echo "No ${package_id}-v* release tags found on main; skipping publish."
             echo "allow_publish=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          if [ "${GITHUB_REF_NAME}" != "$latest_tag" ]; then
-            echo "Tag ${GITHUB_REF_NAME} is not the latest release tag (${latest_tag}); skipping publish."
+          if [ "${tag}" != "$latest_tag" ]; then
+            echo "Tag ${tag} is not the latest ${package_id} release tag (${latest_tag}); skipping publish."
             echo "allow_publish=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
+          echo "package_id=${package_id}" >> "$GITHUB_OUTPUT"
           echo "allow_publish=true" >> "$GITHUB_OUTPUT"
 
   publish:
@@ -67,6 +89,17 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Resolve npm package
+        run: |
+          case "${{ needs.validate-publish-source.outputs.package_id }}" in
+            op) echo "NPM_FILTER=@prodkit/op" >> "$GITHUB_ENV" ;;
+            std) echo "NPM_FILTER=@prodkit/std" >> "$GITHUB_ENV" ;;
+            *)
+              echo "Unsupported package id: ${{ needs.validate-publish-source.outputs.package_id }}"
+              exit 1
+              ;;
+          esac
+
       - name: Setup pnpm
         uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
@@ -82,10 +115,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build package
-        run: pnpm --filter @prodkit/op run build
+        run: pnpm --filter "$NPM_FILTER" run build
 
       - name: Verify changelog includes current package version
-        run: pnpm --filter @prodkit/op run changelog:check
+        run: pnpm --filter "$NPM_FILTER" run changelog:check
 
       - name: Publish to npm
-        run: pnpm --filter @prodkit/op publish --access public --provenance --no-git-checks
+        run: pnpm --filter "$NPM_FILTER" publish --access public --provenance --no-git-checks

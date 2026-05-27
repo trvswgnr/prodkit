@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Changed
 
 - Documented `@prodkit/std` peer dependencies (`@prodkit/op`, `better-result`) and pointed to
   `@prodkit/op` for the shared `better-result` public API coupling notes.
@@ -16,7 +21,6 @@
 - Removed the local abort-signal stub; `.withSignal` uses `AbortSignalLike` from `@prodkit/op/internal`.
 - Replaced local `unsafeCoerce` usage with `@prodkit/op/internal` so helpers stay centralized.
 - Changed `@prodkit/op` to a peer dependency so consumers install a single compatible `@prodkit/op` alongside `@prodkit/std`.
-- Added the initial `@prodkit/std` package with `@prodkit/std/di` helpers for yieldable dependency tokens.
 - Added DI regression coverage for defaulted and rest-parameter dependency operations.
 - Changed DI provisioning to use `DI.Dependency(...)`, `DI.singleton(Dependency, value)` binding values, direct dependency implementation instances, and variadic provisioning calls.
 - Added `DI.scoped(Dependency, resolve)` for scoped (per-run) dependency resolution with in-run memoization.
@@ -24,3 +28,9 @@
 - Dependency-aware ops carry `deps: Blocking<...>` until `DI.provide(...)` satisfies all
   deps; `.run()` is unavailable until then. Clearing deps does not clear other
   `Blocking<T>` metadata keys on the same op.
+
+## [0.1.0] - 2026-05-09
+
+### Added
+
+- Added the initial `@prodkit/std` package with `@prodkit/std/di` helpers for yieldable dependency tokens.

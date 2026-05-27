@@ -2,11 +2,13 @@ import process from "node:process";
 import { Op } from "@prodkit/op";
 import { TaggedError } from "better-result";
 import * as v from "valibot";
+import { CHANGELOG_CHECK_USAGE, isReleasePackageId, RELEASE_PACKAGES } from "./release-packages.ts";
 import {
   createLogger,
   fromRepoRoot,
   NonEmptyString,
   parse,
+  ParseError,
   readPackageJson,
   readFile,
 } from "./utils.ts";
@@ -30,12 +32,21 @@ Add a heading like "## [${version}] - YYYY-MM-DD" before publishing.`;
   }
 }
 
-const main = Op(function* () {
-  const packageJsonPath = yield* fromRepoRoot("packages/op/package.json");
+const main = Op(function* (packageIdArg: string | undefined) {
+  if (!packageIdArg || !isReleasePackageId(packageIdArg)) {
+    return yield* new ParseError({
+      message: CHANGELOG_CHECK_USAGE,
+      issues: [],
+      input: packageIdArg,
+    });
+  }
+
+  const releasePackage = RELEASE_PACKAGES[packageIdArg];
+  const packageJsonPath = yield* fromRepoRoot(`${releasePackage.packageDir}/package.json`);
   const packageJson = yield* readPackageJson(packageJsonPath);
   const { version } = yield* parse(v.object({ version: NonEmptyString }), packageJson);
 
-  const changelogPath = yield* fromRepoRoot("packages/op/CHANGELOG.md");
+  const changelogPath = yield* fromRepoRoot(`${releasePackage.packageDir}/CHANGELOG.md`);
   const changelog = yield* readFile(changelogPath);
 
   if (!hasVersionHeading(changelog, version)) {
@@ -45,7 +56,7 @@ const main = Op(function* () {
   return version;
 });
 
-main.run().then((result) => {
+main.run(process.argv[2]).then((result) => {
   result.match({
     ok: (version) => {
       logger.info(`changelog version check passed for version ${version}`);

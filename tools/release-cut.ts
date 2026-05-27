@@ -4,6 +4,12 @@ import { Op } from "@prodkit/op";
 import * as v from "valibot";
 import { TaggedError, matchErrorPartial } from "better-result";
 import {
+  isReleasePackageId,
+  RELEASE_CUT_USAGE,
+  RELEASE_PACKAGES,
+  releaseTag,
+} from "./release-packages.ts";
+import {
   createLogger,
   fromRepoRoot,
   NonEmptyString,
@@ -34,9 +40,20 @@ const logReleaseAbort = (reason: string, nextStep?: string, details?: string) =>
   if (details) logger.error(`\n${details}`);
 };
 
-const main = Op(function* (bumpKindArg: string | undefined) {
+const main = Op(function* (packageIdArg: string | undefined, bumpKindArg: string | undefined) {
+  if (!packageIdArg || !isReleasePackageId(packageIdArg)) {
+    return yield* new ParseError({
+      message: RELEASE_CUT_USAGE,
+      issues: [],
+      input: packageIdArg,
+    });
+  }
+
+  const packageId = packageIdArg;
+  const releasePackage = RELEASE_PACKAGES[packageId];
   const repoRoot = yield* fromRepoRoot(".");
-  const packageJsonPath = yield* fromRepoRoot("packages/op/package.json");
+  const packageJsonPath = yield* fromRepoRoot(`${releasePackage.packageDir}/package.json`);
+  const changelogPath = yield* fromRepoRoot(`${releasePackage.packageDir}/CHANGELOG.md`);
 
   const writeUtf8 = Op(function* (filepath: string, content: string) {
     return yield* writeFile({
@@ -49,7 +66,7 @@ const main = Op(function* (bumpKindArg: string | undefined) {
     const result = v.safeParse(BumpKind, arg);
     if (!result.success) {
       return yield* new ParseError({
-        message: "usage: node ./tools/release-cut.ts <patch|minor|major>",
+        message: RELEASE_CUT_USAGE,
         issues: result.issues,
         input: arg,
       });
@@ -102,7 +119,7 @@ const main = Op(function* (bumpKindArg: string | undefined) {
       !Object.hasOwn(parsedJson, "version")
     ) {
       return yield* new ParseError({
-        message: "packages/op/package.json must be an object containing a version field",
+        message: `${releasePackage.packageDir}/package.json must be an object containing a version field`,
         issues: [],
         input: parsedJson,
       });
@@ -163,8 +180,7 @@ const main = Op(function* (bumpKindArg: string | undefined) {
     );
   });
 
-  const ensureTagDoesNotExist = Op(function* (version: string) {
-    const tag = `v${version}`;
+  const ensureTagDoesNotExist = Op(function* (tag: string) {
     // Keep local tags up to date before checking collisions.
     yield* run(`git fetch --force --tags origin`);
 
@@ -190,28 +206,30 @@ const main = Op(function* (bumpKindArg: string | undefined) {
   const currentVersion = yield* getCurrentVersion();
   const nextVersion = yield* bumpVersion(currentVersion, bumpKind);
   const releaseDate = yield* getReleaseDate();
-  const changelogPath = yield* fromRepoRoot("packages/op/CHANGELOG.md");
+  const tag = releaseTag(packageId, nextVersion);
   yield* ensureWorktreeClean();
-  yield* ensureTagDoesNotExist(nextVersion);
+  yield* ensureTagDoesNotExist(tag);
 
   const changelog = yield* readFile(changelogPath);
   const updatedChangelog = yield* promoteUnreleased(changelog, nextVersion, releaseDate);
   yield* writeUtf8(changelogPath, updatedChangelog);
 
   yield* setCurrentVersion(nextVersion);
-  yield* run("pnpm --filter @prodkit/op run release:prepare");
-  yield* run("git add packages/op/CHANGELOG.md packages/op/package.json");
-  yield* run(`git commit -m "${nextVersion}"`);
-  yield* run(`git tag v${nextVersion}`);
+  yield* run(`pnpm --filter ${releasePackage.npmName} run release:prepare`);
+  yield* run(
+    `git add ${releasePackage.packageDir}/CHANGELOG.md ${releasePackage.packageDir}/package.json`,
+  );
+  yield* run(`git commit -m "${tag}"`);
+  yield* run(`git tag ${tag}`);
 
-  return { nextVersion };
+  return { nextVersion, npmName: releasePackage.npmName, packageId, tag };
 });
 
-main.run(process.argv[2]).then((result) => {
+main.run(process.argv[2], process.argv[3]).then((result) => {
   result.match({
-    ok: ({ nextVersion }) => {
-      logger.info(`release cut complete: v${nextVersion}\n`);
-      logger.info("next step: pnpm --filter @prodkit/op run release:push\n");
+    ok: ({ tag, npmName }) => {
+      logger.info(`release cut complete: ${tag}\n`);
+      logger.info(`next step: pnpm --filter ${npmName} run release:push\n`);
     },
     err: (error) => {
       let handledKnownError = false;
@@ -235,10 +253,7 @@ main.run(process.argv[2]).then((result) => {
           },
           ParseError: (e) => {
             handledKnownError = true;
-            logReleaseAbort(
-              e.message ?? "invalid release kind.",
-              "usage: node ./tools/release-cut.ts <patch|minor|major>",
-            );
+            logReleaseAbort(e.message ?? "invalid release arguments.", RELEASE_CUT_USAGE);
           },
           ChangelogError: (e) => {
             handledKnownError = true;

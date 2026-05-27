@@ -116,16 +116,22 @@ pnpm --filter @prodkit/std run test
 
 ## Release Workflow (Recommended)
 
-Use this flow for **`@prodkit/op`** releases. Pushing the `v*` tag created in step 3 triggers `.github/workflows/release.yml`, which publishes **`@prodkit/op`** only (not `@prodkit/std`).
+Publishable packages use package-scoped git tags (`op-vX.Y.Z`, `std-vX.Y.Z`).
+Pushing a tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml),
+which publishes the matching npm package. Legacy plain `v*` tags remain in history but
+are not used for new releases.
 
-1. Keep `packages/op/CHANGELOG.md` updated under `## [Unreleased]` as work lands.
+1. Keep the package changelog updated under `## [Unreleased]` as work lands:
 
-2. Cut a release (this promotes `Unreleased`, bumps npm version in
-   `packages/op/package.json`, runs release checks, commits, and
-   creates git tag `vX.Y.Z`):
+   - `@prodkit/op`: `packages/op/CHANGELOG.md`
+   - `@prodkit/std`: `packages/std/CHANGELOG.md`
+
+2. Cut a release (this promotes `Unreleased`, bumps npm version in the package
+   `package.json`, runs release checks, commits, and creates a package-scoped tag):
 
 ```bash
 pnpm --filter @prodkit/op run release:patch
+pnpm --filter @prodkit/std run release:patch
 ```
 
 *Note:* `release:minor` and `release:major` will be added when needed.
@@ -139,14 +145,15 @@ release validation runs against the tagged commit.
 
 ```bash
 pnpm --filter @prodkit/op run release:push
+pnpm --filter @prodkit/std run release:push
 ```
 
-4. The workflow (for tags like `v0.1.1`) then:
+4. The workflow (for tags like `op-v0.1.70` or `std-v0.1.1`) then:
 
+   - validates the tag is the latest package-scoped tag on `main`
    - installs with `pnpm install --frozen-lockfile`
-   - publishes with npm trusted publishing (OIDC) and provenance (`pnpm --filter @prodkit/op publish --provenance --access public --no-git-checks`)
-
-For **`@prodkit/std`**, bump `packages/std/package.json`, update `packages/std/CHANGELOG.md`, run `pnpm run gate`, and publish manually (`pnpm --filter @prodkit/std publish --access public --provenance --no-git-checks`) when you cut a std release; there is no shared tag workflow for it yet.
+   - publishes with npm trusted publishing (OIDC) and provenance
+     (`pnpm --filter @prodkit/<package> publish --provenance --access public --no-git-checks`)
 
 ## Release Failure Recovery
 
@@ -154,7 +161,7 @@ If a release tag is pushed but the release workflow fails (for example,
 changelog/version mismatch), use a forward-fix workflow:
 
 1. Leave the failed tag as-is (do not rewrite tag history by default).
-2. Add the missing changelog note under `packages/op/CHANGELOG.md` under `## [Unreleased]`.
+2. Add the missing changelog note under the package changelog under `## [Unreleased]`.
 3. Cut the next patch release:
 
 ```bash
