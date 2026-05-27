@@ -5,9 +5,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `DI.scoped(Dependency, resolve)` now passes the run `AbortSignal` to `resolve` and accepts
+  sync or async (`PromiseLike`) results. Resolution skips the factory when the signal is already
+  aborted, awaits async factories with DI-native abort handling, and leaves the binding uncached
+  when abort wins before settlement.
+
 ### Added
 
-- No entries yet.
+- DI regression coverage for scoped resolution under pre-abort, in-flight async abort, post-cache
+  abort, and factory throw without env corruption.
 
 ## [0.1.1] - 2026-05-27
 

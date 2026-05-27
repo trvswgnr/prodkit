@@ -1,0 +1,25 @@
+{
+  "name": "@prodkit/shared",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Private workspace-only shared types and config for @prodkit packages.",
+  "type": "module",
+  "types": "platform-globals.d.ts",
+  "exports": {
+    ".": {
+      "types": "./platform-globals.d.ts"
+    },
+    "./platform-globals": "./platform-globals.d.ts"
+  },
+  "scripts": {
+    "fmt": "oxfmt \"**/*.ts\" \"**/*.d.ts\"",
+    "fmt:check": "oxfmt --check \"**/*.ts\" \"**/*.d.ts\"",
+    "lint": "oxlint --config ../../oxlint.config.ts .",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "typescript": "catalog:"
+  }
+}

@@ -7,7 +7,7 @@ export default defineConfig({
       include: ["src/**/*.ts"],
       exclude: [
         "src/**/*.test.ts",
-        "src/platform-globals.d.ts",
+        "@prodkit/shared/platform-globals",
         "src/core/types.ts",
         "src/result.ts",
         "src/test-utils.ts",

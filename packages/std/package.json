@@ -58,6 +58,7 @@
   },
   "devDependencies": {
     "@prodkit/op": "workspace:*",
+    "@prodkit/shared": "workspace:*",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "tsdown": "catalog:",

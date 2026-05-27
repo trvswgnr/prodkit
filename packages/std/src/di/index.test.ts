@@ -224,4 +224,170 @@ describe("DI cutover runtime", () => {
     const _timeout: Op<void, TimeoutError, []> = op;
     expect(_timeout).toBe(op);
   });
+
+  test("pre-aborted signal skips scoped factory invocation", async () => {
+    let factoryCalls = 0;
+    const controller = new AbortController();
+    controller.abort(new Error("already cancelled"));
+
+    const op = DI.provide(
+      Op(function* () {
+        yield* DI.inject(DatabaseDependency);
+        return "unreachable";
+      }),
+      DI.scoped(DatabaseDependency, () => {
+        factoryCalls += 1;
+        return makeDatabase();
+      }),
+    ).withSignal(controller.signal);
+
+    const result = await op.run();
+    const cause = getUnhandledCause(result);
+
+    expect(factoryCalls).toBe(0);
+    expect(cause).toEqual(new Error("already cancelled"));
+  });
+
+  test("abort during async scoped factory rejects without caching", async () => {
+    let factoryCalls = 0;
+    const controller = new AbortController();
+    const op = DI.provide(
+      Op(function* () {
+        yield* DI.inject(DatabaseDependency);
+        return "unreachable";
+      }),
+      DI.scoped(DatabaseDependency, (signal) => {
+        factoryCalls += 1;
+        return new Promise<Database>((resolve, reject) => {
+          const id = setTimeout(() => resolve(makeDatabase()), 50);
+          signal.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(id);
+              reject(signal.reason);
+            },
+            { once: true },
+          );
+        });
+      }),
+    ).withSignal(controller.signal);
+
+    const runPromise = op.run();
+    controller.abort(new Error("cancelled mid-factory"));
+    const result = await runPromise;
+    const cause = getUnhandledCause(result);
+
+    expect(factoryCalls).toBe(1);
+    expect(cause).toEqual(new Error("cancelled mid-factory"));
+
+    factoryCalls = 0;
+    const retry = await DI.provide(
+      Op(function* () {
+        yield* DI.inject(DatabaseDependency);
+        return "ok";
+      }),
+      DI.scoped(DatabaseDependency, () => {
+        factoryCalls += 1;
+        return makeDatabase();
+      }),
+    ).run();
+
+    expect(retry.unwrap()).toBe("ok");
+    expect(factoryCalls).toBe(1);
+  });
+
+  test("async scoped factory resolves once per run and memoizes before later abort", async () => {
+    let factoryCalls = 0;
+    const controller = new AbortController();
+    const op = DI.provide(
+      Op(function* () {
+        const db1 = yield* DI.inject(DatabaseDependency);
+        const db2 = yield* DI.inject(DatabaseDependency);
+        expect(db1).toBe(db2);
+        yield* Op.try(
+          (signal) =>
+            new Promise<number>((resolve, reject) => {
+              const id = setTimeout(() => resolve(1), 100);
+              signal.addEventListener(
+                "abort",
+                () => {
+                  clearTimeout(id);
+                  reject(signal.reason);
+                },
+                { once: true },
+              );
+            }),
+          (cause) => String(cause),
+        );
+        return "unreachable";
+      }),
+      DI.scoped(DatabaseDependency, () => {
+        factoryCalls += 1;
+        return Promise.resolve(makeDatabase());
+      }),
+    ).withSignal(controller.signal);
+
+    const runPromise = op.run();
+    controller.abort(new Error("cancelled after cache"));
+    const result = await runPromise;
+
+    expect(factoryCalls).toBe(1);
+    assert(result.isErr(), "result should be Err");
+  });
+
+  test("DI-native abort await cancels pending async factory under withSignal", async () => {
+    let factoryCalls = 0;
+    const controller = new AbortController();
+    const op = DI.provide(
+      Op(function* () {
+        yield* DI.inject(DatabaseDependency);
+        return "unreachable";
+      }),
+      DI.scoped(DatabaseDependency, () => {
+        factoryCalls += 1;
+        return new Promise<Database>(() => {});
+      }),
+    ).withSignal(controller.signal);
+
+    const runPromise = op.run();
+    controller.abort(new Error("cancelled without cooperative factory"));
+    const result = await runPromise;
+    const cause = getUnhandledCause(result);
+
+    expect(factoryCalls).toBe(1);
+    expect(cause).toEqual(new Error("cancelled without cooperative factory"));
+  });
+
+  test("scoped factory throw leaves binding uncached for the next run", async () => {
+    let factoryCalls = 0;
+    const op = DI.provide(
+      Op(function* () {
+        yield* DI.inject(DatabaseDependency);
+        return "unreachable";
+      }),
+      DI.scoped(DatabaseDependency, () => {
+        factoryCalls += 1;
+        throw new Error("factory failed");
+      }),
+    );
+
+    const failed = await op.run();
+    const cause = getUnhandledCause(failed);
+    expect((cause as Error).message).toBe("factory failed");
+    expect(factoryCalls).toBe(1);
+
+    const recovered = await DI.provide(
+      Op(function* () {
+        yield* DI.inject(DatabaseDependency);
+        return "ok";
+      }),
+      DI.scoped(DatabaseDependency, () => {
+        factoryCalls += 1;
+        return makeDatabase();
+      }),
+    ).run();
+
+    expect(recovered.unwrap()).toBe("ok");
+    expect(factoryCalls).toBe(2);
+  });
 });

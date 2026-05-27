@@ -61,6 +61,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@prodkit/shared": "workspace:*",
     "@vitest/coverage-v8": "catalog:",
     "fast-check": "4.7.0",
     "oxfmt": "catalog:",

@@ -98,7 +98,7 @@ describe("DI cutover type contracts", () => {
     const partial = DI.provide(op, DI.singleton(DatabaseDependency, db));
     const full = DI.provide(
       partial,
-      DI.scoped(LoggerDependency, () => ({ log: () => {} })),
+      DI.scoped(LoggerDependency, (_signal) => ({ log: () => {} })),
     );
 
     type _PartialReqs = Assert<IsEqual<InferReqs<typeof partial>, LoggerDependency>>;
@@ -140,7 +140,7 @@ describe("DI cutover type contracts", () => {
     DI.provide(
       dbOnly,
       // @ts-expect-error - LoggerDependency is not required by this op
-      DI.scoped(LoggerDependency, () => ({ log: () => {} })),
+      DI.scoped(LoggerDependency, (_signal) => ({ log: () => {} })),
     );
 
     const satisfied = DI.provide(dbOnly, DI.singleton(DatabaseDependency, db));
@@ -149,7 +149,7 @@ describe("DI cutover type contracts", () => {
     DI.provide(
       satisfied,
       // @ts-expect-error - op has no remaining deps
-      DI.scoped(LoggerDependency, () => ({ log: () => {} })),
+      DI.scoped(LoggerDependency, (_signal) => ({ log: () => {} })),
     );
   });
 

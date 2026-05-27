@@ -14,7 +14,7 @@ pnpm install
 - This repository is a pnpm workspace monorepo orchestrated by Turborepo (`turbo`).
 - Root scripts (`pnpm run build|test|lint|typecheck|gate`) run across the workspace graph.
 - Publishable libraries today: **`@prodkit/op`** and **`@prodkit/std`** (see `packages/op`, `packages/std`).
-- Supporting workspaces: **`@prodkit/examples`** (`examples/`), **`@prodkit/tools`** (`tools/`), **`@prodkit/op-benchmarks`** (`benchmarks/op`).
+- Supporting workspaces: **`@prodkit/shared`** (`packages/shared`, private workspace types/config), **`@prodkit/examples`** (`examples/`), **`@prodkit/tools`** (`tools/`), **`@prodkit/op-benchmarks`** (`benchmarks/op`).
 - `@prodkit/op` landed first historically; the repo is intentionally multi-package.
 - Package-scoped scripts stay in the owning workspace `package.json`; invoke them with `pnpm --filter <workspace> run <script>`.
 
@@ -83,7 +83,7 @@ Use a strict two-tier model so behavior has one clear home. **`@prodkit/op`** us
   - `errors.ts`, `result.ts`, `tagged.ts` (shared domain contracts)
   - `shared.ts` (small shared type/runtime helpers)
   - `test-utils.ts` (shared test helpers)
-  - `platform-globals.d.ts` (runtime-global typing support for tests/build)
+- `@prodkit/shared` (`packages/shared`, private): workspace-only shared typings and config. Today this includes `platform-globals.d.ts` (runtime-global typings for packages without DOM `lib`). Consumers declare `"@prodkit/shared": "workspace:*"` and set `"types": ["@prodkit/shared"]` in tsconfig.
 - Test layout follows intent:
   - `packages/op/src/index.test.ts` for public API contract coverage
   - `packages/op/src/errors.test.ts` for typed error contracts
@@ -199,6 +199,10 @@ the chain). See policy ordering notes in `packages/op/DESIGN.md`.
 3. **Metadata.** Provided dependencies block bare `.run()` until satisfied via `ProvidedMeta`
    / `withBlocking` on the op type surface.
 
+Scoped bindings (`DI.scoped`) receive the run `AbortSignal` in their factory (same contract as
+`Op.try`). Resolution skips an already-aborted factory call, awaits async factories with
+DI-native abort handling, and memoizes only after successful settlement.
+
 Custom instructions are the supported extension point for other packages that need run-scoped
 state visible inside `SuspendInstruction` and `CustomInstruction.resolve` callbacks.
 
@@ -239,6 +243,12 @@ flowchart TD
 
 For a traced example, start from [`examples/op/`](examples/op/) (especially defer, signal, and
 combinator samples) and follow imports into `core/runtime.ts`.
+
+## Source layout (`@prodkit/shared`)
+
+- Private workspace package under `packages/shared/`; not published to npm.
+- Export map today: `@prodkit/shared` / `@prodkit/shared/platform-globals` (ambient runtime-global typings).
+- Publishable packages that need those globals declare `"@prodkit/shared": "workspace:*"` and set `"types": ["@prodkit/shared"]` in tsconfig `compilerOptions`.
 
 ## Source layout (`@prodkit/std`)
 

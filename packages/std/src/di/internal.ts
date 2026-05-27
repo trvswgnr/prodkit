@@ -4,6 +4,7 @@ import {
   SuspendInstruction,
   createRunContext,
   drive,
+  isPromiseLike,
   unsafeCoerce,
   hasOwn,
   type CustomInstruction,
@@ -76,10 +77,14 @@ export type Binding<C extends AnyDependency, V = unknown> = {
 };
 export type AnyBinding = Binding<AnyDependency>;
 
-export type LazyBinding<C extends AnyDependency, V = unknown> = {
+export type ScopedResolveFn<C extends AnyDependency> = (
+  signal: AbortSignal,
+) => DependencyValue<C> | PromiseLike<DependencyValue<C>>;
+
+export type LazyBinding<C extends AnyDependency> = {
   readonly _tag: "DependencyLazyBinding";
   readonly dependency: C;
-  readonly resolve: () => DependencyValue<C, V>;
+  readonly resolve: ScopedResolveFn<C>;
 };
 export type AnyLazyBinding = LazyBinding<AnyDependency>;
 
@@ -141,11 +146,15 @@ export class DependencyReqInstruction<T, R> implements CustomInstruction<
     this.dependency = dependency;
   }
 
-  resolve(context: RunContext<readonly unknown[]>): T {
+  resolve(context: RunContext<readonly unknown[]>): T | PromiseLike<T> {
+    assertNotAborted(context.signal);
     const env = readEnv(context);
-    const value = resolveDependencyValue(env, this.dependency);
+    const value = resolveDependencyValue(env, this.dependency, context.signal);
     if (value === MISSING_DEPENDENCY) {
       throw new MissingDependencyError(this.dependency.key);
+    }
+    if (isPromiseLike(value)) {
+      return value.then((resolved) => unsafeCoerce<T>(resolved));
     }
     return unsafeCoerce<T>(value);
   }
@@ -234,16 +243,68 @@ function readEnv(context: RunContext<readonly unknown[]>): Env {
   return new Map();
 }
 
-function resolveDependencyValue(env: Env, dependency: AnyDependency): unknown {
+function abortReason(signal: AbortSignal): unknown {
+  return signal.reason ?? new Error("Aborted");
+}
+
+function assertNotAborted(signal: AbortSignal): void {
+  if (signal.aborted) {
+    throw abortReason(signal);
+  }
+}
+
+function awaitWithSignalAbort<T>(suspended: PromiseLike<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) {
+    return Promise.reject(abortReason(signal));
+  }
+
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", onAbort);
+      reject(abortReason(signal));
+    };
+
+    signal.addEventListener("abort", onAbort, { once: true });
+    Promise.resolve(suspended).then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
+function resolveDependencyValue(
+  env: Env,
+  dependency: AnyDependency,
+  signal: AbortSignal,
+): unknown | PromiseLike<unknown> {
   const matchedToken = findProvidedToken(env, dependency);
   if (matchedToken === undefined) return MISSING_DEPENDENCY;
 
   const matchedValue = env.get(matchedToken);
 
   if (isDependencyLazyBinding(matchedValue)) {
-    const resolved = matchedValue.resolve();
-    env.set(matchedToken, resolved);
-    return resolved;
+    const produced = matchedValue.resolve(signal);
+    if (isPromiseLike(produced)) {
+      return awaitWithSignalAbort(produced, signal).then((resolved) => {
+        env.set(matchedToken, resolved);
+        return resolved;
+      });
+    }
+    env.set(matchedToken, produced);
+    return produced;
   }
 
   return matchedValue;

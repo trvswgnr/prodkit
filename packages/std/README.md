@@ -51,13 +51,18 @@ const result = await runnable.run();
 Lifetimes:
 
 - `DI.singleton(Dependency, value)` binds one value reused across runs.
-- `DI.scoped(Dependency, resolve)` resolves once per op run and caches for that run.
+- `DI.scoped(Dependency, resolve)` resolves once per op run and caches for that run. The factory
+  receives the run `AbortSignal` (same contract as `Op.try`) and may return a value or
+  `PromiseLike`. When the signal is already aborted at inject time, the factory is not called.
+  Async factories are awaited with DI-native abort handling; abort before settlement leaves the
+  binding uncached. After a successful resolve, the cached value stays for the rest of that run
+  even if the signal aborts later.
 - `DI.provide(op, new DependencyImpl())` binds a class instance directly when an implementation class extends the dependency token.
 
 ```ts
 const op = DI.provide(
   getUser,
-  DI.scoped(DatabaseDependency, () => connectDatabase()),
+  DI.scoped(DatabaseDependency, (signal) => connectDatabase(signal)),
 );
 
 // same run uses one resolved instance

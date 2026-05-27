@@ -11,6 +11,7 @@ import {
   type DependencyReq,
   type DependencyValue,
   type LazyBinding,
+  type ScopedResolveFn,
   type UseEntry,
   type ValidUseEntries,
   type InferMetaReqs,
@@ -64,10 +65,10 @@ export const singleton = <C extends AnyDependency, V = unknown>(
   value,
 });
 
-export const scoped = <C extends AnyDependency, V = unknown>(
+export const scoped = <C extends AnyDependency>(
   dependency: C,
-  resolve: () => DependencyValue<C, V>,
-): LazyBinding<C, V> => ({
+  resolve: ScopedResolveFn<C>,
+): LazyBinding<C> => ({
   _tag: "DependencyLazyBinding",
   dependency,
   resolve,
