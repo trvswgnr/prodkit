@@ -1,6 +1,21 @@
 # @prodkit/std
 
-Standard library utilities for `@prodkit/op`.
+Companion standard library for `@prodkit/op` programs. Modules are runtime-agnostic and usually build on `Op`, but Op integration is not required for every module.
+
+## Scope
+
+### Today
+
+- **`DI`** (`@prodkit/std/di`): yieldable dependency tokens, bindings, and provisioning for composed ops.
+
+### Likely future modules
+
+These are directions under consideration, not commitments or release dates. The package name stays `@prodkit/std` (no `@prodkit/di` split).
+
+- **Tracing**: span context and propagation helpers for composed `Op` programs.
+- **Typed env/config**: runtime-agnostic configuration reading and validation.
+
+## Quickstart (`DI`)
 
 ```ts
 import { Op } from "@prodkit/op";

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Documented `@prodkit/std` scope in the package README: DI is the only shipped module today, with tracing and typed env/config called out as likely future directions.
 - Renamed DI metadata key from `requirements` to `deps`.
 - Metadata keys on composed ops now display without per-key `readonly` modifiers (for example `{ deps: Blocking<...> }`).
 - Renamed `DI.require` to `DI.inject` for requesting dependency bindings.
