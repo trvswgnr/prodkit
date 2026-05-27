@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Renamed DI metadata key from `requirements` to `deps`.
+- Metadata keys on composed ops now display without per-key `readonly` modifiers (for example `{ deps: Blocking<...> }`).
 - Renamed `DI.require` to `DI.inject` for requesting dependency bindings.
 - Changed dependency-aware programs to use plain `Op(...)` from `@prodkit/op` with `yield* DI.inject(Dependency)`.
 - Changed dependency provisioning to use `DI.provide(op, ...bindings)`.

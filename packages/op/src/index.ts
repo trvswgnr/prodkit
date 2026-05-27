@@ -11,6 +11,7 @@ import {
   type InferOpMeta,
   type IsRunnable,
   type MergeMeta,
+  type Meta,
   type OpLifecycleHook,
   OpInterface,
 } from "./core/types.js";
@@ -189,6 +190,7 @@ export type {
   InferInstructionMeta,
   InferOpMeta,
   MergeMeta,
+  Meta,
   OpLifecycleHook,
 };
 export { withBlocking, type BlockingOp };

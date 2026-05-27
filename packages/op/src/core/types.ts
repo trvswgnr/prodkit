@@ -28,7 +28,7 @@ type MergeMetaValue<A, B, K extends PropertyKey> = K extends keyof StripEmpty<A>
       : never;
 
 type MergeMetaObjects<A, B> = NormalizeMeta<{
-  readonly [K in keyof StripEmpty<A> | keyof StripEmpty<B>]: MergeMetaValue<A, B, K>;
+  [K in keyof StripEmpty<A> | keyof StripEmpty<B>]: MergeMetaValue<A, B, K>;
 }>;
 
 type UnionMetaValueAt<U, K extends PropertyKey> = U extends Record<K, infer V> ? V : never;
@@ -44,7 +44,7 @@ type MergeUnionMeta<U> = NormalizeMeta<
   [U] extends [never]
     ? EmptyMeta
     : {
-        readonly [K in AllMetaKeys<U>]: MergeUnionMetaValue<U, K>;
+        [K in AllMetaKeys<U>]: MergeUnionMetaValue<U, K>;
       }
 >;
 
@@ -69,10 +69,11 @@ export type InferOpOk<R> = R extends Op<infer T, any, [], any> ? T : Awaited<R>;
 
 export type InferOpErr<R> = R extends Op<any, infer E, [], any> ? E : never;
 
-export type InferOpMeta<R> = R extends Op<any, any, infer _A, infer M> ? M : EmptyMeta;
+export type InferOpMeta<R> =
+  R extends Op<any, any, infer _A, infer M> ? NormalizeMeta<M> : EmptyMeta;
 
 export type SetBlockingMeta<M, K extends PropertyKey, T> = NormalizeMeta<
-  Simplify<StripEmpty<M> & { readonly [P in K]: Blocking<T> }>
+  Simplify<StripEmpty<M> & { [P in K]: Blocking<T> }>
 >;
 
 /**
@@ -103,6 +104,9 @@ export type EmptyMeta = {
 /** Branded metadata value that blocks top-level `.run()` until its payload is satisfied. */
 export type Blocking<T> = { readonly [BLOCKING]: T };
 
+/** Metadata shapes accepted on {@link Op}'s `M` parameter (writable object literals are fine). */
+export type Meta<M = EmptyMeta> = M;
+
 type IsAny<T> = 0 extends 1 & T ? true : false;
 export type NormalizeMeta<M> = [M] extends [never]
   ? EmptyMeta
@@ -111,7 +115,7 @@ export type NormalizeMeta<M> = [M] extends [never]
     : M extends object
       ? keyof M extends never
         ? EmptyMeta
-        : M
+        : Simplify<M>
       : M;
 
 export type StripEmpty<M> = [M] extends [never] ? {} : M extends EmptyMeta ? {} : M;

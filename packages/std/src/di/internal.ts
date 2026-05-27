@@ -85,9 +85,9 @@ export type AnyLazyBinding = LazyBinding<AnyDependency>;
 
 export type WithDIMeta<M, R> = [R] extends [never]
   ? NormalizeMeta<Omit<StripEmpty<M>, "deps">>
-  : Simplify<Omit<StripEmpty<M>, "deps"> & { readonly deps: Blocking<R> }>;
+  : Simplify<Omit<StripEmpty<M>, "deps"> & { deps: Blocking<R> }>;
 
-export type InferMetaReqs<M> = M extends { readonly deps: Blocking<infer R> } ? R : never;
+export type InferMetaReqs<M> = M extends { deps: Blocking<infer R> } ? R : never;
 
 export type InferReqs<C> =
   C extends Op<unknown, unknown, infer _A, infer M> ? InferMetaReqs<M> : never;
@@ -122,7 +122,7 @@ export type ValidUseEntries<Entries extends readonly UseEntry[], R> = [
 
 type UpdateProvidedMeta<M, R> = [R] extends [never]
   ? NormalizeMeta<Omit<StripEmpty<M>, "deps">>
-  : Simplify<Omit<StripEmpty<M>, "deps"> & { readonly deps: Blocking<R> }>;
+  : Simplify<Omit<StripEmpty<M>, "deps"> & { deps: Blocking<R> }>;
 
 export type ProvidedMeta<M, Entries extends readonly UseEntry[]> = UpdateProvidedMeta<
   M,

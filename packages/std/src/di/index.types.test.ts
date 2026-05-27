@@ -51,6 +51,15 @@ describe("DI cutover type contracts", () => {
     type _ = Assert<IsEqual<InferReqs<typeof op>, DatabaseDependency>>;
     type Meta = InferOpMeta<typeof op>;
     type _Req = Assert<IsEqual<Meta["deps"], Blocking<DatabaseDependency>>>;
+    type _Annotated = typeof op extends Op<
+      User,
+      DatabaseError,
+      [],
+      { deps: Blocking<DatabaseDependency> }
+    >
+      ? true
+      : false;
+    type _Annotation = Assert<IsEqual<_Annotated, true>>;
   });
 
   test("DI.inject contributes metadata on arity ops", () => {
@@ -236,7 +245,7 @@ describe("DI cutover type contracts", () => {
   });
 
   test("full DI provision clears deps while other blocking keys remain", () => {
-    type WithAuth = WithDIMeta<EmptyMeta, DatabaseDependency> & { readonly auth: Blocking<true> };
+    type WithAuth = WithDIMeta<EmptyMeta, DatabaseDependency> & { auth: Blocking<true> };
     type _StillBlocked = Assert<IsEqual<IsRunnable<WithAuth>, false>>;
 
     type ClearedReqs = Omit<WithAuth, "deps">;

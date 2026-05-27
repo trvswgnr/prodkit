@@ -20,12 +20,12 @@ import type { IsEqual, Assert } from "./type-test-utils.js";
 import type { Result } from "./result.js";
 import type { UnhandledException } from "./errors.js";
 
-type DatabaseReq = { readonly deps: "database" };
-type LoggerReq = { readonly deps: "logger" };
-type CacheReq = { readonly deps: "cache" };
-type SpanReq = { readonly spans: "auth" };
-type DiMeta = { readonly deps: Blocking<"database"> };
-type AuthMeta = { readonly auth: Blocking<true> };
+type DatabaseReq = { deps: "database" };
+type LoggerReq = { deps: "logger" };
+type CacheReq = { deps: "cache" };
+type SpanReq = { spans: "auth" };
+type DiMeta = { deps: Blocking<"database"> };
+type AuthMeta = { auth: Blocking<true> };
 type DiAndAuthMeta = MergeMeta<DiMeta, AuthMeta>;
 
 class TestInstruction<T, M> implements CustomInstruction<T, M> {
@@ -86,25 +86,20 @@ describe("metadata type contracts", () => {
   });
 
   test("merge metadata unions values at shared keys", () => {
-    type _ = Assert<
-      IsEqual<MergeMeta<DatabaseReq, LoggerReq>, { readonly deps: "database" | "logger" }>
-    >;
+    type _ = Assert<IsEqual<MergeMeta<DatabaseReq, LoggerReq>, { deps: "database" | "logger" }>>;
     type _EmptyLeft = Assert<IsEqual<MergeMeta<EmptyMeta, DatabaseReq>, DatabaseReq>>;
     type _EmptyRight = Assert<IsEqual<MergeMeta<DatabaseReq, EmptyMeta>, DatabaseReq>>;
     type _EmptyBoth = Assert<IsEqual<MergeMeta<EmptyMeta, EmptyMeta>, EmptyMeta>>;
     type _CrossKey = Assert<
-      IsEqual<
-        MergeMeta<DatabaseReq, SpanReq>,
-        { readonly deps: "database"; readonly spans: "auth" }
-      >
+      IsEqual<MergeMeta<DatabaseReq, SpanReq>, { deps: "database"; spans: "auth" }>
     >;
   });
 
   test("blocking metadata merges payloads at shared keys", () => {
     type _ = Assert<
       IsEqual<
-        MergeMeta<{ readonly deps: Blocking<"database"> }, { readonly deps: Blocking<"logger"> }>,
-        { readonly deps: Blocking<"database" | "logger"> }
+        MergeMeta<{ deps: Blocking<"database"> }, { deps: Blocking<"logger"> }>,
+        { deps: Blocking<"database" | "logger"> }
       >
     >;
     type _CrossKey = Assert<IsEqual<MergeMeta<DiMeta, AuthMeta>, DiAndAuthMeta>>;
@@ -144,19 +139,15 @@ describe("metadata type contracts", () => {
     type _Entered = Assert<IsEqual<InferOpMeta<typeof entered>, DatabaseReq>>;
     type _Exited = Assert<IsEqual<InferOpMeta<typeof exited>, DatabaseReq>>;
     type _FlatMapped = Assert<
-      IsEqual<InferOpMeta<typeof flatMapped>, { readonly deps: "database" | "logger" }>
+      IsEqual<InferOpMeta<typeof flatMapped>, { deps: "database" | "logger" }>
     >;
-    type _Tapped = Assert<
-      IsEqual<InferOpMeta<typeof tapped>, { readonly deps: "database" | "logger" }>
-    >;
+    type _Tapped = Assert<IsEqual<InferOpMeta<typeof tapped>, { deps: "database" | "logger" }>>;
     type _TappedErr = Assert<
-      IsEqual<InferOpMeta<typeof tappedErr>, { readonly deps: "database" | "logger" }>
+      IsEqual<InferOpMeta<typeof tappedErr>, { deps: "database" | "logger" }>
     >;
     type _Recovered = Assert<IsEqual<InferOpMeta<typeof recovered>, LoggerReq>>;
 
-    type _ = Assert<
-      IsEqual<MergeMeta<DatabaseReq, CacheReq>, { readonly deps: "database" | "cache" }>
-    >;
+    type _ = Assert<IsEqual<MergeMeta<DatabaseReq, CacheReq>, { deps: "database" | "cache" }>>;
   });
 });
 
@@ -179,9 +170,7 @@ describe("Blocking type contracts", () => {
     const blocked = withBlocking(ready, "demo");
 
     type _Blocked = Assert<IsEqual<IsRunnable<InferOpMeta<typeof blocked>>, false>>;
-    type _Blocking = Assert<
-      IsEqual<InferOpMeta<typeof blocked>, { readonly demo: Blocking<true> }>
-    >;
+    type _Blocking = Assert<IsEqual<InferOpMeta<typeof blocked>, { demo: Blocking<true> }>>;
     type _BlockingOp = Assert<
       IsEqual<typeof blocked, BlockingOp<number, never, [], EmptyMeta, "demo", true>>
     >;
@@ -204,7 +193,7 @@ describe("Blocking type contracts", () => {
 
   test("satisfying one blocking key keeps other blocking keys blocked", () => {
     type ClearedAuth = Omit<DiAndAuthMeta, "deps">;
-    type _ClearedAuth = Assert<IsEqual<ClearedAuth, { readonly auth: Blocking<true> }>>;
+    type _ClearedAuth = Assert<IsEqual<ClearedAuth, { auth: Blocking<true> }>>;
     type _StillBlocked = Assert<IsEqual<IsRunnable<ClearedAuth>, false>>;
     type _FullyCleared = Assert<
       IsEqual<NormalizeMeta<Omit<DiAndAuthMeta, "deps" | "auth">>, EmptyMeta>
