@@ -347,8 +347,7 @@ const normalizeFetchError = Op.try(
 ### `.recover(predicate, handler)`
 
 Recovers from selected typed failures while preserving the rest of the error channel.
-For `TaggedError` classes, pass the error class directly for concise typed recovery.
-For other error types, use a predicate (including a type guard) to select what to handle.
+Pass a type predicate such as `MyError.is` or `(error): error is MyError => MyError.is(error)`.
 `handler` can return either a fallback value or another bound nullary `Op`. Invoke generator-built
 ops before returning them from `handler`.
 
@@ -363,7 +362,7 @@ const lookup = Op(function* (id: string) {
   if (id === "missing") return yield* new NotFoundError();
   if (id === "forbidden") return yield* new PermissionError();
   return { id };
-}).recover(NotFoundError, () => ({ id: "fallback" }));
+}).recover(NotFoundError.is, () => ({ id: "fallback" }));
 
 // lookup: Op<{ id: string }, PermissionError, [string]>
 ```

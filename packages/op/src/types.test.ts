@@ -186,7 +186,7 @@ describe("type inference contracts", () => {
     const tryOp = Op.try(() => {
       throw new DomainError();
     }).recover(
-      (e) => {
+      (e): e is never => {
         expectTypeOf(e).toEqualTypeOf<never>();
         return true;
       },
@@ -221,13 +221,13 @@ describe("type inference contracts", () => {
       }
       return yield* new BErr();
     });
-    const recoveredA = base.recover(AErr, () => "fallback");
-    const recoveredB = base.recover(BErr, () => "fallback");
+    const recoveredA = base.recover(AErr.is, () => "fallback");
+    const recoveredB = base.recover(BErr.is, () => "fallback");
     expectTypeOf(recoveredA).toEqualTypeOf<Op<string, BErr, []>>();
     expectTypeOf(recoveredB).toEqualTypeOf<Op<string, AErr, []>>();
 
     // @ts-expect-error - E3 is not a valid error type for this op
-    base.recover(E3, () => "fallback");
+    base.recover(E3.is, () => "fallback");
   });
 
   test("combinators infer tuples and error unions", () => {

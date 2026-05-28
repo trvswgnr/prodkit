@@ -241,8 +241,6 @@ export type ReleaseFn<T> = (value: T) => unknown;
 /** Lifecycle channels exposed by {@link Op}. */
 export type OpLifecycleHook = "enter" | "exit";
 
-export type WithPredicateMethod<E> = { is: (value: unknown) => value is E };
-
 export interface BaseOp<T, E, A extends readonly unknown[], M = EmptyMeta> {
   /** Type discriminant for an `Op` instance. */
   readonly _tag: "Op";
@@ -368,37 +366,16 @@ export interface FluentOp<T, E, A extends readonly unknown[], M = EmptyMeta> {
 
   /**
    * Recovers selected typed failures into a fallback value or operation.
+   * Pass a type predicate such as `MyError.is` or `(error): error is MyError => MyError.is(error)`.
    *
    * @example
-   * const recovered = Op.fail("x" as const).recover((e): e is "x" => e === "x", () => 1);
+   * class NotFoundError extends TaggedError("NotFoundError")() {}
+   * const recovered = Op.fail(new NotFoundError()).recover(NotFoundError.is, () => ({ id: "fallback" }));
    */
   recover<ECaught extends TrackedErr<E>, R>(
     predicate: (error: TrackedErr<E>) => error is ECaught,
     handler: (error: ECaught) => R,
   ): Op<T | InferOpOk<R>, TrackedErr<E, ECaught> | InferOpErr<R>, A, MergeMeta<M, InferOpMeta<R>>>;
-  /**
-   * Recovers typed failures selected by a tagged predicate method.
-   *
-   * @example
-   * const recovered = Op.fail({ is: (v: unknown): v is string => typeof v === "string" }).recover(
-   *   { is: (v: unknown): v is string => typeof v === "string" },
-   *   () => 1,
-   * );
-   */
-  recover<ECaught extends TrackedErr<E>, R>(
-    predicate: WithPredicateMethod<TrackedErr<ECaught>>,
-    handler: (error: ECaught) => R,
-  ): Op<T | InferOpOk<R>, TrackedErr<E, ECaught> | InferOpErr<R>, A, MergeMeta<M, InferOpMeta<R>>>;
-  /**
-   * Recovers failures selected by a boolean predicate over the error value.
-   *
-   * @example
-   * const recovered = Op.fail("x" as const).recover((e) => e === "x", () => 1);
-   */
-  recover<R>(
-    predicate: (error: TrackedErr<E>) => boolean,
-    handler: (error: TrackedErr<E>) => R,
-  ): Op<T | InferOpOk<R>, TrackedErr<E> | InferOpErr<R>, A, MergeMeta<M, InferOpMeta<R>>>;
 }
 
 export interface OpIterable<T, E, M = EmptyMeta> {

@@ -24,7 +24,6 @@ import type {
   InferOpOk,
   ReleaseFn,
   TrackedErr,
-  WithPredicateMethod,
   AnyNullaryOp,
   DefaultHooks,
 } from "./types.js";
@@ -39,10 +38,6 @@ import {
   OP_BOUND_BRAND,
   OP_BRAND,
 } from "../shared.js";
-
-function conditionalPredicate<E>(pred: ((error: E) => boolean) | WithPredicateMethod<E>, error: E) {
-  return "is" in pred ? pred.is(error) : pred(error);
-}
 
 function dispatchLifecycleCore<T, E, M>(
   hooks: OpHooks<T, E, M>,
@@ -107,8 +102,10 @@ export function makeCoreOp<T, E, M = EmptyMeta>(
     flatMap: <R extends AnyNullaryOp>(bind: (value: T) => R) => flatMapCoreOp(self, bind),
     tap: <R>(observe: (value: T) => R) => tapCoreOp(self, observe),
     tapErr: <R>(observe: (error: E) => R) => tapErrCoreOp(self, observe),
-    recover: <R>(predicate: (error: E) => boolean, handler: (error: E) => R) =>
-      recoverCoreOp(self, predicate, handler),
+    recover: <ECaught extends E, R>(
+      predicate: (error: E) => error is ECaught,
+      handler: (error: ECaught) => R,
+    ) => recoverCoreOp(self, predicate, handler),
     [OP_BRAND]: true,
     [OP_BOUND_BRAND]: true,
     _tag: "Op" as const,
@@ -423,10 +420,10 @@ export function mapErrCoreOp<T, E, E2, M>(
   );
 }
 
-export function recoverCoreOp<T, E, R, M>(
+export function recoverCoreOp<T, E, ECaught extends E, R, M>(
   op: Op<T, E, [], M>,
-  predicate: ((error: E) => boolean) | WithPredicateMethod<E>,
-  handler: (error: E) => R,
+  predicate: (error: E) => error is ECaught,
+  handler: (error: ECaught) => R,
 ): Op<T | InferOpOk<R>, E | InferOpErr<R>, [], MergeMeta<M, InferOpMeta<R>>> {
   return makeCoreOp<
     T | InferOpOk<R>,
@@ -444,7 +441,7 @@ export function recoverCoreOp<T, E, R, M>(
 
       const error = result.error;
 
-      if (!conditionalPredicate(predicate, error)) return yield* Result.err(error);
+      if (!predicate(error)) return yield* Result.err(error);
 
       const recovered: InferOpOk<R> = yield* new SuspendInstruction(() =>
         Promise.resolve(handler(error)),
@@ -473,7 +470,7 @@ export function recoverCoreOp<T, E, R, M>(
           predicate,
           handler,
         ),
-      rebuildForTimeout: recoverCoreRebuildForTimeout<T, E, R, M>(predicate, handler),
+      rebuildForTimeout: recoverCoreRebuildForTimeout<T, E, ECaught, R, M>(predicate, handler),
     },
   );
 }

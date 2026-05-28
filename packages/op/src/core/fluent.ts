@@ -112,11 +112,14 @@ export function makeFluentOp<
         const { mapCore, mapCoreForTimeout } = tapErrLiftCallbacks<T, E, R, M>(observe);
         return liftOp(self, mapCore, mapCoreForTimeout);
       },
-      recover: <R>(predicate: (error: E) => boolean, handler: (error: E) => R) =>
+      recover: <ECaught extends E, R>(
+        predicate: (error: E) => error is ECaught,
+        handler: (error: ECaught) => R,
+      ) =>
         liftOp(
           self,
           (resolved) => recoverCoreOp(resolved, predicate, handler),
-          (resolved) => recoverLiftForTimeout<T, E, R, M>(predicate, handler, resolved),
+          (resolved) => recoverLiftForTimeout<T, E, ECaught, R, M>(predicate, handler, resolved),
         ),
       [OP_BRAND]: true,
       [OP_BOUND_BRAND]: bound,

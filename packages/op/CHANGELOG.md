@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `Op.recover` now accepts only a type-predicate function (for example `MyError.is`); passing a
+  `TaggedError` class or a plain boolean predicate is no longer supported.
 - CI gate now fails when monitored public export entrypoints change without a matching
   `CHANGELOG.md` update under unreleased heading.
 

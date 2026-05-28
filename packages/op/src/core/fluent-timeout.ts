@@ -8,7 +8,6 @@ import type {
   InferOpMeta,
   InferOpOk,
   MergeMeta,
-  WithPredicateMethod,
 } from "./types.js";
 import { mapErrCoreOp, onExitCoreOp, recoverCoreOp, tapErrCoreOp } from "./fluent-nullary.js";
 
@@ -19,11 +18,10 @@ function adaptErrorCallbackForTimeout<E, TOut>(
   return (error) => (TimeoutError.is(error) ? onTimeout(error) : fn(error));
 }
 
-function applyRecoverPredicate<E>(
-  predicate: ((error: E) => boolean) | WithPredicateMethod<E>,
-  error: E,
-): boolean {
-  return "is" in predicate ? predicate.is(error) : predicate(error);
+function adaptRecoverPredicateForTimeout<E, ECaught extends E>(
+  predicate: (error: E) => error is ECaught,
+): (error: E | TimeoutError) => error is ECaught {
+  return (error): error is ECaught => !TimeoutError.is(error) && predicate(error);
 }
 
 function coerceTimeoutInner<T, E, M>(newInner: unknown): Op<T, E | TimeoutError, [], M> {
@@ -51,21 +49,17 @@ export function tapErrCoreRebuildForTimeout<T, E, R, M>(observe: (error: E) => R
     );
 }
 
-export function recoverCoreRebuildForTimeout<T, E, R, M>(
-  predicate: ((error: E) => boolean) | WithPredicateMethod<E>,
-  handler: (error: E) => R,
+export function recoverCoreRebuildForTimeout<T, E, ECaught extends E, R, M>(
+  predicate: (error: E) => error is ECaught,
+  handler: (error: ECaught) => R,
 ) {
   return (
     newInner: unknown,
   ): Op<T | InferOpOk<R>, E | InferOpErr<R> | TimeoutError, [], MergeMeta<M, InferOpMeta<R>>> =>
     recoverCoreOp(
       coerceTimeoutInner<T, E, M>(newInner),
-      adaptErrorCallbackForTimeout(
-        (error: E) => applyRecoverPredicate(predicate, error),
-        () => false,
-      ),
-      // SAFETY: TimeoutError is filtered before `handler`, so it still only receives `E`.
-      unsafeCoerce(handler),
+      adaptRecoverPredicateForTimeout(predicate),
+      handler,
     );
 }
 
@@ -106,18 +100,10 @@ export function tapErrLiftCallbacks<T, E, R, M>(observe: (error: E) => R) {
   };
 }
 
-export function recoverLiftForTimeout<T, E, R, M>(
-  predicate: (error: E) => boolean,
-  handler: (error: E) => R,
+export function recoverLiftForTimeout<T, E, ECaught extends E, R, M>(
+  predicate: (error: E) => error is ECaught,
+  handler: (error: ECaught) => R,
   resolved: Op<T, E | TimeoutError, [], M>,
 ): Op<T | InferOpOk<R>, E | InferOpErr<R> | TimeoutError, [], MergeMeta<M, InferOpMeta<R>>> {
-  return recoverCoreOp(
-    resolved,
-    adaptErrorCallbackForTimeout(
-      (error: E) => predicate(error),
-      () => false,
-    ),
-    // SAFETY: TimeoutError is filtered before `handler`, so it still only receives `E`.
-    unsafeCoerce(handler),
-  );
+  return recoverCoreOp(resolved, adaptRecoverPredicateForTimeout(predicate), handler);
 }

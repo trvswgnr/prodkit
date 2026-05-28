@@ -35,7 +35,7 @@ describe("withTimeout push-through matrix", () => {
     {
       combinator: "tapErr",
       run: async () => {
-        const observe = vi.fn((_error: never) => undefined);
+        const observe = vi.fn(() => undefined);
         const result = await runWithFakeTimeout(
           hangingOp().tapErr(observe).withTimeout(TIMEOUT_MS),
         );
@@ -50,7 +50,7 @@ describe("withTimeout push-through matrix", () => {
         const result = await runWithFakeTimeout(
           hangingOp()
             .recover(
-              () => true,
+              (_e): _e is never => true,
               () => Op.of(69),
             )
             .withTimeout(TIMEOUT_MS),
@@ -95,7 +95,7 @@ describe("withTimeout push-through matrix", () => {
       run: async () => {
         const result = await Op.fail("retryable" as const)
           .recover(
-            (error) => error === "retryable",
+            (error): error is "retryable" => error === "retryable",
             () => Op.of(69),
           )
           .withTimeout(GENEROUS_TIMEOUT_MS)

@@ -531,7 +531,7 @@ describe("op.recover", () => {
     const recovered = Op(function* () {
       throw new Error("boom");
     }).recover(
-      () => true,
+      (_e): _e is never => true,
       () => "fallback" as const,
     );
 
@@ -540,35 +540,35 @@ describe("op.recover", () => {
     expect(result.error).toBeInstanceOf(UnhandledException);
   });
 
-  test("recover can handle typed errors with explicit constructor", async () => {
+  test("recover can handle typed errors via TaggedError.is", async () => {
     class TestError extends TaggedError("TestError")() {}
     const recovered = Op(function* () {
       if (TRUE) {
         return yield* new TestError();
       }
       return 69;
-    }).recover(TestError, () => "fallback");
+    }).recover(TestError.is, () => "fallback");
 
     const result = await recovered.run();
     assert(result.isOk(), "should be Ok");
     expect(result.value).toBe("fallback");
   });
 
-  test("recover with constructor predicate preserves arity", async () => {
+  test("recover with TaggedError.is preserves arity", async () => {
     class TestError extends TaggedError("TestError")() {}
     const recovered = Op(function* (n: number) {
       if (n < 0) {
         return yield* new TestError();
       }
       return n;
-    }).recover(TestError, () => "fallback");
+    }).recover(TestError.is, () => "fallback");
 
     const result = await recovered.run(-1);
     assert(result.isOk(), "should be Ok");
     expect(result.value).toBe("fallback");
   });
 
-  test("recover with constructor predicate allows only errors from the Op to be recovered", async () => {
+  test("recover with TaggedError.is allows only errors from the Op to be recovered", async () => {
     class E1 extends TaggedError("E1")() {}
     class E2 extends TaggedError("E2")() {}
     class E3 extends TaggedError("E3")() {}
@@ -579,19 +579,19 @@ describe("op.recover", () => {
       return yield* new E2();
     });
 
-    const recovered1 = op.recover(E1, () => "fallback");
+    const recovered1 = op.recover(E1.is, () => "fallback");
 
     const result1 = await recovered1.run();
     assert(result1.isOk(), "should be Ok");
     expect(result1.value).toBe("fallback");
 
-    const recovered2 = op.recover(E2, () => "fallback1");
+    const recovered2 = op.recover(E2.is, () => "fallback1");
 
     const result2 = await recovered2.run();
     assert(result2.isErr(), "should be Err");
     expect(result2.error).toBeInstanceOf(E1);
 
     // @ts-expect-error - E3 is not a valid error type for this op
-    void op.recover(E3, () => "fallback2");
+    void op.recover(E3.is, () => "fallback2");
   });
 });
