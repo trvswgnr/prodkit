@@ -1,8 +1,8 @@
 import { assert, describe, expect, test } from "vitest";
-import { Op } from "../../index.js";
-import { runOp } from "../run-op.js";
-import { createRunContext } from "../runtime.js";
-import { getPlan } from "./base.js";
+import { Op } from "../../../../src/index.js";
+import { runOp } from "../../../../src/core/run-op.js";
+import { createRunContext } from "../../../../src/core/runtime.js";
+import { getPlan } from "../../../../src/core/plan/base.js";
 
 async function expectPlanMatchesRun<T, E>(op: Op<T, E, []>) {
   const plan = getPlan(op, []);

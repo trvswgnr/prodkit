@@ -1,6 +1,6 @@
 import { assert, describe, expect, test, vi } from "vitest";
-import { ErrorGroup, Op } from "./index.js";
-import { TaggedError, UnhandledException } from "./errors.js";
+import { ErrorGroup, Op } from "../../src/index.js";
+import { TaggedError, UnhandledException } from "../../src/errors.js";
 import {
   deferredPromise,
   invalidConcurrencies,
@@ -8,7 +8,7 @@ import {
   resolveAfter,
   trackAbortListeners,
   TRUE,
-} from "./test-utils.js";
+} from "../support/utils.js";
 
 describe("Op.all", () => {
   test("tuple of successes in input order", async () => {

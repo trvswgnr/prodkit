@@ -1,6 +1,6 @@
 import { describe, expect, test, assert, vi } from "vitest";
-import { fail, fromGenFn, sleep, succeed, _try } from "./builders.js";
-import { UnhandledException } from "./errors.js";
+import { fail, fromGenFn, sleep, succeed, _try } from "../../src/builders.js";
+import { UnhandledException } from "../../src/errors.js";
 
 describe("succeed", () => {
   test("run returns Ok with value", async () => {

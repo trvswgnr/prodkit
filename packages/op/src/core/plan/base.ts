@@ -94,7 +94,8 @@ export function getIterablePlan<T, E, M>(op: Op<T, E, [], M>): Plan<T, E, M> | u
   if (!isIterableOp(op)) return undefined;
 
   if (isPlanBackedOp(op)) {
-    return op[OP_PLAN_BIND]();
+    // SAFETY: isPlanBackedOp narrows to PlanBackedOp, but OP_PLAN_BIND's return is erased at the call site.
+    return unsafeCoerce<Plan<T, E, M>>(op[OP_PLAN_BIND]());
   }
 
   return genPlan(() => op[Symbol.iterator]());
