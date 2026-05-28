@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 title: Op execution plan AST vs push-through rebuild hooks
 packages:
   - "@prodkit/op"
@@ -70,11 +70,11 @@ model:
 AST cutover, but it does not remove the fundamental typing pressure - it concentrates coerces at
 policy attach and leaf wrap sites.
 
-Prototype spike code is not retained in the repository; findings live in this ADR and in GitHub
-issues #116-#123.
+The cutover landed as the internal `packages/op/src/core/plan/` model. `OpHooks` rebuild callbacks
+and `fluent-timeout.ts` were removed; public `Op<T, E, A, M>` stayed the facade.
 
 ## Consequences
 
-- ADR 0002 hook table becomes outdated once plan AST lands; supersede or amend it.
+- ADR 0002 is superseded by this plan model.
 - Epic #86 cast work should target plan introduction, not incremental adapter tweaks.
 - Plan AST cutover work is tracked as sub-issues of #111 (#116-#123).

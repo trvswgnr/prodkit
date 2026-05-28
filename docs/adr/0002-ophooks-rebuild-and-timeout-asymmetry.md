@@ -1,11 +1,14 @@
 ---
-status: accepted
+status: superseded
 title: OpHooks push-through rebuild and timeout-specific rebuild hooks
 packages:
   - "@prodkit/op"
 ---
 
 # OpHooks push-through rebuild and timeout-specific rebuild hooks
+
+Superseded by [ADR 0007](0007-timeout-widening-at-composition-boundary.md). This record documents
+the pre-plan implementation that existed before the internal Plan AST cutover.
 
 Policy methods (`.withRetry`, `.withTimeout`, `.withSignal`) can apply in two ways: wrap the
 current op shell, or push through to an inner op and rebuild the shell around the result.

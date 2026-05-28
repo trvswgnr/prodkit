@@ -81,9 +81,13 @@ export type MergeMeta<A, B> =
 
 export type TrackedErr<E, Excluded = never> = E extends UnhandledException
   ? never
-  : E extends Excluded
+  : E extends TimeoutError
     ? never
-    : E;
+    : E extends Excluded
+      ? never
+      : E;
+
+export type BypassedErr<E> = E extends TimeoutError ? E : never;
 
 export type InferOpOk<R> = R extends Op<infer T, any, [], any> ? T : Awaited<R>;
 
@@ -334,7 +338,7 @@ export interface FluentOp<T, E, A extends readonly unknown[], M = EmptyMeta> {
    * @example
    * const mappedError = Op.fail("x" as const).mapErr((e) => ({ code: e }));
    */
-  mapErr<E2>(transform: (error: TrackedErr<E>) => E2): Op<T, E2, A, M>;
+  mapErr<E2>(transform: (error: TrackedErr<E>) => E2): Op<T, E2 | BypassedErr<E>, A, M>;
 
   /**
    * Binds the success value into the next operation.
@@ -362,7 +366,7 @@ export interface FluentOp<T, E, A extends readonly unknown[], M = EmptyMeta> {
    */
   tapErr<R>(
     observe: (error: TrackedErr<E>) => R,
-  ): Op<T, TrackedErr<E> | InferOpErr<R>, A, MergeMeta<M, InferOpMeta<R>>>;
+  ): Op<T, TrackedErr<E> | BypassedErr<E> | InferOpErr<R>, A, MergeMeta<M, InferOpMeta<R>>>;
 
   /**
    * Recovers selected typed failures into a fallback value or operation.
@@ -375,7 +379,12 @@ export interface FluentOp<T, E, A extends readonly unknown[], M = EmptyMeta> {
   recover<ECaught extends TrackedErr<E>, R>(
     predicate: (error: TrackedErr<E>) => error is ECaught,
     handler: (error: ECaught) => R,
-  ): Op<T | InferOpOk<R>, TrackedErr<E, ECaught> | InferOpErr<R>, A, MergeMeta<M, InferOpMeta<R>>>;
+  ): Op<
+    T | InferOpOk<R>,
+    TrackedErr<E, ECaught> | BypassedErr<E> | InferOpErr<R>,
+    A,
+    MergeMeta<M, InferOpMeta<R>>
+  >;
 }
 
 export interface OpIterable<T, E, M = EmptyMeta> {
@@ -396,21 +405,4 @@ export interface DefaultHooks<T, E, M> {
   registerEnterInitialize: (initialize: EnterFn<[]>) => Op<T, E, [], M>;
   /** Backs public `.on("exit", fn)` on ops built from these hooks. */
   registerExitFinalize: (finalize: ExitFn<T, E, []>) => Op<T, E, [], M>;
-}
-
-export interface OpHooks<
-  T,
-  E,
-  M = EmptyMeta,
-  TInner = unknown,
-  EInner = unknown,
-> extends DefaultHooks<T, E, M> {
-  /** Inner op to push policy wrappers to (when present with `rebuild`). */
-  inner?: Op<TInner, EInner, [], any>;
-  /** Rebuild this operator around a new inner op for push-through policy behavior. */
-  rebuild?: (newInner: Op<TInner, EInner, [], any>) => Op<T, E, [], M>;
-  /** Optional timeout-specific rebuild for error-channel widening edge cases. */
-  rebuildForTimeout?: (
-    newInner: Op<TInner, EInner | TimeoutError, [], any>,
-  ) => Op<T, E | TimeoutError, [], M>;
 }

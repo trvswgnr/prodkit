@@ -1,5 +1,6 @@
 import { UnhandledException } from "./errors.js";
-import { makeFluentOp, onOp } from "./core/fluent.js";
+import { makePlanOp } from "./core/fluent.js";
+import { genPlan } from "./core/plan/base.js";
 import type {
   AnyExitFn,
   EmptyMeta,
@@ -11,9 +12,8 @@ import type {
 } from "./core/types.js";
 import type { Op } from "./index.js";
 import { RegisterExitFinalizerInstruction, SuspendInstruction } from "./core/instructions.js";
-import { withRetryOp, withTimeoutOp, withSignalOp } from "./policies.js";
 import { Result } from "./result.js";
-import { makeCoreOp, createDefaultHooks, withCleanupCoreOp } from "./core/fluent.js";
+import { makeCoreOp, createDefaultHooks } from "./core/fluent.js";
 import { unsafeCoerce, isAwaited, sleepWithSignal } from "./shared.js";
 
 export function succeed<T>(value: T | PromiseLike<T>): Op<Awaited<T>, never, [], EmptyMeta> {
@@ -129,39 +129,6 @@ function bindArityArgsToFinalizers<T, M>(
   };
 }
 
-function makeArityOp<T, E, A extends readonly unknown[], M = EmptyMeta>(
-  invoke: (...args: A) => Op<T, E, [], M>,
-  makeIterable?: () => Op<T, E, [], M>,
-): OpInterface<T, E, A, M> {
-  return makeFluentOp(
-    invoke,
-    (self) => ({
-      withRetry: (policy) =>
-        makeArityOp(
-          (...args) => withRetryOp(invoke(...args), policy),
-          makeIterable ? () => withRetryOp(makeIterable(), policy) : undefined,
-        ),
-      withTimeout: (timeoutMs) =>
-        makeArityOp(
-          (...args) => withTimeoutOp(invoke(...args), timeoutMs),
-          makeIterable ? () => withTimeoutOp(makeIterable(), timeoutMs) : undefined,
-        ),
-      withSignal: (signal) =>
-        makeArityOp(
-          (...args) => withSignalOp(invoke(...args), signal),
-          makeIterable ? () => withSignalOp(makeIterable(), signal) : undefined,
-        ),
-      withRelease: (release) =>
-        makeArityOp(
-          (...args) => withCleanupCoreOp(invoke(...args), release),
-          makeIterable ? () => withCleanupCoreOp(makeIterable(), release) : undefined,
-        ),
-      on: (event, handler) => onOp(self, event, handler),
-    }),
-    makeIterable,
-  );
-}
-
 /**
  * Turns a generator function into an {@link Op}
  */
@@ -170,24 +137,24 @@ export function fromGenFn<Y extends Instruction<unknown, unknown>, T, A extends 
 ): Op<T, InferInstructionErr<Y>, A, InferInstructionMeta<Y>> {
   // We intentionally always build through the tuple-arity lifting path, including for `A = []`.
   // This keeps runtime behavior uniform while preserving exact tuple signatures at the type level.
-  const invoke = (...args: A) => {
-    const bound: Op<T, InferInstructionErr<Y>, [], InferInstructionMeta<Y>> = makeCoreOp(
-      () =>
-        // SAFETY: TS cannot model `Generator<Y, T, unknown>` as the internal instruction supertype.
-        unsafeCoerce<
-          Generator<Instruction<InferInstructionErr<Y>, InferInstructionMeta<Y>>, T, unknown>
-        >(bindArityArgsToFinalizers(f(...args), args)),
-      createDefaultHooks(() => bound),
+  const bindPlan = (...args: A) =>
+    genPlan(() =>
+      // SAFETY: TS cannot model `Generator<Y, T, unknown>` as the internal instruction supertype.
+      unsafeCoerce<
+        Generator<Instruction<InferInstructionErr<Y>, InferInstructionMeta<Y>>, T, unknown>
+      >(bindArityArgsToFinalizers(f(...args), args)),
     );
-    return bound;
-  };
-  const op = makeArityOp(invoke, () =>
-    invoke(
-      // SAFETY: direct iterator composition has no runtime args. The public type exposes that
-      // surface only for `A = []`; runtime intentionally avoids function arity reflection.
-      ...unsafeCoerce<A>([]),
-    ),
+
+  const op: OpInterface<T, InferInstructionErr<Y>, A, InferInstructionMeta<Y>> = makePlanOp(
+    bindPlan,
+    () =>
+      bindPlan(
+        // SAFETY: direct iterator composition has no runtime args. The public type exposes that
+        // surface only for `A = []`; runtime intentionally avoids function arity reflection.
+        ...unsafeCoerce<A>([]),
+      ),
   );
 
-  return op;
+  // SAFETY: makePlanOp installs the Op brand used by the public Op type.
+  return unsafeCoerce(op);
 }

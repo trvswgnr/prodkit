@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Replaced the internal fluent `OpHooks` rebuild path with plan-backed composition, keeping the
+  public `Op` API stable while moving policy push-through into structural plan nodes.
 - Expanded the Op benchmark harness with `Op.any`, `Op.race`, and sequential compose scenarios;
   `PERFORMANCE.md` now snapshots all seven runtime pairs.
 - `Op.recover` now accepts only a type-predicate function (for example `MyError.is`); passing a

@@ -36,9 +36,9 @@ ambiguous (same op, different run options in different callers).
 `EnterContext` / `ExitContext`, not a merged args-plus-options tuple. Mixing options into `.run()`
 would collide with multi-argument ops and complicate type inference for generator-defined ops.
 
-**Policies participate in push-through rebuild.** Retry, timeout, and signal attach to inner ops
-through `OpHooks` (ADR 0002). Treating them as ephemeral run parameters would bypass that rebuild
-machinery and reintroduce outer-shell-only policy bugs on wrapped ops.
+**Policies participate in plan composition.** Retry, timeout, and signal attach through structural
+plan nodes (ADR 0007). Treating them as ephemeral run parameters would bypass that composition
+model and reintroduce outer-shell-only policy bugs on wrapped ops.
 
 ## Considered options
 

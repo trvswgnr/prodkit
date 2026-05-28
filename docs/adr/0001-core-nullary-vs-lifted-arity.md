@@ -14,16 +14,15 @@ serve different consumers and stay as separate construction paths rather than on
 
 ## Decision
 
-- **`makeCoreOp`** (`packages/op/src/core/fluent-nullary.ts`) builds nullary core ops. Every
-  combinator, policy wrapper, and fluent transform that participates in `yield*` / `drive()` runs
-  at this arity.
-- **`makeFluentOp` / `liftOp`** (`packages/op/src/core/fluent.ts`) decorate a
-  `(...args: A) => Op<T, E, [], M>` invoke function with the callable-plus-methods surface
-  (`op(args)` and `op.map(...)` on one object). **`makeArityOp`** in `builders.ts` applies the
-  same lifting to generator-defined ops via `fromGenFn`.
+- **`makeCoreOp`** (`packages/op/src/core/fluent-nullary.ts`) builds nullary core ops from
+  generator leaves. Every leaf that participates in `yield*` / `drive()` still has a nullary
+  iterator surface.
+- **`makePlanOp`** (`packages/op/src/core/plan/`) decorates a `bindArgs(...args) -> Plan<T, E>`
+  function with the callable-plus-methods surface (`op(args)` and `op.map(...)` on one object).
+  `fromGenFn` uses the same plan binder for generator-defined ops.
 
-Policy and transform composition always maps through nullary core ops internally; lifting only
-re-attaches tuple call signatures and iterator bridging for `yield*` interop.
+Policy and transform composition now rewrites internal plan nodes. Tuple arguments are bound at
+the public shell, while iterator bridging keeps nullary `yield*` interop intact.
 
 ## Why not one path?
 
@@ -37,14 +36,14 @@ thread unused argument types through every core combinator and policy implementa
 needs the tuple `A` to flow into lifecycle hooks (`EnterContext`, `ExitContext`) without
 reflecting on function arity at runtime.
 
-**These are not duplicate implementations.** Core ops hold the generator and `OpHooks`; lifted
-ops are a thin invoke wrapper plus handler delegation. `liftOp` re-wraps after each transform so
-policies compose on the inner nullary op and the outer arity stays stable.
+**These are not duplicate implementations.** Core ops provide generator leaves. The plan shell
+binds tuple args to a plan once per run, then fluent transforms produce structural plan nodes so
+policies compose on the intended inner work and the outer arity stays stable.
 
 ## Consequences
 
-- New core combinators should target `makeCoreOp` / nullary `Op<..., [], M>` first, then expose
-  arity through `liftOp` or `makeArityOp` if the operation is user-facing.
+- New core combinators should target plan nodes first, then expose arity through `makePlanOp` if
+  the operation is user-facing.
 - `asOpInterface` and related casts exist because TypeScript cannot infer the callable-plus-methods
   intersection after `Object.assign`; that limitation is structural, not a missing refactor.
 - `DESIGN.md` documents execution invariants for the nullary driver; this ADR documents why arity

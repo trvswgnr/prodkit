@@ -72,10 +72,10 @@ export async function driveInterruptOnAbort<T, E, M>(
   return driveInternal(op, context, true);
 }
 
-async function driveInternal<T, E, M>(
-  op: Op<T, E, [], M>,
+export async function driveIterator<T, E, M>(
+  iter: Iterator<Instruction<E, M>, T, unknown>,
   context: RunContext<readonly unknown[]>,
-  interruptOnAbort: boolean,
+  interruptOnAbort = false,
 ): Promise<Result<T, E | UnhandledException>> {
   const { signal, args: runArgs } = context;
   const finalizers: Array<
@@ -113,15 +113,15 @@ async function driveInternal<T, E, M>(
   };
   const resumeSuspended = async (
     instruction: SuspendInstruction,
-    iter: Iterator<Instruction<E, M>, T, unknown>,
-  ) => iter.next(await awaitWithAbortInterrupt(instruction.suspend(context)));
+    iterator: Iterator<Instruction<E, M>, T, unknown>,
+  ) => iterator.next(await awaitWithAbortInterrupt(instruction.suspend(context)));
   const resumeCustom = async (
     instruction: CustomInstruction<unknown, unknown>,
-    iter: Iterator<Instruction<E, M>, T, unknown>,
-  ) => iter.next(await awaitWithAbortInterrupt(Promise.resolve(instruction.resolve(context))));
+    iterator: Iterator<Instruction<E, M>, T, unknown>,
+  ) => iterator.next(await awaitWithAbortInterrupt(Promise.resolve(instruction.resolve(context))));
   const registerExitFinalizer = (
     instruction: RegisterExitFinalizerInstruction,
-    iter: Iterator<Instruction<E, M>, T, unknown>,
+    iterator: Iterator<Instruction<E, M>, T, unknown>,
   ) => {
     const argsAtRegistration = instruction.args ?? runArgs;
     finalizers.push((ctx) =>
@@ -131,7 +131,7 @@ async function driveInternal<T, E, M>(
         args: argsAtRegistration,
       }),
     );
-    return iter.next(undefined);
+    return iterator.next(undefined);
   };
   /** Run every finalizer LIFO; collect faults from each (later-registered runs first; all still run even if one throws). */
   const runFinalizersSafely = async (
@@ -158,11 +158,8 @@ async function driveInternal<T, E, M>(
   };
   const settleWithCleanup = async (
     result: Result<T, E | UnhandledException>,
-    iter?: Iterator<Instruction<unknown, M>, T, unknown>,
   ): Promise<Result<T, E | UnhandledException>> => {
-    if (iter !== undefined) {
-      closeGenerator(iter);
-    }
+    closeGenerator(iter);
     const exitCtx: ExitContext<T, E, readonly unknown[]> = { signal, args: runArgs, result };
     const cleanupFault = await runFinalizersSafely(exitCtx);
     if (cleanupFault !== undefined) {
@@ -172,8 +169,6 @@ async function driveInternal<T, E, M>(
   };
 
   try {
-    const ef = typeof op === "function" ? op() : op;
-    const iter = ef[Symbol.iterator]();
     let step = iter.next();
     while (!step.done) {
       try {
@@ -191,15 +186,15 @@ async function driveInternal<T, E, M>(
           continue;
         }
         if (isErrInstruction<E>(instr)) {
-          return settleWithCleanup(Result.err(instr.error), iter);
+          return settleWithCleanup(Result.err(instr.error));
         }
         const invalidErr = new UnhandledException({
           cause: new TypeError("Op generator yielded an invalid instruction"),
         });
-        return settleWithCleanup(Result.err(invalidErr), iter);
+        return settleWithCleanup(Result.err(invalidErr));
       } catch (cause) {
         const unhandled = new UnhandledException({ cause });
-        return settleWithCleanup(Result.err(unhandled), iter);
+        return settleWithCleanup(Result.err(unhandled));
       }
     }
     const value = await step.value;
@@ -207,5 +202,20 @@ async function driveInternal<T, E, M>(
   } catch (cause) {
     const unhandled = new UnhandledException({ cause });
     return settleWithCleanup(Result.err(unhandled));
+  }
+}
+
+async function driveInternal<T, E, M>(
+  op: Op<T, E, [], M>,
+  context: RunContext<readonly unknown[]>,
+  interruptOnAbort: boolean,
+): Promise<Result<T, E | UnhandledException>> {
+  try {
+    const ef = typeof op === "function" ? op() : op;
+    const iter = ef[Symbol.iterator]();
+    return driveIterator(iter, context, interruptOnAbort);
+  } catch (cause) {
+    const unhandled = new UnhandledException({ cause });
+    return Result.err(unhandled);
   }
 }
