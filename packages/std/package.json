@@ -53,12 +53,14 @@
     "release:patch": "node ../../tools/release-cut.ts std patch",
     "release:publish:manual": "npm publish --access public --provenance",
     "release:push": "git push && git push --tags",
+    "coverage": "vitest run --coverage",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@prodkit/op": "workspace:*",
     "@prodkit/shared": "workspace:*",
+    "@vitest/coverage-v8": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "tsdown": "catalog:",

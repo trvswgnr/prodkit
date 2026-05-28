@@ -35,8 +35,13 @@ The quality gate includes a consumer-level smoke test that installs `@prodkit/op
 from `npm pack` tarballs via `examples/` in an isolated temp workspace.
 
 Pull requests and pushes to `main` run the same gate in `.github/workflows/ci.yml`.
-CI also publishes the `@prodkit/op` Vitest coverage report as a workflow artifact so reviewers
-can audit unit, integration, type, and property-law coverage evidence from the run.
+CI also publishes Vitest coverage reports as workflow artifacts (`op-coverage`, `std-coverage`)
+so reviewers can audit unit, integration, type, and property-law coverage evidence from the run.
+The gate runs `@prodkit/std` coverage with enforced floors; `@prodkit/op` coverage is published in
+CI for review.
+A `changelog:api:check` gate step fails when `packages/op/src/index.ts` or
+`packages/std/src/di/index.ts` public exports change without an update to that package's
+`CHANGELOG.md` under `## [Unreleased]`.
 A separate `op-benchmarks` job uploads `report.json` with runtime overhead ratios and bundle-size
 numbers; see [`BENCHMARKS.md`](BENCHMARKS.md) for how to read them.
 
@@ -72,7 +77,7 @@ Use a strict two-tier model so behavior has one clear home. **`@prodkit/op`** us
 - If a behavior is an internal invariant of one module, keep it in the unit test; if it is a public composition/API contract, keep it in integration.
 - Avoid duplicate assertions across tiers unless each tier validates meaningfully different risk.
 
-**`@prodkit/std`** uses Vitest alongside implementation under `packages/std/src/` (for example `packages/std/src/di/index.test.ts`).
+**`@prodkit/std`** uses Vitest alongside implementation under `packages/std/src/` (for example `packages/std/src/di/index.test.ts`). Run `pnpm --filter @prodkit/std run coverage` locally to reproduce the CI coverage floor.
 
 ## Source Layout (`@prodkit/op`)
 

@@ -14,6 +14,7 @@
     "runtime:smoke:edge": "node ./run-runtime-smoke.ts edge",
     "smoke": "pnpm run examples:smoke:pack",
     "adr:check": "node ./sync-adr-index.ts",
+    "changelog:api:check": "node ./check-changelog-api.ts",
     "adr:sync": "node ./sync-adr-index.ts --write",
     "fmt": "oxfmt \"**/*.ts\"",
     "fmt:check": "oxfmt --check \"**/*.ts\"",

@@ -5,6 +5,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Vitest coverage script with CI-published HTML/LCOV artifacts and enforced coverage floors for
+  the DI implementation.
+
 ### Fixed
 
 - Concurrent `Op.all` / `Op.race` branches no longer invoke the same async `DI.scoped` factory

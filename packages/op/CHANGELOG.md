@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- CI gate now fails when monitored public export entrypoints change without a matching
+  `CHANGELOG.md` update under unreleased heading.
+
 ### Fixed
 
 - `Op.all`, `Op.allSettled`, `Op.any`, and `Op.race` now merge child operation metadata so
@@ -362,5 +367,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retry timing, and composed operation semantics).
 - Improved examples and parsing validation in places where earlier behavior
   could produce weaker diagnostics or drift from production expectations.
-
-

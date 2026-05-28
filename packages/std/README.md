@@ -1,5 +1,7 @@
 # @prodkit/std
 
+[![@prodkit/std coverage](https://img.shields.io/badge/coverage-%3E%3D94%25%20lines%20(CI)-brightgreen)](https://github.com/trvswgnr/prodkit/actions/workflows/ci.yml)
+
 Companion standard library for `@prodkit/op` programs. Modules are runtime-agnostic and usually build on `Op`, but Op integration is not required for every module.
 
 ## Dependencies
@@ -79,6 +81,9 @@ import * as std from "@prodkit/std";
 
 const Dependency = std.DI.Dependency("Dependency");
 ```
+
+CI publishes a Vitest coverage artifact for this package (see the `std-coverage` workflow
+artifact) and enforces a lines/branches/functions/statements floor via `pnpm --filter @prodkit/std run coverage`.
 
 ## Examples in this repo
 

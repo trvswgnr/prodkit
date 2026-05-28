@@ -146,6 +146,9 @@ importers:
       '@prodkit/shared':
         specifier: workspace:*
         version: link:../shared
+      '@vitest/coverage-v8':
+        specifier: 'catalog:'
+        version: 4.1.0(vitest@4.1.0(@types/node@24.12.3)(vite@8.0.11(@types/node@24.12.3)))
       oxfmt:
         specifier: 'catalog:'
         version: 0.48.0
