@@ -61,5 +61,6 @@ real trade-off. Skip obvious or easily reversed choices.
 | [0004](0004-combinators-wait-for-loser-finalization.md) | `@prodkit/op` | Op.any and Op.race wait for loser finalization before run settles |
 | [0005](0005-unhandled-exception-runtime-channel.md) | `@prodkit/op` | UnhandledException is the non-recoverable runtime error channel |
 | [0006](0006-run-args-only-fluent-policy-composition.md) | `@prodkit/op` | run takes args only; cancellation and policy compose fluently |
+| [0007](0007-timeout-widening-at-composition-boundary.md) | `@prodkit/op` | Op execution plan AST vs push-through rebuild hooks |
 
 <!-- adr-index:end -->
