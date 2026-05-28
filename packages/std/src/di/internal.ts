@@ -296,12 +296,21 @@ function resolveDependencyValue(
   const matchedValue = env.get(matchedToken);
 
   if (isDependencyLazyBinding(matchedValue)) {
-    const produced = matchedValue.resolve(signal);
+    const lazyBinding = matchedValue;
+    const produced = lazyBinding.resolve(signal);
     if (isPromiseLike(produced)) {
-      return awaitWithSignalAbort(produced, signal).then((resolved) => {
-        env.set(matchedToken, resolved);
-        return resolved;
-      });
+      const inflight = awaitWithSignalAbort(produced, signal).then(
+        (resolved) => {
+          env.set(matchedToken, resolved);
+          return resolved;
+        },
+        (error) => {
+          env.set(matchedToken, lazyBinding);
+          return Promise.reject(error);
+        },
+      );
+      env.set(matchedToken, inflight);
+      return inflight;
     }
     env.set(matchedToken, produced);
     return produced;

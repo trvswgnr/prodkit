@@ -5,6 +5,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Concurrent `Op.all` / `Op.race` branches no longer invoke the same async `DI.scoped` factory
+  twice in one run; in-flight resolution is cached in the shared scope env immediately.
+
 ### Changed
 
 - `DI.scoped(Dependency, resolve)` now passes the run `AbortSignal` to `resolve` and accepts

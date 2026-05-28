@@ -473,6 +473,44 @@ describe("DI cutover runtime", () => {
     expect(factoryCalls).toBe(2);
   });
 
+  test("Op.all parallel branches dedupe async scoped factory resolution", async () => {
+    let factoryCalls = 0;
+    let releaseFactory: () => void = () => {};
+    const factoryGate = new Promise<void>((resolve) => {
+      releaseFactory = resolve;
+    });
+
+    const op = DI.provide(
+      Op(function* () {
+        const [db1, db2] = yield* Op.all([
+          Op(function* () {
+            return yield* DI.inject(DatabaseDependency);
+          }),
+          Op(function* () {
+            return yield* DI.inject(DatabaseDependency);
+          }),
+        ]);
+        expect(db1).toBe(db2);
+        return db1;
+      }),
+      // @ts-expect-error - child branches inject deps; parent metadata does not list them
+      DI.scoped(DatabaseDependency, async () => {
+        factoryCalls += 1;
+        await factoryGate;
+        return makeDatabase();
+      }),
+    );
+
+    const runPromise = op.run();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(factoryCalls).toBe(1);
+    releaseFactory();
+    const result = await runPromise;
+
+    expect(result.unwrap()).toBeDefined();
+    expect(factoryCalls).toBe(1);
+  });
+
   test("Op.all parallel branches share parent singleton and scoped bindings", async () => {
     let scopedCalls = 0;
     const op = DI.provide(
