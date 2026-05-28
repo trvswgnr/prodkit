@@ -8,17 +8,17 @@ import {
   type MergeMeta,
   type Blocking,
   type BlockingOp,
-} from "./index.js";
+} from "../../src/index.js";
 import {
   CUSTOM_INSTRUCTION_META,
   type CustomInstruction,
   type IsRunnable,
   type NormalizeMeta,
   type RunContext,
-} from "./internal.js";
-import type { IsEqual, Assert } from "./type-test-utils.js";
-import type { Result } from "./result.js";
-import type { UnhandledException } from "./errors.js";
+} from "../../src/internal.js";
+import type { IsEqual, Assert } from "../support/type-utils.js";
+import type { Result } from "../../src/result.js";
+import type { UnhandledException } from "../../src/errors.js";
 
 type DatabaseReq = { deps: "database" };
 type LoggerReq = { deps: "logger" };

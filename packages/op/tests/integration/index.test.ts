@@ -1,8 +1,8 @@
 import { assert, describe, expect, test, vi } from "vitest";
-import { Op, TimeoutError, exponentialBackoff } from "./index.js";
-import { TaggedError, UnhandledException } from "./errors.js";
-import { Result } from "./result.js";
-import { resolveAfter } from "./test-utils.js";
+import { Op, TimeoutError, exponentialBackoff } from "../../src/index.js";
+import { TaggedError, UnhandledException } from "../../src/errors.js";
+import { Result } from "../../src/result.js";
+import { resolveAfter } from "../support/utils.js";
 
 describe("OpFactory", () => {
   test("type is 'OpFactory'", () => {

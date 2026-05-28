@@ -1,8 +1,14 @@
 import { describe, expectTypeOf, test } from "vitest";
-import { ErrorGroup, Op, TimeoutError, type EnterContext, type ExitContext } from "./index.js";
-import { TaggedError, UnhandledException, type TaggedErrorInstance } from "./errors.js";
-import { Result } from "./result.js";
-import { TRUE } from "./test-utils.js";
+import {
+  ErrorGroup,
+  Op,
+  TimeoutError,
+  type EnterContext,
+  type ExitContext,
+} from "../../src/index.js";
+import { TaggedError, UnhandledException, type TaggedErrorInstance } from "../../src/errors.js";
+import { Result } from "../../src/result.js";
+import { TRUE } from "../support/utils.js";
 
 describe("type inference contracts", () => {
   test("builders infer Op shape and run() output", () => {

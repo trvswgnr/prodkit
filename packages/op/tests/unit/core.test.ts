@@ -1,21 +1,26 @@
 import { assert, describe, expect, test } from "vitest";
-import { chainCleanupFaults, closeGenerator, createRunContext, drive } from "./core/runtime.js";
-import { makeCoreOp } from "./core/fluent-nullary.js";
+import {
+  chainCleanupFaults,
+  closeGenerator,
+  createRunContext,
+  drive,
+} from "../../src/core/runtime.js";
+import { makeCoreOp } from "../../src/core/fluent-nullary.js";
 import {
   isErrInstruction,
   RegisterExitFinalizerInstruction,
   SuspendInstruction,
-} from "./core/instructions.js";
+} from "../../src/core/instructions.js";
 import {
   CUSTOM_INSTRUCTION_META,
   type CustomInstruction,
   type EmptyMeta,
   type Instruction,
   type RunContext,
-} from "./core/types.js";
-import { Op, type Op as OpType } from "./index.js";
-import { UnhandledException } from "./errors.js";
-import { Result } from "./result.js";
+} from "../../src/core/types.js";
+import { Op, type Op as OpType } from "../../src/index.js";
+import { UnhandledException } from "../../src/errors.js";
+import { Result } from "../../src/result.js";
 
 class ThrowingCustomInstruction implements CustomInstruction<never, EmptyMeta> {
   readonly [CUSTOM_INSTRUCTION_META] = undefined as unknown as EmptyMeta;

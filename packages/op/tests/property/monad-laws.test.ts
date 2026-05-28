@@ -1,7 +1,7 @@
 import * as fc from "fast-check";
 import { describe, expect, test } from "vitest";
-import { Op } from "./index.js";
-import { Result } from "./result.js";
+import { Op } from "../../src/index.js";
+import { Result } from "../../src/result.js";
 
 function bind<A, E1, B, E2>(m: Op<A, E1, []>, f: (a: A) => Op<B, E2, []>): Op<B, E1 | E2, []> {
   return m.flatMap(f);

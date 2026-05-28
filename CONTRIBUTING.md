@@ -70,12 +70,16 @@ Published baseline interpretation and artifact locations live in [`BENCHMARKS.md
 
 ## Testing Strategy
 
-Use a strict two-tier model so behavior has one clear home. **`@prodkit/op`** uses:
+`@prodkit/op` keeps tests out of `src/` under `packages/op/tests/` with one file per tier:
 
-- Unit tests (`packages/op/src/<module>.test.ts`) verify module-local invariants, edge cases, and implementation details by importing the module under test directly.
-- Integration tests (`packages/op/src/index.test.ts`) verify public API shape, re-exports, and cross-module composition contracts by importing only from `./index.js`.
-- If a behavior is an internal invariant of one module, keep it in the unit test; if it is a public composition/API contract, keep it in integration.
-- Avoid duplicate assertions across tiers unless each tier validates meaningfully different risk.
+- **Unit** (`tests/unit/`) verifies module-local invariants by importing the module under test from `../../src/...`.
+- **Integration** (`tests/integration/`) verifies public API shape, re-exports, and cross-module composition contracts. Prefer importing from `../../src/index.js`; shared timing helpers live in `tests/support/`.
+- **Property** (`tests/property/`) holds fast-check invariant suites (combinators, monad laws, backoff, retry).
+- **Types** (`tests/types/`) holds compile-time type contracts (`expectTypeOf`, assertion types).
+- **Hygiene** (`tests/hygiene/`) holds repo/API documentation checks.
+- **Support** (`tests/support/`) holds shared helpers (`utils.ts`, `type-utils.ts`).
+
+If a behavior is an internal invariant of one module, keep it in unit; if it is a public composition/API contract, keep it in integration. Avoid duplicate assertions across tiers unless each tier validates meaningfully different risk.
 
 **`@prodkit/std`** uses Vitest alongside implementation under `packages/std/src/` (for example `packages/std/src/di/index.test.ts`). Run `pnpm --filter @prodkit/std run coverage` locally to reproduce the CI coverage floor.
 
@@ -90,18 +94,17 @@ Use a strict two-tier model so behavior has one clear home. **`@prodkit/op`** us
   - `combinators.ts` (all/any/race combinators)
   - `errors.ts`, `result.ts`, `tagged.ts` (shared domain contracts)
   - `shared.ts` (small shared type/runtime helpers)
-  - `test-utils.ts` (shared test helpers)
 - `@prodkit/shared` (`packages/shared`, private): workspace-only shared typings and config. Today this includes `platform-globals.d.ts` (runtime-global typings for packages without DOM `lib`). Consumers declare `"@prodkit/shared": "workspace:*"` and set `"types": ["@prodkit/shared"]` in tsconfig.
-- Test layout follows intent:
-  - `packages/op/src/index.test.ts` for public API contract coverage
-  - `packages/op/src/errors.test.ts` for typed error contracts
-  - `packages/op/src/builders.test.ts` for operation builders, runtime composition, and builder type-inference contracts
-  - `packages/op/src/policies.test.ts` for retry/timeout/signal behavior
-  - `packages/op/src/core.test.ts` for core execution invariants
-  - `packages/op/src/lifecycle.test.ts` for lifecycle/finalizer behavior
-  - `packages/op/src/operators.test.ts` for fluent operator semantics
-  - `packages/op/src/monad-laws.test.ts` for algebraic contract checks
-  - `packages/op/src/types.test.ts` for compile-time type contracts
+- Test layout under `packages/op/tests/`:
+  - `integration/index.test.ts` for public API contract coverage
+  - `unit/errors.test.ts` for typed error contracts
+  - `unit/builders.test.ts` for operation builders, runtime composition, and builder type-inference contracts
+  - `unit/policies.test.ts` for retry/timeout/signal behavior
+  - `unit/core.test.ts` for core execution invariants
+  - `unit/lifecycle.test.ts` for lifecycle/finalizer behavior
+  - `unit/fluent.test.ts` for fluent operator semantics
+  - `property/monad-laws.test.ts` for algebraic contract checks
+  - `types/op.test.ts` for compile-time type contracts
 - Runtime invariants and execution semantics are documented in `packages/op/DESIGN.md`.
 - Structural rationale for core/fluent choices (why separate paths exist) lives in `docs/adr/`.
   Each ADR declares `title`, `status`, and `packages` in YAML frontmatter; run
