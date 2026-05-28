@@ -70,14 +70,14 @@ Published baseline interpretation and artifact locations live in [`BENCHMARKS.md
 
 ## Testing Strategy
 
-`@prodkit/op` keeps tests out of `src/` under `packages/op/test/` with one file per tier:
+`@prodkit/op` keeps tests out of `src/` under `packages/op/tests/` with one file per tier:
 
-- **Unit** (`test/unit/`) verifies module-local invariants by importing the module under test from `../../src/...`.
-- **Integration** (`test/integration/`) verifies public API shape, re-exports, and cross-module composition contracts. Prefer importing from `../../src/index.js`; shared timing helpers live in `test/support/`.
-- **Property** (`test/property/`) holds fast-check invariant suites (combinators, monad laws, backoff, retry).
-- **Types** (`test/types/`) holds compile-time type contracts (`expectTypeOf`, assertion types).
-- **Hygiene** (`test/hygiene/`) holds repo/API documentation checks.
-- **Support** (`test/support/`) holds shared helpers (`utils.ts`, `type-utils.ts`).
+- **Unit** (`tests/unit/`) verifies module-local invariants by importing the module under test from `../../src/...`.
+- **Integration** (`tests/integration/`) verifies public API shape, re-exports, and cross-module composition contracts. Prefer importing from `../../src/index.js`; shared timing helpers live in `tests/support/`.
+- **Property** (`tests/property/`) holds fast-check invariant suites (combinators, monad laws, backoff, retry).
+- **Types** (`tests/types/`) holds compile-time type contracts (`expectTypeOf`, assertion types).
+- **Hygiene** (`tests/hygiene/`) holds repo/API documentation checks.
+- **Support** (`tests/support/`) holds shared helpers (`utils.ts`, `type-utils.ts`).
 
 If a behavior is an internal invariant of one module, keep it in unit; if it is a public composition/API contract, keep it in integration. Avoid duplicate assertions across tiers unless each tier validates meaningfully different risk.
 
@@ -95,7 +95,7 @@ If a behavior is an internal invariant of one module, keep it in unit; if it is 
   - `errors.ts`, `result.ts`, `tagged.ts` (shared domain contracts)
   - `shared.ts` (small shared type/runtime helpers)
 - `@prodkit/shared` (`packages/shared`, private): workspace-only shared typings and config. Today this includes `platform-globals.d.ts` (runtime-global typings for packages without DOM `lib`). Consumers declare `"@prodkit/shared": "workspace:*"` and set `"types": ["@prodkit/shared"]` in tsconfig.
-- Test layout under `packages/op/test/`:
+- Test layout under `packages/op/tests/`:
   - `integration/index.test.ts` for public API contract coverage
   - `unit/errors.test.ts` for typed error contracts
   - `unit/builders.test.ts` for operation builders, runtime composition, and builder type-inference contracts

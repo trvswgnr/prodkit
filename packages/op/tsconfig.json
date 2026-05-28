@@ -19,6 +19,6 @@
     "noErrorTruncation": true,
     "erasableSyntaxOnly": true
   },
-  "include": ["src/**/*", "test/**/*"],
+  "include": ["src/**/*", "tests/**/*"],
   "exclude": ["node_modules", "dist"]
 }

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Moved `@prodkit/op` tests out of `src/` into a tiered `test/` layout (unit, integration,
+- Moved `@prodkit/op` tests out of `src/` into a tiered `tests/` layout (unit, integration,
   property, types, hygiene, support) so implementation and test-only code stay separated.
 - Replaced the internal fluent `OpHooks` rebuild path with plan-backed composition, keeping the
   public `Op` API stable while moving policy push-through into structural plan nodes.

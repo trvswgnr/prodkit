@@ -6,7 +6,7 @@ export default defineConfig({
       all: true,
       include: ["src/**/*.ts"],
       exclude: [
-        "test/**",
+        "tests/**",
         "@prodkit/shared/platform-globals",
         "src/core/types.ts",
         "src/result.ts",
@@ -14,10 +14,10 @@ export default defineConfig({
       reporter: ["text", "json", "html", "lcov"],
       reportsDirectory: "coverage",
     },
-    include: ["test/**/*.test.ts"],
+    include: ["tests/**/*.test.ts"],
     typecheck: {
       enabled: true,
-      include: ["test/**/*.test.ts"],
+      include: ["tests/**/*.test.ts"],
     },
   },
 });
