@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - DI regression coverage for scoped resolution under pre-abort, in-flight async abort, post-cache
   abort, and factory throw without env corruption.
+- DI interaction tests for runtime nested overlapping `provide`, async scoped factory rejection,
+  and parent binding sharing under `Op.all` / `Op.race`.
 
 ## [0.1.1] - 2026-05-27
 

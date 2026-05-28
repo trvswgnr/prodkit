@@ -141,6 +141,28 @@ describe("DI cutover runtime", () => {
     expect(cause.key).toBe("DatabaseDependency");
   });
 
+  test("runtime nested provide with overlapping binding throws AlreadyProvidedError", async () => {
+    const op = DI.provide(
+      Op(function* () {
+        const inner = DI.provide(
+          Op(function* () {
+            yield* DI.inject(DatabaseDependency);
+            return "inner";
+          }),
+          DI.singleton(DatabaseDependency, makeDatabase()),
+        );
+        return yield* inner;
+      }),
+      // @ts-expect-error - outer op does not declare deps; runtime overlap is under test
+      DI.singleton(DatabaseDependency, makeDatabase()),
+    );
+
+    const cause = getUnhandledCause(await op.run());
+
+    assert(AlreadyProvidedError.is(cause));
+    expect(cause.key).toBe("DatabaseDependency");
+  });
+
   test("policy, lifecycle, release, and fluent paths keep DI context", async () => {
     const db = makeDatabase();
     const findUser = Op(function* (id: string) {
@@ -389,5 +411,127 @@ describe("DI cutover runtime", () => {
 
     expect(recovered.unwrap()).toBe("ok");
     expect(factoryCalls).toBe(2);
+  });
+
+  test("async scoped factory reject surfaces UnhandledException without corrupting DI env", async () => {
+    let factoryCalls = 0;
+    const runnable = DI.provide(
+      Op(function* () {
+        yield* DI.inject(DatabaseDependency);
+        return "unreachable";
+      }),
+      DI.scoped(DatabaseDependency, () => {
+        factoryCalls += 1;
+        return Promise.reject(new Error("async factory failed"));
+      }),
+    );
+
+    const failed = await runnable.run();
+    expect((getUnhandledCause(failed) as Error).message).toBe("async factory failed");
+    expect(factoryCalls).toBe(1);
+
+    const recovered = await DI.provide(
+      Op(function* () {
+        yield* DI.inject(DatabaseDependency);
+        return "ok";
+      }),
+      DI.scoped(DatabaseDependency, () => {
+        factoryCalls += 1;
+        return Promise.resolve(makeDatabase());
+      }),
+    ).run();
+
+    expect(recovered.unwrap()).toBe("ok");
+    expect(factoryCalls).toBe(2);
+  });
+
+  test("scoped factory throw leaves sibling bindings usable on the next run", async () => {
+    let factoryCalls = 0;
+    const logs: string[] = [];
+    const runnable = DI.provide(
+      Op(function* () {
+        const logger = yield* DI.inject(LoggerDependency);
+        const db = yield* DI.inject(DatabaseDependency);
+        logger.log("ok");
+        return yield* db.query("user", ["1"]);
+      }),
+      DI.singleton(LoggerDependency, { log: (message) => logs.push(message) }),
+      DI.scoped(DatabaseDependency, () => {
+        factoryCalls += 1;
+        if (factoryCalls === 1) throw new Error("factory failed");
+        return makeDatabase();
+      }),
+    );
+
+    const failed = await runnable.run();
+    expect((getUnhandledCause(failed) as Error).message).toBe("factory failed");
+    expect(logs).toEqual([]);
+
+    const recovered = await runnable.run();
+    expect(recovered.unwrap()).toEqual({ id: "1" });
+    expect(logs).toEqual(["ok"]);
+    expect(factoryCalls).toBe(2);
+  });
+
+  test("Op.all parallel branches share parent singleton and scoped bindings", async () => {
+    let scopedCalls = 0;
+    const op = DI.provide(
+      Op(function* () {
+        const [db1, db2] = yield* Op.all([
+          Op(function* () {
+            return yield* DI.inject(DatabaseDependency);
+          }),
+          Op(function* () {
+            return yield* DI.inject(DatabaseDependency);
+          }),
+        ]);
+        expect(db1).toBe(db2);
+        return db1;
+      }),
+      // @ts-expect-error - child branches inject deps; parent metadata does not list them
+      DI.scoped(DatabaseDependency, () => {
+        scopedCalls += 1;
+        return makeDatabase();
+      }),
+    );
+
+    const result = await op.run();
+
+    expect(result.unwrap()).toBeDefined();
+    expect(scopedCalls).toBe(1);
+  });
+
+  test("Op.race branches share parent DI bindings without scoped cross-talk", async () => {
+    let scopedCalls = 0;
+    const slow = Op(function* () {
+      yield* Op.try(
+        () =>
+          new Promise<void>((resolve) => {
+            setTimeout(() => resolve(), 50);
+          }),
+        (cause) => String(cause),
+      );
+      return yield* DI.inject(DatabaseDependency);
+    });
+    const fast = Op(function* () {
+      return yield* DI.inject(DatabaseDependency);
+    });
+    const op = DI.provide(
+      Op(function* () {
+        const winner = yield* Op.race([slow, fast]);
+        const again = yield* DI.inject(DatabaseDependency);
+        expect(winner).toBe(again);
+        return winner;
+      }),
+      DI.scoped(DatabaseDependency, () => {
+        scopedCalls += 1;
+        return makeDatabase();
+      }),
+    );
+
+    const result = await op.run();
+
+    expect(result.isOk()).toBe(true);
+    expect(scopedCalls).toBe(1);
   });
 });
