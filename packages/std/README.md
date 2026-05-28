@@ -85,6 +85,6 @@ const Dependency = std.DI.Dependency("Dependency");
 CI publishes a Vitest coverage artifact for this package (see the `std-coverage` workflow
 artifact) and enforces a lines/branches/functions/statements floor via `pnpm --filter @prodkit/std run coverage`.
 
-## Examples in this repo
+## Examples
 
-End-to-end DI wiring with `DI` dependencies lives in [`examples/std/onboarding.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/std/onboarding.ts) and scoped cancellation behavior in [`examples/std/di-cancellation.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/std/di-cancellation.ts) (consumer smoke covers both via [`examples/smoke.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/smoke.ts)).
+End-to-end DI wiring with `DI` dependencies lives in [`examples/std/onboarding.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/std/onboarding.ts), scoped cancellation in [`examples/std/di-cancellation.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/std/di-cancellation.ts), and scoped pool checkout with `Op.defer` release in [`examples/std/http-handler.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/std/http-handler.ts) (consumer smoke covers all three via [`examples/smoke.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/smoke.ts)).
