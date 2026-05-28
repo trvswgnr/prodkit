@@ -24,6 +24,7 @@ Other workspace roots are maintainer- or CI-oriented: [`examples`](examples/) (`
 
 ## development
 
+- Node: `>=24.14.0` on the 24.x Active LTS line (current LTS; see [nodejs/Release](https://github.com/nodejs/release)). `.nvmrc` pins `24.14.0`.
 - contributor guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - `@prodkit/op` benchmark baselines: [`BENCHMARKS.md`](BENCHMARKS.md)
 - `@prodkit/op` runtime/design notes: [`packages/op/DESIGN.md`](packages/op/DESIGN.md)

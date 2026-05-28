@@ -2,7 +2,7 @@
 
 ## Setup
 
-- Use Node `>=24.14.0` and `pnpm@10` (validated in CI on `10.11.0`).
+- Use Node `>=24.14.0` on the 24.x Active LTS line (current LTS; codename Krypton) and `pnpm@10` (validated in CI on `10.11.0`). `.nvmrc` pins `24.14.0`.
 - Run commands from the repo root unless noted otherwise.
 
 ```bash
@@ -20,7 +20,7 @@ pnpm install
 
 ## Contributor Runtime
 
-- Node `>=24.14.0` is required for local development and release tasks.
+- Node `>=24.14.0` on 24.x Active LTS is required for local development and release tasks. Node 22.x is maintenance LTS; this repo standardizes on 24.x, not 22 or 20.
 - This requirement is for contributors/tooling only; the library API is runtime-agnostic for consumers.
 
 ## Local Quality Gate

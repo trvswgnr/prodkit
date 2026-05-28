@@ -27,7 +27,8 @@ npm i @prodkit/op
 ```
 
 Runtime support for consumers: any JavaScript runtime with `Promise` and `AbortController`.
-For Node consumers specifically, this package is tested on Node `24.14.0`. CI also runs
+For Node consumers specifically, this package is tested on Node `24.14.0` (24.x Active LTS, the
+current LTS line). CI also runs
 packed-package smoke checks on Bun `1.3.13`, Deno `2.7.14`, and a Cloudflare Workers-like
 Miniflare environment.
 
@@ -704,4 +705,4 @@ For monorepo setup, local development, release flow, and publish procedures, see
 
 ## Publishing
 
-Contributor requirement: Node `>=24.14.0`.
+Contributor requirement: Node `>=24.14.0` (active LTS)
