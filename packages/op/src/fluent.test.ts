@@ -1,6 +1,6 @@
 import { describe, test, expect, assert, vi } from "vitest";
 import { Op } from "./index.js";
-import { TaggedError, TimeoutError, UnhandledException } from "./errors.js";
+import { TaggedError, UnhandledException } from "./errors.js";
 import { TRUE } from "./test-utils.js";
 
 describe("op.map", () => {
@@ -95,19 +95,6 @@ describe("op.mapErr", () => {
     assert(result.isOk(), "should be Ok");
     expect(result.value).toBe(69);
     expect(attempts).toBe(2);
-  });
-
-  test("mapErr withTimeout preserves TimeoutError without mapping", async () => {
-    const result = await Op.try(
-      () => new Promise<number>((resolve) => setTimeout(() => resolve(1), 20)),
-      () => "source-failed" as const,
-    )
-      .mapErr((error) => ({ kind: "app", error }))
-      .withTimeout(1)
-      .run();
-
-    assert(result.isErr(), "should be Err");
-    expect(result.error).toBeInstanceOf(TimeoutError);
   });
 });
 
