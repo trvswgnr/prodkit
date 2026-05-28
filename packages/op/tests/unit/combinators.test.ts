@@ -424,6 +424,42 @@ describe("Op.race", () => {
     expect(r.error).toBe("quick");
   });
 
+  test("children begin async work in input index order", async () => {
+    const registrationOrder: number[] = [];
+    const gate = deferredPromise<void>();
+
+    const branch = (id: number) =>
+      Op.try((_signal) => {
+        registrationOrder.push(id);
+        return gate.promise;
+      });
+
+    const run = Op.race([branch(0), branch(1), branch(2)]).run();
+    await vi.waitFor(() => expect(registrationOrder).toEqual([0, 1, 2]));
+
+    gate.resolve(undefined);
+    await run;
+  });
+
+  test("equal-delay branches settle in input index order", async () => {
+    vi.useFakeTimers();
+    try {
+      const run = Op.race([
+        Op.try(() => resolveAfter(0, 5)),
+        Op.try(() => resolveAfter(1, 5)),
+        Op.try(() => resolveAfter(2, 5)),
+      ]).run();
+
+      await vi.advanceTimersByTimeAsync(5);
+      const r = await run;
+
+      assert(r.isOk(), "should be Ok");
+      expect(r.value).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("losers are aborted with no library-specific reason", async () => {
     let observedReason: unknown;
     const slow = Op.try(

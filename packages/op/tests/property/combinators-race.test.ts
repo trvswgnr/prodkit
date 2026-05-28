@@ -1,6 +1,8 @@
 import * as fc from "fast-check";
-import { assert, describe, expect, test } from "vitest";
+import { assert, describe, expect, test, vi } from "vitest";
+import { UnhandledException } from "../../src/errors.js";
 import { Op } from "../../src/index.js";
+import { Result } from "../../src/result.js";
 import { rejectAfter, resolveAfter, trackAbortListeners } from "../support/utils.js";
 
 type RaceBranch =
@@ -18,27 +20,22 @@ function branchOp(branch: RaceBranch) {
   );
 }
 
-async function oracleFirstSettler(branches: readonly RaceBranch[]): Promise<RaceBranch> {
-  if (branches.length === 0) {
-    throw new Error("race oracle expected at least one branch");
-  }
+type BranchResult = Result<number, string | UnhandledException>;
 
-  let winnerIndex: number | undefined;
+async function oracleFirstSettler(branches: readonly RaceBranch[]): Promise<BranchResult> {
+  let winner: BranchResult | undefined;
 
   await Promise.all(
-    branches.map(
-      (branch, index) =>
-        new Promise<void>((resolve) => {
-          setTimeout(() => {
-            if (winnerIndex === undefined) winnerIndex = index;
-            resolve();
-          }, branch.delay);
+    branches.map((branch) =>
+      branchOp(branch)
+        .run()
+        .then((result) => {
+          if (winner === undefined) winner = result;
         }),
     ),
   );
 
-  const winner = branches[winnerIndex ?? 0];
-  if (!winner) {
+  if (winner === undefined) {
     throw new Error("race oracle failed to resolve a winner");
   }
 
@@ -65,20 +62,30 @@ describe("Op.race invariants (property-based)", () => {
           { minLength: 1, maxLength: 6 },
         ),
         async (branches) => {
-          const ops = branches.map((branch) => branchOp(branch));
-          const [result, expected] = await Promise.all([
-            Op.race(ops).run(),
-            oracleFirstSettler(branches),
-          ]);
+          vi.useFakeTimers();
+          try {
+            const maxDelay = branches.reduce((max, branch) => Math.max(max, branch.delay), 0);
+            const ops = branches.map((branch) => branchOp(branch));
 
-          if (expected.kind === "ok") {
-            assert(result.isOk(), "expected Ok from first settler");
-            expect(result.value).toBe(expected.value);
-            return;
+            const expectedPromise = oracleFirstSettler(branches);
+            await vi.advanceTimersByTimeAsync(maxDelay);
+            const expected = await expectedPromise;
+
+            const resultPromise = Op.race(ops).run();
+            await vi.advanceTimersByTimeAsync(maxDelay);
+            const result = await resultPromise;
+
+            if (expected.isOk()) {
+              assert(result.isOk(), "expected Ok from first settler");
+              expect(result.value).toBe(expected.value);
+              return;
+            }
+
+            assert(result.isErr(), "expected Err from first settler");
+            expect(result.error).toBe(expected.error);
+          } finally {
+            vi.useRealTimers();
           }
-
-          assert(result.isErr(), "expected Err from first settler");
-          expect(result.error).toBe(expected.error);
         },
       ),
     );

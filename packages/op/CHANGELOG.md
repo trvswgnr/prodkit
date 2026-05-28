@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - No entries yet.
 
+### Fixed
+
+- Stabilized the `Op.race` first-settler property test by driving the oracle through the same
+  `Op.try` branch path as the combinator and advancing fake timers for deterministic settlement.
+
 ## [0.1.71] - 2026-05-28
 
 ### Changed
