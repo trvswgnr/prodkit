@@ -82,4 +82,4 @@ const Dependency = std.DI.Dependency("Dependency");
 
 ## Examples in this repo
 
-End-to-end DI wiring with `DI` dependencies lives in [`examples/std/onboarding.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/std/onboarding.ts) (consumer smoke covers it via [`examples/smoke.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/smoke.ts)).
+End-to-end DI wiring with `DI` dependencies lives in [`examples/std/onboarding.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/std/onboarding.ts) and scoped cancellation behavior in [`examples/std/di-cancellation.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/std/di-cancellation.ts) (consumer smoke covers both via [`examples/smoke.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/smoke.ts)).
