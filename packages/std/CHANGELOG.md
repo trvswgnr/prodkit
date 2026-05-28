@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- No entries yet.
+
+## [0.1.2] - 2026-05-28
+
+### Added
+
 - Vitest coverage script with CI-published HTML/LCOV artifacts and enforced coverage floors for
   the DI implementation.
 
@@ -60,4 +66,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added the initial `@prodkit/std` package with `@prodkit/std/di` helpers for yieldable dependency tokens.
+
 

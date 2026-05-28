@@ -1,6 +1,6 @@
 {
   "name": "@prodkit/std",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Standard library utilities for @prodkit/op programs.",
   "keywords": [
     "dependency injection",
