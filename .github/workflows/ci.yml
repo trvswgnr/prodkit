@@ -96,3 +96,39 @@ jobs:
 
       - name: Run runtime smoke
         run: pnpm --filter @prodkit/tools run runtime:smoke:${{ matrix.runtime }}
+
+  op-benchmarks:
+    name: op benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 10.11.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.14.0"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch main for baseline worktree
+        run: git fetch origin main --depth=1
+
+      - name: Run Op benchmark harness
+        run: pnpm --filter @prodkit/op-benchmarks run bench -- --report=report.json
+
+      - name: Upload benchmark report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: op-benchmarks
+          path: benchmarks/op/report.json
+          if-no-files-found: error

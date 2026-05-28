@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- No entries yet.
+- Published Op benchmark baseline guidance in repo-root `BENCHMARKS.md`, with CI
+  `op-benchmarks` artifacts carrying machine-readable `report.json` overhead ratios.
 
 ## [0.1.70] - 2026-05-27
 

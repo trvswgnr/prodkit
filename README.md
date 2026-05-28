@@ -25,6 +25,7 @@ Other workspace roots are maintainer- or CI-oriented: [`examples`](examples/) (`
 ## development
 
 - contributor guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- `@prodkit/op` benchmark baselines: [`BENCHMARKS.md`](BENCHMARKS.md)
 - `@prodkit/op` runtime/design notes: [`packages/op/DESIGN.md`](packages/op/DESIGN.md)
 - architectural decision records: [`docs/adr/`](docs/adr/)
 - `@prodkit/op` changelog: [`packages/op/CHANGELOG.md`](packages/op/CHANGELOG.md)

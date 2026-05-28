@@ -3,6 +3,7 @@ out
 dist
 *.tgz
 coverage
+benchmarks/op/report.json
 *.lcov
 logs
 _.log

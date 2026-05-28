@@ -27,10 +27,12 @@ From repo root:
 pnpm run bench
 pnpm --filter @prodkit/op-benchmarks run bench -- --baseline=main
 pnpm --filter @prodkit/op-benchmarks run bench -- --baseline=npm
+pnpm --filter @prodkit/op-benchmarks run bench -- --report=report.json
 ```
 
 - `pnpm run bench` defaults to `--baseline=main`.
 - Use `pnpm --filter @prodkit/op-benchmarks run bench -- --baseline=npm` when you want drift against the latest published package.
+- Use `--report=<path>` to write machine-readable results (`overhead.*.slowdownRatio`, runtime hz, bundle size). CI uploads this as the `op-benchmarks` artifact; see [`BENCHMARKS.md`](../../BENCHMARKS.md).
 
 ## Contributor guidance
 

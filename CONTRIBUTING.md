@@ -37,6 +37,8 @@ from `npm pack` tarballs via `examples/` in an isolated temp workspace.
 Pull requests and pushes to `main` run the same gate in `.github/workflows/ci.yml`.
 CI also publishes the `@prodkit/op` Vitest coverage report as a workflow artifact so reviewers
 can audit unit, integration, type, and property-law coverage evidence from the run.
+A separate `op-benchmarks` job uploads `report.json` with runtime overhead ratios and bundle-size
+numbers; see [`BENCHMARKS.md`](BENCHMARKS.md) for how to read them.
 
 All runnable consumer examples and smoke entrypoints live in the **`examples/`** workspace (`@prodkit/examples`): Op-oriented samples under [`examples/op/`](examples/op/), std/di samples under [`examples/std/`](examples/std/), with root [`examples/smoke.ts`](examples/smoke.ts) running both suites.
 
@@ -53,6 +55,7 @@ pnpm run bench
 - Keep benchmark interpretation directional; rely on relative deltas and rerun unexpected regressions before acting.
 
 Detailed benchmark scenarios and authoring guidance live in `benchmarks/op/README.md`.
+Published baseline interpretation and artifact locations live in [`BENCHMARKS.md`](BENCHMARKS.md).
 
 ## Type Cast Policy
 

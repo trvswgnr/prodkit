@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { gzipSync } from "node:zlib";
-import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -29,6 +29,49 @@ type RuntimeReport = Record<VariantName, BenchmarkRecord>;
 type SizeReport = {
   minBytes: number;
   gzipBytes: number;
+};
+
+type OverheadPairName = "singleOp" | "all" | "retry" | "timeout";
+
+type OverheadPair = {
+  reference: VariantName;
+  variant: VariantName;
+  slowdownRatio: number;
+};
+
+type BenchmarkReport = {
+  generatedAt: string;
+  environment: {
+    node: string;
+    platform: NodeJS.Platform;
+    arch: string;
+  };
+  baselineKind: BaselineKind;
+  current: {
+    label: string;
+    headSha: string;
+    dirty: boolean;
+    packageVersion: string;
+  };
+  baseline: {
+    label: string;
+    packageVersion: string;
+  };
+  runtime: Record<
+    VariantName,
+    {
+      current: BenchmarkRecord;
+      baseline: BenchmarkRecord;
+      deltaPercent: number | null;
+    }
+  >;
+  overhead: Record<OverheadPairName, OverheadPair>;
+  bundleSize: {
+    current: SizeReport;
+    baseline: SizeReport;
+    minifiedDeltaPercent: number | null;
+    gzipDeltaPercent: number | null;
+  };
 };
 
 type TargetInstall = {
@@ -108,6 +151,16 @@ function parseBaselineArg(argv: readonly string[]): BaselineKind {
   const value = arg.slice("--baseline=".length);
   if (value === "main" || value === "npm") return value;
   throw new Error(`Invalid baseline "${value}". Expected "main" or "npm".`);
+}
+
+function parseReportArg(argv: readonly string[]): string | undefined {
+  const arg = argv.find((item) => item.startsWith("--report="));
+  if (!arg) return undefined;
+  const value = arg.slice("--report=".length);
+  if (value.length === 0) {
+    throw new Error(`Invalid report path "". Expected a non-empty path.`);
+  }
+  return value;
 }
 
 function parseLsRemoteSha(output: string): string | undefined {
@@ -509,27 +562,115 @@ function formatNumber(value: number): string {
   return Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
 }
 
+function percentDelta(current: number, baseline: number): number | null {
+  if (baseline === 0) return null;
+  return ((current - baseline) / baseline) * 100;
+}
+
 function formatPercentDelta(current: number, baseline: number): string {
-  if (baseline === 0) return "n/a";
-  const pct = ((current - baseline) / baseline) * 100;
+  const pct = percentDelta(current, baseline);
+  if (pct === null) return "n/a";
   const sign = pct > 0 ? "+" : "";
   return `${sign}${pct.toFixed(2)}%`;
 }
 
-function printRuntimeComparison(current: RuntimeReport, baseline: RuntimeReport): void {
-  const variants: VariantName[] = [
-    "singleOp.rawAsync",
-    "singleOp.opRun",
-    "all.promiseAll",
-    "all.opAll",
-    "retry.handRolled",
-    "retry.opWithRetry",
-    "timeout.promiseRace",
-    "timeout.opWithTimeout",
-  ];
+function slowdownRatio(referenceHz: number, variantHz: number): number {
+  if (variantHz === 0) return 0;
+  return referenceHz / variantHz;
+}
 
+const RUNTIME_VARIANTS: VariantName[] = [
+  "singleOp.rawAsync",
+  "singleOp.opRun",
+  "all.promiseAll",
+  "all.opAll",
+  "retry.handRolled",
+  "retry.opWithRetry",
+  "timeout.promiseRace",
+  "timeout.opWithTimeout",
+];
+
+const OVERHEAD_PAIRS: Record<OverheadPairName, { reference: VariantName; variant: VariantName }> = {
+  singleOp: { reference: "singleOp.rawAsync", variant: "singleOp.opRun" },
+  all: { reference: "all.promiseAll", variant: "all.opAll" },
+  retry: { reference: "retry.handRolled", variant: "retry.opWithRetry" },
+  timeout: { reference: "timeout.promiseRace", variant: "timeout.opWithTimeout" },
+};
+
+function buildBenchmarkReport(input: {
+  baselineKind: BaselineKind;
+  currentLabel: string;
+  currentFingerprint: { headSha: string; dirty: boolean };
+  currentVersion: string;
+  baselineLabel: string;
+  baselineVersion: string;
+  currentRuntime: RuntimeReport;
+  baselineRuntime: RuntimeReport;
+  currentSize: SizeReport;
+  baselineSize: SizeReport;
+}): BenchmarkReport {
+  const runtime = {} as BenchmarkReport["runtime"];
+  for (const name of RUNTIME_VARIANTS) {
+    runtime[name] = {
+      current: input.currentRuntime[name],
+      baseline: input.baselineRuntime[name],
+      deltaPercent: percentDelta(input.currentRuntime[name].hz, input.baselineRuntime[name].hz),
+    };
+  }
+
+  const overhead = {} as BenchmarkReport["overhead"];
+  for (const [name, pair] of Object.entries(OVERHEAD_PAIRS) as Array<
+    [OverheadPairName, { reference: VariantName; variant: VariantName }]
+  >) {
+    overhead[name] = {
+      reference: pair.reference,
+      variant: pair.variant,
+      slowdownRatio: slowdownRatio(
+        input.baselineRuntime[pair.reference].hz,
+        input.baselineRuntime[pair.variant].hz,
+      ),
+    };
+  }
+
+  return {
+    generatedAt: new Date().toISOString(),
+    environment: {
+      node: process.version,
+      platform: process.platform,
+      arch: process.arch,
+    },
+    baselineKind: input.baselineKind,
+    current: {
+      label: input.currentLabel,
+      headSha: input.currentFingerprint.headSha,
+      dirty: input.currentFingerprint.dirty,
+      packageVersion: input.currentVersion,
+    },
+    baseline: {
+      label: input.baselineLabel,
+      packageVersion: input.baselineVersion,
+    },
+    runtime,
+    overhead,
+    bundleSize: {
+      current: input.currentSize,
+      baseline: input.baselineSize,
+      minifiedDeltaPercent: percentDelta(input.currentSize.minBytes, input.baselineSize.minBytes),
+      gzipDeltaPercent: percentDelta(input.currentSize.gzipBytes, input.baselineSize.gzipBytes),
+    },
+  };
+}
+
+async function writeBenchmarkReport(reportPath: string, report: BenchmarkReport): Promise<void> {
+  const absolutePath = path.resolve(reportPath);
+  await mkdir(path.dirname(absolutePath), { recursive: true });
+  await writeFile(absolutePath, JSON.stringify(report, null, 2) + "\n", "utf8");
+  logger.info(`Wrote benchmark report: ${absolutePath}`);
+}
+
+function printRuntimeComparison(current: RuntimeReport, baseline: RuntimeReport): void {
   logger.info("Runtime benchmarks (ops/sec, higher is better):");
-  for (const name of variants) {
+  for (const name of RUNTIME_VARIANTS) {
     const currentHz = current[name].hz;
     const baselineHz = baseline[name].hz;
     const delta = formatPercentDelta(currentHz, baselineHz);
@@ -553,6 +694,19 @@ function printBundleComparison(current: SizeReport, baseline: SizeReport): void 
   );
 }
 
+function printOverheadSummary(report: BenchmarkReport): void {
+  logger.info(
+    "Op overhead vs native Promise baselines (baseline slowdown ratio, higher is slower):",
+  );
+  for (const [name, pair] of Object.entries(report.overhead) as Array<
+    [OverheadPairName, OverheadPair]
+  >) {
+    logger.info(
+      `- ${name}: ${pair.variant} vs ${pair.reference} = ${pair.slowdownRatio.toFixed(2)}x`,
+    );
+  }
+}
+
 async function runCleanup(cleanups: Array<() => Promise<void>>): Promise<void> {
   for (let index = cleanups.length - 1; index >= 0; index -= 1) {
     const cleanup = cleanups[index];
@@ -562,8 +716,10 @@ async function runCleanup(cleanups: Array<() => Promise<void>>): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  const argv = process.argv.slice(2);
   const repoRoot = getRepoRoot();
-  const baselineKind = parseBaselineArg(process.argv.slice(2));
+  const baselineKind = parseBaselineArg(argv);
+  const reportPath = parseReportArg(argv);
   const cleanups: Array<() => Promise<void>> = [];
   let failure: unknown;
 
@@ -623,6 +779,23 @@ async function main(): Promise<void> {
 
     printRuntimeComparison(currentRuntime, baselineRuntime);
     printBundleComparison(currentSize, baselineSize);
+
+    const report = buildBenchmarkReport({
+      baselineKind,
+      currentLabel,
+      currentFingerprint,
+      currentVersion: currentTarget.packageVersion,
+      baselineLabel,
+      baselineVersion: baselineTarget.packageVersion,
+      currentRuntime,
+      baselineRuntime,
+      currentSize,
+      baselineSize,
+    });
+    printOverheadSummary(report);
+    if (reportPath !== undefined) {
+      await writeBenchmarkReport(reportPath, report);
+    }
   } catch (error) {
     failure = error;
   }
