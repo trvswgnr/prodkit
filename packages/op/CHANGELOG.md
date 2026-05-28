@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Expanded the Op benchmark harness with `Op.any`, `Op.race`, and sequential compose scenarios;
+  `PERFORMANCE.md` now snapshots all seven runtime pairs.
 - `Op.recover` now accepts only a type-predicate function (for example `MyError.is`); passing a
   `TaggedError` class or a plain boolean predicate is no longer supported.
 - CI gate now fails when monitored public export entrypoints change without a matching
@@ -21,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Performance snapshot in [`PERFORMANCE.md`](PERFORMANCE.md) (all harness scenarios, ops/sec,
+  slowdown ratios, and bundle size), refreshable via
+  `pnpm --filter @prodkit/tools run performance:sync -- --write`.
 - Published Op benchmark baseline guidance in repo-root `BENCHMARKS.md`, with CI
   `op-benchmarks` artifacts carrying machine-readable `report.json` overhead ratios.
 

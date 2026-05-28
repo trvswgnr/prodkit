@@ -6,6 +6,8 @@ This README documents the `@prodkit/op` package API and usage.
 For monorepo/workspace orientation, see the repo root [`README.md`](https://github.com/trvswgnr/prodkit/blob/main/README.md).
 For tradeoffs against Effect, neverthrow, `fp-ts`, native `Promise`, and `ResultAsync`, see
 [`COMPARISON.md`](https://github.com/trvswgnr/prodkit/blob/main/packages/op/COMPARISON.md).
+For runtime overhead ratios, throughput figures, and bundle size, see
+[`PERFORMANCE.md`](https://github.com/trvswgnr/prodkit/blob/main/packages/op/PERFORMANCE.md).
 
 > [!WARNING]
 > This library is currently in alpha. The API will almost certainly change between releases while it stabilizes.
@@ -684,6 +686,16 @@ or `runtime:smoke:edge`.
 - [`examples/smoke.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/smoke.ts):
   consumer-level scenario assertions for Op flows (`examples/op/smoke.ts`) and DI onboarding
   (`examples/std/smoke.ts`).
+
+## Performance
+
+`@prodkit/op` adds measurable runtime overhead compared with raw `Promise` usage in
+microbenchmarks. Real applications are usually dominated by I/O, so relative overhead matters
+less once network or database latency is in the picture.
+
+See [`PERFORMANCE.md`](https://github.com/trvswgnr/prodkit/blob/main/packages/op/PERFORMANCE.md)
+for the latest snapshot from the benchmark harness, including all paired scenarios, ops/sec
+figures, slowdown ratios, and bundle size.
 
 ## Contributing
 

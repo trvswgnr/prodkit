@@ -13,6 +13,7 @@
     "runtime:smoke:deno": "node ./run-runtime-smoke.ts deno",
     "runtime:smoke:edge": "node ./run-runtime-smoke.ts edge",
     "smoke": "pnpm run examples:smoke:pack",
+    "performance:sync": "node ./update-op-performance-doc.ts",
     "adr:check": "node ./sync-adr-index.ts",
     "changelog:api:check": "node ./check-changelog-api.ts",
     "adr:sync": "node ./sync-adr-index.ts --write",

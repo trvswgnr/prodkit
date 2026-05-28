@@ -14,10 +14,16 @@ type VariantName =
   | "singleOp.opRun"
   | "all.promiseAll"
   | "all.opAll"
+  | "any.handRolledFirstSuccess"
+  | "any.opAny"
+  | "race.handRolledFirstSettler"
+  | "race.opRace"
   | "retry.handRolled"
   | "retry.opWithRetry"
   | "timeout.promiseRace"
-  | "timeout.opWithTimeout";
+  | "timeout.opWithTimeout"
+  | "compose.asyncSteps"
+  | "compose.opYieldChain";
 
 type BenchmarkRecord = {
   hz: number;
@@ -31,7 +37,7 @@ type SizeReport = {
   gzipBytes: number;
 };
 
-type OverheadPairName = "singleOp" | "all" | "retry" | "timeout";
+type OverheadPairName = "singleOp" | "all" | "any" | "race" | "retry" | "timeout" | "compose";
 
 type OverheadPair = {
   reference: VariantName;
@@ -89,6 +95,7 @@ const ENTRY_FALLBACK = "./dist/index.mjs";
 const CONCURRENCY_CHILDREN = 8;
 const RETRY_ATTEMPTS = 3;
 const TIMEOUT_BUDGET_MS = 250;
+const COMPOSE_STEPS = 6;
 const logger = console;
 
 function readPackageJsonIfPresent(dir: string): unknown {
@@ -407,20 +414,25 @@ async function importOpFactory(packageDir: string): Promise<{ Op: unknown }> {
   return { Op: mod.Op };
 }
 
+type OpRunResult = { isOk: () => boolean; value?: unknown };
+
 type OpFactory = {
+  (generator: () => Generator<unknown, unknown, unknown>): { run: () => Promise<OpRunResult> };
   of: (value: unknown) => {
-    run: () => Promise<{ isOk: () => boolean }>;
-    withTimeout: (timeoutMs: number) => { run: () => Promise<{ isOk: () => boolean }> };
+    run: () => Promise<OpRunResult>;
+    withTimeout: (timeoutMs: number) => { run: () => Promise<OpRunResult> };
   };
   try: (f: () => unknown) => {
     withRetry: (policy: {
       maxAttempts: number;
       shouldRetry: (cause: unknown) => boolean;
       getDelay: (attempt: number, cause: unknown) => number;
-    }) => { run: () => Promise<{ isOk: () => boolean }> };
-    withTimeout: (timeoutMs: number) => { run: () => Promise<{ isOk: () => boolean }> };
+    }) => { run: () => Promise<OpRunResult> };
+    withTimeout: (timeoutMs: number) => { run: () => Promise<OpRunResult> };
   };
-  all: (ops: unknown[]) => { run: () => Promise<{ isOk: () => boolean }> };
+  all: (ops: unknown[]) => { run: () => Promise<OpRunResult> };
+  any: (ops: unknown[]) => { run: () => Promise<OpRunResult> };
+  race: (ops: unknown[]) => { run: () => Promise<OpRunResult> };
 };
 
 function assertOpFactory(input: unknown): OpFactory {
@@ -430,9 +442,12 @@ function assertOpFactory(input: unknown): OpFactory {
   if (
     typeof input.of !== "function" ||
     typeof input.try !== "function" ||
-    typeof input.all !== "function"
+    typeof input.all !== "function" ||
+    typeof input.any !== "function" ||
+    typeof input.race !== "function" ||
+    typeof input !== "function"
   ) {
-    throw new Error("Imported Op is missing required methods (of/try/all).");
+    throw new Error("Imported Op is missing required methods (of/try/all/any/race).");
   }
   // SAFETY: We've already asserted that the input is a valid OpFactory.
   return input as OpFactory;
@@ -452,6 +467,27 @@ async function runVariant(name: string, fn: () => Promise<unknown>): Promise<Ben
   const hz = task?.result?.hz ?? 0;
   const latencyMs = task?.result?.mean ?? 0;
   return { hz, latencyMs };
+}
+
+async function handRolledFirstSettler(childCount: number): Promise<void> {
+  let winner: number | undefined;
+  const controllers = Array.from({ length: childCount }, () => new AbortController());
+  await Promise.all(
+    Array.from({ length: childCount }, (_, index) =>
+      Promise.resolve(index).then((value) => {
+        if (winner === undefined) {
+          winner = value;
+          controllers.forEach((controller, controllerIndex) => {
+            if (controllerIndex !== index) controller.abort();
+          });
+        }
+        return value;
+      }),
+    ),
+  );
+  if (winner === undefined) {
+    throw new Error("handRolledFirstSettler exhausted unexpectedly.");
+  }
 }
 
 async function runRuntimeBenchmarks(opFactoryInput: unknown): Promise<RuntimeReport> {
@@ -477,6 +513,32 @@ async function runRuntimeBenchmarks(opFactoryInput: unknown): Promise<RuntimeRep
     const ops = Array.from({ length: CONCURRENCY_CHILDREN }, (_, index) => Op.of(index));
     const result = await Op.all(ops).run();
     if (!result.isOk()) throw new Error("all.opAll failed unexpectedly.");
+  });
+
+  report["any.handRolledFirstSuccess"] = await runVariant(
+    "any.handRolledFirstSuccess",
+    async () => {
+      await handRolledFirstSettler(CONCURRENCY_CHILDREN);
+    },
+  );
+
+  report["any.opAny"] = await runVariant("any.opAny", async () => {
+    const ops = Array.from({ length: CONCURRENCY_CHILDREN }, (_, index) => Op.of(index));
+    const result = await Op.any(ops).run();
+    if (!result.isOk()) throw new Error("any.opAny failed unexpectedly.");
+  });
+
+  report["race.handRolledFirstSettler"] = await runVariant(
+    "race.handRolledFirstSettler",
+    async () => {
+      await handRolledFirstSettler(CONCURRENCY_CHILDREN);
+    },
+  );
+
+  report["race.opRace"] = await runVariant("race.opRace", async () => {
+    const ops = Array.from({ length: CONCURRENCY_CHILDREN }, (_, index) => Op.of(index));
+    const result = await Op.race(ops).run();
+    if (!result.isOk()) throw new Error("race.opRace failed unexpectedly.");
   });
 
   report["retry.handRolled"] = await runVariant("retry.handRolled", async () => {
@@ -523,6 +585,30 @@ async function runRuntimeBenchmarks(opFactoryInput: unknown): Promise<RuntimeRep
   report["timeout.opWithTimeout"] = await runVariant("timeout.opWithTimeout", async () => {
     const result = await Op.of(7).withTimeout(TIMEOUT_BUDGET_MS).run();
     if (!result.isOk()) throw new Error("timeout.opWithTimeout failed unexpectedly.");
+  });
+
+  report["compose.asyncSteps"] = await runVariant("compose.asyncSteps", async () => {
+    let value = await Promise.resolve(1);
+    for (let step = 0; step < COMPOSE_STEPS; step += 1) {
+      value = await Promise.resolve(value + 1);
+    }
+    if (value !== COMPOSE_STEPS + 1) {
+      throw new Error("compose.asyncSteps failed unexpectedly.");
+    }
+  });
+
+  report["compose.opYieldChain"] = await runVariant("compose.opYieldChain", async () => {
+    const program = Op(function* () {
+      let value = 1;
+      for (let step = 0; step < COMPOSE_STEPS; step += 1) {
+        value = yield* Op.of(value + 1) as unknown as Generator<unknown, number, unknown>;
+      }
+      return value;
+    });
+    const result = await program.run();
+    if (!result.isOk() || result.value !== COMPOSE_STEPS + 1) {
+      throw new Error("compose.opYieldChain failed unexpectedly.");
+    }
   });
 
   return report as RuntimeReport;
@@ -584,17 +670,26 @@ const RUNTIME_VARIANTS: VariantName[] = [
   "singleOp.opRun",
   "all.promiseAll",
   "all.opAll",
+  "any.handRolledFirstSuccess",
+  "any.opAny",
+  "race.handRolledFirstSettler",
+  "race.opRace",
   "retry.handRolled",
   "retry.opWithRetry",
   "timeout.promiseRace",
   "timeout.opWithTimeout",
+  "compose.asyncSteps",
+  "compose.opYieldChain",
 ];
 
 const OVERHEAD_PAIRS: Record<OverheadPairName, { reference: VariantName; variant: VariantName }> = {
   singleOp: { reference: "singleOp.rawAsync", variant: "singleOp.opRun" },
   all: { reference: "all.promiseAll", variant: "all.opAll" },
+  any: { reference: "any.handRolledFirstSuccess", variant: "any.opAny" },
+  race: { reference: "race.handRolledFirstSettler", variant: "race.opRace" },
   retry: { reference: "retry.handRolled", variant: "retry.opWithRetry" },
   timeout: { reference: "timeout.promiseRace", variant: "timeout.opWithTimeout" },
+  compose: { reference: "compose.asyncSteps", variant: "compose.opYieldChain" },
 };
 
 function buildBenchmarkReport(input: {
