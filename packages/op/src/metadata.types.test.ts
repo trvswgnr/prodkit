@@ -149,6 +149,31 @@ describe("metadata type contracts", () => {
 
     type _ = Assert<IsEqual<MergeMeta<DatabaseReq, CacheReq>, { deps: "database" | "cache" }>>;
   });
+
+  test("combinators merge child metadata", () => {
+    const withDb = Op(function* () {
+      return yield* new TestInstruction<number, DatabaseReq>(1);
+    });
+    const withLogger = Op(function* () {
+      return yield* new TestInstruction<string, LoggerReq>("ok");
+    });
+    const all = Op.all([withDb, withLogger]);
+    const allSettled = Op.allSettled([withDb, withLogger]);
+    const anyCombined = Op.any([withDb, withLogger]);
+    const race = Op.race([withDb, withLogger]);
+
+    type _All = Assert<IsEqual<InferOpMeta<typeof all>, { deps: "database" | "logger" }>>;
+    type _AllSettled = Assert<
+      IsEqual<InferOpMeta<typeof allSettled>, { deps: "database" | "logger" }>
+    >;
+    type _Any = Assert<IsEqual<InferOpMeta<typeof anyCombined>, { deps: "database" | "logger" }>>;
+    type _Race = Assert<IsEqual<InferOpMeta<typeof race>, { deps: "database" | "logger" }>>;
+
+    const outer = Op(function* () {
+      return yield* Op.all([withDb, withLogger]);
+    });
+    type _Outer = Assert<IsEqual<InferOpMeta<typeof outer>, { deps: "database" | "logger" }>>;
+  });
 });
 
 describe("Blocking type contracts", () => {

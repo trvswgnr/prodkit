@@ -493,7 +493,6 @@ describe("DI cutover runtime", () => {
         expect(db1).toBe(db2);
         return db1;
       }),
-      // @ts-expect-error - child branches inject deps; parent metadata does not list them
       DI.scoped(DatabaseDependency, async () => {
         factoryCalls += 1;
         await factoryGate;
@@ -526,7 +525,6 @@ describe("DI cutover runtime", () => {
         expect(db1).toBe(db2);
         return db1;
       }),
-      // @ts-expect-error - child branches inject deps; parent metadata does not list them
       DI.scoped(DatabaseDependency, () => {
         scopedCalls += 1;
         return makeDatabase();

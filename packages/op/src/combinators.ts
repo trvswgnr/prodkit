@@ -1,8 +1,11 @@
 import { ErrorGroup, UnhandledException } from "./errors.js";
 import {
-  type Instruction,
+  type EmptyMeta,
+  type InferOpMeta,
   type InferOpOk,
   type InferOpErr,
+  type Instruction,
+  type MergeMeta,
   type RunContext,
 } from "./core/types.js";
 import type { Op } from "./index.js";
@@ -11,10 +14,22 @@ import { createRunContext, drive } from "./core/runtime.js";
 import { Result, type Err } from "./result.js";
 import { makeCoreOp, createDefaultHooks } from "./core/fluent-nullary.js";
 import type { AnyNullaryOp } from "./core/types.js";
+import { unsafeCoerce } from "./shared.js";
 
-function makeCombinatorOp<T, E>(gen: () => Generator<Instruction<E>, T, unknown>): Op<T, E, []> {
-  const self: Op<T, E, []> = makeCoreOp(
-    gen,
+type MergeOpsMeta<Ops extends readonly AnyNullaryOp[]> = Ops extends readonly [
+  infer Head extends AnyNullaryOp,
+  ...infer Tail extends readonly AnyNullaryOp[],
+]
+  ? MergeMeta<InferOpMeta<Head>, MergeOpsMeta<Tail>>
+  : EmptyMeta;
+
+function makeCombinatorOp<T, E, M = EmptyMeta>(
+  gen: () => Generator<Instruction<E>, T, unknown>,
+): Op<T, E, [], M> {
+  let self: Op<T, E, [], M>;
+  self = makeCoreOp<T, E, M>(
+    // SAFETY: combinator generators yield runtime instructions; M is declared on the returned Op.
+    () => unsafeCoerce(gen()),
     createDefaultHooks(() => self),
   );
   return self;
@@ -109,7 +124,7 @@ function collectAllSettled<T, E>(
 export function allOp<const Ops extends readonly AnyNullaryOp[]>(
   ops: Ops,
   concurrency?: number,
-): Op<AllOpOk<Ops>, AllOpErr<Ops>, []> {
+): Op<AllOpOk<Ops>, AllOpErr<Ops>, [], MergeOpsMeta<Ops>> {
   const snapshot = ops.slice();
 
   return makeCombinatorOp(function* () {
@@ -228,7 +243,7 @@ type AllSettledOpOk<Ops extends readonly AnyNullaryOp[]> = {
 export function allSettledOp<const Ops extends readonly AnyNullaryOp[]>(
   ops: Ops,
   concurrency?: number,
-): Op<AllSettledOpOk<Ops>, never, []> {
+): Op<AllSettledOpOk<Ops>, never, [], MergeOpsMeta<Ops>> {
   const snapshot = ops.slice();
 
   return makeCombinatorOp(function* () {
@@ -241,7 +256,9 @@ export function allSettledOp<const Ops extends readonly AnyNullaryOp[]>(
   });
 }
 
-export function settleOp<T, E>(op: Op<T, E, []>): Op<Result<T, E | UnhandledException>, never, []> {
+export function settleOp<T, E, M>(
+  op: Op<T, E, [], M>,
+): Op<Result<T, E | UnhandledException>, never, [], M> {
   return makeCombinatorOp(function* () {
     return yield* new SuspendInstruction((outerContext) => drive(op, outerContext));
   });
@@ -334,7 +351,7 @@ type AnyOpErr<Ops extends readonly AnyNullaryOp[]> =
 
 export function anyOp<const Ops extends readonly AnyNullaryOp[]>(
   ops: Ops,
-): Op<AnyOpOk<Ops>, AnyOpErr<Ops>, []> {
+): Op<AnyOpOk<Ops>, AnyOpErr<Ops>, [], MergeOpsMeta<Ops>> {
   const snapshot = ops.slice();
 
   return makeCombinatorOp(function* () {
@@ -397,7 +414,7 @@ type RaceOpOk<Ops extends readonly AnyNullaryOp[]> = InferOpOk<Ops[number]>;
 type RaceOpErr<Ops extends readonly AnyNullaryOp[]> = InferOpErr<Ops[number]>;
 export function raceOp<const Ops extends readonly AnyNullaryOp[]>(
   ops: Ops,
-): Op<RaceOpOk<Ops>, RaceOpErr<Ops>, []> {
+): Op<RaceOpOk<Ops>, RaceOpErr<Ops>, [], MergeOpsMeta<Ops>> {
   const snapshot = ops.slice();
   return makeCombinatorOp(function* () {
     const result: Result<RaceOpOk<Ops>, RaceOpErr<Ops>> = yield* new SuspendInstruction(

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `Op.all`, `Op.allSettled`, `Op.any`, and `Op.race` now merge child operation metadata so
+  requirements declared only in combinator branches flow to parent `yield*` sites and provisioning.
+
 ### Added
 
 - Published Op benchmark baseline guidance in repo-root `BENCHMARKS.md`, with CI

@@ -240,6 +240,30 @@ describe("DI cutover type contracts", () => {
     type _ = Assert<IsEqual<InferReqs<typeof runnable>, never>>;
   });
 
+  test("Op.all child dependency requirements bubble to parent provision sites", () => {
+    const db = {
+      query: Op(function* (_sql: string, _params: unknown[]) {
+        return { id: "1" };
+      }).mapErr((error): DatabaseError => error),
+    } satisfies Database;
+
+    const op = Op(function* () {
+      yield* Op.all([
+        Op(function* () {
+          yield* DI.inject(DatabaseDependency);
+        }),
+        Op(function* () {
+          yield* DI.inject(DatabaseDependency);
+        }),
+      ]);
+    });
+
+    type _Reqs = Assert<IsEqual<InferReqs<typeof op>, DatabaseDependency>>;
+
+    const runnable = DI.provide(op, DI.singleton(DatabaseDependency, db));
+    type _ = Assert<IsEqual<InferReqs<typeof runnable>, never>>;
+  });
+
   test("full DI provision clears deps while other blocking keys remain", () => {
     type WithAuth = WithDIMeta<EmptyMeta, DatabaseDependency> & { auth: Blocking<true> };
     type _StillBlocked = Assert<IsEqual<IsRunnable<WithAuth>, false>>;
