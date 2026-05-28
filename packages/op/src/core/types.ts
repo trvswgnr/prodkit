@@ -9,6 +9,25 @@ declare const EMPTY_META: unique symbol;
 declare const BLOCKING: unique symbol;
 export const CUSTOM_INSTRUCTION_META = Symbol("prodkit.op.custom-instruction-meta");
 
+/**
+ * Metadata merge algebra for composed operations.
+ *
+ * Operations carry extension metadata on `M`. When they compose (`flatMap`, combinators,
+ * yielded custom instructions), {@link MergeMeta} accumulates requirements from both sides.
+ *
+ * {@link EmptyMeta} is the identity element: merging with empty metadata leaves the other
+ * operand unchanged.
+ *
+ * Per-key merge outcomes:
+ * - Keys present on only one side are kept as-is.
+ * - Plain values at the same key union (requirements accumulate).
+ * - When either side at a key is {@link Blocking}, the merged value is `Blocking` with
+ *   payloads unioned. `Blocking` takes precedence over plain values at that key.
+ *
+ * {@link MergeMetaObjects} merges two object shapes key-by-key. {@link MergeUnionMeta} applies
+ * the same rules when a generator yields multiple custom instructions. {@link CollectBlockingPayload}
+ * extracts `Blocking` payload types during union merges so blocking requirements stay branded.
+ */
 type MergeBlockingValue<VA, VB> =
   VA extends Blocking<infer TA>
     ? VB extends Blocking<infer TB>
@@ -48,6 +67,7 @@ type MergeUnionMeta<U> = NormalizeMeta<
       }
 >;
 
+/** Merges metadata accumulated across two composed operations. See merge algebra above. */
 export type MergeMeta<A, B> =
   IsAny<A> extends true
     ? any
@@ -77,14 +97,20 @@ export type SetBlockingMeta<M, K extends PropertyKey, T> = NormalizeMeta<
 >;
 
 /**
- * Whether top-level {@link BaseOp.run} is available from operation metadata.
+ * Runnable gating from metadata.
  *
- * Operations are runnable by default. Extension packages block `.run()` by placing
- * a {@link Blocking} value on a metadata key, or by wrapping with `withBlocking(...)`.
+ * Top-level {@link BaseOp.run} is available only when every metadata key is satisfied.
+ * {@link HasBlocking} is true when any key still carries {@link Blocking} with a non-empty
+ * payload. {@link IsRunnable} is false in that case, so `.run()` is not on the operation type.
+ *
+ * Extension packages block `.run()` by attaching `Blocking` to metadata keys (or via
+ * `withBlocking(...)`). Callers satisfy those requirements through extension-specific runners
+ * first; clearing or replacing blocking metadata is what makes `.run()` type-check again.
  */
 export type IsRunnable<M> =
   IsAny<M> extends true ? true : [HasBlocking<M>] extends [true] ? false : true;
 
+/** True when metadata still carries an unsatisfied {@link Blocking} requirement on any key. */
 type HasBlocking<M> = keyof StripEmpty<M> extends never
   ? false
   : {
@@ -97,11 +123,22 @@ type HasBlocking<M> = keyof StripEmpty<M> extends never
     ? true
     : false;
 
+/**
+ * Empty metadata; the merge identity element.
+ *
+ * Operations with no extension requirements use `EmptyMeta`. Merging with `EmptyMeta` leaves
+ * the other operand unchanged in both directions.
+ */
 export type EmptyMeta = {
   readonly [EMPTY_META]: true;
 };
 
-/** Branded metadata value that blocks top-level `.run()` until its payload is satisfied. */
+/**
+ * Branded metadata value that blocks top-level `.run()` until its payload is satisfied.
+ *
+ * During metadata merge, `Blocking` at a key takes precedence over plain values and unions
+ * payloads with other `Blocking` values at the same key.
+ */
 export type Blocking<T> = { readonly [BLOCKING]: T };
 
 /** Metadata shapes accepted on {@link Op}'s `M` parameter (writable object literals are fine). */
