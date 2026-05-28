@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { ErrorGroup, TaggedError, TimeoutError, UnhandledException } from "./errors.js";
+import { ErrorGroup, TaggedError, TimeoutError, UnhandledException } from "../../src/errors.js";
 
 describe("UnhandledException", () => {
   test("derives message from cause", () => {

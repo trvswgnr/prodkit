@@ -1,7 +1,7 @@
 import * as fc from "fast-check";
 import { assert, describe, expect, test } from "vitest";
-import { Op } from "./index.js";
-import { rejectAfter, resolveAfter, trackAbortListeners } from "./test-utils.js";
+import { Op } from "../../src/index.js";
+import { rejectAfter, resolveAfter, trackAbortListeners } from "../support/utils.js";
 
 type RaceBranch =
   | { kind: "ok"; value: number; delay: number }

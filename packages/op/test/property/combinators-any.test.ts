@@ -1,7 +1,7 @@
 import * as fc from "fast-check";
 import { assert, describe, expect, test } from "vitest";
-import { ErrorGroup, Op } from "./index.js";
-import { rejectAfter, resolveAfter } from "./test-utils.js";
+import { ErrorGroup, Op } from "../../src/index.js";
+import { rejectAfter, resolveAfter } from "../support/utils.js";
 
 function delayedFail<T>(tag: T, ms: number) {
   return Op.try(
