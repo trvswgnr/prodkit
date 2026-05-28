@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Property-based regression tests for `Op.any`, `Op.race`, `exponentialBackoff`, and retry
+  policy attempt-count invariants.
 - Performance snapshot in [`PERFORMANCE.md`](PERFORMANCE.md) (all harness scenarios, ops/sec,
   slowdown ratios, and bundle size), refreshable via
   `pnpm --filter @prodkit/tools run performance:sync -- --write`.
