@@ -1,4 +1,7 @@
 export const COMPOSE_STEPS = 6;
+export const CONCURRENCY_CHILDREN = 8;
+export const RETRY_ATTEMPTS = 3;
+export const TIMEOUT_BUDGET_MS = 250;
 
 export type OpRunResult = { isOk: () => boolean; value?: unknown };
 

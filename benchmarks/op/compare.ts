@@ -96,6 +96,7 @@ function formatBytes(bytes: number): string {
 function implementationShortLabel(column: ImplementationColumn): string {
   if (column.id === BASELINE_IMPLEMENTATION_ID) return "Native";
   if (column.id === "op") return "Op";
+  if (column.id === "effect") return "Effect";
   return column.header;
 }
 

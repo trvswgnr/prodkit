@@ -1,10 +1,23 @@
 import { Op } from "@prodkit/op";
+import {
+  runEffectAll,
+  runEffectFirstSuccess,
+  runEffectRaceFirst,
+  runEffectRetry,
+  runEffectSingleValue,
+  runEffectTimeout,
+  runEffectYieldChain,
+} from "./effect-scenarios.ts";
 import { assertProfileOpFactory } from "./harness.ts";
-import { runAsyncChain, runOpYieldChain } from "./scenarios.ts";
+import {
+  CONCURRENCY_CHILDREN,
+  RETRY_ATTEMPTS,
+  runAsyncChain,
+  runOpYieldChain,
+  TIMEOUT_BUDGET_MS,
+} from "./scenarios.ts";
 
-export const CONCURRENCY_CHILDREN = 8;
-export const RETRY_ATTEMPTS = 3;
-export const TIMEOUT_BUDGET_MS = 250;
+export { CONCURRENCY_CHILDREN, RETRY_ATTEMPTS, TIMEOUT_BUDGET_MS } from "./scenarios.ts";
 
 export const BASELINE_IMPLEMENTATION_ID = "native" as const;
 
@@ -17,8 +30,8 @@ export type ComparisonScenarioKey =
   | "timeout"
   | "compose";
 
-/** Column ids for the public comparison table. Add competitors here later. */
-export type ImplementationId = typeof BASELINE_IMPLEMENTATION_ID | "op";
+/** Column ids for the public comparison table. */
+export type ImplementationId = typeof BASELINE_IMPLEMENTATION_ID | "op" | "effect";
 
 export type ImplementationColumn = {
   id: ImplementationId;
@@ -36,6 +49,11 @@ export const IMPLEMENTATION_COLUMNS: readonly ImplementationColumn[] = [
     id: "op",
     header: "@prodkit/op",
     description: "Workspace `@prodkit/op` build under test",
+  },
+  {
+    id: "effect",
+    header: "effect",
+    description: "`effect` npm package on the same machine",
   },
 ];
 
@@ -103,6 +121,11 @@ export const COMPARISON_SCENARIOS: readonly ComparisonScenario[] = [
         if (!result.isOk()) throw new Error("singleValue.opRun failed unexpectedly.");
       },
     },
+    effect: {
+      benchName: "singleValue.effectRunPromise",
+      description: "`Effect.runPromise(Effect.succeed(x))`",
+      run: runEffectSingleValue,
+    },
   }),
   defineScenario("all", "Parallel batch (8 children)", "overhead.all.ratio", {
     native: {
@@ -123,6 +146,11 @@ export const COMPARISON_SCENARIOS: readonly ComparisonScenario[] = [
         if (!result.isOk()) throw new Error("all.opAll failed unexpectedly.");
       },
     },
+    effect: {
+      benchName: "all.effectAll",
+      description: "`Effect.all(..., { concurrency: 'unbounded' })`",
+      run: runEffectAll,
+    },
   }),
   defineScenario("any", "First success (8 children)", "overhead.any.ratio", {
     native: {
@@ -141,6 +169,11 @@ export const COMPARISON_SCENARIOS: readonly ComparisonScenario[] = [
         if (!result.isOk()) throw new Error("any.opAny failed unexpectedly.");
       },
     },
+    effect: {
+      benchName: "any.effectFirstSuccessOf",
+      description: "`Effect.firstSuccessOf([...])`",
+      run: runEffectFirstSuccess,
+    },
   }),
   defineScenario("race", "First settler (8 children)", "overhead.race.ratio", {
     native: {
@@ -158,6 +191,11 @@ export const COMPARISON_SCENARIOS: readonly ComparisonScenario[] = [
         const result = await Op.race(ops).run();
         if (!result.isOk()) throw new Error("race.opRace failed unexpectedly.");
       },
+    },
+    effect: {
+      benchName: "race.effectRaceFirst",
+      description: "`Effect.raceFirst` folded over children",
+      run: runEffectRaceFirst,
     },
   }),
   defineScenario("retry", "Retry loop", "overhead.retry.ratio", {
@@ -197,6 +235,11 @@ export const COMPARISON_SCENARIOS: readonly ComparisonScenario[] = [
         if (!result.isOk()) throw new Error("retry.opWithRetry failed unexpectedly.");
       },
     },
+    effect: {
+      benchName: "retry.effectRetry",
+      description: "`Effect.retry(..., { times, schedule })`",
+      run: runEffectRetry,
+    },
   }),
   defineScenario("timeout", "Timeout guard", "overhead.timeout.ratio", {
     native: {
@@ -222,6 +265,11 @@ export const COMPARISON_SCENARIOS: readonly ComparisonScenario[] = [
         if (!result.isOk()) throw new Error("timeout.opWithTimeout failed unexpectedly.");
       },
     },
+    effect: {
+      benchName: "timeout.effectTimeout",
+      description: "`Effect.timeout(ms)`",
+      run: runEffectTimeout,
+    },
   }),
   defineScenario("compose", "Sequential compose (6 steps)", "overhead.compose.ratio", {
     native: {
@@ -236,6 +284,13 @@ export const COMPARISON_SCENARIOS: readonly ComparisonScenario[] = [
       description: "`yield* Op.of` generator chain",
       run: async () => {
         await runOpYieldChain(op);
+      },
+    },
+    effect: {
+      benchName: "compose.effectGenChain",
+      description: "`Effect.gen` + `yield* Effect.succeed` chain",
+      run: async () => {
+        await runEffectYieldChain();
       },
     },
   }),

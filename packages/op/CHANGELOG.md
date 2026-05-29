@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   id). Comparison reports now expose `vsBaseline` ratios per competitor column; `compare` and
   `performance:sync` render absolute ops/sec and vs-native tables dynamically from
   `IMPLEMENTATION_COLUMNS`.
+- Added an `effect` competitor column to the comparison matrix with matching scenario runners for
+  the public `PERFORMANCE.md` snapshot. CodSpeed benches remain Op-only.
 - Removed dead hook-era internals after the plan AST cutover: unused `*CoreOp` builders,
   `DefaultHooks`, and orphan `with*Op` policy wrappers. Fluent methods now share one
   `fluentMethodsForContext` factory between `makePlanOp` and the sync-value hot path.

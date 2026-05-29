@@ -12,11 +12,11 @@ Performance work uses four layers:
 
 ## Comparison matrix
 
-Scenario semantics live in [`comparison-matrix.ts`](comparison-matrix.ts). Each row defines `implementations` keyed by column id; `native` is the baseline and additional libraries (currently `@prodkit/op`) are competitors. Add columns by extending `IMPLEMENTATION_COLUMNS` and each scenario's `implementations` map.
+Scenario semantics live in [`comparison-matrix.ts`](comparison-matrix.ts). Each row defines `implementations` keyed by column id; `native` is the baseline and competitors (`@prodkit/op`, `effect`) run the same workload shape. Add columns by extending `IMPLEMENTATION_COLUMNS` and each scenario's `implementations` map.
 
 | Output | Harness | Purpose |
 | --- | --- | --- |
-| Public snapshot table | `compare.ts` -> `performance:sync` | User-facing absolute ops/sec and vs-native ratios |
+| Public snapshot table | `compare.ts` -> `performance:sync` | User-facing absolute ops/sec and vs-native ratios (native, Op, Effect) |
 | CI regression guard | CodSpeed walltime + `overhead.*.ratio` | Track absolute timings and gap changes |
 | Sync hot path | CodSpeed simulation (`compose.rawSyncYieldStar`) | Generator dispatch without async noise |
 | Deep dive | `profile.ts` | Flame graphs and compose breakdown |
@@ -90,7 +90,7 @@ Walltime benches track Op absolute timings plus `overhead.*.ratio` benches that 
 
 `compare.ts` runs the same scenario matrix with `tinybench`, writes `.artifacts/comparison-report.json`, and `performance:sync` renders the snapshot block in `packages/op/PERFORMANCE.md`.
 
-To add a competitor column, extend `IMPLEMENTATION_COLUMNS` and each scenario's `implementations` in `comparison-matrix.ts`. `compare.ts` and `tools/update-op-performance-doc.ts` read column ids from the report automatically.
+To add another competitor column, extend `IMPLEMENTATION_COLUMNS` and each scenario's `implementations` in `comparison-matrix.ts` (see `effect-scenarios.ts` for the Effect column). `compare.ts` and `tools/update-op-performance-doc.ts` read column ids from the report automatically. CodSpeed walltime benches stay Op-only.
 
 ### Bundle size
 

@@ -16,6 +16,15 @@ import {
   runRawSyncYieldStarChain,
   runSingleOpRun,
 } from "../scenarios.ts";
+import {
+  runEffectAll,
+  runEffectFirstSuccess,
+  runEffectRaceFirst,
+  runEffectRetry,
+  runEffectSingleValue,
+  runEffectTimeout,
+  runEffectYieldChain,
+} from "../effect-scenarios.ts";
 
 describe("profile scenarios", () => {
   const steps = 3;
@@ -45,6 +54,16 @@ describe("profile scenarios", () => {
     await expect(runOpFlatLoop(Op, steps)).resolves.toBe(expected);
     await expect(runOpSequentialRuns(Op, steps)).resolves.toBe(expected);
     await expect(runSingleOpRun(Op)).resolves.toBeUndefined();
+  });
+
+  it("Effect-backed scenarios complete without error", async () => {
+    await expect(runEffectSingleValue()).resolves.toBeUndefined();
+    await expect(runEffectAll()).resolves.toBeUndefined();
+    await expect(runEffectFirstSuccess()).resolves.toBeUndefined();
+    await expect(runEffectRaceFirst()).resolves.toBeUndefined();
+    await expect(runEffectRetry()).resolves.toBeUndefined();
+    await expect(runEffectTimeout()).resolves.toBeUndefined();
+    await expect(runEffectYieldChain(steps)).resolves.toBe(expected);
   });
 
   it("default compose steps remain stable", () => {
