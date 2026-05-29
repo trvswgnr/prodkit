@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- No entries yet.
+- Added sequential-compose profile harness in `@prodkit/op-benchmarks`: shared `harness.ts` and
+  `scenarios.ts`, `tinybench` breakdown statistics, `--steps=` / `--report=profile.json`, sync
+  reference table split, CPU/heap artifact detection, and Vitest scenario smoke tests.
 
 ### Fixed
 

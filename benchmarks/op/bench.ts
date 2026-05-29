@@ -1,12 +1,26 @@
 import { spawn } from "node:child_process";
 import { gzipSync } from "node:zlib";
-import { copyFile, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { existsSync, readFileSync } from "node:fs";
+import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import { Bench } from "tinybench";
 import { transform } from "esbuild";
+import {
+  assertBenchOpFactory,
+  formatNumber,
+  formatPercentDelta,
+  getRepoRoot,
+  importOpModule,
+  isRecord,
+  OP_PACKAGE,
+  parseReportPath,
+  percentDelta,
+  resolveBundleEntry,
+  resolveOpPackageDir,
+  runTinybenchVariant,
+  writeJsonReport,
+} from "./harness.ts";
+import { runAsyncChain, runOpYieldChain } from "./scenarios.ts";
 
 type BaselineKind = "main" | "npm";
 type VariantName =
@@ -90,67 +104,10 @@ type TargetInstall = {
 const REPO = "trvswgnr/prodkit";
 const MAIN_REF = "refs/heads/main";
 const MAIN_REMOTE_URL = `https://github.com/${REPO}.git`;
-const OP_PACKAGE = "@prodkit/op";
-const ENTRY_FALLBACK = "./dist/index.mjs";
 const CONCURRENCY_CHILDREN = 8;
 const RETRY_ATTEMPTS = 3;
 const TIMEOUT_BUDGET_MS = 250;
-const COMPOSE_STEPS = 6;
 const logger = console;
-
-function readPackageJsonIfPresent(dir: string): unknown {
-  const packageJsonPath = path.join(dir, "package.json");
-  if (!existsSync(packageJsonPath)) return undefined;
-  try {
-    return JSON.parse(readFileSync(packageJsonPath, "utf8"));
-  } catch {
-    return undefined;
-  }
-}
-
-function readOwnObjectField(value: unknown, key: string): unknown {
-  if (typeof value !== "object" || value === null) return undefined;
-  if (!Object.hasOwn(value, key)) return undefined;
-  return Reflect.get(value, key);
-}
-
-function readPackageNameIfPresent(dir: string): string | undefined {
-  const parsed = readPackageJsonIfPresent(dir);
-  const name = readOwnObjectField(parsed, "name");
-  return typeof name === "string" ? name : undefined;
-}
-
-function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
-  return (typeof value === "object" || typeof value === "function") && value !== null;
-}
-
-function getRepoRoot(): string {
-  let currentDir = path.dirname(fileURLToPath(import.meta.url));
-
-  while (true) {
-    if (existsSync(path.join(currentDir, "pnpm-workspace.yaml"))) {
-      return currentDir;
-    }
-
-    const name = readPackageNameIfPresent(currentDir);
-    if (name === "@prodkit/monorepo" || name === "@prodkit/op") {
-      return currentDir;
-    }
-
-    const parentDir = path.dirname(currentDir);
-    if (parentDir === currentDir) {
-      throw new Error("Unable to locate repo root");
-    }
-    currentDir = parentDir;
-  }
-}
-
-function resolveOpPackageDir(repoRoot: string): string {
-  const workspacePackageDir = path.join(repoRoot, "packages", "op");
-  if (existsSync(path.join(workspacePackageDir, "package.json"))) return workspacePackageDir;
-  if (readPackageNameIfPresent(repoRoot) === OP_PACKAGE) return repoRoot;
-  throw new Error(`Unable to locate ${OP_PACKAGE} package directory from ${repoRoot}`);
-}
 
 function parseBaselineArg(argv: readonly string[]): BaselineKind {
   const arg = argv.find((item) => item.startsWith("--baseline="));
@@ -158,16 +115,6 @@ function parseBaselineArg(argv: readonly string[]): BaselineKind {
   const value = arg.slice("--baseline=".length);
   if (value === "main" || value === "npm") return value;
   throw new Error(`Invalid baseline "${value}". Expected "main" or "npm".`);
-}
-
-function parseReportArg(argv: readonly string[]): string | undefined {
-  const arg = argv.find((item) => item.startsWith("--report="));
-  if (!arg) return undefined;
-  const value = arg.slice("--report=".length);
-  if (value.length === 0) {
-    throw new Error(`Invalid report path "". Expected a non-empty path.`);
-  }
-  return value;
 }
 
 function parseLsRemoteSha(output: string): string | undefined {
@@ -191,31 +138,6 @@ function parsePackFilename(packOutput: string): string {
     throw new Error("Could not parse npm pack output filename.");
   }
   return filename;
-}
-
-function relativeSafePath(pkgRoot: string, candidate: string): string {
-  const absolute = path.resolve(pkgRoot, candidate);
-  const relative = path.relative(pkgRoot, absolute);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new Error(`Resolved entry path escaped package root: ${candidate}`);
-  }
-  return absolute;
-}
-
-function readRuntimeEntryFromExports(exportsField: unknown): string | undefined {
-  if (typeof exportsField === "string") return exportsField;
-  if (!isRecord(exportsField)) return undefined;
-
-  const entry = exportsField["."];
-  if (typeof entry === "string") return entry;
-  if (!isRecord(entry)) return undefined;
-
-  const runtimeEntry = entry.import;
-  if (typeof runtimeEntry === "string") return runtimeEntry;
-
-  const defaultEntry = entry.default;
-  if (typeof defaultEntry === "string") return defaultEntry;
-  return undefined;
 }
 
 async function runCommand(
@@ -400,73 +322,12 @@ async function resolveMainTarball(repoRoot: string, sha: string): Promise<string
 }
 
 async function importOpFactory(packageDir: string): Promise<{ Op: unknown }> {
-  const modulePath = await resolveBundleEntry(packageDir);
-  if (!existsSync(modulePath)) {
-    throw new Error(`Resolved runtime entry does not exist: ${modulePath}`);
-  }
-  const mod: unknown = await import(pathToFileURL(modulePath).href);
-  if (!isRecord(mod)) {
-    throw new Error(`Unable to import Op factory from ${modulePath}.`);
-  }
-  if (!mod.Op) {
-    throw new Error(`Unable to import Op factory from ${modulePath}.`);
-  }
-  return { Op: mod.Op };
-}
-
-type OpRunResult = { isOk: () => boolean; value?: unknown };
-
-type OpFactory = {
-  (generator: () => Generator<unknown, unknown, unknown>): { run: () => Promise<OpRunResult> };
-  of: (value: unknown) => {
-    run: () => Promise<OpRunResult>;
-    withTimeout: (timeoutMs: number) => { run: () => Promise<OpRunResult> };
-  };
-  try: (f: () => unknown) => {
-    withRetry: (policy: {
-      maxAttempts: number;
-      shouldRetry: (cause: unknown) => boolean;
-      getDelay: (attempt: number, cause: unknown) => number;
-    }) => { run: () => Promise<OpRunResult> };
-    withTimeout: (timeoutMs: number) => { run: () => Promise<OpRunResult> };
-  };
-  all: (ops: unknown[]) => { run: () => Promise<OpRunResult> };
-  any: (ops: unknown[]) => { run: () => Promise<OpRunResult> };
-  race: (ops: unknown[]) => { run: () => Promise<OpRunResult> };
-};
-
-function assertOpFactory(input: unknown): OpFactory {
-  if (!isRecord(input)) {
-    throw new Error("Imported Op value is invalid.");
-  }
-  if (
-    typeof input.of !== "function" ||
-    typeof input.try !== "function" ||
-    typeof input.all !== "function" ||
-    typeof input.any !== "function" ||
-    typeof input.race !== "function" ||
-    typeof input !== "function"
-  ) {
-    throw new Error("Imported Op is missing required methods (of/try/all/any/race).");
-  }
-  // SAFETY: We've already asserted that the input is a valid OpFactory.
-  return input as OpFactory;
+  return importOpModule(packageDir);
 }
 
 async function runVariant(name: string, fn: () => Promise<unknown>): Promise<BenchmarkRecord> {
-  const bench = new Bench({
-    name,
-    time: 300,
-    warmupTime: 150,
-    warmupIterations: 5,
-  });
-  bench.add(name, fn);
-  await bench.run();
-
-  const task = bench.tasks[0];
-  const hz = task?.result?.hz ?? 0;
-  const latencyMs = task?.result?.mean ?? 0;
-  return { hz, latencyMs };
+  const record = await runTinybenchVariant(name, fn);
+  return { hz: record.hz, latencyMs: record.latencyMs };
 }
 
 async function handRolledFirstSettler(childCount: number): Promise<void> {
@@ -491,7 +352,7 @@ async function handRolledFirstSettler(childCount: number): Promise<void> {
 }
 
 async function runRuntimeBenchmarks(opFactoryInput: unknown): Promise<RuntimeReport> {
-  const Op = assertOpFactory(opFactoryInput);
+  const Op = assertBenchOpFactory(opFactoryInput);
   const report: Partial<RuntimeReport> = {};
 
   report["singleOp.rawAsync"] = await runVariant("singleOp.rawAsync", async () => {
@@ -587,47 +448,13 @@ async function runRuntimeBenchmarks(opFactoryInput: unknown): Promise<RuntimeRep
     if (!result.isOk()) throw new Error("timeout.opWithTimeout failed unexpectedly.");
   });
 
-  report["compose.asyncSteps"] = await runVariant("compose.asyncSteps", async () => {
-    let value = await Promise.resolve(1);
-    for (let step = 0; step < COMPOSE_STEPS; step += 1) {
-      value = await Promise.resolve(value + 1);
-    }
-    if (value !== COMPOSE_STEPS + 1) {
-      throw new Error("compose.asyncSteps failed unexpectedly.");
-    }
-  });
+  report["compose.asyncSteps"] = await runVariant("compose.asyncSteps", () => runAsyncChain());
 
-  report["compose.opYieldChain"] = await runVariant("compose.opYieldChain", async () => {
-    const program = Op(function* () {
-      let value = 1;
-      for (let step = 0; step < COMPOSE_STEPS; step += 1) {
-        value = yield* Op.of(value + 1) as unknown as Generator<unknown, number, unknown>;
-      }
-      return value;
-    });
-    const result = await program.run();
-    if (!result.isOk() || result.value !== COMPOSE_STEPS + 1) {
-      throw new Error("compose.opYieldChain failed unexpectedly.");
-    }
-  });
+  report["compose.opYieldChain"] = await runVariant("compose.opYieldChain", () =>
+    runOpYieldChain(Op),
+  );
 
   return report as RuntimeReport;
-}
-
-async function resolveBundleEntry(packageDir: string): Promise<string> {
-  const packageJsonPath = path.join(packageDir, "package.json");
-  const packageJsonRaw = await readFile(packageJsonPath, "utf8");
-  const packageJson: unknown = JSON.parse(packageJsonRaw);
-
-  if (!isRecord(packageJson)) {
-    throw new Error("Could not parse package.json.");
-  }
-
-  const exportEntry = readRuntimeEntryFromExports(packageJson.exports);
-  const moduleEntry = typeof packageJson.module === "string" ? packageJson.module : undefined;
-  const mainEntry = typeof packageJson.main === "string" ? packageJson.main : undefined;
-  const candidate = exportEntry ?? moduleEntry ?? mainEntry ?? ENTRY_FALLBACK;
-  return relativeSafePath(packageDir, candidate);
 }
 
 async function measureBundleSize(packageDir: string): Promise<SizeReport> {
@@ -642,22 +469,6 @@ async function measureBundleSize(packageDir: string): Promise<SizeReport> {
   const minBytes = Buffer.byteLength(transformed.code, "utf8");
   const gzipBytes = gzipSync(Buffer.from(transformed.code, "utf8")).byteLength;
   return { minBytes, gzipBytes };
-}
-
-function formatNumber(value: number): string {
-  return Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
-}
-
-function percentDelta(current: number, baseline: number): number | null {
-  if (baseline === 0) return null;
-  return ((current - baseline) / baseline) * 100;
-}
-
-function formatPercentDelta(current: number, baseline: number): string {
-  const pct = percentDelta(current, baseline);
-  if (pct === null) return "n/a";
-  const sign = pct > 0 ? "+" : "";
-  return `${sign}${pct.toFixed(2)}%`;
 }
 
 function slowdownRatio(referenceHz: number, variantHz: number): number {
@@ -756,13 +567,6 @@ function buildBenchmarkReport(input: {
   };
 }
 
-async function writeBenchmarkReport(reportPath: string, report: BenchmarkReport): Promise<void> {
-  const absolutePath = path.resolve(reportPath);
-  await mkdir(path.dirname(absolutePath), { recursive: true });
-  await writeFile(absolutePath, JSON.stringify(report, null, 2) + "\n", "utf8");
-  logger.info(`Wrote benchmark report: ${absolutePath}`);
-}
-
 function printRuntimeComparison(current: RuntimeReport, baseline: RuntimeReport): void {
   logger.info("Runtime benchmarks (ops/sec, higher is better):");
   for (const name of RUNTIME_VARIANTS) {
@@ -814,7 +618,7 @@ async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const repoRoot = getRepoRoot();
   const baselineKind = parseBaselineArg(argv);
-  const reportPath = parseReportArg(argv);
+  const reportPath = parseReportPath(argv);
   const cleanups: Array<() => Promise<void>> = [];
   let failure: unknown;
 
@@ -889,7 +693,8 @@ async function main(): Promise<void> {
     });
     printOverheadSummary(report);
     if (reportPath !== undefined) {
-      await writeBenchmarkReport(reportPath, report);
+      await writeJsonReport(reportPath, report);
+      logger.info(`Wrote benchmark report: ${path.resolve(reportPath)}`);
     }
   } catch (error) {
     failure = error;
