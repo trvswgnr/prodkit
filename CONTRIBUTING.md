@@ -44,7 +44,7 @@ A `changelog:api:check` gate step fails when `packages/op/src/index.ts` or
 `CHANGELOG.md` under `## [Unreleased]`. Internal re-export paths do not count as API changes.
 A `bundle-size` job compares `@prodkit/op` minified + gzip bundle size on pull requests via
 `compressed-size-action`; runtime regressions are tracked separately by CodSpeed
-(see [`packages/op/PERFORMANCE.md`](packages/op/PERFORMANCE.md) and [`BENCHMARKS.md`](BENCHMARKS.md)).
+(see [`packages/op/PERFORMANCE.md`](packages/op/PERFORMANCE.md) and [`benchmarks/op/README.md`](benchmarks/op/README.md)).
 
 All runnable consumer examples and smoke entrypoints live in the **`examples/`** workspace (`@prodkit/examples`): Op-oriented samples under [`examples/op/`](examples/op/), std/di samples under [`examples/std/`](examples/std/), with root [`examples/smoke.ts`](examples/smoke.ts) running both suites.
 
@@ -59,7 +59,7 @@ pnpm --filter @prodkit/tools run performance:sync -- --write
 pnpm --filter @prodkit/op-benchmarks run profile
 ```
 
-- CodSpeed comments on pull requests with runtime regression data; see [`BENCHMARKS.md`](BENCHMARKS.md).
+- CodSpeed comments on pull requests with runtime regression data; see [`benchmarks/op/README.md`](benchmarks/op/README.md).
 - Bundle-size deltas appear on pull requests via the CI `bundle-size` job.
 - `compare` + `performance:sync` refresh the public native-vs-Op table in [`packages/op/PERFORMANCE.md`](packages/op/PERFORMANCE.md).
 - Use `profile.ts` locally after a CodSpeed regression to isolate overhead sources.

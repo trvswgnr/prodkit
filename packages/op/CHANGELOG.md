@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and restored `performance:sync` to publish native-vs-Op slowdown ratios in `PERFORMANCE.md`.
   CodSpeed walltime benches track Op timings and overhead ratios only; native baselines stay in
   `compare.ts` for the public snapshot table.
+- Consolidated benchmark contributor docs into `benchmarks/op/README.md` and removed redundant
+  repo-root `BENCHMARKS.md`.
 - Removed dead hook-era internals after the plan AST cutover: unused `*CoreOp` builders,
   `DefaultHooks`, and orphan `with*Op` policy wrappers. Fluent methods now share one
   `fluentMethodsForContext` factory between `makePlanOp` and the sync-value hot path.

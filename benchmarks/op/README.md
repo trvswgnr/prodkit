@@ -1,26 +1,49 @@
 # Benchmarks
 
-This workspace measures `@prodkit/op` runtime overhead and bundle size. Repo-wide orientation lives in [`BENCHMARKS.md`](../../BENCHMARKS.md).
+This workspace measures `@prodkit/op` runtime overhead and bundle size. Public numbers and
+interpretation live in [`packages/op/PERFORMANCE.md`](../../packages/op/PERFORMANCE.md).
+
+Performance work uses four layers:
+
+1. **CodSpeed** (CI): automated runtime regression detection on every push and pull request.
+2. **compressed-size-action** (CI): automated bundle-size comparison on pull requests.
+3. **`compare.ts` + `performance:sync`** (local / CI artifact): native vs Op slowdown ratios and bundle size for the public table in `PERFORMANCE.md`.
+4. **`profile.ts`** (local): V8 CPU/heap profiling and overhead breakdown when you need to investigate a regression.
+
+## Comparison matrix
+
+Scenario semantics live in [`comparison-matrix.ts`](comparison-matrix.ts). Each row pairs a native baseline with `@prodkit/op` on the same workload. Add competitor library columns by extending `IMPLEMENTATION_COLUMNS` and the runners in that file.
+
+| Output | Harness | Purpose |
+| --- | --- | --- |
+| Public snapshot table | `compare.ts` -> `performance:sync` | User-facing Op vs native ratios |
+| CI regression guard | CodSpeed walltime + `overhead.*.ratio` | Track absolute timings and gap changes |
+| Sync hot path | CodSpeed simulation (`compose.rawSyncYieldStar`) | Generator dispatch without async noise |
+| Deep dive | `profile.ts` | Flame graphs and compose breakdown |
+
+Shared scenario definitions live in `scenarios.ts`. The comparison matrix, CodSpeed benches, profile harness, and Vitest smoke tests import from there so semantics stay aligned.
 
 ## What is measured
 
-Runtime scenarios share one matrix in `comparison-matrix.ts`:
+Runtime (comparison matrix / CodSpeed walltime):
 
 - Single-op overhead (`Op.of(...).run()` vs raw async resolve)
-- Parallel aggregation (`Op.all` vs `Promise.all`)
-- First success (`Op.any` vs hand-rolled first success + abort)
-- First settler (`Op.race` vs hand-rolled first settler + abort)
-- Retry overhead (`withRetry` vs a hand-rolled retry loop)
+- Parallel aggregation (`Op.all` vs `Promise.all`, 8 children)
+- First success (`Op.any` vs hand-rolled first success)
+- First settler (`Op.race` vs hand-rolled first settler)
+- Retry overhead (`withRetry` vs hand-rolled retry loop, 3 attempts)
 - Timeout overhead (`withTimeout` vs `Promise.race` + `setTimeout`)
 - Sequential composition (native async chain vs Op yield* chain)
 
-CodSpeed walltime benches track `@prodkit/op` absolute timings, `overhead.*.ratio` gap benches, and Op compose breakdown scenarios (`opFlatLoop`, `opSequentialRuns`). A sync reference bench (`compose.rawSyncYieldStar`) runs in simulation mode only.
+Runtime (CodSpeed extras):
 
-Bundle-size scenario (CI `bundle-size` job):
+- Op compose breakdown (`opFlatLoop`, `opSequentialRuns`)
+- Sync reference (`compose.rawSyncYieldStar`, simulation only)
+- Overhead ratio benches (`overhead.*.ratio`; native baselines run inside the bench, not as separate CodSpeed series)
 
-- package ESM entrypoint minified + gzip bytes (esbuild minify after `tsdown` build)
+Bundle size (compressed-size-action and compare report):
 
-Shared scenario definitions live in `scenarios.ts`. The comparison matrix, CodSpeed benches, profile harness, and Vitest smoke tests import from there so semantics stay aligned.
+- `@prodkit/op` ESM entry minified + gzip bytes (`tsdown` build, then esbuild minify of `dist/index.mjs`)
 
 ## Commands
 
@@ -35,7 +58,7 @@ pnpm --filter @prodkit/tools run performance:sync -- --write
 
 Build `@prodkit/op` before running benches locally. CodSpeed instrumentation activates in CI (or with the CodSpeed CLI); locally, Vitest runs plain wall-clock benches for a sanity check.
 
-CI publishes runtime regressions via CodSpeed (see [`.github/workflows/codspeed.yml`](../../.github/workflows/codspeed.yml)), bundle-size deltas via `compressed-size-action`, and uploads a comparison report artifact from the walltime job. See [`packages/op/PERFORMANCE.md`](../../packages/op/PERFORMANCE.md) for the public snapshot table.
+CI publishes runtime regressions via CodSpeed (see [`.github/workflows/codspeed.yml`](../../.github/workflows/codspeed.yml)), bundle-size deltas via `compressed-size-action`, and uploads a comparison report artifact from the walltime job.
 
 ### CodSpeed bench entrypoints
 
@@ -45,13 +68,32 @@ CI publishes runtime regressions via CodSpeed (see [`.github/workflows/codspeed.
 | `codspeed:bench:walltime` | `codspeed.walltime.bench.ts` | walltime |
 | `codspeed:bench` | both | local sanity check |
 
+CI runs two CodSpeed jobs:
+
+- **simulation**: instruction counting via Valgrind. Deterministic. Best for sync hot paths.
+- **walltime**: controlled wall-clock with statistical change detection. Tracks `@prodkit/op` absolute timings, `overhead.*.ratio` gap benches (native work runs inside the ratio bench, not as separate dashboard series), and Op compose breakdown scenarios. Also runs `compare` and uploads `comparison-report.json` as a workflow artifact.
+
+CodSpeed comments on pull requests with regression data and flame graphs (simulation mode). Track history on the [CodSpeed dashboard](https://codspeed.io/trvswgnr/prodkit).
+
 Walltime benches track Op absolute timings plus `overhead.*.ratio` benches that measure Op-vs-native gap drift. Native baselines stay in `compare.ts` for the public table; ratio benches run native work internally without publishing separate CodSpeed series.
+
+### CodSpeed setup (maintainers, one-time)
+
+1. Sign up at [codspeed.io](https://codspeed.io) and import `trvswgnr/prodkit`.
+2. Install the CodSpeed GitHub App on the repository.
+3. Trigger the CodSpeed workflow on `main` (`workflow_dispatch` or push). CodSpeed backtests to establish baseline data; subsequent PRs get regression comments automatically.
 
 ### Public comparison table
 
 `compare.ts` runs the same scenario matrix with `tinybench`, writes `comparison-report.json`, and `performance:sync` renders the snapshot block in `packages/op/PERFORMANCE.md`.
 
 To add a competitor column later, extend `IMPLEMENTATION_COLUMNS` and the runners in `comparison-matrix.ts`, then teach `compare.ts` and `tools/update-op-performance-doc.ts` about the new column id.
+
+### Bundle size
+
+The CI `bundle-size` job uses [`preactjs/compressed-size-action`](https://github.com/preactjs/compressed-size-action) to build the PR branch and target branch, minify the `@prodkit/op` ESM entry with esbuild, and compare gzip sizes. It comments on pull requests automatically.
+
+Measurement matches the compare harness (`pnpm run build:size`). Fork PRs cannot receive comments (GitHub permission model); the job still prints the comparison to stdout.
 
 ## Profiling sequential composition
 
@@ -63,6 +105,8 @@ pnpm --filter @prodkit/op-benchmarks run profile
 pnpm --filter @prodkit/op-benchmarks run profile -- --report=profile.json
 pnpm --filter @prodkit/op-benchmarks run profile -- --steps=12
 ```
+
+When CodSpeed flags a regression, use `profile.ts` for deep investigation. CodSpeed flame graphs can lose async stack traces; V8 `--cpu-prof` handles async code fine.
 
 ### Async scenarios (included in baseline ratios)
 
@@ -111,7 +155,7 @@ pnpm --filter @prodkit/op-benchmarks run test
 
 ## Contributor guidance
 
-- Trust CodSpeed PR comments for regression detection; local wall-clock numbers are noisy.
+- Trust CodSpeed PR comments and the dashboard for regression signals, not local wall-clock numbers.
 - Refresh `PERFORMANCE.md` with `compare` + `performance:sync --write` when the public snapshot should change.
 - Use `profile.ts` after a CodSpeed regression to isolate overhead sources.
-- Keep benchmark scenario semantics equivalent when adding or changing tests.
+- Keep scenario semantics aligned between `comparison-matrix.ts`, `scenarios.ts`, CodSpeed benches, and `profile.ts` when adding or changing workloads.

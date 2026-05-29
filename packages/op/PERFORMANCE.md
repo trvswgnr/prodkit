@@ -13,8 +13,7 @@ The harness in [`benchmarks/op`](https://github.com/trvswgnr/prodkit/blob/main/b
 uses a shared [`comparison-matrix.ts`](https://github.com/trvswgnr/prodkit/blob/main/benchmarks/op/comparison-matrix.ts)
 for native baselines, `@prodkit/op`, and future competitor columns. Scenario definitions and
 contributor commands live in
-[`benchmarks/op/README.md`](https://github.com/trvswgnr/prodkit/blob/main/benchmarks/op/README.md)
-and [`BENCHMARKS.md`](https://github.com/trvswgnr/prodkit/blob/main/BENCHMARKS.md).
+[`benchmarks/op/README.md`](https://github.com/trvswgnr/prodkit/blob/main/benchmarks/op/README.md).
 
 ## Latest comparison snapshot
 
@@ -79,5 +78,5 @@ pnpm --filter @prodkit/op-benchmarks run compare -- --report=comparison-report.j
 pnpm --filter @prodkit/tools run performance:sync -- --write
 ```
 
-See [`BENCHMARKS.md`](https://github.com/trvswgnr/prodkit/blob/main/BENCHMARKS.md) for the full
+See [`benchmarks/op/README.md`](https://github.com/trvswgnr/prodkit/blob/main/benchmarks/op/README.md) for the full
 profiling story and maintainer setup steps.
