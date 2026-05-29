@@ -36,7 +36,7 @@
       "dependsOn": ["build", "^build"],
       "cache": false
     },
-    "bench": {
+    "codspeed:bench": {
       "dependsOn": ["^build"],
       "cache": false
     }

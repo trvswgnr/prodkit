@@ -16,25 +16,6 @@ export const DEFAULT_BENCH_TIME_MS = 300;
 export const DEFAULT_BENCH_WARMUP_TIME_MS = 150;
 export const DEFAULT_BENCH_WARMUP_ITERATIONS = 5;
 
-export type BenchOpFactory = {
-  (generator: () => Generator<unknown, unknown, unknown>): { run: () => Promise<OpRunResult> };
-  of: (value: unknown) => {
-    run: () => Promise<OpRunResult>;
-    withTimeout: (timeoutMs: number) => { run: () => Promise<OpRunResult> };
-  };
-  try: (f: () => unknown) => {
-    withRetry: (policy: {
-      maxAttempts: number;
-      shouldRetry: (cause: unknown) => boolean;
-      getDelay: (attempt: number, cause: unknown) => number;
-    }) => { run: () => Promise<OpRunResult> };
-    withTimeout: (timeoutMs: number) => { run: () => Promise<OpRunResult> };
-  };
-  all: (ops: unknown[]) => { run: () => Promise<OpRunResult> };
-  any: (ops: unknown[]) => { run: () => Promise<OpRunResult> };
-  race: (ops: unknown[]) => { run: () => Promise<OpRunResult> };
-};
-
 export type TinybenchRecord = {
   hz: number;
   latencyMs: number;
@@ -177,24 +158,6 @@ export async function importOpModule(packageDir: string): Promise<{ Op: unknown 
   return { Op: mod.Op };
 }
 
-export function assertBenchOpFactory(input: unknown): BenchOpFactory {
-  if (!isRecord(input)) {
-    throw new Error("Imported Op value is invalid.");
-  }
-  if (
-    typeof input.of !== "function" ||
-    typeof input.try !== "function" ||
-    typeof input.all !== "function" ||
-    typeof input.any !== "function" ||
-    typeof input.race !== "function" ||
-    typeof input !== "function"
-  ) {
-    throw new Error("Imported Op is missing required methods (of/try/all/any/race).");
-  }
-  // SAFETY: We've already asserted that the input is a valid BenchOpFactory.
-  return input as BenchOpFactory;
-}
-
 export function assertProfileOpFactory(input: unknown): ProfileScenarioOpFactory {
   if (!isRecord(input)) {
     throw new Error("Imported Op value is invalid.");
@@ -244,18 +207,6 @@ export function formatNumber(value: number): string {
 
 export function formatRatio(value: number): string {
   return `${value.toFixed(2)}x`;
-}
-
-export function percentDelta(current: number, baseline: number): number | null {
-  if (baseline === 0) return null;
-  return ((current - baseline) / baseline) * 100;
-}
-
-export function formatPercentDelta(current: number, baseline: number): string {
-  const pct = percentDelta(current, baseline);
-  if (pct === null) return "n/a";
-  const sign = pct > 0 ? "+" : "";
-  return `${sign}${pct.toFixed(2)}%`;
 }
 
 export function readEnvironmentReport(): EnvironmentReport {

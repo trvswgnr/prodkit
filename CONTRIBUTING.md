@@ -42,26 +42,27 @@ CI for review.
 A `changelog:api:check` gate step fails when `packages/op/src/index.ts` or
 `packages/std/src/di/index.ts` public export names change without an update to that package's
 `CHANGELOG.md` under `## [Unreleased]`. Internal re-export paths do not count as API changes.
-A separate `op-benchmarks` job uploads `report.json` with runtime overhead ratios and bundle-size
-numbers; see [`packages/op/PERFORMANCE.md`](packages/op/PERFORMANCE.md) for how to read them.
+A `bundle-size` job compares `@prodkit/op` minified + gzip bundle size on pull requests via
+`compressed-size-action`; runtime regressions are tracked separately by CodSpeed
+(see [`packages/op/PERFORMANCE.md`](packages/op/PERFORMANCE.md) and [`BENCHMARKS.md`](BENCHMARKS.md)).
 
 All runnable consumer examples and smoke entrypoints live in the **`examples/`** workspace (`@prodkit/examples`): Op-oriented samples under [`examples/op/`](examples/op/), std/di samples under [`examples/std/`](examples/std/), with root [`examples/smoke.ts`](examples/smoke.ts) running both suites.
 
 ## Benchmarking
 
-Use the benchmark harness when you need to validate runtime overhead or package-size drift against a baseline:
+Use CodSpeed (CI) and the local profile harness when you need to validate runtime overhead or investigate regressions:
 
 ```bash
 pnpm run bench
+pnpm --filter @prodkit/op-benchmarks run profile
 ```
 
-- Default baseline is latest commit on `main`.
-- For latest published package comparison, run `pnpm --filter @prodkit/op-benchmarks run bench -- --baseline=npm`.
-- Keep benchmark interpretation directional; rely on relative deltas and rerun unexpected regressions before acting.
+- CodSpeed comments on pull requests with runtime regression data; see [`BENCHMARKS.md`](BENCHMARKS.md).
+- Bundle-size deltas appear on pull requests via the CI `bundle-size` job.
+- Use `profile.ts` locally after a CodSpeed regression to isolate overhead sources.
 
 Detailed benchmark scenarios and authoring guidance live in `benchmarks/op/README.md`.
-Published baseline interpretation and artifact locations live in
-[`packages/op/PERFORMANCE.md`](packages/op/PERFORMANCE.md).
+Published baseline interpretation lives in [`packages/op/PERFORMANCE.md`](packages/op/PERFORMANCE.md).
 
 ## Type Cast Policy
 

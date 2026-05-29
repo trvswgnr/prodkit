@@ -4,7 +4,7 @@
   "description": "Benchmark harness for @prodkit/op",
   "type": "module",
   "scripts": {
-    "bench": "node ./bench.ts",
+    "codspeed:bench": "vitest bench --run",
     "profile": "node ./profile.ts",
     "profile:cpu": "node --cpu-prof --cpu-prof-interval=100 ./profile.ts --profile-mode=cpu",
     "profile:heap": "node --heap-prof ./profile.ts --profile-mode=heap",
@@ -16,9 +16,9 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@codspeed/vitest-plugin": "^5.0.1",
     "@prodkit/op": "workspace:*",
     "@types/node": "^24.12.2",
-    "esbuild": "^0.25.11",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "tinybench": "^5.1.0",

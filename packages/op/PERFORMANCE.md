@@ -10,64 +10,41 @@ usually dominated by I/O, so relative overhead matters less once network or data
 in the picture.
 
 The harness in [`benchmarks/op`](https://github.com/trvswgnr/prodkit/blob/main/benchmarks/op)
-runs paired scenarios with `tinybench`. Scenario definitions and contributor commands live in
-[`benchmarks/op/README.md`](https://github.com/trvswgnr/prodkit/blob/main/benchmarks/op/README.md).
+runs paired scenarios with Vitest bench under CodSpeed in CI. Scenario definitions and contributor
+commands live in [`benchmarks/op/README.md`](https://github.com/trvswgnr/prodkit/blob/main/benchmarks/op/README.md)
+and [`BENCHMARKS.md`](https://github.com/trvswgnr/prodkit/blob/main/BENCHMARKS.md).
 
-## Latest snapshot
+## Automated regression detection
 
-<!-- op-performance-snapshot:start -->
+**Runtime:** CodSpeed runs on every push to `main` and every pull request
+([`.github/workflows/codspeed.yml`](https://github.com/trvswgnr/prodkit/blob/main/.github/workflows/codspeed.yml)).
+Simulation mode (instruction counting) covers sync hot paths; walltime mode covers async overhead.
+CodSpeed comments on pull requests with regression data and flame graphs. Track history on the
+[CodSpeed dashboard](https://codspeed.io/trvswgnr/prodkit).
 
-Captured on **2026-05-28** at commit [`9cbf3e7`](https://github.com/trvswgnr/prodkit/commit/9cbf3e73ee6766f3a85a7756df8084b925bb9618) (`@prodkit/op@0.1.70`).
-Environment: v24.14.1, darwin/arm64.
-Slowdown ratios compare Op paths to native Promise equivalents on the same machine.
+**Bundle size:** The CI `bundle-size` job uses `compressed-size-action` to compare minified + gzip
+size of the `@prodkit/op` ESM entry on pull requests.
 
-### Runtime overhead
+Compare Op paths to their native Promise equivalents in the CodSpeed dashboard or PR comments.
+Look at `singleOp`, `all`, `any`, `race`, `retry`, `timeout`, and `compose` groups first.
 
-| Scenario | Native baseline | Native ops/sec | Op variant | Op ops/sec | Slowdown |
-| --- | --- | --- | --- | --- | --- |
-| Single value | `Promise.resolve(x)` | 14,116,954.61 | `Op.of(x).run()` | 995,394.74 | 13.87x |
-| Parallel batch (8 children) | `Promise.all([...])` | 1,597,441.41 | `Op.all([...]).run()` | 99,385.52 | 16.52x |
-| First success (8 children) | Hand-rolled first success + abort | 65,986.64 | `Op.any([...]).run()` | 39,920.07 | 1.63x |
-| First settler (8 children) | Hand-rolled first settler + abort | 66,360.75 | `Op.race([...]).run()` | 40,193.01 | 1.65x |
-| Retry loop | Hand-rolled try/catch retry | 251,010.87 | `Op.try(...).withRetry(...).run()` | 51,771.73 | 4.90x |
-| Timeout guard | `Promise.race` + `setTimeout` | 3,942,961.54 | `Op.of(x).withTimeout(ms).run()` | 295,824.99 | 12.37x |
-| Sequential compose (6 steps) | `await Promise.resolve` chain | 4,138,976 | `yield* Op.of` generator chain | 165,095.13 | 25.36x |
+## Local investigation
 
-### Bundle size
+When CodSpeed flags a regression, use the profile harness for deeper analysis. CodSpeed flame
+graphs can lose async stack traces; V8 `--cpu-prof` handles async code fine.
 
-| Metric | Size |
-| --- | --- |
-| ESM entry minified | 14,652 B |
-| ESM entry minified + gzip | 4,132 B |
+```bash
+pnpm --filter @prodkit/op run build
+pnpm --filter @prodkit/op-benchmarks run profile
+pnpm --filter @prodkit/op-benchmarks run profile:cpu -- --scenario=compose.yieldChain
+pnpm --filter @prodkit/op-benchmarks run profile:heap -- --scenario=compose.yieldChain
+```
 
-<!-- op-performance-snapshot:end -->
-
-## Reading results
-
-Each CI run uploads `report.json` with absolute ops/sec and mean latency per scenario,
-branch-vs-baseline deltas (default baseline is latest `main`), and `overhead.*.slowdownRatio`
-(how many times slower the Op path is than its native pair on the same machine).
-
-Prefer slowdown ratios over raw ops/sec when comparing machines. Absolute throughput varies by
-CPU and OS; paired ratios on one run are the useful signal. Look at `overhead.singleOp`,
-`overhead.all`, `overhead.any`, `overhead.race`, `overhead.retry`, `overhead.timeout`, and
-`overhead.compose` first.
-
-CI publishes an `op-benchmarks` artifact on every push and pull request to `main`. Download
-`report.json` from the latest successful
-[`CI` workflow run](https://github.com/trvswgnr/prodkit/actions/workflows/ci.yml) on `main`.
-
-Treat all numbers as directional. Rerun locally if a result surprises you.
-
-## Refresh locally
-
-From the repo root:
+For a local sanity check of bench scenarios (plain Vitest wall-clock, not CodSpeed):
 
 ```bash
 pnpm run bench
-pnpm --filter @prodkit/op-benchmarks run bench -- --report=report.json
-pnpm --filter @prodkit/tools run performance:sync -- --write
 ```
 
-Default baseline is latest commit on `main`. Use `--baseline=npm` to compare against the latest
-published npm release.
+See [`BENCHMARKS.md`](https://github.com/trvswgnr/prodkit/blob/main/BENCHMARKS.md) for the full
+profiling story and maintainer setup steps.

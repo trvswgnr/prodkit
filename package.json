@@ -15,7 +15,8 @@
     "fmt": "turbo run fmt --log-order=grouped",
     "fmt:check": "turbo run fmt:check --log-order=grouped",
     "gate": "turbo run build typecheck test lint fmt:check --log-order=grouped && pnpm --filter @prodkit/tools run adr:check && pnpm --filter @prodkit/tools run changelog:api:check && pnpm --filter @prodkit/std run coverage && turbo run smoke --filter=@prodkit/tools --log-order=grouped",
-    "bench": "turbo run bench --filter=@prodkit/op-benchmarks --log-order=grouped",
+    "bench": "turbo run codspeed:bench --filter=@prodkit/op-benchmarks --log-order=grouped",
+    "build:size": "pnpm --filter @prodkit/op run build:size",
     "clean": "git clean -Xfd"
   },
   "devDependencies": {
