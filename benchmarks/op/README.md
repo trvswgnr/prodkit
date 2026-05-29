@@ -14,7 +14,7 @@ Runtime scenarios share one matrix in `comparison-matrix.ts`:
 - Timeout overhead (`withTimeout` vs `Promise.race` + `setTimeout`)
 - Sequential composition (native async chain vs Op yield* chain)
 
-CodSpeed walltime benches also include compose breakdown scenarios (`asyncFnChain`, `opFlatLoop`, `opSequentialRuns`) and a sync reference bench (`compose.rawSyncYieldStar`, simulation mode only).
+CodSpeed walltime benches track `@prodkit/op` absolute timings, `overhead.*.ratio` gap benches, and Op compose breakdown scenarios (`opFlatLoop`, `opSequentialRuns`). A sync reference bench (`compose.rawSyncYieldStar`) runs in simulation mode only.
 
 Bundle-size scenario (CI `bundle-size` job):
 
@@ -45,7 +45,7 @@ CI publishes runtime regressions via CodSpeed (see [`.github/workflows/codspeed.
 | `codspeed:bench:walltime` | `codspeed.walltime.bench.ts` | walltime |
 | `codspeed:bench` | both | local sanity check |
 
-Walltime benches include absolute native/op timings plus `overhead.*.ratio` benches that track the Op-vs-native gap.
+Walltime benches track Op absolute timings plus `overhead.*.ratio` benches that measure Op-vs-native gap drift. Native baselines stay in `compare.ts` for the public table; ratio benches run native work internally without publishing separate CodSpeed series.
 
 ### Public comparison table
 

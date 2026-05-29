@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `compressed-size-action` for bundle-size PR comments. Added a shared comparison matrix
   (`comparison-matrix.ts`), local `compare` report harness, `overhead.*.ratio` CodSpeed benches,
   and restored `performance:sync` to publish native-vs-Op slowdown ratios in `PERFORMANCE.md`.
+  CodSpeed walltime benches track Op timings and overhead ratios only; native baselines stay in
+  `compare.ts` for the public snapshot table.
 - Removed dead hook-era internals after the plan AST cutover: unused `*CoreOp` builders,
   `DefaultHooks`, and orphan `with*Op` policy wrappers. Fluent methods now share one
   `fluentMethodsForContext` factory between `makePlanOp` and the sync-value hot path.

@@ -53,8 +53,7 @@ ratios over raw ops/sec when comparing machines.
 
 **Runtime:** CodSpeed runs on every push to `main` and every pull request
 ([`.github/workflows/codspeed.yml`](https://github.com/trvswgnr/prodkit/blob/main/.github/workflows/codspeed.yml)).
-Simulation mode tracks sync hot paths (`compose.rawSyncYieldStar`). Walltime mode tracks async
-scenarios and `overhead.*.ratio` benches (Op vs native gap). CodSpeed comments on pull requests;
+Simulation mode tracks sync hot paths (`compose.rawSyncYieldStar`). Walltime mode tracks Op absolute timings and `overhead.*.ratio` gap benches (native work runs inside the ratio bench, not as separate dashboard series). CodSpeed comments on pull requests;
 track history on the [CodSpeed dashboard](https://codspeed.io/trvswgnr/prodkit).
 
 **Bundle size:** The CI `bundle-size` job uses `compressed-size-action` to compare minified + gzip

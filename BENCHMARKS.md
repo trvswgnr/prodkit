@@ -30,7 +30,7 @@ Shared scenario semantics also live in [`benchmarks/op/scenarios.ts`](benchmarks
 CI runs two CodSpeed jobs from [`.github/workflows/codspeed.yml`](.github/workflows/codspeed.yml):
 
 - **simulation**: instruction counting via Valgrind. Deterministic. Best for sync hot paths (generator dispatch, instruction stepping).
-- **walltime**: controlled wall-clock with statistical change detection. Best for async overhead (microtasks, Promise resolution, event loop turns). Also runs `compare` and uploads `comparison-report.json` as a workflow artifact.
+- **walltime**: controlled wall-clock with statistical change detection. Tracks `@prodkit/op` absolute timings, `overhead.*.ratio` gap benches (native work runs inside the ratio bench, not as separate dashboard series), and Op compose breakdown scenarios. Also runs `compare` and uploads `comparison-report.json` as a workflow artifact.
 
 CodSpeed comments on pull requests with regression data and flame graphs (simulation mode). Track history on the [CodSpeed dashboard](https://codspeed.io/trvswgnr/prodkit).
 
@@ -97,9 +97,9 @@ Runtime (comparison matrix / CodSpeed walltime):
 
 Runtime (CodSpeed extras):
 
-- Compose breakdown (`asyncFnChain`, `opFlatLoop`, `opSequentialRuns`)
+- Op compose breakdown (`opFlatLoop`, `opSequentialRuns`)
 - Sync reference (`compose.rawSyncYieldStar`, simulation only)
-- Overhead ratio benches (`overhead.*.ratio`)
+- Overhead ratio benches (`overhead.*.ratio`; native baselines run inside the bench, not as separate CodSpeed series)
 
 Bundle size (compressed-size-action and compare report):
 
