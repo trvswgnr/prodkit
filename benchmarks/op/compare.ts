@@ -8,15 +8,18 @@ import {
   COMPARISON_SCENARIOS,
   computeVsBaseline,
   IMPLEMENTATION_COLUMNS,
+  libraryPairOutcome,
   type ComparisonScenarioKey,
   type ImplementationColumn,
   type ImplementationId,
+  type LibraryPairOutcome,
   type VsBaselineRatios,
 } from "./comparison-matrix.ts";
 import {
   formatNumber,
   formatRatio,
   getRepoRoot,
+  parseArgValue,
   readEnvironmentReport,
   readPackageVersion,
   resolveOpPackageDir,
@@ -27,6 +30,11 @@ import {
 } from "./harness.ts";
 
 type RuntimeCell = TinybenchRecord;
+
+type LibraryPair = {
+  left: ImplementationId;
+  right: ImplementationId;
+};
 
 type ComparisonReport = {
   generatedAt: string;
@@ -48,6 +56,15 @@ type ComparisonReport = {
   bundleSize: {
     minBytes: number;
     gzipBytes: number;
+  };
+  pair?: {
+    left: ImplementationId;
+    right: ImplementationId;
+    scenarios: Array<{
+      key: ComparisonScenarioKey;
+      faster: ImplementationId;
+      margin: number;
+    }>;
   };
 };
 
@@ -106,6 +123,85 @@ function formatVsBaseline(ratio: number | undefined): string {
   return `${formatRatio(1 / ratio)} faster`;
 }
 
+function isImplementationId(value: string): value is ImplementationId {
+  return IMPLEMENTATION_COLUMNS.some((column) => column.id === value);
+}
+
+export function parseLibraryPairArg(argv: readonly string[]): LibraryPair | undefined {
+  const value = parseArgValue(argv, "--pair=");
+  if (value === undefined) return undefined;
+
+  const parts = value
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  if (parts.length !== 2) {
+    throw new Error(
+      `Invalid --pair=${value}. Expected two comma-separated implementation ids (for example --pair=op,effect).`,
+    );
+  }
+
+  const [left, right] = parts as [string, string];
+  if (!isImplementationId(left) || !isImplementationId(right)) {
+    const valid = IMPLEMENTATION_COLUMNS.map((column) => column.id).join(", ");
+    throw new Error(`Invalid --pair=${value}. Expected ids from: ${valid}.`);
+  }
+  if (left === BASELINE_IMPLEMENTATION_ID || right === BASELINE_IMPLEMENTATION_ID) {
+    throw new Error(
+      "--pair compares libraries directly; use the vs-native table for the native baseline.",
+    );
+  }
+  if (left === right) {
+    throw new Error("--pair must name two different implementation ids.");
+  }
+
+  return { left, right };
+}
+
+function findImplementationColumn(
+  implementations: ComparisonReport["implementations"],
+  id: ImplementationId,
+): ImplementationColumn {
+  const column = implementations.find((item) => item.id === id);
+  if (column === undefined) {
+    throw new Error(`Missing implementation column "${id}" in comparison report.`);
+  }
+  return column;
+}
+
+function formatPairOutcome(
+  implementations: ComparisonReport["implementations"],
+  outcome: LibraryPairOutcome,
+): { winner: string; margin: string } {
+  return {
+    winner: implementationShortLabel(findImplementationColumn(implementations, outcome.faster)),
+    margin: formatRatio(outcome.margin),
+  };
+}
+
+function buildPairReport(
+  scenarios: ComparisonReport["scenarios"],
+  pair: LibraryPair,
+): NonNullable<ComparisonReport["pair"]> {
+  return {
+    left: pair.left,
+    right: pair.right,
+    scenarios: scenarios.map((scenario) => {
+      const outcome = libraryPairOutcome(
+        pair.left,
+        scenario.runtime[pair.left].hz,
+        pair.right,
+        scenario.runtime[pair.right].hz,
+      );
+      return {
+        key: scenario.key,
+        faster: outcome.faster,
+        margin: outcome.margin,
+      };
+    }),
+  };
+}
+
 function printAbsoluteTable(
   scenarios: ComparisonReport["scenarios"],
   implementations: ComparisonReport["implementations"],
@@ -155,6 +251,42 @@ function printVsBaselineTable(
   }
 }
 
+function printPairTable(
+  scenarios: ComparisonReport["scenarios"],
+  implementations: ComparisonReport["implementations"],
+  pair: LibraryPair,
+): void {
+  const leftLabel = implementationShortLabel(findImplementationColumn(implementations, pair.left));
+  const rightLabel = implementationShortLabel(
+    findImplementationColumn(implementations, pair.right),
+  );
+  const scenarioWidth = 32;
+  const winnerWidth = 10;
+  const marginWidth = 12;
+
+  logger.info("");
+  logger.info(
+    `${leftLabel} vs ${rightLabel} (margin = slower ops/sec / faster ops/sec; values above 1x mean the winner is faster):`,
+  );
+  logger.info("");
+  logger.info(
+    `${"Scenario".padEnd(scenarioWidth)} ${"Winner".padStart(winnerWidth)} ${"Margin".padStart(marginWidth)}`,
+  );
+  logger.info(`${"-".repeat(scenarioWidth)} ${"-".repeat(winnerWidth)} ${"-".repeat(marginWidth)}`);
+  for (const scenario of scenarios) {
+    const outcome = libraryPairOutcome(
+      pair.left,
+      scenario.runtime[pair.left].hz,
+      pair.right,
+      scenario.runtime[pair.right].hz,
+    );
+    const formatted = formatPairOutcome(implementations, outcome);
+    logger.info(
+      `${scenario.label.padEnd(scenarioWidth)} ${formatted.winner.padStart(winnerWidth)} ${formatted.margin.padStart(marginWidth)}`,
+    );
+  }
+}
+
 function printBundleSize(bundleSize: ComparisonReport["bundleSize"]): void {
   logger.info("");
   logger.info(
@@ -164,6 +296,7 @@ function printBundleSize(bundleSize: ComparisonReport["bundleSize"]): void {
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
+  const pair = parseLibraryPairArg(argv);
   const repoRoot = getRepoRoot();
   const reportPath = resolveReportPath(argv, "comparison-report.json");
   const packageDir = resolveOpPackageDir(repoRoot);
@@ -208,10 +341,14 @@ async function main(): Promise<void> {
     implementations,
     scenarios,
     bundleSize,
+    pair: pair === undefined ? undefined : buildPairReport(scenarios, pair),
   };
 
   printAbsoluteTable(scenarios, implementations);
   printVsBaselineTable(scenarios, implementations);
+  if (pair !== undefined) {
+    printPairTable(scenarios, implementations, pair);
+  }
   printBundleSize(bundleSize);
 
   await writeJsonReport(reportPath, report);

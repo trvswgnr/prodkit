@@ -56,6 +56,7 @@ From repo root:
 pnpm run bench
 pnpm --filter @prodkit/op-benchmarks run codspeed:bench
 pnpm --filter @prodkit/op-benchmarks run compare
+pnpm --filter @prodkit/op-benchmarks run compare -- --pair=op,effect
 pnpm --filter @prodkit/tools run performance:sync -- --write
 ```
 
@@ -91,6 +92,8 @@ Walltime benches track Op absolute timings plus `overhead.*.ratio` benches that 
 `compare.ts` runs the same scenario matrix with `tinybench`, writes `.artifacts/comparison-report.json`, and `performance:sync` renders the snapshot block in `packages/op/PERFORMANCE.md`.
 
 To add another competitor column, extend `IMPLEMENTATION_COLUMNS` and each scenario's `implementations` in `comparison-matrix.ts` (see `effect-scenarios.ts` for the Effect column). `compare.ts` and `tools/update-op-performance-doc.ts` read column ids from the report automatically. CodSpeed walltime benches stay Op-only.
+
+`compare --pair=op,effect` prints a direct head-to-head table (winner + margin) and stores the same data under `pair` in `.artifacts/comparison-report.json`.
 
 ### Bundle size
 
