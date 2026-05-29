@@ -312,7 +312,7 @@ function main(): void {
   }
   if (!existsSync(reportPath)) {
     throw new Error(
-      `missing comparison report at ${reportPath}. Run: pnpm --filter @prodkit/op-benchmarks run compare`,
+      `missing comparison report at ${reportPath}. Run: pnpm --filter @prodkit/benchmarks run compare`,
     );
   }
 

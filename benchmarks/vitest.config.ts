@@ -4,6 +4,6 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   plugins: [codspeedPlugin()],
   test: {
-    include: ["tests/**/*.test.ts"],
+    include: ["op/tests/**/*.test.ts"],
   },
 });

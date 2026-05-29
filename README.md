@@ -11,14 +11,14 @@ Use each publishable package README under `packages/*/README.md` as the source o
 - [`@prodkit/op`](packages/op/README.md) (published to npm with the package)
 - [`@prodkit/std`](packages/std/README.md), including the `@prodkit/std/di` entrypoint
 
-Other workspace roots are maintainer- or CI-oriented: [`examples`](examples/) (`@prodkit/examples`), [`tools`](tools/) (`@prodkit/tools`), and [`benchmarks`](benchmarks/).
+Other workspace roots are maintainer- or CI-oriented: [`examples`](examples/) (`@prodkit/examples`), [`tools`](tools/) (`@prodkit/tools`), and [`benchmarks`](benchmarks/) (`@prodkit/benchmarks`).
 
 ## workspace layout
 
 - `packages/*`: publishable library packages
 - `apps/*`: runnable product/demo applications
 - `examples`: consumer examples and smoke workspace (`@prodkit/examples`)
-- `benchmarks/*`: performance benchmark harnesses
+- `benchmarks`: performance benchmark harnesses (`@prodkit/benchmarks`)
 - `tools`: maintainer tooling workspace (`@prodkit/tools`)
 - `.github/workflows`: CI and release automation
 

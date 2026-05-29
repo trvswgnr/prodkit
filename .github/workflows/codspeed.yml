@@ -42,8 +42,8 @@ jobs:
         uses: CodSpeedHQ/action@9d332c4d90b43981c3e55ae8e38e68709996240f # v4.17.0
         with:
           mode: simulation
-          working-directory: benchmarks/op
-          run: pnpm vitest bench --run codspeed.sync.bench.ts
+          working-directory: benchmarks
+          run: pnpm vitest bench --run op/codspeed.sync.bench.ts
 
   benchmarks-walltime:
     name: benchmarks (walltime)
@@ -75,11 +75,11 @@ jobs:
         uses: CodSpeedHQ/action@9d332c4d90b43981c3e55ae8e38e68709996240f # v4.17.0
         with:
           mode: walltime
-          working-directory: benchmarks/op
-          run: pnpm vitest bench --run codspeed.walltime.bench.ts
+          working-directory: benchmarks
+          run: pnpm vitest bench --run op/codspeed.walltime.bench.ts
 
       - name: Write comparison report
-        run: pnpm --filter @prodkit/op-benchmarks run compare
+        run: pnpm --filter @prodkit/benchmarks run compare
 
       - name: Upload comparison report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

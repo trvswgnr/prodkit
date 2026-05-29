@@ -2,7 +2,7 @@ packages:
   - packages/*
   - apps/*
   - examples
-  - benchmarks/*
+  - benchmarks
   - tools
 
 catalog:

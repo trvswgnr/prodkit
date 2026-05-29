@@ -1,0 +1,36 @@
+{
+  "name": "@prodkit/benchmarks",
+  "private": true,
+  "description": "Performance benchmark harnesses for @prodkit packages.",
+  "type": "module",
+  "scripts": {
+    "compare": "node ./op/compare.ts",
+    "codspeed:bench": "vitest bench --run",
+    "codspeed:bench:sync": "vitest bench --run op/codspeed.sync.bench.ts",
+    "codspeed:bench:walltime": "vitest bench --run op/codspeed.walltime.bench.ts",
+    "profile": "node ./op/profile.ts",
+    "profile:cpu": "node --cpu-prof --cpu-prof-interval=100 --cpu-prof-dir=op/.artifacts ./op/profile.ts --profile-mode=cpu",
+    "profile:heap": "node --heap-prof --heap-prof-dir=op/.artifacts ./op/profile.ts --profile-mode=heap",
+    "test": "vitest run",
+    "fmt": "oxfmt \"**/*.ts\"",
+    "fmt:check": "oxfmt --check \"**/*.ts\"",
+    "lint": "oxlint --config ../oxlint.config.ts .",
+    "lint:fix": "oxlint --config ../oxlint.config.ts --fix .",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@codspeed/vitest-plugin": "^5.0.1",
+    "@prodkit/op": "workspace:*",
+    "@types/node": "^24.12.2",
+    "effect": "^3.21.2",
+    "esbuild": "^0.25.11",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "tinybench": "^5.1.0",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=24.14.0"
+  }
+}

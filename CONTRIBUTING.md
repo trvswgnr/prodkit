@@ -14,7 +14,7 @@ pnpm install
 - This repository is a pnpm workspace monorepo orchestrated by Turborepo (`turbo`).
 - Root scripts (`pnpm run build|test|lint|typecheck|gate`) run across the workspace graph.
 - Publishable libraries today: **`@prodkit/op`** and **`@prodkit/std`** (see `packages/op`, `packages/std`).
-- Supporting workspaces: **`@prodkit/shared`** (`packages/shared`, private workspace types/config), **`@prodkit/examples`** (`examples/`), **`@prodkit/tools`** (`tools/`), **`@prodkit/op-benchmarks`** (`benchmarks/op`).
+- Supporting workspaces: **`@prodkit/shared`** (`packages/shared`, private workspace types/config), **`@prodkit/examples`** (`examples/`), **`@prodkit/tools`** (`tools/`), **`@prodkit/benchmarks`** (`benchmarks/`).
 - `@prodkit/op` landed first historically; the repo is intentionally multi-package.
 - Package-scoped scripts stay in the owning workspace `package.json`; invoke them with `pnpm --filter <workspace> run <script>`.
 
@@ -54,9 +54,9 @@ Use CodSpeed (CI), the comparison harness, and the local profile harness when yo
 
 ```bash
 pnpm run bench
-pnpm --filter @prodkit/op-benchmarks run compare
+pnpm --filter @prodkit/benchmarks run compare
 pnpm --filter @prodkit/tools run performance:sync -- --write
-pnpm --filter @prodkit/op-benchmarks run profile
+pnpm --filter @prodkit/benchmarks run profile
 ```
 
 - CodSpeed comments on pull requests with runtime regression data; see [`benchmarks/op/README.md`](benchmarks/op/README.md).

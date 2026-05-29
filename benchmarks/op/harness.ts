@@ -11,7 +11,7 @@ export type ProfileOpFactory = ProfileScenarioOpFactory;
 
 export const OP_PACKAGE = "@prodkit/op";
 export const ENTRY_FALLBACK = "./dist/index.mjs";
-export const BENCHMARK_ARTIFACTS_DIR = ".artifacts";
+export const BENCHMARK_ARTIFACTS_DIR = "op/.artifacts";
 
 export const DEFAULT_BENCH_TIME_MS = 300;
 export const DEFAULT_BENCH_WARMUP_TIME_MS = 150;

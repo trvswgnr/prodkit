@@ -47,16 +47,16 @@ Bundle size (compressed-size-action and compare report):
 
 ## Commands
 
-Local harness output goes under `.artifacts/` (gitignored). JSON reports, CPU profiles, and heap
+Local harness output goes under `op/.artifacts/` (gitignored). JSON reports, CPU profiles, and heap
 profiles all land there.
 
 From repo root:
 
 ```bash
 pnpm run bench
-pnpm --filter @prodkit/op-benchmarks run codspeed:bench
-pnpm --filter @prodkit/op-benchmarks run compare
-pnpm --filter @prodkit/op-benchmarks run compare -- --pair=op,effect
+pnpm --filter @prodkit/benchmarks run codspeed:bench
+pnpm --filter @prodkit/benchmarks run compare
+pnpm --filter @prodkit/benchmarks run compare -- --pair=op,effect
 pnpm --filter @prodkit/tools run performance:sync -- --write
 ```
 
@@ -75,7 +75,7 @@ CI publishes runtime regressions via CodSpeed (see [`.github/workflows/codspeed.
 CI runs two CodSpeed jobs:
 
 - **simulation**: instruction counting via Valgrind. Deterministic. Best for sync hot paths.
-- **walltime**: controlled wall-clock with statistical change detection. Tracks `@prodkit/op` absolute timings, `overhead.*.ratio` gap benches (native work runs inside the ratio bench, not as separate dashboard series), and Op compose breakdown scenarios. Also runs `compare` and uploads `.artifacts/comparison-report.json` as a workflow artifact.
+- **walltime**: controlled wall-clock with statistical change detection. Tracks `@prodkit/op` absolute timings, `overhead.*.ratio` gap benches (native work runs inside the ratio bench, not as separate dashboard series), and Op compose breakdown scenarios. Also runs `compare` and uploads `op/.artifacts/comparison-report.json` as a workflow artifact.
 
 CodSpeed comments on pull requests with regression data and flame graphs (simulation mode). Track history on the [CodSpeed dashboard](https://codspeed.io/trvswgnr/prodkit).
 
@@ -89,11 +89,11 @@ Walltime benches track Op absolute timings plus `overhead.*.ratio` benches that 
 
 ### Public comparison table
 
-`compare.ts` runs the same scenario matrix with `tinybench`, writes `.artifacts/comparison-report.json`, and `performance:sync` renders the snapshot block in `packages/op/PERFORMANCE.md`.
+`compare.ts` runs the same scenario matrix with `tinybench`, writes `op/.artifacts/comparison-report.json`, and `performance:sync` renders the snapshot block in `packages/op/PERFORMANCE.md`.
 
 To add another competitor column, extend `IMPLEMENTATION_COLUMNS` and each scenario's `implementations` in `comparison-matrix.ts` (see `effect-scenarios.ts` for the Effect column). `compare.ts` and `tools/update-op-performance-doc.ts` read column ids from the report automatically. CodSpeed walltime benches stay Op-only.
 
-`compare --pair=op,effect` prints a direct head-to-head table (winner + margin) and stores the same data under `pair` in `.artifacts/comparison-report.json`.
+`compare --pair=op,effect` prints a direct head-to-head table (winner + margin) and stores the same data under `pair` in `op/.artifacts/comparison-report.json`.
 
 ### Bundle size
 
@@ -107,9 +107,9 @@ CodSpeed reports end-to-end scenario timings. The profile harness decomposes the
 
 ```bash
 pnpm --filter @prodkit/op run build
-pnpm --filter @prodkit/op-benchmarks run profile
-pnpm --filter @prodkit/op-benchmarks run profile -- --report=.artifacts/profile.json
-pnpm --filter @prodkit/op-benchmarks run profile -- --steps=12
+pnpm --filter @prodkit/benchmarks run profile
+pnpm --filter @prodkit/benchmarks run profile -- --report=op/.artifacts/profile.json
+pnpm --filter @prodkit/benchmarks run profile -- --steps=12
 ```
 
 When CodSpeed flags a regression, use `profile.ts` for deep investigation. CodSpeed flame graphs can lose async stack traces; V8 `--cpu-prof` handles async code fine.
@@ -134,17 +134,17 @@ When CodSpeed flags a regression, use `profile.ts` for deep investigation. CodSp
 Filter to one scenario:
 
 ```bash
-pnpm --filter @prodkit/op-benchmarks run profile -- --scenario=compose.yieldChain
+pnpm --filter @prodkit/benchmarks run profile -- --scenario=compose.yieldChain
 ```
 
 For flame graphs and allocation profiles:
 
 ```bash
-pnpm --filter @prodkit/op-benchmarks run profile:cpu -- --scenario=compose.yieldChain
-pnpm --filter @prodkit/op-benchmarks run profile:heap -- --scenario=compose.yieldChain
+pnpm --filter @prodkit/benchmarks run profile:cpu -- --scenario=compose.yieldChain
+pnpm --filter @prodkit/benchmarks run profile:heap -- --scenario=compose.yieldChain
 ```
 
-Node writes `CPU.*.cpuprofile` or `Heap.*.heapprofile` under `.artifacts/`.
+Node writes `CPU.*.cpuprofile` or `Heap.*.heapprofile` under `op/.artifacts/`.
 The profile command prints the resolved artifact path when it can detect it.
 
 Use `--package-dir=` to profile a packed install tree instead of the workspace build.
@@ -154,7 +154,7 @@ Use `--package-dir=` to profile a packed install tree instead of the workspace b
 Scenario correctness is covered by Vitest smoke tests:
 
 ```bash
-pnpm --filter @prodkit/op-benchmarks run test
+pnpm --filter @prodkit/benchmarks run test
 ```
 
 `@prodkit/op` is listed as a workspace devDependency so Turbo runs `^build` before benchmark tests. The profile harness loads the built ESM entry via `importOpModule` (not a TypeScript import of source), matching how consumers load the package.

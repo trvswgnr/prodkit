@@ -65,16 +65,16 @@ graphs can lose async stack traces; V8 `--cpu-prof` handles async code fine.
 
 ```bash
 pnpm --filter @prodkit/op run build
-pnpm --filter @prodkit/op-benchmarks run profile
-pnpm --filter @prodkit/op-benchmarks run profile:cpu -- --scenario=compose.yieldChain
-pnpm --filter @prodkit/op-benchmarks run profile:heap -- --scenario=compose.yieldChain
+pnpm --filter @prodkit/benchmarks run profile
+pnpm --filter @prodkit/benchmarks run profile:cpu -- --scenario=compose.yieldChain
+pnpm --filter @prodkit/benchmarks run profile:heap -- --scenario=compose.yieldChain
 ```
 
 Refresh the public comparison table locally:
 
 ```bash
 pnpm --filter @prodkit/op run build
-pnpm --filter @prodkit/op-benchmarks run compare
+pnpm --filter @prodkit/benchmarks run compare
 pnpm --filter @prodkit/tools run performance:sync -- --write
 ```
 

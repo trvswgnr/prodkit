@@ -235,22 +235,22 @@ function printInterpretationGuide(): void {
   logger.info("");
   logger.info("Machine-readable output:");
   logger.info(
-    `  pnpm --filter @prodkit/op-benchmarks run profile -- --report=${resolveBenchmarkArtifact("profile.json")}`,
+    `  pnpm --filter @prodkit/benchmarks run profile -- --report=${resolveBenchmarkArtifact("profile.json")}`,
   );
   logger.info("");
   logger.info("CPU profile (flame graph):");
   logger.info(
-    "  pnpm --filter @prodkit/op-benchmarks run profile:cpu -- --scenario=compose.yieldChain",
+    "  pnpm --filter @prodkit/benchmarks run profile:cpu -- --scenario=compose.yieldChain",
   );
   logger.info(
-    "  Open the emitted *.cpuprofile in .artifacts/ via Chrome DevTools or https://speedscope.app",
+    "  Open the emitted *.cpuprofile in op/.artifacts/ via Chrome DevTools or https://speedscope.app",
   );
   logger.info("");
   logger.info("Heap profile (allocations):");
   logger.info(
-    "  pnpm --filter @prodkit/op-benchmarks run profile:heap -- --scenario=compose.yieldChain",
+    "  pnpm --filter @prodkit/benchmarks run profile:heap -- --scenario=compose.yieldChain",
   );
-  logger.info("  Open the emitted *.heapprofile in .artifacts/ via Chrome DevTools Memory");
+  logger.info("  Open the emitted *.heapprofile in op/.artifacts/ via Chrome DevTools Memory");
 }
 
 async function measureAsyncScenario(

@@ -15,8 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and restored `performance:sync` to publish native-vs-Op slowdown ratios in `PERFORMANCE.md`.
   CodSpeed walltime benches track Op timings and overhead ratios only; native baselines stay in
   `compare.ts` for the public snapshot table.
-- Consolidated benchmark contributor docs into `benchmarks/op/README.md` and removed redundant
-  repo-root `BENCHMARKS.md`.
+- Consolidated benchmark workspace layout to match `examples/`: shared `@prodkit/benchmarks` package
+  at `benchmarks/` with Op-specific harness code under `benchmarks/op/`.
 - Benchmark harness JSON reports and V8 profiles now write under `benchmarks/op/.artifacts/`.
 - Renamed comparison scenario `singleOp` to `singleValue` so matrix keys match workload names.
 - Refactored the comparison matrix to column-driven scenarios (`implementations` keyed by library
