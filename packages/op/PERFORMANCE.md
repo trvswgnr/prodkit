@@ -10,9 +10,8 @@ usually dominated by I/O, so relative overhead matters less once network or data
 in the picture.
 
 The harness in [`benchmarks/op`](https://github.com/trvswgnr/prodkit/blob/main/benchmarks/op)
-runs paired scenarios with `tinybench`. See repo-root
-[`BENCHMARKS.md`](https://github.com/trvswgnr/prodkit/blob/main/BENCHMARKS.md) for methodology
-and CI artifacts.
+runs paired scenarios with `tinybench`. Scenario definitions and contributor commands live in
+[`benchmarks/op/README.md`](https://github.com/trvswgnr/prodkit/blob/main/benchmarks/op/README.md).
 
 ## Latest snapshot
 
@@ -43,6 +42,23 @@ Slowdown ratios compare Op paths to native Promise equivalents on the same machi
 
 <!-- op-performance-snapshot:end -->
 
+## Reading results
+
+Each CI run uploads `report.json` with absolute ops/sec and mean latency per scenario,
+branch-vs-baseline deltas (default baseline is latest `main`), and `overhead.*.slowdownRatio`
+(how many times slower the Op path is than its native pair on the same machine).
+
+Prefer slowdown ratios over raw ops/sec when comparing machines. Absolute throughput varies by
+CPU and OS; paired ratios on one run are the useful signal. Look at `overhead.singleOp`,
+`overhead.all`, `overhead.any`, `overhead.race`, `overhead.retry`, `overhead.timeout`, and
+`overhead.compose` first.
+
+CI publishes an `op-benchmarks` artifact on every push and pull request to `main`. Download
+`report.json` from the latest successful
+[`CI` workflow run](https://github.com/trvswgnr/prodkit/actions/workflows/ci.yml) on `main`.
+
+Treat all numbers as directional. Rerun locally if a result surprises you.
+
 ## Refresh locally
 
 From the repo root:
@@ -53,4 +69,5 @@ pnpm --filter @prodkit/op-benchmarks run bench -- --report=report.json
 pnpm --filter @prodkit/tools run performance:sync -- --write
 ```
 
-Treat all numbers as directional. Rerun locally if a result surprises you.
+Default baseline is latest commit on `main`. Use `--baseline=npm` to compare against the latest
+published npm release.
