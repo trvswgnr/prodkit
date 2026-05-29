@@ -4,7 +4,14 @@ import { Result } from "../../result.js";
 import { isIterableOp, unsafeCoerce } from "../../shared.js";
 import { driveIterator } from "../runtime.js";
 import { DEFAULT_RETRY_POLICY, type RetryPolicy } from "../retry-policy.js";
-import type { EmptyMeta, Instruction, OpInterface, RunContext, TrackedErr } from "../types.js";
+import type {
+  AsArgs,
+  EmptyMeta,
+  Instruction,
+  OpInterface,
+  RunContext,
+  TrackedErr,
+} from "../types.js";
 import { retryPlan, signalPlan, timeoutPlan } from "./policies.js";
 
 export const OP_PLAN_BIND: unique symbol = Symbol("prodkit.op.plan-bind");
@@ -22,9 +29,9 @@ export interface Plan<T, E, M = EmptyMeta> {
   readonly withSignal: (signal: AbortSignal) => Plan<T, E, M>;
 }
 
-export type PlanBinder<T, E, A extends readonly unknown[], M> = (...args: A) => Plan<T, E, M>;
+export type PlanBinder<T, E, A, M> = (...args: AsArgs<A>) => Plan<T, E, M>;
 
-export type PlanBackedOp<T, E, A extends readonly unknown[], M> = OpInterface<T, E, A, M> & {
+export type PlanBackedOp<T, E, A, M> = OpInterface<T, E, A, M> & {
   readonly [OP_PLAN_BIND]: PlanBinder<T, E, A, M>;
 };
 
@@ -71,10 +78,7 @@ export function genPlan<T, E, M>(
   return createPlan(() => gen());
 }
 
-export function getPlan<T, E, A extends readonly unknown[], M>(
-  op: Op<T, E, A, M>,
-  args: A,
-): Plan<T, E, M> {
+export function getPlan<T, E, A, M>(op: Op<T, E, A, M>, args: AsArgs<A>): Plan<T, E, M> {
   if (isPlanBackedOp(op)) {
     return op[OP_PLAN_BIND](...args);
   }
@@ -93,7 +97,7 @@ export function getIterablePlan<T, E, M>(op: Op<T, E, [], M>): Plan<T, E, M> | u
   return genPlan(() => op[Symbol.iterator]());
 }
 
-export function isPlanBackedOp<T, E, A extends readonly unknown[], M>(
+export function isPlanBackedOp<T, E, A, M>(
   value: Op<T, E, A, M>,
 ): value is Op<T, E, A, M> & PlanBackedOp<T, E, A, M> {
   return OP_PLAN_BIND in value;

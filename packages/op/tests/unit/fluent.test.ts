@@ -253,7 +253,7 @@ describe("op.tap", () => {
 
   test("tap drives invoked Op(function*) observers that succeed", async () => {
     const seen: string[] = [];
-    const op = Op(function* (value) {
+    const op = Op(function* (value: number) {
       seen.push(`observed:${value}`);
       return 69;
     });

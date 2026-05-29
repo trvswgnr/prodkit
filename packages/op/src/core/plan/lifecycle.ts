@@ -33,7 +33,7 @@ export function withReleasePlan<T, E, M>(
   );
 }
 
-export function onEnterPlan<T, E, A extends readonly unknown[], M>(
+export function onEnterPlan<T, E, A, M>(
   source: Plan<T, E, M>,
   initialize: EnterFn<A>,
 ): Plan<T, E, M> {
@@ -65,7 +65,7 @@ export function onEnterPlan<T, E, A extends readonly unknown[], M>(
   );
 }
 
-export function onExitPlan<T, E, A extends readonly unknown[], M>(
+export function onExitPlan<T, E, A, M>(
   source: Plan<T, E, M>,
   finalize: ExitFn<T, E, A>,
 ): Plan<T, E, M> {

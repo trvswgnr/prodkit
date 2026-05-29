@@ -3,6 +3,7 @@ import { makePlanOp } from "./core/fluent.js";
 import { genPlan } from "./core/plan/base.js";
 import type {
   AnyExitFn,
+  AsArgs,
   EmptyMeta,
   InferInstructionErr,
   InferInstructionMeta,
@@ -106,12 +107,12 @@ function bindArityArgsToFinalizers<T, M>(
 /**
  * Turns a generator function into an {@link Op}
  */
-export function fromGenFn<Y extends Instruction<unknown, unknown>, T, A extends readonly unknown[]>(
-  f: (...args: A) => Generator<Y, T, unknown>,
+export function fromGenFn<Y extends Instruction<unknown, unknown>, T, A>(
+  f: (...args: AsArgs<A>) => Generator<Y, T, unknown>,
 ): Op<T, InferInstructionErr<Y>, A, InferInstructionMeta<Y>> {
   // We intentionally always build through the tuple-arity lifting path, including for `A = []`.
   // This keeps runtime behavior uniform while preserving exact tuple signatures at the type level.
-  const bindPlan = (...args: A) =>
+  const bindPlan = (...args: AsArgs<A>) =>
     genPlan(() =>
       // SAFETY: TS cannot model `Generator<Y, T, unknown>` as the internal instruction supertype.
       unsafeCoerce<
@@ -125,7 +126,7 @@ export function fromGenFn<Y extends Instruction<unknown, unknown>, T, A extends 
       bindPlan(
         // SAFETY: direct iterator composition has no runtime args. The public type exposes that
         // surface only for `A = []`; runtime intentionally avoids function arity reflection.
-        ...unsafeCoerce<A>([]),
+        ...unsafeCoerce<AsArgs<A>>([]),
       ),
   );
 

@@ -13,6 +13,7 @@ import {
   type RunContext,
   type Simplify,
   type StripEmpty,
+  type AsArgs,
 } from "@prodkit/op/internal";
 import { Op, type EmptyMeta } from "@prodkit/op";
 import type { Dependency } from "./index.js";
@@ -333,14 +334,11 @@ function extendContext(
   return createRunContext(context.signal, context.args, extensions);
 }
 
-export function provideOp<
-  T,
-  E,
-  A extends readonly unknown[],
-  M,
-  const Entries extends readonly UseEntry[],
->(op: Op<T, E, A, M>, entries: Entries): Op<T, E, A, ProvidedMeta<M, Entries>> {
-  const provided = Op(function* (...args: A) {
+export function provideOp<T, E, A, M, const Entries extends readonly UseEntry[]>(
+  op: Op<T, E, A, M>,
+  entries: Entries,
+): Op<T, E, A, ProvidedMeta<M, Entries>> {
+  const provided = Op(function* (...args: AsArgs<A>) {
     const result = yield* new SuspendInstruction((context) =>
       drive(op(...args), extendContext(context, entries)),
     );

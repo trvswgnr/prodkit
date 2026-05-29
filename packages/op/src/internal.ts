@@ -34,5 +34,6 @@ export type {
   SetBlockingMeta,
   Simplify,
   StripEmpty,
+  AsArgs,
 } from "./core/types.js";
 export { withBlocking, type BlockingOp } from "./blocking.js";

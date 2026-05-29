@@ -28,14 +28,14 @@ export function makeCoreOp<T, E, M = EmptyMeta>(
   );
 }
 
-function asPublicOp<T, E, A extends readonly unknown[], M, Yieldable extends boolean>(
+function asPublicOp<T, E, A, M, Yieldable extends boolean>(
   op: OpInterface<T, E, A, M, Yieldable>,
 ): Op<T, E, A, M> {
   // SAFETY: OpInterface values built by makePlanOp carry the internal Op brand at runtime.
   return unsafeCoerce(op);
 }
 
-function iterablePlanFor<T, E, A extends readonly unknown[], M, Yieldable extends boolean>(
+function iterablePlanFor<T, E, A, M, Yieldable extends boolean>(
   op: OpInterface<T, E, A, M, Yieldable>,
 ) {
   // SAFETY: getIterablePlan checks the runtime iterable brand before reading the iterator.
@@ -43,7 +43,7 @@ function iterablePlanFor<T, E, A extends readonly unknown[], M, Yieldable extend
   return getIterablePlan(iterableCandidate);
 }
 
-export function onExitOp<T, E, A extends readonly unknown[], M, Yieldable extends boolean>(
+export function onExitOp<T, E, A, M, Yieldable extends boolean>(
   op: OpInterface<T, E, A, M, Yieldable>,
   finalize: ExitFn<T, E, A>,
 ): OpInterface<T, E, A, M, Yieldable> {
@@ -58,7 +58,7 @@ export function onExitOp<T, E, A extends readonly unknown[], M, Yieldable extend
   );
 }
 
-export function onEnterOp<T, E, A extends readonly unknown[], M, Yieldable extends boolean>(
+export function onEnterOp<T, E, A, M, Yieldable extends boolean>(
   op: OpInterface<T, E, A, M, Yieldable>,
   initialize: EnterFn<A>,
 ): OpInterface<T, E, A, M, Yieldable> {
@@ -73,7 +73,7 @@ export function onEnterOp<T, E, A extends readonly unknown[], M, Yieldable exten
   );
 }
 
-export function onOp<T, E, A extends readonly unknown[], M, Yieldable extends boolean>(
+export function onOp<T, E, A, M, Yieldable extends boolean>(
   op: OpInterface<T, E, A, M, Yieldable>,
   event: OpLifecycleHook,
   handler: LifecycleFn<T, E, A>,
@@ -89,7 +89,7 @@ export function onOp<T, E, A extends readonly unknown[], M, Yieldable extends bo
   throw new Error(`Invalid event: ${event}`);
 }
 
-export function withReleaseOp<T, E, A extends readonly unknown[], M, Yieldable extends boolean>(
+export function withReleaseOp<T, E, A, M, Yieldable extends boolean>(
   op: OpInterface<T, E, A, M, Yieldable>,
   release: ReleaseFn<T>,
 ): OpInterface<T, E, A, M, Yieldable> {

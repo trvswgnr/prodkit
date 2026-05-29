@@ -204,32 +204,28 @@ export type AnyNullaryOp = Op<unknown, unknown, [], any>;
  *   (including {@link UnhandledException} on the error channel when relevant).
  *   If a finalizer throws, `.run()` returns a new cleanup-failure result instead.
  */
-export interface ExitContext<T, E, A extends readonly unknown[] = []> {
+export interface ExitContext<T, E, A = []> {
   readonly signal: AbortSignal;
   readonly args: A;
   readonly result: Result<T, E | UnhandledException>;
 }
 
 /** Passed to {@link EnterFn} when a run starts, before the wrapped operation body begins. */
-export interface EnterContext<A extends readonly unknown[] = []> {
+export interface EnterContext<A = []> {
   readonly signal: AbortSignal;
   readonly args: A;
 }
 
 /** Runtime execution context threaded through internal driver/suspend boundaries. */
-export interface RunContext<A extends readonly unknown[] = readonly unknown[]> {
+export interface RunContext<A = []> {
   readonly signal: AbortSignal;
   readonly args: A;
   readonly extensions: ReadonlyMap<unknown, unknown>;
 }
 
-export type EnterFn<A extends readonly unknown[] = []> = (ctx: EnterContext<A>) => unknown;
-export type ExitFn<T = unknown, E = unknown, A extends readonly unknown[] = []> = (
-  ctx: ExitContext<T, E, A>,
-) => unknown;
-export type LifecycleFn<T = unknown, E = unknown, A extends readonly unknown[] = []> =
-  | EnterFn<A>
-  | ExitFn<T, E, A>;
+export type EnterFn<A> = (ctx: EnterContext<A>) => unknown;
+export type ExitFn<T = unknown, E = unknown, A = []> = (ctx: ExitContext<T, E, A>) => unknown;
+export type LifecycleFn<T = unknown, E = unknown, A = []> = EnterFn<A> | ExitFn<T, E, A>;
 
 /** Widened hook for {@link builders.defer} where enclosing `Op` `T`/`E` are not inferred. */
 export type AnyExitFn = ExitFn<unknown, unknown, readonly unknown[]>;
@@ -245,12 +241,12 @@ export type ReleaseFn<T> = (value: T) => unknown;
 /** Lifecycle channels exposed by {@link Op}. */
 export type OpLifecycleHook = "enter" | "exit";
 
-export interface BaseOp<T, E, A extends readonly unknown[], M = EmptyMeta> {
+export interface BaseOp<T, E, A, M = EmptyMeta> {
   /** Type discriminant for an `Op` instance. */
   readonly _tag: "Op";
 
   /** Provides the operation with runtime arguments. */
-  (...args: A): Op<T, E, [], M>;
+  (...args: AsArgs<A>): Op<T, E, [], M>;
 
   /**
    * Executes the operation with runtime arguments and returns a `Result`.
@@ -260,7 +256,7 @@ export interface BaseOp<T, E, A extends readonly unknown[], M = EmptyMeta> {
    */
   run: [IsRunnable<M>] extends [false]
     ? never
-    : (...args: A) => Promise<Result<T, E | UnhandledException>>;
+    : (...args: AsArgs<A>) => Promise<Result<T, E | UnhandledException>>;
 }
 
 type ObjectNotFunction<T> = T extends object
@@ -276,7 +272,7 @@ export type RequireOne<T> = {
   [K in keyof T]: Identity<Required<Pick<T, K>> & Partial<Omit<T, K>>>;
 }[keyof T];
 
-export interface FluentOp<T, E, A extends readonly unknown[], M = EmptyMeta> {
+export interface FluentOp<T, E, A, M = EmptyMeta> {
   /**
    * Wraps the operation in retry policy logic.
    *
@@ -394,7 +390,9 @@ export interface OpIterable<T, E, M = EmptyMeta> {
 export type OpInterface<
   T,
   E,
-  A extends readonly unknown[],
+  A,
   M = EmptyMeta,
   Yieldable extends boolean = A extends [] ? true : false,
 > = BaseOp<T, E, A, M> & FluentOp<T, E, A, M> & (Yieldable extends true ? OpIterable<T, E, M> : {});
+
+export type AsArgs<T> = T extends readonly unknown[] ? T : never;

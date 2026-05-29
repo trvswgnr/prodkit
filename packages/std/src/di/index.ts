@@ -74,13 +74,7 @@ export const scoped = <C extends AnyDependency>(
   resolve,
 });
 
-export const provide = <
-  T,
-  E,
-  A extends readonly unknown[],
-  M,
-  const Entries extends readonly UseEntry[],
->(
+export const provide = <T, E, A, M, const Entries extends readonly UseEntry[]>(
   op: Op<T, E, A, M>,
   ...entries: ValidUseEntries<Entries, InferMetaReqs<M>>
 ): Op<T, E, A, ProvidedMeta<M, Entries>> => provideOp(op, entries);

@@ -4,6 +4,7 @@ import { createRunContext } from "../runtime.js";
 import { DEFAULT_RETRY_POLICY, type RetryPolicy } from "../retry-policy.js";
 import type {
   AnyNullaryOp,
+  AsArgs,
   EmptyMeta,
   EnterFn,
   ExitFn,
@@ -23,7 +24,7 @@ import {
   tapPlan,
 } from "./transforms.js";
 
-type PlanShellContext<T, E, A extends readonly unknown[], M> = {
+type PlanShellContext<T, E, A, M> = {
   bindArgs: PlanBinder<T, E, A, M>;
   withPolicyIterable: <TNext, ENext, MNext>(
     transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
@@ -31,16 +32,7 @@ type PlanShellContext<T, E, A extends readonly unknown[], M> = {
   bound: boolean;
 };
 
-function wrapPlanTransform<
-  T,
-  E,
-  A extends readonly unknown[],
-  M,
-  Yieldable extends boolean,
-  TNext,
-  ENext,
-  MNext,
->(
+function wrapPlanTransform<T, E, A, M, Yieldable extends boolean, TNext, ENext, MNext>(
   ctx: PlanShellContext<T, E, A, M>,
   transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
 ): OpInterface<TNext, ENext, A, MNext, Yieldable> {
@@ -51,7 +43,7 @@ function wrapPlanTransform<
   );
 }
 
-function fluentMethodsForContext<T, E, A extends readonly unknown[], M, Yieldable extends boolean>(
+function fluentMethodsForContext<T, E, A, M, Yieldable extends boolean>(
   ctx: PlanShellContext<T, E, A, M>,
 ) {
   const wrap = <TNext, ENext, MNext>(
@@ -138,7 +130,7 @@ function createSyncValueFluentPrototype(): PropertyDescriptorMap {
 export function makePlanOp<
   T,
   E,
-  A extends readonly unknown[],
+  A,
   M = EmptyMeta,
   Yieldable extends boolean = A extends [] ? true : false,
 >(
@@ -149,7 +141,7 @@ export function makePlanOp<
   let self: OpInterface<T, E, A, M, Yieldable>;
   const invoke = bound
     ? () => self
-    : (...args: A) =>
+    : (...args: AsArgs<A>) =>
         makePlanOp<T, E, [], M, true>(
           () => bindArgs(...args),
           () => bindArgs(...args),
@@ -162,7 +154,7 @@ export function makePlanOp<
       ? () =>
           bindArgs(
             // SAFETY: bound plan ops are always nullary at the public call surface.
-            ...unsafeCoerce<A>([]),
+            ...unsafeCoerce<AsArgs<A>>([]),
           )
       : undefined);
 
@@ -181,7 +173,7 @@ export function makePlanOp<
   self = unsafeCoerce(
     Object.assign(invoke, {
       [OP_PLAN_BIND]: bindArgs,
-      run: (...args: A) =>
+      run: (...args: AsArgs<A>) =>
         bindArgs(...args).execute(createRunContext(new AbortController().signal, args)),
       ...fluentMethodsForContext<T, E, A, M, Yieldable>(shellContext),
       [OP_BRAND]: true,

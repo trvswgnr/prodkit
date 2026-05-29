@@ -1,19 +1,20 @@
 import { defer, fail, fromGenFn, sleep, succeed, _try } from "./builders.js";
 import { allOp, allSettledOp, anyOp, raceOp, settleOp } from "./combinators.js";
 import { ErrorGroup, TimeoutError, type UnhandledException } from "./errors.js";
-import {
-  type Blocking,
-  type EmptyMeta,
-  type EnterContext,
-  type ExitContext,
-  type CustomInstruction,
-  type InferInstructionMeta,
-  type InferOpMeta,
-  type IsRunnable,
-  type MergeMeta,
-  type Meta,
-  type OpLifecycleHook,
+import type {
+  Blocking,
+  EmptyMeta,
+  EnterContext,
+  ExitContext,
+  CustomInstruction,
+  InferInstructionMeta,
+  InferOpMeta,
+  IsRunnable,
+  MergeMeta,
+  Meta,
+  OpLifecycleHook,
   OpInterface,
+  AsArgs,
 } from "./core/types.js";
 import { runOp } from "./core/run-op.js";
 import { exponentialBackoff } from "./core/retry-policy.js";
@@ -53,9 +54,9 @@ export const Op = Object.assign(fromGenFn, {
    * @example
    * const value = await Op.run(Op.of(1));
    */
-  run: <T, E, A extends readonly unknown[], M>(
+  run: <T, E, A, M>(
     op: [IsRunnable<M>] extends [false] ? never : Op<T, E, A, M>,
-    ...args: A
+    ...args: AsArgs<A>
   ): Promise<Result<T, E | UnhandledException>> => {
     return runOp(op(...args));
   },
@@ -178,8 +179,7 @@ export const Op = Object.assign(fromGenFn, {
   empty,
 });
 
-export type Op<T, E, A extends readonly unknown[], M = EmptyMeta> = OpInterface<T, E, A, M> &
-  Tagged<"Op">;
+export type Op<T, E, A, M = EmptyMeta> = OpInterface<T, E, A, M> & Tagged<"Op">;
 
 export type {
   Blocking,
