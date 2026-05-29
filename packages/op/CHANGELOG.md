@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   repo-root `BENCHMARKS.md`.
 - Benchmark harness JSON reports and V8 profiles now write under `benchmarks/op/.artifacts/`.
 - Renamed comparison scenario `singleOp` to `singleValue` so matrix keys match workload names.
+- Refactored the comparison matrix to column-driven scenarios (`implementations` keyed by library
+  id). Comparison reports now expose `vsBaseline` ratios per competitor column; `compare` and
+  `performance:sync` render absolute ops/sec and vs-native tables dynamically from
+  `IMPLEMENTATION_COLUMNS`.
 - Removed dead hook-era internals after the plan AST cutover: unused `*CoreOp` builders,
   `DefaultHooks`, and orphan `with*Op` policy wrappers. Fluent methods now share one
   `fluentMethodsForContext` factory between `makePlanOp` and the sync-value hot path.

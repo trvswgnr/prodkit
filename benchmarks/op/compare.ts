@@ -4,12 +4,14 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { transform } from "esbuild";
 import {
+  BASELINE_IMPLEMENTATION_ID,
   COMPARISON_SCENARIOS,
-  comparisonOutcome,
+  computeVsBaseline,
   IMPLEMENTATION_COLUMNS,
-  slowdownRatio,
   type ComparisonScenarioKey,
+  type ImplementationColumn,
   type ImplementationId,
+  type VsBaselineRatios,
 } from "./comparison-matrix.ts";
 import {
   formatNumber,
@@ -34,13 +36,14 @@ type ComparisonReport = {
     dirty: boolean;
     packageVersion: string;
   };
+  baselineId: typeof BASELINE_IMPLEMENTATION_ID;
   implementations: Array<(typeof IMPLEMENTATION_COLUMNS)[number]>;
   scenarios: Array<{
     key: ComparisonScenarioKey;
     label: string;
     descriptions: Record<ImplementationId, string>;
     runtime: Record<ImplementationId, RuntimeCell>;
-    slowdownRatio: number;
+    vsBaseline: VsBaselineRatios;
   }>;
   bundleSize: {
     minBytes: number;
@@ -90,27 +93,64 @@ function formatBytes(bytes: number): string {
   return `${Intl.NumberFormat("en-US").format(bytes)} B`;
 }
 
-function formatWinner(winner: ImplementationId): string {
-  return winner === "native" ? "Native" : "Op";
+function implementationShortLabel(column: ImplementationColumn): string {
+  if (column.id === BASELINE_IMPLEMENTATION_ID) return "Native";
+  if (column.id === "op") return "Op";
+  return column.header;
 }
 
-function printComparisonTable(scenarios: ComparisonReport["scenarios"]): void {
+function formatVsBaseline(ratio: number | undefined): string {
+  if (ratio === undefined || ratio === 0) return "n/a";
+  if (ratio >= 1) return formatRatio(ratio);
+  return `${formatRatio(1 / ratio)} faster`;
+}
+
+function printAbsoluteTable(
+  scenarios: ComparisonReport["scenarios"],
+  implementations: ComparisonReport["implementations"],
+): void {
   const scenarioWidth = 32;
-  const winnerWidth = 8;
-  logger.info("");
-  logger.info("Runtime comparison (higher ops/sec wins):");
-  logger.info("");
-  logger.info(
-    `${"Scenario".padEnd(scenarioWidth)} ${"Native ops/sec".padStart(14)} ${"Op ops/sec".padStart(14)} ${"Winner".padStart(winnerWidth)} ${"Margin".padStart(8)}`,
+  const hzWidth = 14;
+  const headers = implementations.map((column) =>
+    `${implementationShortLabel(column)} ops/sec`.padStart(hzWidth),
   );
+  logger.info("");
+  logger.info("Absolute throughput (ops/sec):");
+  logger.info("");
+  logger.info(`${"Scenario".padEnd(scenarioWidth)} ${headers.join(" ")}`);
   logger.info(
-    `${"-".repeat(scenarioWidth)} ${"-".repeat(14)} ${"-".repeat(14)} ${"-".repeat(winnerWidth)} ${"-".repeat(8)}`,
+    `${"-".repeat(scenarioWidth)} ${implementations.map(() => "-".repeat(hzWidth)).join(" ")}`,
   );
   for (const scenario of scenarios) {
-    const outcome = comparisonOutcome(scenario.runtime.native.hz, scenario.runtime.op.hz);
-    logger.info(
-      `${scenario.label.padEnd(scenarioWidth)} ${formatNumber(scenario.runtime.native.hz).padStart(14)} ${formatNumber(scenario.runtime.op.hz).padStart(14)} ${formatWinner(outcome.winner).padStart(winnerWidth)} ${formatRatio(outcome.margin).padStart(8)}`,
+    const cells = implementations.map((column) =>
+      formatNumber(scenario.runtime[column.id].hz).padStart(hzWidth),
     );
+    logger.info(`${scenario.label.padEnd(scenarioWidth)} ${cells.join(" ")}`);
+  }
+}
+
+function printVsBaselineTable(
+  scenarios: ComparisonReport["scenarios"],
+  implementations: ComparisonReport["implementations"],
+): void {
+  const scenarioWidth = 32;
+  const ratioWidth = 12;
+  const competitors = implementations.filter((column) => column.id !== BASELINE_IMPLEMENTATION_ID);
+  const headers = competitors.map((column) =>
+    `${implementationShortLabel(column)} vs native`.padStart(ratioWidth),
+  );
+  logger.info("");
+  logger.info("Versus native baseline (native ops/sec / library ops/sec; above 1x means slower):");
+  logger.info("");
+  logger.info(`${"Scenario".padEnd(scenarioWidth)} ${headers.join(" ")}`);
+  logger.info(
+    `${"-".repeat(scenarioWidth)} ${competitors.map(() => "-".repeat(ratioWidth)).join(" ")}`,
+  );
+  for (const scenario of scenarios) {
+    const cells = competitors.map((column) =>
+      formatVsBaseline(scenario.vsBaseline[column.id]).padStart(ratioWidth),
+    );
+    logger.info(`${scenario.label.padEnd(scenarioWidth)} ${cells.join(" ")}`);
   }
 }
 
@@ -136,21 +176,24 @@ async function main(): Promise<void> {
   const scenarios: ComparisonReport["scenarios"] = [];
   for (const scenario of COMPARISON_SCENARIOS) {
     logger.info(`Benchmarking ${scenario.label}...`);
-    const native = await runTinybenchVariant(scenario.nativeBench, scenario.native);
-    const op = await runTinybenchVariant(scenario.opBench, scenario.op);
+    const runtime = {} as Record<ImplementationId, RuntimeCell>;
+    const descriptions = {} as Record<ImplementationId, string>;
+    for (const column of IMPLEMENTATION_COLUMNS) {
+      const cell = scenario.implementations[column.id];
+      runtime[column.id] = await runTinybenchVariant(cell.benchName, cell.run);
+      descriptions[column.id] = cell.description;
+    }
     scenarios.push({
       key: scenario.key,
       label: scenario.label,
-      descriptions: {
-        native: scenario.nativeDescription,
-        op: scenario.opDescription,
-      },
-      runtime: { native, op },
-      slowdownRatio: slowdownRatio(native.hz, op.hz),
+      descriptions,
+      runtime,
+      vsBaseline: computeVsBaseline(runtime),
     });
   }
 
   const bundleSize = await measureBundleSize(packageDir);
+  const implementations = [...IMPLEMENTATION_COLUMNS];
 
   const report: ComparisonReport = {
     generatedAt: new Date().toISOString(),
@@ -160,12 +203,14 @@ async function main(): Promise<void> {
       dirty: fingerprint.dirty,
       packageVersion,
     },
-    implementations: [...IMPLEMENTATION_COLUMNS],
+    baselineId: BASELINE_IMPLEMENTATION_ID,
+    implementations,
     scenarios,
     bundleSize,
   };
 
-  printComparisonTable(scenarios);
+  printAbsoluteTable(scenarios, implementations);
+  printVsBaselineTable(scenarios, implementations);
   printBundleSize(bundleSize);
 
   await writeJsonReport(reportPath, report);

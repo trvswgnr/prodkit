@@ -12,11 +12,15 @@ const REPO = "trvswgnr/prodkit";
 const SNAPSHOT_START = "<!-- op-performance-snapshot:start -->";
 const SNAPSHOT_END = "<!-- op-performance-snapshot:end -->";
 
-type ImplementationId = "native" | "op";
-
 type RuntimeCell = {
   hz: number;
   latencyMs: number;
+};
+
+type ImplementationRecord = {
+  id: string;
+  header: string;
+  description: string;
 };
 
 type ComparisonReport = {
@@ -30,17 +34,14 @@ type ComparisonReport = {
     headSha: string;
     packageVersion: string;
   };
-  implementations: Array<{
-    id: ImplementationId;
-    header: string;
-    description: string;
-  }>;
+  baselineId: string;
+  implementations: ImplementationRecord[];
   scenarios: Array<{
     key: string;
     label: string;
-    descriptions: Record<ImplementationId, string>;
-    runtime: Record<ImplementationId, RuntimeCell>;
-    slowdownRatio: number;
+    descriptions: Record<string, string>;
+    runtime: Record<string, RuntimeCell>;
+    vsBaseline: Record<string, number>;
   }>;
   bundleSize: {
     minBytes: number;
@@ -62,8 +63,9 @@ function formatHz(hz: number): string {
   return Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(hz);
 }
 
-function formatRatio(ratio: number): string {
-  return `${ratio.toFixed(2)}x`;
+function formatVsBaseline(ratio: number): string {
+  if (ratio >= 1) return `${ratio.toFixed(2)}x`;
+  return `${(1 / ratio).toFixed(2)}x faster`;
 }
 
 function formatSnapshotDate(iso: string): string {
@@ -108,6 +110,7 @@ function readComparisonReport(reportPath: string): ComparisonReport {
   }
 
   const generatedAt = readStringField(parsed, "generatedAt", "generatedAt");
+  const baselineId = readStringField(parsed, "baselineId", "baselineId");
   const environment = Reflect.get(parsed, "environment");
   if (typeof environment !== "object" || environment === null) {
     throw new Error("comparison report is missing environment");
@@ -123,6 +126,23 @@ function readComparisonReport(reportPath: string): ComparisonReport {
     throw new Error("comparison report is missing implementations");
   }
 
+  const implementations = implementationsRaw.map((item, index) => {
+    if (typeof item !== "object" || item === null) {
+      throw new Error(`comparison report implementations[${index}] must be an object`);
+    }
+    return {
+      id: readStringField(item, "id", `implementations[${index}].id`),
+      header: readStringField(item, "header", `implementations[${index}].header`),
+      description: readStringField(item, "description", `implementations[${index}].description`),
+    };
+  });
+
+  if (implementations[0]?.id !== baselineId) {
+    throw new Error(
+      `comparison report baselineId "${baselineId}" must match the first implementation column`,
+    );
+  }
+
   const scenariosRaw = Reflect.get(parsed, "scenarios");
   if (!Array.isArray(scenariosRaw) || scenariosRaw.length === 0) {
     throw new Error("comparison report is missing scenarios");
@@ -133,6 +153,7 @@ function readComparisonReport(reportPath: string): ComparisonReport {
     throw new Error("comparison report is missing bundleSize");
   }
 
+  const competitorIds = implementations.slice(1).map((column) => column.id);
   const scenarios: ComparisonReport["scenarios"] = [];
   for (const item of scenariosRaw) {
     if (typeof item !== "object" || item === null) {
@@ -140,27 +161,42 @@ function readComparisonReport(reportPath: string): ComparisonReport {
     }
     const key = readStringField(item, "key", "scenarios[].key");
     const label = readStringField(item, "label", `scenarios.${key}.label`);
-    const descriptions = Reflect.get(item, "descriptions");
-    const runtime = Reflect.get(item, "runtime");
-    if (typeof descriptions !== "object" || descriptions === null) {
+    const descriptionsRaw = Reflect.get(item, "descriptions");
+    const runtimeRaw = Reflect.get(item, "runtime");
+    const vsBaselineRaw = Reflect.get(item, "vsBaseline");
+    if (typeof descriptionsRaw !== "object" || descriptionsRaw === null) {
       throw new Error(`comparison report is missing scenarios.${key}.descriptions`);
     }
-    if (typeof runtime !== "object" || runtime === null) {
+    if (typeof runtimeRaw !== "object" || runtimeRaw === null) {
       throw new Error(`comparison report is missing scenarios.${key}.runtime`);
     }
-    scenarios.push({
-      key,
-      label,
-      descriptions: {
-        native: readStringField(descriptions, "native", `scenarios.${key}.descriptions.native`),
-        op: readStringField(descriptions, "op", `scenarios.${key}.descriptions.op`),
-      },
-      runtime: {
-        native: readRuntimeCell(Reflect.get(runtime, "native"), `scenarios.${key}.runtime.native`),
-        op: readRuntimeCell(Reflect.get(runtime, "op"), `scenarios.${key}.runtime.op`),
-      },
-      slowdownRatio: readNumberField(item, "slowdownRatio", `scenarios.${key}.slowdownRatio`),
-    });
+    if (typeof vsBaselineRaw !== "object" || vsBaselineRaw === null) {
+      throw new Error(`comparison report is missing scenarios.${key}.vsBaseline`);
+    }
+
+    const descriptions: Record<string, string> = {};
+    const runtime: Record<string, RuntimeCell> = {};
+    const vsBaseline: Record<string, number> = {};
+    for (const column of implementations) {
+      descriptions[column.id] = readStringField(
+        descriptionsRaw,
+        column.id,
+        `scenarios.${key}.descriptions.${column.id}`,
+      );
+      runtime[column.id] = readRuntimeCell(
+        Reflect.get(runtimeRaw, column.id),
+        `scenarios.${key}.runtime.${column.id}`,
+      );
+    }
+    for (const competitorId of competitorIds) {
+      vsBaseline[competitorId] = readNumberField(
+        vsBaselineRaw,
+        competitorId,
+        `scenarios.${key}.vsBaseline.${competitorId}`,
+      );
+    }
+
+    scenarios.push({ key, label, descriptions, runtime, vsBaseline });
   }
 
   return {
@@ -174,16 +210,8 @@ function readComparisonReport(reportPath: string): ComparisonReport {
       headSha: readStringField(current, "headSha", "current.headSha"),
       packageVersion: readStringField(current, "packageVersion", "current.packageVersion"),
     },
-    implementations: implementationsRaw.map((item, index) => {
-      if (typeof item !== "object" || item === null) {
-        throw new Error(`comparison report implementations[${index}] must be an object`);
-      }
-      return {
-        id: readStringField(item, "id", `implementations[${index}].id`) as ImplementationId,
-        header: readStringField(item, "header", `implementations[${index}].header`),
-        description: readStringField(item, "description", `implementations[${index}].description`),
-      };
-    }),
+    baselineId,
+    implementations,
     scenarios,
     bundleSize: {
       minBytes: readNumberField(bundleSize, "minBytes", "bundleSize.minBytes"),
@@ -196,25 +224,57 @@ function renderSnapshot(report: ComparisonReport): string {
   const date = formatSnapshotDate(report.generatedAt);
   const shortSha = report.current.headSha.slice(0, 7);
   const commitUrl = `https://github.com/${REPO}/commit/${report.current.headSha}`;
+  const baseline = report.implementations[0];
+  if (baseline === undefined) {
+    throw new Error("comparison report is missing baseline implementation column");
+  }
+  const competitors = report.implementations.slice(1);
+
+  const headerCells = [
+    "Scenario",
+    `${baseline.header}`,
+    `${baseline.header} ops/sec`,
+    ...competitors.flatMap((column) => [
+      column.header,
+      `${column.header} ops/sec`,
+      `${column.header} vs native`,
+    ]),
+  ];
+  const separatorCells = headerCells.map(() => "---");
+  const headerRow = `| ${headerCells.join(" | ")} |`;
+  const separatorRow = `| ${separatorCells.join(" | ")} |`;
 
   const runtimeRows = report.scenarios
     .map((scenario) => {
-      const native = scenario.runtime.native;
-      const op = scenario.runtime.op;
-      return `| ${scenario.label} | ${scenario.descriptions.native} | ${formatHz(native.hz)} | ${scenario.descriptions.op} | ${formatHz(op.hz)} | ${formatRatio(scenario.slowdownRatio)} |`;
+      const cells = [
+        scenario.label,
+        scenario.descriptions[baseline.id],
+        formatHz(scenario.runtime[baseline.id]?.hz ?? 0),
+        ...competitors.flatMap((column) => [
+          scenario.descriptions[column.id],
+          formatHz(scenario.runtime[column.id]?.hz ?? 0),
+          formatVsBaseline(scenario.vsBaseline[column.id] ?? 0),
+        ]),
+      ];
+      return `| ${cells.join(" | ")} |`;
     })
     .join("\n");
+
+  const competitorNote =
+    competitors.length === 1
+      ? `\`${competitors[0]?.header}\` ratios use native ops/sec divided by library ops/sec (values above 1x mean slower than native).`
+      : "Versus-native ratios use native ops/sec divided by library ops/sec (values above 1x mean slower than native).";
 
   return [
     `Captured on **${date}** at commit [\`${shortSha}\`](${commitUrl}) (\`@prodkit/op@${report.current.packageVersion}\`).`,
     `Environment: ${report.environment.node}, ${report.environment.platform}/${report.environment.arch}.`,
-    "Slowdown ratios compare `@prodkit/op` to native Promise equivalents on the same machine.",
-    "Add competitor library columns by extending `IMPLEMENTATION_COLUMNS` in `benchmarks/op/comparison-matrix.ts`.",
+    competitorNote,
+    "Add library columns by extending `IMPLEMENTATION_COLUMNS` and scenario implementations in `benchmarks/op/comparison-matrix.ts`.",
     "",
     "### Runtime overhead",
     "",
-    "| Scenario | Native baseline | Native ops/sec | @prodkit/op | Op ops/sec | Slowdown (Op vs native) |",
-    "| --- | --- | --- | --- | --- | --- |",
+    headerRow,
+    separatorRow,
     runtimeRows,
     "",
     "### Bundle size",

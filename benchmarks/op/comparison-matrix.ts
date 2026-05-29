@@ -6,6 +6,8 @@ export const CONCURRENCY_CHILDREN = 8;
 export const RETRY_ATTEMPTS = 3;
 export const TIMEOUT_BUDGET_MS = 250;
 
+export const BASELINE_IMPLEMENTATION_ID = "native" as const;
+
 export type ComparisonScenarioKey =
   | "singleValue"
   | "all"
@@ -16,7 +18,7 @@ export type ComparisonScenarioKey =
   | "compose";
 
 /** Column ids for the public comparison table. Add competitors here later. */
-export type ImplementationId = "native" | "op";
+export type ImplementationId = typeof BASELINE_IMPLEMENTATION_ID | "op";
 
 export type ImplementationColumn = {
   id: ImplementationId;
@@ -26,7 +28,7 @@ export type ImplementationColumn = {
 
 export const IMPLEMENTATION_COLUMNS: readonly ImplementationColumn[] = [
   {
-    id: "native",
+    id: BASELINE_IMPLEMENTATION_ID,
     header: "Native baseline",
     description: "Raw Promise / hand-rolled equivalent on the same machine",
   },
@@ -37,17 +39,18 @@ export const IMPLEMENTATION_COLUMNS: readonly ImplementationColumn[] = [
   },
 ];
 
+export type ImplementationCell = {
+  benchName: string;
+  description: string;
+  run: () => Promise<void> | void;
+};
+
 export type ComparisonScenario = {
   key: ComparisonScenarioKey;
   label: string;
   group: ComparisonScenarioKey;
-  nativeBench: string;
-  opBench: string;
   overheadBench: string;
-  nativeDescription: string;
-  opDescription: string;
-  native: () => Promise<void> | void;
-  op: () => Promise<void> | void;
+  implementations: Record<ImplementationId, ImplementationCell>;
 };
 
 const op = assertProfileOpFactory(Op);
@@ -73,202 +76,233 @@ async function handRolledFirstSettler(childCount: number): Promise<void> {
   }
 }
 
-/** Primary comparison rows shown in PERFORMANCE.md and CodSpeed overhead tracking. */
-export const COMPARISON_SCENARIOS: readonly ComparisonScenario[] = [
-  {
-    key: "singleValue",
-    label: "Single value",
-    group: "singleValue",
-    nativeBench: "singleValue.rawAsync",
-    opBench: "singleValue.opRun",
-    overheadBench: "overhead.singleValue.ratio",
-    nativeDescription: "`Promise.resolve(x)`",
-    opDescription: "`Op.of(x).run()`",
-    native: async () => {
-      await Promise.resolve(69);
-    },
-    op: async () => {
-      const result = await Op.of(69).run();
-      if (!result.isOk()) throw new Error("singleValue.opRun failed unexpectedly.");
-    },
-  },
-  {
-    key: "all",
-    label: "Parallel batch (8 children)",
-    group: "all",
-    nativeBench: "all.promiseAll",
-    opBench: "all.opAll",
-    overheadBench: "overhead.all.ratio",
-    nativeDescription: "`Promise.all([...])`",
-    opDescription: "`Op.all([...]).run()`",
-    native: async () => {
-      await Promise.all(
-        Array.from({ length: CONCURRENCY_CHILDREN }, (_, index) => Promise.resolve(index)),
-      );
-    },
-    op: async () => {
-      const ops = Array.from({ length: CONCURRENCY_CHILDREN }, (_, index) => Op.of(index));
-      const result = await Op.all(ops).run();
-      if (!result.isOk()) throw new Error("all.opAll failed unexpectedly.");
-    },
-  },
-  {
-    key: "any",
-    label: "First success (8 children)",
-    group: "any",
-    nativeBench: "any.handRolledFirstSuccess",
-    opBench: "any.opAny",
-    overheadBench: "overhead.any.ratio",
-    nativeDescription: "Hand-rolled first success + abort",
-    opDescription: "`Op.any([...]).run()`",
-    native: async () => {
-      await handRolledFirstSettler(CONCURRENCY_CHILDREN);
-    },
-    op: async () => {
-      const ops = Array.from({ length: CONCURRENCY_CHILDREN }, (_, index) => Op.of(index));
-      const result = await Op.any(ops).run();
-      if (!result.isOk()) throw new Error("any.opAny failed unexpectedly.");
-    },
-  },
-  {
-    key: "race",
-    label: "First settler (8 children)",
-    group: "race",
-    nativeBench: "race.handRolledFirstSettler",
-    opBench: "race.opRace",
-    overheadBench: "overhead.race.ratio",
-    nativeDescription: "Hand-rolled first settler + abort",
-    opDescription: "`Op.race([...]).run()`",
-    native: async () => {
-      await handRolledFirstSettler(CONCURRENCY_CHILDREN);
-    },
-    op: async () => {
-      const ops = Array.from({ length: CONCURRENCY_CHILDREN }, (_, index) => Op.of(index));
-      const result = await Op.race(ops).run();
-      if (!result.isOk()) throw new Error("race.opRace failed unexpectedly.");
-    },
-  },
-  {
-    key: "retry",
-    label: "Retry loop",
-    group: "retry",
-    nativeBench: "retry.handRolled",
-    opBench: "retry.opWithRetry",
-    overheadBench: "overhead.retry.ratio",
-    nativeDescription: "Hand-rolled try/catch retry",
-    opDescription: "`Op.try(...).withRetry(...).run()`",
-    native: async () => {
-      let attempt = 0;
-      for (;;) {
-        attempt += 1;
-        try {
-          if (attempt < RETRY_ATTEMPTS) throw new Error("retry");
-          break;
-        } catch {
-          if (attempt >= RETRY_ATTEMPTS)
-            throw new Error("retry.handRolled exhausted unexpectedly.");
-        }
-      }
-    },
-    op: async () => {
-      let attempt = 0;
-      const result = await Op.try(() => {
-        attempt += 1;
-        if (attempt < RETRY_ATTEMPTS) throw new Error("retry");
-        return 1;
-      })
-        .withRetry({
-          maxAttempts: RETRY_ATTEMPTS,
-          shouldRetry: () => true,
-          getDelay: () => 0,
-        })
-        .run();
-      if (!result.isOk()) throw new Error("retry.opWithRetry failed unexpectedly.");
-    },
-  },
-  {
-    key: "timeout",
-    label: "Timeout guard",
-    group: "timeout",
-    nativeBench: "timeout.promiseRace",
-    opBench: "timeout.opWithTimeout",
-    overheadBench: "overhead.timeout.ratio",
-    nativeDescription: "`Promise.race` + `setTimeout`",
-    opDescription: "`Op.of(x).withTimeout(ms).run()`",
-    native: async () => {
-      let timeoutId: ReturnType<typeof setTimeout> | undefined;
-      const timer = new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => {
-          if (timeoutId !== undefined) clearTimeout(timeoutId);
-          reject(new Error("timeout should not fire"));
-        }, TIMEOUT_BUDGET_MS);
-      });
-      await Promise.race([Promise.resolve(7), timer]);
-      if (timeoutId !== undefined) clearTimeout(timeoutId);
-    },
-    op: async () => {
-      const result = await Op.of(7).withTimeout(TIMEOUT_BUDGET_MS).run();
-      if (!result.isOk()) throw new Error("timeout.opWithTimeout failed unexpectedly.");
-    },
-  },
-  {
-    key: "compose",
-    label: "Sequential compose (6 steps)",
-    group: "compose",
-    nativeBench: "compose.asyncSteps",
-    opBench: "compose.opYieldChain",
-    overheadBench: "overhead.compose.ratio",
-    nativeDescription: "`await Promise.resolve` chain",
-    opDescription: "`yield* Op.of` generator chain",
-    native: async () => {
-      await runAsyncChain();
-    },
-    op: async () => {
-      await runOpYieldChain(op);
-    },
-  },
-];
-
-export function slowdownRatio(referenceHz: number, variantHz: number): number {
-  if (variantHz === 0) return 0;
-  return referenceHz / variantHz;
+function defineScenario(
+  key: ComparisonScenarioKey,
+  label: string,
+  overheadBench: string,
+  implementations: Record<ImplementationId, ImplementationCell>,
+): ComparisonScenario {
+  return { key, label, group: key, overheadBench, implementations };
 }
 
-export type ComparisonOutcome = {
-  winner: ImplementationId;
-  /** Factor by which the winner beat the loser (always >= 1). */
+/** Primary comparison rows shown in PERFORMANCE.md and CodSpeed overhead tracking. */
+export const COMPARISON_SCENARIOS: readonly ComparisonScenario[] = [
+  defineScenario("singleValue", "Single value", "overhead.singleValue.ratio", {
+    native: {
+      benchName: "singleValue.rawAsync",
+      description: "`Promise.resolve(x)`",
+      run: async () => {
+        await Promise.resolve(69);
+      },
+    },
+    op: {
+      benchName: "singleValue.opRun",
+      description: "`Op.of(x).run()`",
+      run: async () => {
+        const result = await Op.of(69).run();
+        if (!result.isOk()) throw new Error("singleValue.opRun failed unexpectedly.");
+      },
+    },
+  }),
+  defineScenario("all", "Parallel batch (8 children)", "overhead.all.ratio", {
+    native: {
+      benchName: "all.promiseAll",
+      description: "`Promise.all([...])`",
+      run: async () => {
+        await Promise.all(
+          Array.from({ length: CONCURRENCY_CHILDREN }, (_, index) => Promise.resolve(index)),
+        );
+      },
+    },
+    op: {
+      benchName: "all.opAll",
+      description: "`Op.all([...]).run()`",
+      run: async () => {
+        const ops = Array.from({ length: CONCURRENCY_CHILDREN }, (_, index) => Op.of(index));
+        const result = await Op.all(ops).run();
+        if (!result.isOk()) throw new Error("all.opAll failed unexpectedly.");
+      },
+    },
+  }),
+  defineScenario("any", "First success (8 children)", "overhead.any.ratio", {
+    native: {
+      benchName: "any.handRolledFirstSuccess",
+      description: "Hand-rolled first success + abort",
+      run: async () => {
+        await handRolledFirstSettler(CONCURRENCY_CHILDREN);
+      },
+    },
+    op: {
+      benchName: "any.opAny",
+      description: "`Op.any([...]).run()`",
+      run: async () => {
+        const ops = Array.from({ length: CONCURRENCY_CHILDREN }, (_, index) => Op.of(index));
+        const result = await Op.any(ops).run();
+        if (!result.isOk()) throw new Error("any.opAny failed unexpectedly.");
+      },
+    },
+  }),
+  defineScenario("race", "First settler (8 children)", "overhead.race.ratio", {
+    native: {
+      benchName: "race.handRolledFirstSettler",
+      description: "Hand-rolled first settler + abort",
+      run: async () => {
+        await handRolledFirstSettler(CONCURRENCY_CHILDREN);
+      },
+    },
+    op: {
+      benchName: "race.opRace",
+      description: "`Op.race([...]).run()`",
+      run: async () => {
+        const ops = Array.from({ length: CONCURRENCY_CHILDREN }, (_, index) => Op.of(index));
+        const result = await Op.race(ops).run();
+        if (!result.isOk()) throw new Error("race.opRace failed unexpectedly.");
+      },
+    },
+  }),
+  defineScenario("retry", "Retry loop", "overhead.retry.ratio", {
+    native: {
+      benchName: "retry.handRolled",
+      description: "Hand-rolled try/catch retry",
+      run: async () => {
+        let attempt = 0;
+        for (;;) {
+          attempt += 1;
+          try {
+            if (attempt < RETRY_ATTEMPTS) throw new Error("retry");
+            break;
+          } catch {
+            if (attempt >= RETRY_ATTEMPTS)
+              throw new Error("retry.handRolled exhausted unexpectedly.");
+          }
+        }
+      },
+    },
+    op: {
+      benchName: "retry.opWithRetry",
+      description: "`Op.try(...).withRetry(...).run()`",
+      run: async () => {
+        let attempt = 0;
+        const result = await Op.try(() => {
+          attempt += 1;
+          if (attempt < RETRY_ATTEMPTS) throw new Error("retry");
+          return 1;
+        })
+          .withRetry({
+            maxAttempts: RETRY_ATTEMPTS,
+            shouldRetry: () => true,
+            getDelay: () => 0,
+          })
+          .run();
+        if (!result.isOk()) throw new Error("retry.opWithRetry failed unexpectedly.");
+      },
+    },
+  }),
+  defineScenario("timeout", "Timeout guard", "overhead.timeout.ratio", {
+    native: {
+      benchName: "timeout.promiseRace",
+      description: "`Promise.race` + `setTimeout`",
+      run: async () => {
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
+        const timer = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            if (timeoutId !== undefined) clearTimeout(timeoutId);
+            reject(new Error("timeout should not fire"));
+          }, TIMEOUT_BUDGET_MS);
+        });
+        await Promise.race([Promise.resolve(7), timer]);
+        if (timeoutId !== undefined) clearTimeout(timeoutId);
+      },
+    },
+    op: {
+      benchName: "timeout.opWithTimeout",
+      description: "`Op.of(x).withTimeout(ms).run()`",
+      run: async () => {
+        const result = await Op.of(7).withTimeout(TIMEOUT_BUDGET_MS).run();
+        if (!result.isOk()) throw new Error("timeout.opWithTimeout failed unexpectedly.");
+      },
+    },
+  }),
+  defineScenario("compose", "Sequential compose (6 steps)", "overhead.compose.ratio", {
+    native: {
+      benchName: "compose.asyncSteps",
+      description: "`await Promise.resolve` chain",
+      run: async () => {
+        await runAsyncChain();
+      },
+    },
+    op: {
+      benchName: "compose.opYieldChain",
+      description: "`yield* Op.of` generator chain",
+      run: async () => {
+        await runOpYieldChain(op);
+      },
+    },
+  }),
+];
+
+export function competitorColumns(): readonly ImplementationColumn[] {
+  return IMPLEMENTATION_COLUMNS.filter((column) => column.id !== BASELINE_IMPLEMENTATION_ID);
+}
+
+export function baselineRatio(baselineHz: number, libHz: number): number {
+  if (libHz === 0) return 0;
+  return baselineHz / libHz;
+}
+
+export type VsBaselineRatios = Partial<Record<ImplementationId, number>>;
+
+export function computeVsBaseline(
+  runtime: Record<ImplementationId, { hz: number }>,
+): VsBaselineRatios {
+  const baselineHz = runtime[BASELINE_IMPLEMENTATION_ID].hz;
+  const ratios: VsBaselineRatios = {};
+  for (const column of competitorColumns()) {
+    ratios[column.id] = baselineRatio(baselineHz, runtime[column.id].hz);
+  }
+  return ratios;
+}
+
+export type LibraryPairOutcome = {
+  faster: ImplementationId;
   margin: number;
 };
 
-export function comparisonOutcome(nativeHz: number, opHz: number): ComparisonOutcome {
-  if (nativeHz >= opHz) {
-    return { winner: "native", margin: slowdownRatio(nativeHz, opHz) };
+/** Compare two libraries directly from absolute ops/sec (margin is always >= 1). */
+export function libraryPairOutcome(
+  leftId: ImplementationId,
+  leftHz: number,
+  rightId: ImplementationId,
+  rightHz: number,
+): LibraryPairOutcome {
+  if (leftHz >= rightHz) {
+    return { faster: leftId, margin: baselineRatio(leftHz, rightHz) };
   }
-  return { winner: "op", margin: slowdownRatio(opHz, nativeHz) };
+  return { faster: rightId, margin: baselineRatio(rightHz, leftHz) };
 }
 
 const RATIO_SAMPLE_COUNT = 5;
 
-/** Measure op/native wall time in one bench iteration; scales follow-up work with the ratio. */
+/** Measure baseline/library wall time in one bench iteration; scales follow-up work with the ratio. */
 export async function runOverheadRatioBench(
-  native: () => Promise<void> | void,
-  opWork: () => Promise<void> | void,
+  baseline: () => Promise<void> | void,
+  library: () => Promise<void> | void,
 ): Promise<void> {
-  let nativeMs = 0;
-  let opMs = 0;
+  let baselineMs = 0;
+  let libraryMs = 0;
   for (let sample = 0; sample < RATIO_SAMPLE_COUNT; sample += 1) {
-    const nativeStart = performance.now();
-    await native();
-    nativeMs += performance.now() - nativeStart;
+    const baselineStart = performance.now();
+    await baseline();
+    baselineMs += performance.now() - baselineStart;
 
-    const opStart = performance.now();
-    await opWork();
-    opMs += performance.now() - opStart;
+    const libraryStart = performance.now();
+    await library();
+    libraryMs += performance.now() - libraryStart;
   }
 
-  const ratio = opMs / Math.max(nativeMs, Number.EPSILON);
+  const ratio = libraryMs / Math.max(baselineMs, Number.EPSILON);
   const repeat = Math.max(1, Math.round(ratio));
   for (let index = 0; index < repeat; index += 1) {
-    await opWork();
+    await library();
   }
 }

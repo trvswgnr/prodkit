@@ -19,22 +19,22 @@ contributor commands live in
 
 <!-- op-performance-snapshot:start -->
 
-Captured on **2026-05-29** at commit [`c32e960`](https://github.com/trvswgnr/prodkit/commit/c32e960f192f02ac57dfd7816c918f90341b9ca6) (`@prodkit/op@0.1.72`).
+Captured on **2026-05-29** at commit [`92a88fd`](https://github.com/trvswgnr/prodkit/commit/92a88fd79c24ce1a28a8cfa760aff71df12f0624) (`@prodkit/op@0.1.72`).
 Environment: v24.14.1, darwin/arm64.
-Slowdown ratios compare `@prodkit/op` to native Promise equivalents on the same machine.
-Add competitor library columns by extending `IMPLEMENTATION_COLUMNS` in `benchmarks/op/comparison-matrix.ts`.
+`@prodkit/op` ratios use native ops/sec divided by library ops/sec (values above 1x mean slower than native).
+Add library columns by extending `IMPLEMENTATION_COLUMNS` and scenario implementations in `benchmarks/op/comparison-matrix.ts`.
 
 ### Runtime overhead
 
-| Scenario | Native baseline | Native ops/sec | @prodkit/op | Op ops/sec | Slowdown (Op vs native) |
+| Scenario | Native baseline | Native baseline ops/sec | @prodkit/op | @prodkit/op ops/sec | @prodkit/op vs native |
 | --- | --- | --- | --- | --- | --- |
-| Single value | `Promise.resolve(x)` | 13,978,833.08 | `Op.of(x).run()` | 2,318,999.83 | 6.03x |
-| Parallel batch (8 children) | `Promise.all([...])` | 1,641,382.42 | `Op.all([...]).run()` | 126,241.64 | 13.00x |
-| First success (8 children) | Hand-rolled first success + abort | 67,374.04 | `Op.any([...]).run()` | 44,240.6 | 1.52x |
-| First settler (8 children) | Hand-rolled first settler + abort | 67,350.77 | `Op.race([...]).run()` | 44,856.83 | 1.50x |
-| Retry loop | Hand-rolled try/catch retry | 257,300.06 | `Op.try(...).withRetry(...).run()` | 51,894.09 | 4.96x |
-| Timeout guard | `Promise.race` + `setTimeout` | 3,838,694.14 | `Op.of(x).withTimeout(ms).run()` | 323,565.33 | 11.86x |
-| Sequential compose (6 steps) | `await Promise.resolve` chain | 3,591,628.11 | `yield* Op.of` generator chain | 265,379.2 | 13.53x |
+| Single value | `Promise.resolve(x)` | 13,631,902.24 | `Op.of(x).run()` | 2,332,606.5 | 5.84x |
+| Parallel batch (8 children) | `Promise.all([...])` | 1,634,752.05 | `Op.all([...]).run()` | 127,949.51 | 12.78x |
+| First success (8 children) | Hand-rolled first success + abort | 65,668.51 | `Op.any([...]).run()` | 43,929.53 | 1.49x |
+| First settler (8 children) | Hand-rolled first settler + abort | 63,890.76 | `Op.race([...]).run()` | 44,089.99 | 1.45x |
+| Retry loop | Hand-rolled try/catch retry | 253,920.1 | `Op.try(...).withRetry(...).run()` | 51,163.05 | 4.96x |
+| Timeout guard | `Promise.race` + `setTimeout` | 3,828,285.53 | `Op.of(x).withTimeout(ms).run()` | 327,946.73 | 11.67x |
+| Sequential compose (6 steps) | `await Promise.resolve` chain | 3,691,951.04 | `yield* Op.of` generator chain | 265,280.97 | 13.92x |
 
 ### Bundle size
 

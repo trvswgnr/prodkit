@@ -7,16 +7,16 @@ Performance work uses four layers:
 
 1. **CodSpeed** (CI): automated runtime regression detection on every push and pull request.
 2. **compressed-size-action** (CI): automated bundle-size comparison on pull requests.
-3. **`compare.ts` + `performance:sync`** (local / CI artifact): native vs Op slowdown ratios and bundle size for the public table in `PERFORMANCE.md`.
+3. **`compare.ts` + `performance:sync`** (local / CI artifact): column-driven native baseline plus library ops/sec and vs-native ratios for the public table in `PERFORMANCE.md`.
 4. **`profile.ts`** (local): V8 CPU/heap profiling and overhead breakdown when you need to investigate a regression.
 
 ## Comparison matrix
 
-Scenario semantics live in [`comparison-matrix.ts`](comparison-matrix.ts). Each row pairs a native baseline with `@prodkit/op` on the same workload. Add competitor library columns by extending `IMPLEMENTATION_COLUMNS` and the runners in that file.
+Scenario semantics live in [`comparison-matrix.ts`](comparison-matrix.ts). Each row defines `implementations` keyed by column id; `native` is the baseline and additional libraries (currently `@prodkit/op`) are competitors. Add columns by extending `IMPLEMENTATION_COLUMNS` and each scenario's `implementations` map.
 
 | Output | Harness | Purpose |
 | --- | --- | --- |
-| Public snapshot table | `compare.ts` -> `performance:sync` | User-facing Op vs native ratios |
+| Public snapshot table | `compare.ts` -> `performance:sync` | User-facing absolute ops/sec and vs-native ratios |
 | CI regression guard | CodSpeed walltime + `overhead.*.ratio` | Track absolute timings and gap changes |
 | Sync hot path | CodSpeed simulation (`compose.rawSyncYieldStar`) | Generator dispatch without async noise |
 | Deep dive | `profile.ts` | Flame graphs and compose breakdown |
@@ -90,7 +90,7 @@ Walltime benches track Op absolute timings plus `overhead.*.ratio` benches that 
 
 `compare.ts` runs the same scenario matrix with `tinybench`, writes `.artifacts/comparison-report.json`, and `performance:sync` renders the snapshot block in `packages/op/PERFORMANCE.md`.
 
-To add a competitor column later, extend `IMPLEMENTATION_COLUMNS` and the runners in `comparison-matrix.ts`, then teach `compare.ts` and `tools/update-op-performance-doc.ts` about the new column id.
+To add a competitor column, extend `IMPLEMENTATION_COLUMNS` and each scenario's `implementations` in `comparison-matrix.ts`. `compare.ts` and `tools/update-op-performance-doc.ts` read column ids from the report automatically.
 
 ### Bundle size
 
