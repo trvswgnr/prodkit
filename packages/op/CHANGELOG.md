@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Sync `Op.of(value)` now uses a lightweight runtime shell: `.run()` resolves directly and
+  `yield*` skips `makePlanOp`; fluent transforms still upgrade through the normal plan path.
+
 ### Added
 
 - Added sequential-compose profile harness in `@prodkit/op-benchmarks`: shared `harness.ts` and

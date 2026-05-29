@@ -41,7 +41,7 @@ export {
   tapErrCoreOp,
   withCleanupCoreOp,
 } from "./fluent-nullary.js";
-export { makePlanOp } from "./plan/shell.js";
+export { makePlanOp, makeSyncValueOp } from "./plan/shell.js";
 
 function asPublicOp<T, E, A extends readonly unknown[], M, Yieldable extends boolean>(
   op: OpInterface<T, E, A, M, Yieldable>,

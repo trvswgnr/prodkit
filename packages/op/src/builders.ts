@@ -13,7 +13,7 @@ import type {
 import type { Op } from "./index.js";
 import { RegisterExitFinalizerInstruction, SuspendInstruction } from "./core/instructions.js";
 import { Result } from "./result.js";
-import { makeCoreOp, createDefaultHooks } from "./core/fluent.js";
+import { makeCoreOp, createDefaultHooks, makeSyncValueOp } from "./core/fluent.js";
 import { unsafeCoerce, isAwaited, sleepWithSignal } from "./shared.js";
 
 export function succeed<T>(value: T | PromiseLike<T>): Op<Awaited<T>, never, [], EmptyMeta> {
@@ -21,14 +21,7 @@ export function succeed<T>(value: T | PromiseLike<T>): Op<Awaited<T>, never, [],
     return _try(() => value);
   }
 
-  const op: Op<Awaited<T>, never, [], EmptyMeta> = makeCoreOp(
-    function* () {
-      return value;
-    },
-    createDefaultHooks(() => op),
-  );
-
-  return op;
+  return makeSyncValueOp(value);
 }
 
 /*

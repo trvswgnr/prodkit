@@ -1,4 +1,5 @@
 import { TimeoutError } from "../../errors.js";
+import { Result } from "../../result.js";
 import { OP_BOUND_BRAND, OP_BRAND, unsafeCoerce } from "../../shared.js";
 import { createRunContext } from "../runtime.js";
 import { DEFAULT_RETRY_POLICY, type RetryPolicy } from "../retry-policy.js";
@@ -17,7 +18,7 @@ import type {
   ReleaseFn,
   TrackedErr,
 } from "../types.js";
-import { OP_PLAN_BIND, type Plan, type PlanBinder } from "./base.js";
+import { OP_PLAN_BIND, genPlan, type Plan, type PlanBackedOp, type PlanBinder } from "./base.js";
 import { onEnterPlan, onExitPlan, withReleasePlan } from "./lifecycle.js";
 import {
   flatMapPlan,
@@ -181,4 +182,165 @@ export function makePlanOp<
   }
 
   return self;
+}
+
+type SyncValueOpShell<T> = (() => SyncValueOpShell<T>) &
+  PlanBackedOp<T, never, [], EmptyMeta> &
+  OpInterface<T, never, [], EmptyMeta, true>;
+
+function* syncValueIterator<T>(value: T): Generator<never, T, unknown> {
+  return value;
+}
+
+function toFullPlanOp<T>(self: SyncValueOpShell<T>): OpInterface<T, never, [], EmptyMeta, true> {
+  const bindPlan = self[OP_PLAN_BIND];
+  return makePlanOp(
+    () => bindPlan(),
+    () => bindPlan(),
+    true,
+  );
+}
+
+function createSyncValueFluentPrototype(): PropertyDescriptorMap {
+  const withPolicyIterable =
+    <T>(
+      self: SyncValueOpShell<T>,
+      transform: (plan: Plan<T, never, EmptyMeta>) => Plan<unknown, unknown, EmptyMeta>,
+    ) =>
+    () =>
+      transform(self[OP_PLAN_BIND]());
+
+  return {
+    withRetry: {
+      value(this: SyncValueOpShell<unknown>, policy?: RetryPolicy) {
+        const retryPolicy = policy ?? DEFAULT_RETRY_POLICY;
+        return makePlanOp(
+          () => this[OP_PLAN_BIND]().withRetry(retryPolicy),
+          withPolicyIterable(this, (plan) => plan.withRetry(retryPolicy)),
+          true,
+        );
+      },
+    },
+    withTimeout: {
+      value(this: SyncValueOpShell<unknown>, timeoutMs: number) {
+        return makePlanOp(
+          () => this[OP_PLAN_BIND]().withTimeout(timeoutMs),
+          withPolicyIterable(this, (plan) => plan.withTimeout(timeoutMs)),
+          true,
+        );
+      },
+    },
+    withSignal: {
+      value(this: SyncValueOpShell<unknown>, signal: AbortSignal) {
+        return makePlanOp(
+          () => this[OP_PLAN_BIND]().withSignal(signal),
+          withPolicyIterable(this, (plan) => plan.withSignal(signal)),
+          true,
+        );
+      },
+    },
+    withRelease: {
+      value(this: SyncValueOpShell<unknown>, release: ReleaseFn<unknown>) {
+        return makePlanOp(
+          () => withReleasePlan(this[OP_PLAN_BIND](), release),
+          withPolicyIterable(this, (plan) => withReleasePlan(plan, release)),
+          true,
+        );
+      },
+    },
+    on: {
+      value(this: SyncValueOpShell<unknown>, event: OpLifecycleHook, handler: unknown) {
+        if (event === "enter") {
+          const initialize = handler as EnterFn<[]>;
+          return makePlanOp(
+            () => onEnterPlan(this[OP_PLAN_BIND](), initialize),
+            withPolicyIterable(this, (plan) => onEnterPlan(plan, initialize)),
+            true,
+          );
+        }
+
+        if (event === "exit") {
+          const finalize = handler as ExitFn<unknown, never, []>;
+          return makePlanOp(
+            () => onExitPlan(this[OP_PLAN_BIND](), finalize),
+            withPolicyIterable(this, (plan) => onExitPlan(plan, finalize)),
+            true,
+          );
+        }
+
+        throw new Error(`Invalid event: ${event}`);
+      },
+    },
+    map: {
+      value<U>(this: SyncValueOpShell<unknown>, transform: (value: unknown) => U) {
+        return toFullPlanOp(this).map(transform);
+      },
+    },
+    mapErr: {
+      value<E2>(this: SyncValueOpShell<unknown>, transform: (error: TrackedErr<never>) => E2) {
+        return toFullPlanOp(this).mapErr(transform);
+      },
+    },
+    flatMap: {
+      value<R extends AnyNullaryOp>(this: SyncValueOpShell<unknown>, bind: (value: unknown) => R) {
+        return toFullPlanOp(this).flatMap(bind);
+      },
+    },
+    tap: {
+      value<R>(this: SyncValueOpShell<unknown>, observe: (value: unknown) => R) {
+        return toFullPlanOp(this).tap(observe);
+      },
+    },
+    tapErr: {
+      value<R>(this: SyncValueOpShell<unknown>, observe: (error: TrackedErr<never>) => R) {
+        return toFullPlanOp(this).tapErr(observe);
+      },
+    },
+    recover: {
+      value<ECaught extends TrackedErr<never>, R>(
+        this: SyncValueOpShell<unknown>,
+        predicate: (error: TrackedErr<never>) => error is ECaught,
+        handler: (error: ECaught) => R,
+      ) {
+        return toFullPlanOp(this).recover(predicate, handler);
+      },
+    },
+  };
+}
+
+const SYNC_VALUE_OP_PROTOTYPE = Object.create(
+  null,
+  createSyncValueFluentPrototype(),
+) as SyncValueOpShell<unknown>;
+
+/**
+ * Builds a bound nullary Op for an already-awaited sync success value.
+ *
+ * Hot paths (`.run()`, `yield*`) skip `makePlanOp` and the full generator driver.
+ * Fluent transforms upgrade through the normal plan shell on demand.
+ */
+export function makeSyncValueOp<T>(value: T): OpInterface<T, never, [], EmptyMeta, true> {
+  const bindPlan = () =>
+    genPlan(function* () {
+      return value;
+    });
+
+  const invoke = (() => self) as SyncValueOpShell<T>;
+  let self: SyncValueOpShell<T>;
+
+  // SAFETY: same runtime decoration pattern as makePlanOp; brands are proof-only at the type level.
+  self = unsafeCoerce(
+    Object.assign(invoke, {
+      [OP_PLAN_BIND]: bindPlan,
+      run: () => Promise.resolve(Result.ok(value)),
+      [Symbol.iterator]: () => syncValueIterator(value),
+      [OP_BRAND]: true,
+      [OP_BOUND_BRAND]: true,
+      _tag: "Op" as const,
+    }),
+  );
+  Object.setPrototypeOf(self, SYNC_VALUE_OP_PROTOTYPE);
+
+  // SAFETY: sync-value shell installs the same runtime brands and method surface as makePlanOp.
+  return unsafeCoerce(self);
 }
