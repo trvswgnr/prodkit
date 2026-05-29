@@ -28,13 +28,13 @@ Add library columns by extending `IMPLEMENTATION_COLUMNS` and scenario implement
 
 | Scenario | Native baseline | Native baseline ops/sec | @prodkit/op | @prodkit/op ops/sec | @prodkit/op vs native |
 | --- | --- | --- | --- | --- | --- |
-| Single value | `Promise.resolve(x)` | 13,631,902.24 | `Op.of(x).run()` | 2,332,606.5 | 5.84x |
-| Parallel batch (8 children) | `Promise.all([...])` | 1,634,752.05 | `Op.all([...]).run()` | 127,949.51 | 12.78x |
-| First success (8 children) | Hand-rolled first success + abort | 65,668.51 | `Op.any([...]).run()` | 43,929.53 | 1.49x |
-| First settler (8 children) | Hand-rolled first settler + abort | 63,890.76 | `Op.race([...]).run()` | 44,089.99 | 1.45x |
-| Retry loop | Hand-rolled try/catch retry | 253,920.1 | `Op.try(...).withRetry(...).run()` | 51,163.05 | 4.96x |
-| Timeout guard | `Promise.race` + `setTimeout` | 3,828,285.53 | `Op.of(x).withTimeout(ms).run()` | 327,946.73 | 11.67x |
-| Sequential compose (6 steps) | `await Promise.resolve` chain | 3,691,951.04 | `yield* Op.of` generator chain | 265,280.97 | 13.92x |
+| Single value | `Promise.resolve(x)` | 13,603,338.14 | `Op.of(x).run()` | 2,280,358.66 | 5.97x |
+| Parallel batch (8 children) | `Promise.all([...])` | 1,649,275.56 | `Op.all([...]).run()` | 127,308.23 | 12.95x |
+| First success (8 children) | Hand-rolled first success + abort | 64,759.52 | `Op.any([...]).run()` | 43,603.31 | 1.49x |
+| First settler (8 children) | Hand-rolled first settler + abort | 64,968.43 | `Op.race([...]).run()` | 43,044.23 | 1.51x |
+| Retry loop | Hand-rolled try/catch retry | 255,092.13 | `Op.try(...).withRetry(...).run()` | 51,401.66 | 4.96x |
+| Timeout guard | `Promise.race` + `setTimeout` | 3,915,876.83 | `Op.of(x).withTimeout(ms).run()` | 324,965.3 | 12.05x |
+| Sequential compose (6 steps) | `await Promise.resolve` chain | 3,479,865.15 | `yield* Op.of` generator chain | 264,361.47 | 13.16x |
 
 ### Bundle size
 
