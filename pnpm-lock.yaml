@@ -43,13 +43,16 @@ importers:
     devDependencies:
       '@codspeed/vitest-plugin':
         specifier: ^5.0.1
-        version: 5.4.0(tinybench@5.1.0)(vite@8.0.11(@types/node@24.12.3))(vitest@4.1.0(@types/node@24.12.3)(vite@8.0.11(@types/node@24.12.3)))
+        version: 5.4.0(tinybench@5.1.0)(vite@8.0.11(@types/node@24.12.3)(esbuild@0.25.12))(vitest@4.1.0(@types/node@24.12.3)(vite@8.0.11(@types/node@24.12.3)(esbuild@0.25.12)))
       '@prodkit/op':
         specifier: workspace:*
         version: link:../../packages/op
       '@types/node':
         specifier: ^24.12.2
         version: 24.12.3
+      esbuild:
+        specifier: ^0.25.11
+        version: 0.25.12
       oxfmt:
         specifier: 'catalog:'
         version: 0.48.0
@@ -64,7 +67,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.0(@types/node@24.12.3)(vite@8.0.11(@types/node@24.12.3)(esbuild@0.25.12))
+        version: 4.1.0(@types/node@24.12.3)(vite@8.0.11(@types/node@24.12.3))
 
   examples:
     dependencies:
@@ -129,7 +132,7 @@ importers:
         version: 0.3.0
       vitest:
         specifier: 'catalog:'
-        version: 4.1.0(@types/node@24.12.3)(vite@8.0.11(@types/node@24.12.3)(esbuild@0.25.12))
+        version: 4.1.0(@types/node@24.12.3)(vite@8.0.11(@types/node@24.12.3))
 
   packages/shared:
     devDependencies:
@@ -172,7 +175,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.0(@types/node@24.12.3)(vite@8.0.11(@types/node@24.12.3)(esbuild@0.25.12))
+        version: 4.1.0(@types/node@24.12.3)(vite@8.0.11(@types/node@24.12.3))
 
   tools:
     dependencies:
@@ -1886,12 +1889,12 @@ snapshots:
       - debug
       - supports-color
 
-  '@codspeed/vitest-plugin@5.4.0(tinybench@5.1.0)(vite@8.0.11(@types/node@24.12.3))(vitest@4.1.0(@types/node@24.12.3)(vite@8.0.11(@types/node@24.12.3)))':
+  '@codspeed/vitest-plugin@5.4.0(tinybench@5.1.0)(vite@8.0.11(@types/node@24.12.3)(esbuild@0.25.12))(vitest@4.1.0(@types/node@24.12.3)(vite@8.0.11(@types/node@24.12.3)(esbuild@0.25.12)))':
     dependencies:
       '@codspeed/core': 5.4.0
       tinybench: 5.1.0
       vite: 8.0.11(@types/node@24.12.3)(esbuild@0.25.12)
-      vitest: 4.1.0(@types/node@24.12.3)(vite@8.0.11(@types/node@24.12.3)(esbuild@0.25.12))
+      vitest: 4.1.0(@types/node@24.12.3)(vite@8.0.11(@types/node@24.12.3))
     transitivePeerDependencies:
       - debug
       - supports-color
@@ -2408,7 +2411,7 @@ snapshots:
       obug: 2.1.1
       std-env: 4.1.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.0(@types/node@24.12.3)(vite@8.0.11(@types/node@24.12.3)(esbuild@0.25.12))
+      vitest: 4.1.0(@types/node@24.12.3)(vite@8.0.11(@types/node@24.12.3))
 
   '@vitest/expect@4.1.0':
     dependencies:
@@ -2419,7 +2422,7 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.0
 
-  '@vitest/mocker@4.1.0(vite@8.0.11(@types/node@24.12.3)(esbuild@0.25.12))':
+  '@vitest/mocker@4.1.0(vite@8.0.11(@types/node@24.12.3))':
     dependencies:
       '@vitest/spy': 4.1.0
       estree-walker: 3.0.3
@@ -3038,10 +3041,10 @@ snapshots:
       esbuild: 0.25.12
       fsevents: 2.3.3
 
-  vitest@4.1.0(@types/node@24.12.3)(vite@8.0.11(@types/node@24.12.3)(esbuild@0.25.12)):
+  vitest@4.1.0(@types/node@24.12.3)(vite@8.0.11(@types/node@24.12.3)):
     dependencies:
       '@vitest/expect': 4.1.0
-      '@vitest/mocker': 4.1.0(vite@8.0.11(@types/node@24.12.3)(esbuild@0.25.12))
+      '@vitest/mocker': 4.1.0(vite@8.0.11(@types/node@24.12.3))
       '@vitest/pretty-format': 4.1.0
       '@vitest/runner': 4.1.0
       '@vitest/snapshot': 4.1.0

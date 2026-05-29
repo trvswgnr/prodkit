@@ -50,15 +50,18 @@ All runnable consumer examples and smoke entrypoints live in the **`examples/`**
 
 ## Benchmarking
 
-Use CodSpeed (CI) and the local profile harness when you need to validate runtime overhead or investigate regressions:
+Use CodSpeed (CI), the comparison harness, and the local profile harness when you need to validate runtime overhead or investigate regressions:
 
 ```bash
 pnpm run bench
+pnpm --filter @prodkit/op-benchmarks run compare -- --report=comparison-report.json
+pnpm --filter @prodkit/tools run performance:sync -- --write
 pnpm --filter @prodkit/op-benchmarks run profile
 ```
 
 - CodSpeed comments on pull requests with runtime regression data; see [`BENCHMARKS.md`](BENCHMARKS.md).
 - Bundle-size deltas appear on pull requests via the CI `bundle-size` job.
+- `compare` + `performance:sync` refresh the public native-vs-Op table in [`packages/op/PERFORMANCE.md`](packages/op/PERFORMANCE.md).
 - Use `profile.ts` locally after a CodSpeed regression to isolate overhead sources.
 
 Detailed benchmark scenarios and authoring guidance live in `benchmarks/op/README.md`.

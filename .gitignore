@@ -3,6 +3,7 @@ out
 dist
 *.tgz
 coverage
+benchmarks/op/comparison-report.json
 benchmarks/op/report.json
 benchmarks/op/profile.json
 *.cpuprofile

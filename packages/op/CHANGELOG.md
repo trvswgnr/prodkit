@@ -10,8 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Replaced the wall-clock `bench.ts` harness with CodSpeed (simulation + walltime Vitest benches)
-  and `compressed-size-action` for bundle-size PR comments. Removed `performance:sync` and the
-  frozen snapshot block in `PERFORMANCE.md`; CodSpeed dashboard and PR comments are the source of truth.
+  and `compressed-size-action` for bundle-size PR comments. Added a shared comparison matrix
+  (`comparison-matrix.ts`), local `compare` report harness, `overhead.*.ratio` CodSpeed benches,
+  and restored `performance:sync` to publish native-vs-Op slowdown ratios in `PERFORMANCE.md`.
 - Removed dead hook-era internals after the plan AST cutover: unused `*CoreOp` builders,
   `DefaultHooks`, and orphan `with*Op` policy wrappers. Fluent methods now share one
   `fluentMethodsForContext` factory between `makePlanOp` and the sync-value hot path.

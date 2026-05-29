@@ -43,7 +43,7 @@ jobs:
         with:
           mode: simulation
           working-directory: benchmarks/op
-          run: pnpm vitest bench --run
+          run: pnpm vitest bench --run codspeed.sync.bench.ts
 
   benchmarks-walltime:
     name: benchmarks (walltime)
@@ -76,4 +76,14 @@ jobs:
         with:
           mode: walltime
           working-directory: benchmarks/op
-          run: pnpm vitest bench --run
+          run: pnpm vitest bench --run codspeed.walltime.bench.ts
+
+      - name: Write comparison report
+        run: pnpm --filter @prodkit/op-benchmarks run compare -- --report=comparison-report.json
+
+      - name: Upload comparison report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: op-comparison-report
+          path: benchmarks/op/comparison-report.json
+          if-no-files-found: error
