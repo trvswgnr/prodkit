@@ -1,7 +1,7 @@
 // oxlint-disable typescript/no-explicit-any
 import type { TimeoutError, UnhandledException } from "../errors.js";
 import type { Err, Result } from "../result.js";
-import type { RetryPolicy } from "../policies.js";
+import type { RetryPolicy } from "./retry-policy.js";
 import type { RegisterExitFinalizerInstruction, SuspendInstruction } from "./instructions.js";
 import type { Op } from "../index.js";
 
@@ -398,11 +398,3 @@ export type OpInterface<
   M = EmptyMeta,
   Yieldable extends boolean = A extends [] ? true : false,
 > = BaseOp<T, E, A, M> & FluentOp<T, E, A, M> & (Yieldable extends true ? OpIterable<T, E, M> : {});
-
-export interface DefaultHooks<T, E, M> {
-  withRelease: (release: ReleaseFn<T>) => Op<T, E, [], M>;
-  /** Backs public `.on("enter", fn)` on ops built from these hooks. */
-  registerEnterInitialize: (initialize: EnterFn<[]>) => Op<T, E, [], M>;
-  /** Backs public `.on("exit", fn)` on ops built from these hooks. */
-  registerExitFinalize: (finalize: ExitFn<T, E, []>) => Op<T, E, [], M>;
-}

@@ -1,18 +1,12 @@
-import { TimeoutError } from "../../errors.js";
 import { Result } from "../../result.js";
 import { OP_BOUND_BRAND, OP_BRAND, unsafeCoerce } from "../../shared.js";
 import { createRunContext } from "../runtime.js";
 import { DEFAULT_RETRY_POLICY, type RetryPolicy } from "../retry-policy.js";
 import type {
   AnyNullaryOp,
-  BypassedErr,
   EmptyMeta,
   EnterFn,
   ExitFn,
-  InferOpErr,
-  InferOpMeta,
-  InferOpOk,
-  MergeMeta,
   OpInterface,
   OpLifecycleHook,
   ReleaseFn,
@@ -28,6 +22,118 @@ import {
   tapErrPlan,
   tapPlan,
 } from "./transforms.js";
+
+type PlanShellContext<T, E, A extends readonly unknown[], M> = {
+  bindArgs: PlanBinder<T, E, A, M>;
+  withPolicyIterable: <TNext, ENext, MNext>(
+    transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
+  ) => (() => Plan<TNext, ENext, MNext>) | undefined;
+  bound: boolean;
+};
+
+function wrapPlanTransform<
+  T,
+  E,
+  A extends readonly unknown[],
+  M,
+  Yieldable extends boolean,
+  TNext,
+  ENext,
+  MNext,
+>(
+  ctx: PlanShellContext<T, E, A, M>,
+  transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
+): OpInterface<TNext, ENext, A, MNext, Yieldable> {
+  return makePlanOp<TNext, ENext, A, MNext, Yieldable>(
+    (...args) => transform(ctx.bindArgs(...args)),
+    ctx.withPolicyIterable(transform),
+    ctx.bound,
+  );
+}
+
+function fluentMethodsForContext<T, E, A extends readonly unknown[], M, Yieldable extends boolean>(
+  ctx: PlanShellContext<T, E, A, M>,
+) {
+  const wrap = <TNext, ENext, MNext>(
+    transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
+  ) => wrapPlanTransform<T, E, A, M, Yieldable, TNext, ENext, MNext>(ctx, transform);
+
+  return {
+    withRetry: (policy?: RetryPolicy) => {
+      const retryPolicy = policy ?? DEFAULT_RETRY_POLICY;
+      return wrap((plan) => plan.withRetry(retryPolicy));
+    },
+    withTimeout: (timeoutMs: number) => wrap((plan) => plan.withTimeout(timeoutMs)),
+    withSignal: (signal: AbortSignal) => wrap((plan) => plan.withSignal(signal)),
+    withRelease: (release: ReleaseFn<T>) => wrap((plan) => withReleasePlan(plan, release)),
+    on: (event: OpLifecycleHook, handler: unknown) => {
+      if (event === "enter") {
+        const initialize = handler as EnterFn<A>;
+        return wrap((plan) => onEnterPlan(plan, initialize));
+      }
+
+      if (event === "exit") {
+        const finalize = handler as ExitFn<T, E, A>;
+        return wrap((plan) => onExitPlan(plan, finalize));
+      }
+
+      throw new Error(`Invalid event: ${event}`);
+    },
+    map: <U>(transform: (value: T) => U) => wrap((plan) => mapPlan(plan, transform)),
+    mapErr: <E2>(transform: (error: TrackedErr<E>) => E2) =>
+      wrap((plan) => mapErrPlan(plan, transform)),
+    flatMap: <R extends AnyNullaryOp>(bind: (value: T) => R) =>
+      wrap((plan) => flatMapPlan(plan, bind)),
+    tap: <R>(observe: (value: T) => R) => wrap((plan) => tapPlan(plan, observe)),
+    tapErr: <R>(observe: (error: TrackedErr<E>) => R) => wrap((plan) => tapErrPlan(plan, observe)),
+    recover: <ECaught extends TrackedErr<E>, R>(
+      predicate: (error: TrackedErr<E>) => error is ECaught,
+      handler: (error: ECaught) => R,
+    ) => wrap((plan) => recoverPlan(plan, predicate, handler)),
+  };
+}
+
+function syncValueShellContext<T>(
+  self: SyncValueOpShell<T>,
+): PlanShellContext<T, never, [], EmptyMeta> {
+  return {
+    bindArgs: () => self[OP_PLAN_BIND](),
+    withPolicyIterable: (transform) => () => transform(self[OP_PLAN_BIND]()),
+    bound: true,
+  };
+}
+
+function createSyncValueFluentPrototype(): PropertyDescriptorMap {
+  type FluentMethod = keyof ReturnType<
+    typeof fluentMethodsForContext<unknown, never, [], EmptyMeta, true>
+  >;
+
+  const bindMethod = <K extends FluentMethod>(name: K): PropertyDescriptor => ({
+    value(this: SyncValueOpShell<unknown>, ...args: unknown[]) {
+      const methods = fluentMethodsForContext<unknown, never, [], EmptyMeta, true>(
+        syncValueShellContext(this),
+      );
+      const method = methods[name] as (...methodArgs: unknown[]) => unknown;
+      return method(...args);
+    },
+  });
+
+  const methodNames = [
+    "withRetry",
+    "withTimeout",
+    "withSignal",
+    "withRelease",
+    "on",
+    "map",
+    "mapErr",
+    "flatMap",
+    "tap",
+    "tapErr",
+    "recover",
+  ] as const satisfies readonly FluentMethod[];
+
+  return Object.fromEntries(methodNames.map((name) => [name, bindMethod(name)]));
+}
 
 export function makePlanOp<
   T,
@@ -64,6 +170,12 @@ export function makePlanOp<
     transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
   ) => (iterable === undefined ? undefined : () => transform(iterable()));
 
+  const shellContext: PlanShellContext<T, E, A, M> = {
+    bindArgs,
+    withPolicyIterable,
+    bound,
+  };
+
   // SAFETY: Object.assign decorates the runtime callable with the Op method surface and
   // internal plan binder. The callable and method signatures are supplied by the generic inputs.
   self = unsafeCoerce(
@@ -71,104 +183,7 @@ export function makePlanOp<
       [OP_PLAN_BIND]: bindArgs,
       run: (...args: A) =>
         bindArgs(...args).execute(createRunContext(new AbortController().signal, args)),
-      withRetry: (policy?: RetryPolicy) => {
-        const retryPolicy = policy ?? DEFAULT_RETRY_POLICY;
-        return makePlanOp<T, E, A, M, Yieldable>(
-          (...args) => bindArgs(...args).withRetry(retryPolicy),
-          withPolicyIterable((plan) => plan.withRetry(retryPolicy)),
-          bound,
-        );
-      },
-      withTimeout: (timeoutMs: number) =>
-        makePlanOp<T, E | TimeoutError, A, M, Yieldable>(
-          (...args) => bindArgs(...args).withTimeout(timeoutMs),
-          withPolicyIterable((plan) => plan.withTimeout(timeoutMs)),
-          bound,
-        ),
-      withSignal: (signal: AbortSignal) =>
-        makePlanOp<T, E, A, M, Yieldable>(
-          (...args) => bindArgs(...args).withSignal(signal),
-          withPolicyIterable((plan) => plan.withSignal(signal)),
-          bound,
-        ),
-      withRelease: (release: ReleaseFn<T>) =>
-        makePlanOp<T, E, A, M, Yieldable>(
-          (...args) => withReleasePlan(bindArgs(...args), release),
-          withPolicyIterable((plan) => withReleasePlan(plan, release)),
-          bound,
-        ),
-      on: (event: OpLifecycleHook, handler: unknown) => {
-        if (event === "enter") {
-          const initialize = handler as EnterFn<A>;
-          return makePlanOp<T, E, A, M, Yieldable>(
-            (...args) => onEnterPlan(bindArgs(...args), initialize),
-            withPolicyIterable((plan) => onEnterPlan(plan, initialize)),
-            bound,
-          );
-        }
-
-        if (event === "exit") {
-          const finalize = handler as ExitFn<T, E, A>;
-          return makePlanOp<T, E, A, M, Yieldable>(
-            (...args) => onExitPlan(bindArgs(...args), finalize),
-            withPolicyIterable((plan) => onExitPlan(plan, finalize)),
-            bound,
-          );
-        }
-
-        throw new Error(`Invalid event: ${event}`);
-      },
-      map: <U>(transform: (value: T) => U) =>
-        makePlanOp<Awaited<U>, E, A, M, Yieldable>(
-          (...args) => mapPlan(bindArgs(...args), transform),
-          withPolicyIterable((plan) => mapPlan(plan, transform)),
-          bound,
-        ),
-      mapErr: <E2>(transform: (error: TrackedErr<E>) => E2) =>
-        makePlanOp<T, E2 | BypassedErr<E>, A, M, Yieldable>(
-          (...args) => mapErrPlan(bindArgs(...args), transform),
-          withPolicyIterable((plan) => mapErrPlan(plan, transform)),
-          bound,
-        ),
-      flatMap: <R extends AnyNullaryOp>(bind: (value: T) => R) =>
-        makePlanOp<InferOpOk<R>, E | InferOpErr<R>, A, MergeMeta<M, InferOpMeta<R>>, Yieldable>(
-          (...args) => flatMapPlan(bindArgs(...args), bind),
-          withPolicyIterable((plan) => flatMapPlan(plan, bind)),
-          bound,
-        ),
-      tap: <R>(observe: (value: T) => R) =>
-        makePlanOp<T, E | InferOpErr<R>, A, MergeMeta<M, InferOpMeta<R>>, Yieldable>(
-          (...args) => tapPlan(bindArgs(...args), observe),
-          withPolicyIterable((plan) => tapPlan(plan, observe)),
-          bound,
-        ),
-      tapErr: <R>(observe: (error: TrackedErr<E>) => R) =>
-        makePlanOp<
-          T,
-          TrackedErr<E> | BypassedErr<E> | InferOpErr<R>,
-          A,
-          MergeMeta<M, InferOpMeta<R>>,
-          Yieldable
-        >(
-          (...args) => tapErrPlan(bindArgs(...args), observe),
-          withPolicyIterable((plan) => tapErrPlan(plan, observe)),
-          bound,
-        ),
-      recover: <ECaught extends TrackedErr<E>, R>(
-        predicate: (error: TrackedErr<E>) => error is ECaught,
-        handler: (error: ECaught) => R,
-      ) =>
-        makePlanOp<
-          T | InferOpOk<R>,
-          TrackedErr<E, ECaught> | BypassedErr<E> | InferOpErr<R>,
-          A,
-          MergeMeta<M, InferOpMeta<R>>,
-          Yieldable
-        >(
-          (...args) => recoverPlan(bindArgs(...args), predicate, handler),
-          withPolicyIterable((plan) => recoverPlan(plan, predicate, handler)),
-          bound,
-        ),
+      ...fluentMethodsForContext<T, E, A, M, Yieldable>(shellContext),
       [OP_BRAND]: true,
       [OP_BOUND_BRAND]: bound,
       _tag: "Op" as const,
@@ -190,122 +205,6 @@ type SyncValueOpShell<T> = (() => SyncValueOpShell<T>) &
 
 function* syncValueIterator<T>(value: T): Generator<never, T, unknown> {
   return value;
-}
-
-function toFullPlanOp<T>(self: SyncValueOpShell<T>): OpInterface<T, never, [], EmptyMeta, true> {
-  const bindPlan = self[OP_PLAN_BIND];
-  return makePlanOp(
-    () => bindPlan(),
-    () => bindPlan(),
-    true,
-  );
-}
-
-function createSyncValueFluentPrototype(): PropertyDescriptorMap {
-  const withPolicyIterable =
-    <T>(
-      self: SyncValueOpShell<T>,
-      transform: (plan: Plan<T, never, EmptyMeta>) => Plan<unknown, unknown, EmptyMeta>,
-    ) =>
-    () =>
-      transform(self[OP_PLAN_BIND]());
-
-  return {
-    withRetry: {
-      value(this: SyncValueOpShell<unknown>, policy?: RetryPolicy) {
-        const retryPolicy = policy ?? DEFAULT_RETRY_POLICY;
-        return makePlanOp(
-          () => this[OP_PLAN_BIND]().withRetry(retryPolicy),
-          withPolicyIterable(this, (plan) => plan.withRetry(retryPolicy)),
-          true,
-        );
-      },
-    },
-    withTimeout: {
-      value(this: SyncValueOpShell<unknown>, timeoutMs: number) {
-        return makePlanOp(
-          () => this[OP_PLAN_BIND]().withTimeout(timeoutMs),
-          withPolicyIterable(this, (plan) => plan.withTimeout(timeoutMs)),
-          true,
-        );
-      },
-    },
-    withSignal: {
-      value(this: SyncValueOpShell<unknown>, signal: AbortSignal) {
-        return makePlanOp(
-          () => this[OP_PLAN_BIND]().withSignal(signal),
-          withPolicyIterable(this, (plan) => plan.withSignal(signal)),
-          true,
-        );
-      },
-    },
-    withRelease: {
-      value(this: SyncValueOpShell<unknown>, release: ReleaseFn<unknown>) {
-        return makePlanOp(
-          () => withReleasePlan(this[OP_PLAN_BIND](), release),
-          withPolicyIterable(this, (plan) => withReleasePlan(plan, release)),
-          true,
-        );
-      },
-    },
-    on: {
-      value(this: SyncValueOpShell<unknown>, event: OpLifecycleHook, handler: unknown) {
-        if (event === "enter") {
-          const initialize = handler as EnterFn<[]>;
-          return makePlanOp(
-            () => onEnterPlan(this[OP_PLAN_BIND](), initialize),
-            withPolicyIterable(this, (plan) => onEnterPlan(plan, initialize)),
-            true,
-          );
-        }
-
-        if (event === "exit") {
-          const finalize = handler as ExitFn<unknown, never, []>;
-          return makePlanOp(
-            () => onExitPlan(this[OP_PLAN_BIND](), finalize),
-            withPolicyIterable(this, (plan) => onExitPlan(plan, finalize)),
-            true,
-          );
-        }
-
-        throw new Error(`Invalid event: ${event}`);
-      },
-    },
-    map: {
-      value<U>(this: SyncValueOpShell<unknown>, transform: (value: unknown) => U) {
-        return toFullPlanOp(this).map(transform);
-      },
-    },
-    mapErr: {
-      value<E2>(this: SyncValueOpShell<unknown>, transform: (error: TrackedErr<never>) => E2) {
-        return toFullPlanOp(this).mapErr(transform);
-      },
-    },
-    flatMap: {
-      value<R extends AnyNullaryOp>(this: SyncValueOpShell<unknown>, bind: (value: unknown) => R) {
-        return toFullPlanOp(this).flatMap(bind);
-      },
-    },
-    tap: {
-      value<R>(this: SyncValueOpShell<unknown>, observe: (value: unknown) => R) {
-        return toFullPlanOp(this).tap(observe);
-      },
-    },
-    tapErr: {
-      value<R>(this: SyncValueOpShell<unknown>, observe: (error: TrackedErr<never>) => R) {
-        return toFullPlanOp(this).tapErr(observe);
-      },
-    },
-    recover: {
-      value<ECaught extends TrackedErr<never>, R>(
-        this: SyncValueOpShell<unknown>,
-        predicate: (error: TrackedErr<never>) => error is ECaught,
-        handler: (error: ECaught) => R,
-      ) {
-        return toFullPlanOp(this).recover(predicate, handler);
-      },
-    },
-  };
 }
 
 const SYNC_VALUE_OP_PROTOTYPE = Object.create(

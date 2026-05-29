@@ -40,8 +40,8 @@ so reviewers can audit unit, integration, type, and property-law coverage eviden
 The gate runs `@prodkit/std` coverage with enforced floors; `@prodkit/op` coverage is published in
 CI for review.
 A `changelog:api:check` gate step fails when `packages/op/src/index.ts` or
-`packages/std/src/di/index.ts` public exports change without an update to that package's
-`CHANGELOG.md` under `## [Unreleased]`.
+`packages/std/src/di/index.ts` public export names change without an update to that package's
+`CHANGELOG.md` under `## [Unreleased]`. Internal re-export paths do not count as API changes.
 A separate `op-benchmarks` job uploads `report.json` with runtime overhead ratios and bundle-size
 numbers; see [`BENCHMARKS.md`](BENCHMARKS.md) for how to read them.
 
@@ -126,10 +126,10 @@ nullary core ops and always settle through the same driver:
 packages/op/src/index.ts          (Op factory, Op.run, re-exports)
   |-- builders.ts                 (Op.of, Op.try, fromGenFn, Op.defer, ...)
   |-- combinators.ts              (Op.all, Op.any, Op.race, ...)
-  |-- policies.ts                 (withRetry / withTimeout / withSignal wrappers)
+  |-- core/retry-policy.ts          (RetryPolicy, exponentialBackoff)
   |-- core/run-op.ts              (runOp -> drive)
-  |-- core/fluent.ts              (makeFluentOp, liftOp, fluent transforms)
-  |-- core/fluent-nullary.ts      (makeCoreOp, core transforms)
+  |-- core/fluent.ts              (makeCoreOp, makePlanOp shell, fluent transforms)
+  |-- core/plan/                  (Plan AST, policy nodes, shell)
   |-- core/runtime.ts             (createRunContext, drive)  <-- single execution engine
   |-- core/instructions.ts        (Suspend, RegisterExitFinalizer, Err yields)
 

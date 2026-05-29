@@ -14,7 +14,7 @@ serve different consumers and stay as separate construction paths rather than on
 
 ## Decision
 
-- **`makeCoreOp`** (`packages/op/src/core/fluent-nullary.ts`) builds nullary core ops from
+- **`makeCoreOp`** (`packages/op/src/core/fluent.ts`) builds nullary core ops from
   generator leaves. Every leaf that participates in `yield*` / `drive()` still has a nullary
   iterator surface.
 - **`makePlanOp`** (`packages/op/src/core/plan/`) decorates a `bindArgs(...args) -> Plan<T, E>`
@@ -44,7 +44,7 @@ policies compose on the intended inner work and the outer arity stays stable.
 
 - New core combinators should target plan nodes first, then expose arity through `makePlanOp` if
   the operation is user-facing.
-- `asOpInterface` and related casts exist because TypeScript cannot infer the callable-plus-methods
+- Brand and `Object.assign` coerces exist because TypeScript cannot infer the callable-plus-methods
   intersection after `Object.assign`; that limitation is structural, not a missing refactor.
 - `DESIGN.md` documents execution invariants for the nullary driver; this ADR documents why arity
   lifting is a separate layer.

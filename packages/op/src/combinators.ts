@@ -12,7 +12,7 @@ import type { Op } from "./index.js";
 import { SuspendInstruction } from "./core/instructions.js";
 import { createRunContext, drive } from "./core/runtime.js";
 import { Result, type Err } from "./result.js";
-import { makeCoreOp, createDefaultHooks } from "./core/fluent-nullary.js";
+import { makeCoreOp } from "./core/fluent.js";
 import type { AnyNullaryOp } from "./core/types.js";
 import { unsafeCoerce } from "./shared.js";
 
@@ -26,13 +26,10 @@ type MergeOpsMeta<Ops extends readonly AnyNullaryOp[]> = Ops extends readonly [
 function makeCombinatorOp<T, E, M = EmptyMeta>(
   gen: () => Generator<Instruction<E>, T, unknown>,
 ): Op<T, E, [], M> {
-  let self: Op<T, E, [], M>;
-  self = makeCoreOp<T, E, M>(
+  return makeCoreOp<T, E, M>(
     // SAFETY: combinator generators yield runtime instructions; M is declared on the returned Op.
     () => unsafeCoerce(gen()),
-    createDefaultHooks(() => self),
   );
-  return self;
 }
 
 type FanOut<T, E> = {

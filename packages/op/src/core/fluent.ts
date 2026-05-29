@@ -1,47 +1,39 @@
-import { getIterablePlan, getPlan } from "./plan/base.js";
+import { genPlan, getIterablePlan, getPlan } from "./plan/base.js";
 import { onEnterPlan, onExitPlan, withReleasePlan } from "./plan/lifecycle.js";
 import { makePlanOp } from "./plan/shell.js";
-import {
-  asOpInterface,
-  createDefaultHooks,
-  flatMapCoreOp,
-  makeCoreOp,
-  mapCoreOp,
-  mapErrCoreOp,
-  onEnterCoreOp,
-  onExitCoreOp,
-  recoverCoreOp,
-  tapCoreOp,
-  tapErrCoreOp,
-  withCleanupCoreOp,
-} from "./fluent-nullary.js";
 import type {
   EmptyMeta,
   EnterFn,
   ExitFn,
+  Instruction,
   LifecycleFn,
   OpInterface,
   OpLifecycleHook,
   ReleaseFn,
+  TrackedErr,
 } from "./types.js";
 import type { Op } from "../index.js";
 import { coerceToNullaryOp, unsafeCoerce } from "../shared.js";
 
-export {
-  asOpInterface,
-  createDefaultHooks,
-  flatMapCoreOp,
-  makeCoreOp,
-  mapCoreOp,
-  mapErrCoreOp,
-  onEnterCoreOp,
-  onExitCoreOp,
-  recoverCoreOp,
-  tapCoreOp,
-  tapErrCoreOp,
-  withCleanupCoreOp,
-} from "./fluent-nullary.js";
 export { makePlanOp, makeSyncValueOp } from "./plan/shell.js";
+
+function asOp<T, E, M>(op: OpInterface<T, E, [], M>): Op<T, E, [], M> {
+  // SAFETY: makePlanOp installs the internal Op brand and callable method surface.
+  return unsafeCoerce(op);
+}
+
+/** Builds a nullary generator leaf op backed by the internal plan model. */
+export function makeCoreOp<T, E, M = EmptyMeta>(
+  gen: () => Generator<Instruction<E, M>, T, unknown>,
+): Op<T, TrackedErr<E>, [], M> {
+  return asOp(
+    makePlanOp(
+      () => genPlan(gen),
+      () => genPlan(gen),
+      true,
+    ),
+  );
+}
 
 function asPublicOp<T, E, A extends readonly unknown[], M, Yieldable extends boolean>(
   op: OpInterface<T, E, A, M, Yieldable>,

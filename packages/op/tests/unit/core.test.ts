@@ -5,7 +5,7 @@ import {
   createRunContext,
   drive,
 } from "../../src/core/runtime.js";
-import { makeCoreOp } from "../../src/core/fluent-nullary.js";
+import { makeCoreOp } from "../../src/core/fluent.js";
 import {
   isErrInstruction,
   RegisterExitFinalizerInstruction,
@@ -47,12 +47,7 @@ class RejectingCustomInstruction implements CustomInstruction<never, EmptyMeta> 
 }
 
 function makeRuntimeOp<T, E>(gen: () => Generator<Instruction<E>, T, unknown>): OpType<T, E, []> {
-  const op: OpType<T, E, []> = makeCoreOp(gen, {
-    withRelease: (_release) => op,
-    registerEnterInitialize: (_initialize) => op,
-    registerExitFinalize: (_finalize) => op,
-  });
-  return op;
+  return makeCoreOp(gen);
 }
 
 describe("core/runtime helpers", () => {

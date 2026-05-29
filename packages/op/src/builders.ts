@@ -13,7 +13,7 @@ import type {
 import type { Op } from "./index.js";
 import { RegisterExitFinalizerInstruction, SuspendInstruction } from "./core/instructions.js";
 import { Result } from "./result.js";
-import { makeCoreOp, createDefaultHooks, makeSyncValueOp } from "./core/fluent.js";
+import { makeCoreOp, makeSyncValueOp } from "./core/fluent.js";
 import { unsafeCoerce, isAwaited, sleepWithSignal } from "./shared.js";
 
 export function succeed<T>(value: T | PromiseLike<T>): Op<Awaited<T>, never, [], EmptyMeta> {
@@ -28,26 +28,17 @@ export function succeed<T>(value: T | PromiseLike<T>): Op<Awaited<T>, never, [],
  * Lifts a value into an operation that always fails
  */
 export function fail<E>(value: E): Op<never, E, [], EmptyMeta> {
-  const op: Op<never, E, [], EmptyMeta> = makeCoreOp(
-    function* () {
-      return yield* Result.err(value);
-    },
-    createDefaultHooks(() => op),
-  );
-
-  return op;
+  return makeCoreOp(function* () {
+    return yield* Result.err(value);
+  });
 }
 
 export function defer(finalize: AnyExitFn): Op<void, never, [], EmptyMeta> {
-  const op: Op<void, never, [], EmptyMeta> = makeCoreOp(
-    function* () {
-      yield new RegisterExitFinalizerInstruction((ctx) =>
-        Promise.resolve(finalize(ctx)).then(() => {}),
-      );
-    },
-    createDefaultHooks(() => op),
-  );
-  return op;
+  return makeCoreOp(function* () {
+    yield new RegisterExitFinalizerInstruction((ctx) =>
+      Promise.resolve(finalize(ctx)).then(() => {}),
+    );
+  });
 }
 
 export function sleep(ms: number): Op<void, never, [], EmptyMeta> {
@@ -64,30 +55,26 @@ export function _try<T, E = UnhandledException>(
   f: (signal: AbortSignal) => T,
   onError?: (e: unknown) => E | PromiseLike<E>,
 ): Op<Awaited<T>, TrackedErr<Awaited<E>>, [], EmptyMeta> {
-  const op: Op<Awaited<T>, TrackedErr<Awaited<E>>, [], EmptyMeta> = makeCoreOp(
-    function* () {
-      const result: Result<
-        Awaited<T>,
-        Awaited<E> | UnhandledException
-      > = yield* new SuspendInstruction(async (context) =>
-        Promise.resolve()
-          .then(() => f(context.signal))
-          .then(
-            (a) => Result.ok(a),
-            async (cause) => {
-              if (!onError) return Result.err(new UnhandledException({ cause }));
-              const mapped = await onError(cause);
-              return Result.err(mapped);
-            },
-          ),
-      );
+  return makeCoreOp(function* () {
+    const result: Result<
+      Awaited<T>,
+      Awaited<E> | UnhandledException
+    > = yield* new SuspendInstruction(async (context) =>
+      Promise.resolve()
+        .then(() => f(context.signal))
+        .then(
+          (a) => Result.ok(a),
+          async (cause) => {
+            if (!onError) return Result.err(new UnhandledException({ cause }));
+            const mapped = await onError(cause);
+            return Result.err(mapped);
+          },
+        ),
+    );
 
-      if (result.isErr()) return yield* result;
-      return result.value;
-    },
-    createDefaultHooks(() => op),
-  );
-  return op;
+    if (result.isErr()) return yield* result;
+    return result.value;
+  });
 }
 
 function bindArityArgsToFinalizers<T, M>(

@@ -2,7 +2,7 @@ import * as fc from "fast-check";
 import { assert, describe, expect, test } from "vitest";
 import { Op, exponentialBackoff } from "../../src/index.js";
 import type { RequireOne } from "../../src/core/types.js";
-import type { BackoffOptions } from "../../src/policies.js";
+import type { BackoffOptions } from "../../src/core/retry-policy.js";
 
 const invalidBackoffOptionsArb: fc.Arbitrary<RequireOne<BackoffOptions>> = fc.oneof(
   fc.record({ base: fc.constant(0), max: fc.constant(1000), jitter: fc.constant(0.5) }),

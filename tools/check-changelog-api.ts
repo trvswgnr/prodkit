@@ -118,10 +118,7 @@ function collectExportEntries(source: string): ExportEntry[] {
 
 function exportFingerprint(source: string): string {
   const entries = collectExportEntries(source)
-    .map((entry) => {
-      const from = entry.from ? `@${entry.from}` : "";
-      return `${entry.kind}:${entry.name}${from}`;
-    })
+    .map((entry) => `${entry.kind}:${entry.name}`)
     .sort();
   return entries.join("\n");
 }
@@ -163,7 +160,8 @@ function resolveBaseRef(): string {
 
 function pathChangedSinceBase(baseRef: string, relativePath: string): boolean {
   try {
-    execFileSync("git", ["diff", "--quiet", baseRef, "HEAD", "--", relativePath], {
+    // Compare merge-base to the working tree so local uncommitted changelog edits count.
+    execFileSync("git", ["diff", "--quiet", baseRef, "--", relativePath], {
       stdio: "ignore",
     });
     return false;

@@ -1,7 +1,7 @@
 import { describe, expect, test, assert, vi } from "vitest";
 import { fail, fromGenFn, succeed, _try } from "../../src/builders.js";
 import { TimeoutError, UnhandledException } from "../../src/errors.js";
-import type { RetryPolicy } from "../../src/policies.js";
+import type { RetryPolicy } from "../../src/core/retry-policy.js";
 
 describe("withRetry", () => {
   class FetchError extends Error {

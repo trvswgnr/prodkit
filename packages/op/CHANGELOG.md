@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Changed
 
-- No entries yet.
+- Removed dead hook-era internals after the plan AST cutover: unused `*CoreOp` builders,
+  `DefaultHooks`, and orphan `with*Op` policy wrappers. Fluent methods now share one
+  `fluentMethodsForContext` factory between `makePlanOp` and the sync-value hot path.
+- Folded `makeCoreOp` into `core/fluent.ts` and dropped the `policies.ts` re-export shim;
+  retry policy types and helpers now import from `core/retry-policy.ts` directly.
 
 ## [0.1.72] - 2026-05-29
 

@@ -16,7 +16,7 @@ import {
   OpInterface,
 } from "./core/types.js";
 import { runOp } from "./core/run-op.js";
-import { exponentialBackoff } from "./policies.js";
+import { exponentialBackoff } from "./core/retry-policy.js";
 import { withBlocking, type BlockingOp } from "./blocking.js";
 import { Tagged } from "./tagged.js";
 import { type Result } from "./result.js";
@@ -194,6 +194,6 @@ export type {
   OpLifecycleHook,
 };
 export { withBlocking, type BlockingOp };
-export type { BackoffOptions, RetryPolicy } from "./policies.js";
+export type { BackoffOptions, RetryPolicy } from "./core/retry-policy.js";
 
 export { TimeoutError, ErrorGroup, exponentialBackoff };
