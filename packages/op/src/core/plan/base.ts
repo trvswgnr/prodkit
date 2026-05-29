@@ -54,9 +54,7 @@ export function executePlan<T, E, M>(
 ): Promise<Result<T, E | UnhandledException>> {
   // SAFETY: plan constructors type their public error channel on Plan<T, E>; the shared
   // generator driver also appends UnhandledException for runtime faults.
-  return unsafeCoerce<Promise<Result<T, E | UnhandledException>>>(
-    driveIterator<T, unknown, M>(plan.iterate(), context),
-  );
+  return unsafeCoerce(driveIterator(plan.iterate(), context));
 }
 
 export function executePlanInterruptOnAbort<T, E, M>(
@@ -64,19 +62,13 @@ export function executePlanInterruptOnAbort<T, E, M>(
   context: RunContext<readonly unknown[]>,
 ): Promise<Result<T, E | UnhandledException>> {
   // SAFETY: interrupt mode changes cancellation behavior, not the plan's typed error channel.
-  return unsafeCoerce<Promise<Result<T, E | UnhandledException>>>(
-    driveIterator<T, unknown, M>(plan.iterate(), context, true),
-  );
+  return unsafeCoerce(driveIterator(plan.iterate(), context, true));
 }
 
 export function genPlan<T, E, M>(
   gen: () => Generator<Instruction<E, M>, T, unknown>,
 ): Plan<T, TrackedErr<E>, M> {
-  return createPlan(() => {
-    // SAFETY: the public typed error channel excludes runtime-only UnhandledException values,
-    // while the driver can still surface them from throws and invalid instructions.
-    return unsafeCoerce<PlanIterator<T, TrackedErr<E>, M>>(gen());
-  });
+  return createPlan(() => gen());
 }
 
 export function getPlan<T, E, A extends readonly unknown[], M>(
@@ -95,7 +87,7 @@ export function getIterablePlan<T, E, M>(op: Op<T, E, [], M>): Plan<T, E, M> | u
 
   if (isPlanBackedOp(op)) {
     // SAFETY: isPlanBackedOp narrows to PlanBackedOp, but OP_PLAN_BIND's return is erased at the call site.
-    return unsafeCoerce<Plan<T, E, M>>(op[OP_PLAN_BIND]());
+    return op[OP_PLAN_BIND]();
   }
 
   return genPlan(() => op[Symbol.iterator]());

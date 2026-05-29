@@ -17,21 +17,14 @@ import { coerceToNullaryOp, unsafeCoerce } from "../shared.js";
 
 export { makePlanOp, makeSyncValueOp } from "./plan/shell.js";
 
-function asOp<T, E, M>(op: OpInterface<T, E, [], M>): Op<T, E, [], M> {
-  // SAFETY: makePlanOp installs the internal Op brand and callable method surface.
-  return unsafeCoerce(op);
-}
-
 /** Builds a nullary generator leaf op backed by the internal plan model. */
 export function makeCoreOp<T, E, M = EmptyMeta>(
   gen: () => Generator<Instruction<E, M>, T, unknown>,
 ): Op<T, TrackedErr<E>, [], M> {
-  return asOp(
-    makePlanOp(
-      () => genPlan(gen),
-      () => genPlan(gen),
-      true,
-    ),
+  return makePlanOp(
+    () => genPlan(gen),
+    () => genPlan(gen),
+    true,
   );
 }
 
@@ -46,7 +39,7 @@ function iterablePlanFor<T, E, A extends readonly unknown[], M, Yieldable extend
   op: OpInterface<T, E, A, M, Yieldable>,
 ) {
   // SAFETY: getIterablePlan checks the runtime iterable brand before reading the iterator.
-  const iterableCandidate = unsafeCoerce<Op<T, E, [], M>>(op);
+  const iterableCandidate: Op<T, E, [], M> = unsafeCoerce(op);
   return getIterablePlan(iterableCandidate);
 }
 

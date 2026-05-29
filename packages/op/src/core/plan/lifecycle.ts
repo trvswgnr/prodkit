@@ -45,7 +45,7 @@ export function onEnterPlan<T, E, A extends readonly unknown[], M>(
         const enterCtx: EnterContext<A> = {
           signal: context.signal,
           // SAFETY: this plan is bound by the op shell for the same tuple arity `A`.
-          args: unsafeCoerce<A>(context.args),
+          args: unsafeCoerce(context.args),
         };
         await Promise.resolve(initialize(enterCtx));
       });
@@ -79,7 +79,7 @@ export function onExitPlan<T, E, A extends readonly unknown[], M>(
           // SAFETY: this finalizer is registered by the plan that produced the result type `T | E`.
           result: unsafeCoerce(ctx.result),
           // SAFETY: this plan is bound by the op shell for the same tuple arity `A`.
-          args: unsafeCoerce<A>(ctx.args),
+          args: unsafeCoerce(ctx.args),
         };
         await Promise.resolve(finalize(exitCtx));
       });

@@ -240,6 +240,5 @@ export function makeSyncValueOp<T>(value: T): OpInterface<T, never, [], EmptyMet
   );
   Object.setPrototypeOf(self, SYNC_VALUE_OP_PROTOTYPE);
 
-  // SAFETY: sync-value shell installs the same runtime brands and method surface as makePlanOp.
-  return unsafeCoerce(self);
+  return self;
 }

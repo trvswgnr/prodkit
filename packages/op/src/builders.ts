@@ -95,13 +95,7 @@ function bindArityArgsToFinalizers<T, M>(
 
   return {
     next: (value?: unknown) => bindStep(iterator.next(value)),
-    return: (value?: T) =>
-      bindStep(
-        iterator.return(
-          // SAFETY: value is only forwarded to generator finalization during close.
-          unsafeCoerce<T>(value),
-        ),
-      ),
+    return: (value: T) => bindStep(iterator.return(value)),
     throw: (error?: unknown) => bindStep(iterator.throw(error)),
     [Symbol.iterator]() {
       return this;
@@ -135,6 +129,5 @@ export function fromGenFn<Y extends Instruction<unknown, unknown>, T, A extends 
       ),
   );
 
-  // SAFETY: makePlanOp installs the Op brand used by the public Op type.
-  return unsafeCoerce(op);
+  return op;
 }

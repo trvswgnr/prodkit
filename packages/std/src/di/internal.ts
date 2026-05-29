@@ -154,9 +154,9 @@ export class DependencyReqInstruction<T, R> implements CustomInstruction<
       throw new MissingDependencyError(this.dependency.key);
     }
     if (isPromiseLike(value)) {
-      return value.then((resolved) => unsafeCoerce<T>(resolved));
+      return value.then((resolved) => unsafeCoerce(resolved));
     }
-    return unsafeCoerce<T>(value);
+    return unsafeCoerce(value);
   }
 
   *[Symbol.iterator](): Generator<this, T, unknown> {
@@ -200,7 +200,7 @@ function dependencyTokenFromEntry(entry: AnyDependency): AnyDependency {
       hasOwn(current, "key") &&
       hasOwn(current, DI_TOKEN)
     ) {
-      return unsafeCoerce<AnyDependency>(current);
+      return unsafeCoerce(current);
     }
     current = Object.getPrototypeOf(current);
   }
@@ -239,7 +239,7 @@ function withDependencyEntry(env: Env, entry: UseEntry): Env {
 
 function readEnv(context: RunContext<readonly unknown[]>): Env {
   const env = context.extensions.get(DI_ENV_EXTENSION);
-  if (env instanceof Map) return unsafeCoerce<Env>(env);
+  if (env instanceof Map) return unsafeCoerce(env);
   return new Map();
 }
 
