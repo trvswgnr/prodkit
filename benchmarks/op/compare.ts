@@ -5,12 +5,15 @@ import path from "node:path";
 import { transform } from "esbuild";
 import {
   COMPARISON_SCENARIOS,
+  comparisonOutcome,
   IMPLEMENTATION_COLUMNS,
   slowdownRatio,
   type ComparisonScenarioKey,
   type ImplementationId,
 } from "./comparison-matrix.ts";
 import {
+  formatNumber,
+  formatRatio,
   getRepoRoot,
   readEnvironmentReport,
   readPackageVersion,
@@ -83,6 +86,41 @@ async function measureBundleSize(
   return { minBytes, gzipBytes };
 }
 
+function formatBytes(bytes: number): string {
+  return `${Intl.NumberFormat("en-US").format(bytes)} B`;
+}
+
+function formatWinner(winner: ImplementationId): string {
+  return winner === "native" ? "Native" : "Op";
+}
+
+function printComparisonTable(scenarios: ComparisonReport["scenarios"]): void {
+  const scenarioWidth = 32;
+  const winnerWidth = 8;
+  logger.info("");
+  logger.info("Runtime comparison (higher ops/sec wins):");
+  logger.info("");
+  logger.info(
+    `${"Scenario".padEnd(scenarioWidth)} ${"Native ops/sec".padStart(14)} ${"Op ops/sec".padStart(14)} ${"Winner".padStart(winnerWidth)} ${"Margin".padStart(8)}`,
+  );
+  logger.info(
+    `${"-".repeat(scenarioWidth)} ${"-".repeat(14)} ${"-".repeat(14)} ${"-".repeat(winnerWidth)} ${"-".repeat(8)}`,
+  );
+  for (const scenario of scenarios) {
+    const outcome = comparisonOutcome(scenario.runtime.native.hz, scenario.runtime.op.hz);
+    logger.info(
+      `${scenario.label.padEnd(scenarioWidth)} ${formatNumber(scenario.runtime.native.hz).padStart(14)} ${formatNumber(scenario.runtime.op.hz).padStart(14)} ${formatWinner(outcome.winner).padStart(winnerWidth)} ${formatRatio(outcome.margin).padStart(8)}`,
+    );
+  }
+}
+
+function printBundleSize(bundleSize: ComparisonReport["bundleSize"]): void {
+  logger.info("");
+  logger.info(
+    `Bundle size: ${formatBytes(bundleSize.minBytes)} minified, ${formatBytes(bundleSize.gzipBytes)} minified + gzip`,
+  );
+}
+
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const repoRoot = getRepoRoot();
@@ -92,12 +130,12 @@ async function main(): Promise<void> {
   const packageVersion = await readPackageVersion(packageDir);
 
   logger.info(
-    `Comparison environment: node=${process.version} platform=${process.platform} arch=${process.arch}`,
+    `Comparison target: @prodkit/op@${packageVersion} (${process.version}, ${process.platform}/${process.arch})`,
   );
 
   const scenarios: ComparisonReport["scenarios"] = [];
   for (const scenario of COMPARISON_SCENARIOS) {
-    logger.info(`Benchmarking scenario ${scenario.key}...`);
+    logger.info(`Benchmarking ${scenario.label}...`);
     const native = await runTinybenchVariant(scenario.nativeBench, scenario.native);
     const op = await runTinybenchVariant(scenario.opBench, scenario.op);
     scenarios.push({
@@ -127,14 +165,15 @@ async function main(): Promise<void> {
     bundleSize,
   };
 
-  for (const scenario of scenarios) {
-    logger.info(
-      `- ${scenario.key}: slowdown=${scenario.slowdownRatio.toFixed(2)}x (native=${scenario.runtime.native.hz.toFixed(0)} hz, op=${scenario.runtime.op.hz.toFixed(0)} hz)`,
-    );
-  }
+  printComparisonTable(scenarios);
+  printBundleSize(bundleSize);
 
   await writeJsonReport(reportPath, report);
+  logger.info("");
   logger.info(`Wrote comparison report: ${path.resolve(reportPath)}`);
+  logger.info(
+    "Refresh PERFORMANCE.md with: pnpm --filter @prodkit/tools run performance:sync -- --write",
+  );
 }
 
 main().catch((error) => {

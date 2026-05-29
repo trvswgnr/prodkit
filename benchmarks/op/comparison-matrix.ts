@@ -7,7 +7,7 @@ export const RETRY_ATTEMPTS = 3;
 export const TIMEOUT_BUDGET_MS = 250;
 
 export type ComparisonScenarioKey =
-  | "singleOp"
+  | "singleValue"
   | "all"
   | "any"
   | "race"
@@ -76,12 +76,12 @@ async function handRolledFirstSettler(childCount: number): Promise<void> {
 /** Primary comparison rows shown in PERFORMANCE.md and CodSpeed overhead tracking. */
 export const COMPARISON_SCENARIOS: readonly ComparisonScenario[] = [
   {
-    key: "singleOp",
+    key: "singleValue",
     label: "Single value",
-    group: "singleOp",
-    nativeBench: "singleOp.rawAsync",
-    opBench: "singleOp.opRun",
-    overheadBench: "overhead.singleOp.ratio",
+    group: "singleValue",
+    nativeBench: "singleValue.rawAsync",
+    opBench: "singleValue.opRun",
+    overheadBench: "overhead.singleValue.ratio",
     nativeDescription: "`Promise.resolve(x)`",
     opDescription: "`Op.of(x).run()`",
     native: async () => {
@@ -89,7 +89,7 @@ export const COMPARISON_SCENARIOS: readonly ComparisonScenario[] = [
     },
     op: async () => {
       const result = await Op.of(69).run();
-      if (!result.isOk()) throw new Error("singleOp.opRun failed unexpectedly.");
+      if (!result.isOk()) throw new Error("singleValue.opRun failed unexpectedly.");
     },
   },
   {
@@ -232,6 +232,19 @@ export const COMPARISON_SCENARIOS: readonly ComparisonScenario[] = [
 export function slowdownRatio(referenceHz: number, variantHz: number): number {
   if (variantHz === 0) return 0;
   return referenceHz / variantHz;
+}
+
+export type ComparisonOutcome = {
+  winner: ImplementationId;
+  /** Factor by which the winner beat the loser (always >= 1). */
+  margin: number;
+};
+
+export function comparisonOutcome(nativeHz: number, opHz: number): ComparisonOutcome {
+  if (nativeHz >= opHz) {
+    return { winner: "native", margin: slowdownRatio(nativeHz, opHz) };
+  }
+  return { winner: "op", margin: slowdownRatio(opHz, nativeHz) };
 }
 
 const RATIO_SAMPLE_COUNT = 5;

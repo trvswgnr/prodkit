@@ -38,7 +38,7 @@ type AsyncProfileScenarioName =
   | "compose.yieldChain"
   | "compose.flatOp"
   | "compose.sequentialRuns"
-  | "compose.singleOpRun";
+  | "compose.singleValueRun";
 
 type SyncReferenceScenarioName = "generator.rawYieldStarSync";
 
@@ -116,7 +116,7 @@ const ASYNC_SCENARIOS: AsyncScenarioSpec[] = [
   },
   {
     kind: "async",
-    name: "compose.singleOpRun",
+    name: "compose.singleValueRun",
     description: "single Op.of(x).run()",
     run: (Op) => runSingleOpRun(Op),
   },

@@ -120,7 +120,7 @@ When CodSpeed flags a regression, use `profile.ts` for deep investigation. CodSp
 | `compose.yieldChain` | Full `yield* Op.of` path (matches `compose.opYieldChain` in CodSpeed benches) |
 | `compose.flatOp` | Single Op / single driver pass (no nested `yield*`) |
 | `compose.sequentialRuns` | Per-step `Op.of(...).run()` without `yield*` delegation |
-| `compose.singleOpRun` | One `Op.of(x).run()` |
+| `compose.singleValueRun` | One `Op.of(x).run()` |
 
 ### Sync reference (excluded from async baseline ratios)
 
