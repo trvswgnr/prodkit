@@ -7,7 +7,7 @@ import { readRepoRoot } from "./utils.ts";
 const logger = createLogger(import.meta.url);
 
 const PERFORMANCE_DOC_REL = "packages/op/PERFORMANCE.md";
-const DEFAULT_REPORT_REL = "benchmarks/op/comparison-report.json";
+const DEFAULT_REPORT_REL = "benchmarks/op/.artifacts/comparison-report.json";
 const REPO = "trvswgnr/prodkit";
 const SNAPSHOT_START = "<!-- op-performance-snapshot:start -->";
 const SNAPSHOT_END = "<!-- op-performance-snapshot:end -->";
@@ -252,7 +252,7 @@ function main(): void {
   }
   if (!existsSync(reportPath)) {
     throw new Error(
-      `missing comparison report at ${reportPath}. Run: pnpm --filter @prodkit/op-benchmarks run compare -- --report=comparison-report.json`,
+      `missing comparison report at ${reportPath}. Run: pnpm --filter @prodkit/op-benchmarks run compare`,
     );
   }
 

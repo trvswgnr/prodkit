@@ -19,7 +19,7 @@ contributor commands live in
 
 <!-- op-performance-snapshot:start -->
 
-Captured on **2026-05-29** at commit [`6756b8e`](https://github.com/trvswgnr/prodkit/commit/6756b8ed741103eefb75b185a6c359e1f4058f86) (`@prodkit/op@0.1.72`).
+Captured on **2026-05-29** at commit [`c327b5b`](https://github.com/trvswgnr/prodkit/commit/c327b5b3a0a2a3602b9c7afd6f78137572906c94) (`@prodkit/op@0.1.72`).
 Environment: v24.14.1, darwin/arm64.
 Slowdown ratios compare `@prodkit/op` to native Promise equivalents on the same machine.
 Add competitor library columns by extending `IMPLEMENTATION_COLUMNS` in `benchmarks/op/comparison-matrix.ts`.
@@ -28,20 +28,20 @@ Add competitor library columns by extending `IMPLEMENTATION_COLUMNS` in `benchma
 
 | Scenario | Native baseline | Native ops/sec | @prodkit/op | Op ops/sec | Slowdown (Op vs native) |
 | --- | --- | --- | --- | --- | --- |
-| Single value | `Promise.resolve(x)` | 13,979,344.13 | `Op.of(x).run()` | 2,297,743.66 | 6.08x |
-| Parallel batch (8 children) | `Promise.all([...])` | 1,629,319.02 | `Op.all([...]).run()` | 125,767.64 | 12.95x |
-| First success (8 children) | Hand-rolled first success + abort | 66,904.93 | `Op.any([...]).run()` | 44,954.87 | 1.49x |
-| First settler (8 children) | Hand-rolled first settler + abort | 67,518.34 | `Op.race([...]).run()` | 45,310.72 | 1.49x |
-| Retry loop | Hand-rolled try/catch retry | 253,778.19 | `Op.try(...).withRetry(...).run()` | 52,777.02 | 4.81x |
-| Timeout guard | `Promise.race` + `setTimeout` | 3,943,086.51 | `Op.of(x).withTimeout(ms).run()` | 322,670.05 | 12.22x |
-| Sequential compose (6 steps) | `await Promise.resolve` chain | 3,643,161.02 | `yield* Op.of` generator chain | 269,297.7 | 13.53x |
+| Single value | `Promise.resolve(x)` | 14,053,821.64 | `Op.of(x).run()` | 2,309,677.14 | 6.08x |
+| Parallel batch (8 children) | `Promise.all([...])` | 1,621,246.31 | `Op.all([...]).run()` | 125,628.5 | 12.91x |
+| First success (8 children) | Hand-rolled first success + abort | 66,515.8 | `Op.any([...]).run()` | 43,710.5 | 1.52x |
+| First settler (8 children) | Hand-rolled first settler + abort | 65,972.25 | `Op.race([...]).run()` | 45,356.69 | 1.45x |
+| Retry loop | Hand-rolled try/catch retry | 257,173.05 | `Op.try(...).withRetry(...).run()` | 52,961.87 | 4.86x |
+| Timeout guard | `Promise.race` + `setTimeout` | 3,901,343.45 | `Op.of(x).withTimeout(ms).run()` | 324,337.38 | 12.03x |
+| Sequential compose (6 steps) | `await Promise.resolve` chain | 3,591,439.28 | `yield* Op.of` generator chain | 265,605.08 | 13.52x |
 
 ### Bundle size
 
 | Metric | Size |
 | --- | --- |
-| ESM entry minified | 12,781 B |
-| ESM entry minified + gzip | 3,719 B |
+| ESM entry minified | 12,738 B |
+| ESM entry minified + gzip | 3,702 B |
 
 <!-- op-performance-snapshot:end -->
 
@@ -74,7 +74,7 @@ Refresh the public comparison table locally:
 
 ```bash
 pnpm --filter @prodkit/op run build
-pnpm --filter @prodkit/op-benchmarks run compare -- --report=comparison-report.json
+pnpm --filter @prodkit/op-benchmarks run compare
 pnpm --filter @prodkit/tools run performance:sync -- --write
 ```
 

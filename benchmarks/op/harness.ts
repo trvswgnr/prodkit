@@ -11,6 +11,7 @@ export type ProfileOpFactory = ProfileScenarioOpFactory;
 
 export const OP_PACKAGE = "@prodkit/op";
 export const ENTRY_FALLBACK = "./dist/index.mjs";
+export const BENCHMARK_ARTIFACTS_DIR = ".artifacts";
 
 export const DEFAULT_BENCH_TIME_MS = 300;
 export const DEFAULT_BENCH_WARMUP_TIME_MS = 150;
@@ -193,6 +194,20 @@ export function parseReportPath(argv: readonly string[]): string | undefined {
     throw new Error(`Invalid report path "". Expected a non-empty path.`);
   }
   return value;
+}
+
+export function resolveBenchmarkArtifact(name: string): string {
+  return path.join(BENCHMARK_ARTIFACTS_DIR, name);
+}
+
+export function resolveReportPath(argv: readonly string[], defaultName: string): string {
+  return parseReportPath(argv) ?? resolveBenchmarkArtifact(defaultName);
+}
+
+export async function ensureBenchmarkArtifactsDir(): Promise<string> {
+  const absolutePath = path.resolve(BENCHMARK_ARTIFACTS_DIR);
+  await mkdir(absolutePath, { recursive: true });
+  return absolutePath;
 }
 
 export function parseStepsArg(argv: readonly string[]): number {

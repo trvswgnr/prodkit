@@ -79,11 +79,11 @@ jobs:
           run: pnpm vitest bench --run codspeed.walltime.bench.ts
 
       - name: Write comparison report
-        run: pnpm --filter @prodkit/op-benchmarks run compare -- --report=comparison-report.json
+        run: pnpm --filter @prodkit/op-benchmarks run compare
 
       - name: Upload comparison report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: op-comparison-report
-          path: benchmarks/op/comparison-report.json
+          path: benchmarks/op/.artifacts/comparison-report.json
           if-no-files-found: error

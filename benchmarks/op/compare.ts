@@ -12,10 +12,10 @@ import {
 } from "./comparison-matrix.ts";
 import {
   getRepoRoot,
-  parseReportPath,
   readEnvironmentReport,
   readPackageVersion,
   resolveOpPackageDir,
+  resolveReportPath,
   runTinybenchVariant,
   writeJsonReport,
   type TinybenchRecord,
@@ -86,7 +86,7 @@ async function measureBundleSize(
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const repoRoot = getRepoRoot();
-  const reportPath = parseReportPath(argv);
+  const reportPath = resolveReportPath(argv, "comparison-report.json");
   const packageDir = resolveOpPackageDir(repoRoot);
   const fingerprint = readCurrentFingerprint(repoRoot);
   const packageVersion = await readPackageVersion(packageDir);
@@ -133,10 +133,8 @@ async function main(): Promise<void> {
     );
   }
 
-  if (reportPath !== undefined) {
-    await writeJsonReport(reportPath, report);
-    logger.info(`Wrote comparison report: ${path.resolve(reportPath)}`);
-  }
+  await writeJsonReport(reportPath, report);
+  logger.info(`Wrote comparison report: ${path.resolve(reportPath)}`);
 }
 
 main().catch((error) => {

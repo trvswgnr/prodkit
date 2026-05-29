@@ -54,7 +54,7 @@ Use CodSpeed (CI), the comparison harness, and the local profile harness when yo
 
 ```bash
 pnpm run bench
-pnpm --filter @prodkit/op-benchmarks run compare -- --report=comparison-report.json
+pnpm --filter @prodkit/op-benchmarks run compare
 pnpm --filter @prodkit/tools run performance:sync -- --write
 pnpm --filter @prodkit/op-benchmarks run profile
 ```

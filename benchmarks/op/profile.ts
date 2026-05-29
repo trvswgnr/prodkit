@@ -2,6 +2,8 @@ import { statSync } from "node:fs";
 import path from "node:path";
 import {
   assertProfileOpFactory,
+  BENCHMARK_ARTIFACTS_DIR,
+  ensureBenchmarkArtifactsDir,
   findNewestProfileArtifact,
   formatNumber,
   formatRatio,
@@ -13,6 +15,7 @@ import {
   parseStepsArg,
   readEnvironmentReport,
   readPackageVersion,
+  resolveBenchmarkArtifact,
   resolveOpPackageDir,
   runTinybenchVariant,
   writeJsonReport,
@@ -231,19 +234,23 @@ function printInterpretationGuide(): void {
   );
   logger.info("");
   logger.info("Machine-readable output:");
-  logger.info("  pnpm --filter @prodkit/op-benchmarks run profile -- --report=profile.json");
+  logger.info(
+    `  pnpm --filter @prodkit/op-benchmarks run profile -- --report=${resolveBenchmarkArtifact("profile.json")}`,
+  );
   logger.info("");
   logger.info("CPU profile (flame graph):");
   logger.info(
     "  pnpm --filter @prodkit/op-benchmarks run profile:cpu -- --scenario=compose.yieldChain",
   );
-  logger.info("  Open the emitted *.cpuprofile in Chrome DevTools or https://speedscope.app");
+  logger.info(
+    "  Open the emitted *.cpuprofile in .artifacts/ via Chrome DevTools or https://speedscope.app",
+  );
   logger.info("");
   logger.info("Heap profile (allocations):");
   logger.info(
     "  pnpm --filter @prodkit/op-benchmarks run profile:heap -- --scenario=compose.yieldChain",
   );
-  logger.info("  Open the emitted *.heapprofile in Chrome DevTools Memory");
+  logger.info("  Open the emitted *.heapprofile in .artifacts/ via Chrome DevTools Memory");
 }
 
 async function measureAsyncScenario(
@@ -334,16 +341,19 @@ async function main(): Promise<void> {
       throw new Error(`${profileMode} mode requires profile loop iterations.`);
     }
 
-    const cwd = process.cwd();
+    await ensureBenchmarkArtifactsDir();
+    const artifactsDir = path.resolve(BENCHMARK_ARTIFACTS_DIR);
     const startedAt = Date.now();
     await runProfileLoop(spec, Op, steps, profileLoopIterations);
     const artifactPrefix = profileMode === "cpu" ? "CPU" : "Heap";
-    const artifactPath = findNewestProfileArtifact(cwd, artifactPrefix);
+    const artifactPath = findNewestProfileArtifact(artifactsDir, artifactPrefix);
     logger.info("");
     if (artifactPath !== undefined && statArtifactIsFresh(artifactPath, startedAt)) {
       logger.info(`${artifactPrefix} profile written: ${artifactPath}`);
     } else {
-      logger.info(`${artifactPrefix} profile should be written in ${cwd} as ${artifactPrefix}.*`);
+      logger.info(
+        `${artifactPrefix} profile should be written in ${artifactsDir} as ${artifactPrefix}.*`,
+      );
     }
     return;
   }
