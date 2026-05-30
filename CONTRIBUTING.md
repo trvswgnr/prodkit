@@ -46,7 +46,15 @@ A `bundle-size` job compares `@prodkit/op` minified + gzip bundle size on pull r
 `compressed-size-action`; runtime regressions are tracked separately by CodSpeed
 (see [`packages/op/PERFORMANCE.md`](packages/op/PERFORMANCE.md) and [`benchmarks/op/README.md`](benchmarks/op/README.md)).
 
-All runnable consumer examples and smoke entrypoints live in the **`examples/`** workspace (`@prodkit/examples`): Op-oriented samples under [`examples/op/`](examples/op/) (including DI under [`examples/op/di/`](examples/op/di/)), with [`examples/std/`](examples/std/) reserved for future `@prodkit/std` utilities. Root [`examples/smoke.ts`](examples/smoke.ts) runs the Op, DI, and std smoke suites.
+All runnable consumer examples and smoke entrypoints live in the **`examples/`** workspace (`@prodkit/examples`):
+
+```text
+examples/
+  op/                 core Op samples (combinators, defer, webhook, ...)
+  op/di/              @prodkit/op/di samples (onboarding, cancellation, HTTP handler)
+  std/                reserved for future @prodkit/std utility samples
+  smoke.ts            runs op, di, and std smoke suites
+```
 
 ## Benchmarking
 

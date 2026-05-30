@@ -84,6 +84,37 @@ From **`@prodkit/op`**:
 
 No other `better-result` exports are published from `@prodkit/op` today.
 
+## Subpath exports
+
+Op-native extensions ship as separate subpath exports on `@prodkit/op`. Import them explicitly; the
+main `@prodkit/op` entry does not re-export them ([ADR 0008](https://github.com/trvswgnr/prodkit/blob/main/docs/adr/0008-op-subpath-exports.md)).
+
+### `@prodkit/op/di`
+
+Dependency injection for composed ops: tokens, `inject`, `provide`, and scoped/singleton bindings.
+
+```ts
+import { Op } from "@prodkit/op";
+import { DI } from "@prodkit/op/di";
+
+class DatabaseDependency extends DI.Dependency("Database")<Database> {}
+
+const getUser = Op(function* (id: number) {
+  const db = yield* DI.inject(DatabaseDependency);
+  return yield* db.findById(id);
+});
+
+const runnable = DI.provide(getUser, DI.singleton(DatabaseDependency, db));
+const result = await runnable.run(1);
+```
+
+Public exports: `DI`, `Dependency`, `inject`, `provide`, `scoped`, `singleton`, and helper types
+(`InferArgs`, `InferErr`, `InferOk`, `InferReqs`).
+
+Runnable consumer examples live under
+[`examples/op/di/`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/di/) (onboarding,
+scoped cancellation, HTTP handler with pool checkout).
+
 ## Quick start
 
 ```ts
@@ -684,7 +715,11 @@ or `runtime:smoke:edge`.
 - [`examples/op/simple.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/simple.ts):
   minimal composition and typed error walkthrough.
 - [`examples/op/di/onboarding.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/di/onboarding.ts):
-  `@prodkit/op/di` wiring with `DI` dependencies.
+  `@prodkit/op/di` wiring with singleton bindings and typed domain errors.
+- [`examples/op/di/di-cancellation.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/di/di-cancellation.ts):
+  scoped bindings, run `AbortSignal`, and cancellation during factory resolution.
+- [`examples/op/di/http-handler.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/di/http-handler.ts):
+  pool checkout with `Op.defer` and layered DI bindings.
 - [`examples/smoke.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/smoke.ts):
   consumer-level scenario assertions for Op flows (`examples/op/smoke.ts`) and DI
   (`examples/op/di/smoke.ts`).

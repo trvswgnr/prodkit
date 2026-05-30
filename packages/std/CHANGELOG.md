@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Removed `@prodkit/std/di`; import DI from `@prodkit/op/di` instead.
+- Removed `@prodkit/std/di`; import DI from `@prodkit/op/di` instead. DI consumer examples moved
+  from `examples/std/` to `examples/op/di/`; `examples/std/` is reserved for future utility samples.
 - Repositioned `@prodkit/std` as a general runtime-agnostic utility layer with no `@prodkit/op` peer
   dependency.
 

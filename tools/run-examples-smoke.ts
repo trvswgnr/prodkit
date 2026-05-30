@@ -352,9 +352,12 @@ const ensureInstalledPackagesReady = Op(function* (workspaceRoot: string, source
     if (typeof moduleField === "string" && moduleField.length > 0) entryCandidates.add(moduleField);
 
     const exportsField = getOwnPropertyValue(packageJson, "exports");
-    if (getOwnPropertyValue(exportsField, ".") !== undefined) {
-      collectRuntimeEntryLeaves(getOwnPropertyValue(exportsField, "."), entryCandidates);
-    } else {
+    if (isRecord(exportsField)) {
+      for (const [exportKey, exportValue] of Object.entries(exportsField)) {
+        if (exportKey.endsWith(".json")) continue;
+        collectRuntimeEntryLeaves(exportValue, entryCandidates);
+      }
+    } else if (exportsField !== undefined) {
       collectRuntimeEntryLeaves(exportsField, entryCandidates);
     }
 

@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added `@prodkit/op/di` subpath export with dependency tokens, inject, provide, and scoped/singleton
-  bindings (moved from `@prodkit/std/di`).
+  bindings (moved from `@prodkit/std/di`). Consumer examples live under `examples/op/di/`.
 
 ### Removed
 

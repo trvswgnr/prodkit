@@ -1,7 +1,7 @@
 {
   "name": "@prodkit/examples",
   "private": true,
-  "description": "Consumer-level smoke checks and runnable examples for @prodkit/op and @prodkit/std.",
+  "description": "Consumer-level smoke checks and runnable examples for @prodkit/op (including @prodkit/op/di) and @prodkit/std.",
   "type": "module",
   "scripts": {
     "fmt": "oxfmt \"**/*.ts\"",

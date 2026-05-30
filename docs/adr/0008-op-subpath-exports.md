@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 title: Op-native modules ship as @prodkit/op subpath exports
 packages:
   - "@prodkit/op"
@@ -56,11 +56,12 @@ Guiding constraints for std:
 - Prefer native at runtime; wrap only for types, cross-runtime consistency, or security hardening.
 - Keep op-native features off std; they belong on `@prodkit/op` subpaths.
 
-After DI moves to `@prodkit/op/di`:
+DI now lives on `@prodkit/op/di`:
 
 - Hard-cutover imports from `@prodkit/std/di` to `@prodkit/op/di`.
 - Remove DI from `@prodkit/std` (no compatibility re-export).
 - Repurpose `@prodkit/std` for the utility-layer modules above.
+- Consumer examples under [`examples/op/di/`](../../examples/op/di/).
 
 ## Considered options
 
@@ -90,5 +91,5 @@ constructors.
 
 ## Implementation
 
-- [#128](https://github.com/trvswgnr/prodkit/issues/128): Move DI to `@prodkit/op/di` and remove DI from `@prodkit/std`.
+- [#128](https://github.com/trvswgnr/prodkit/issues/128): Move DI to `@prodkit/op/di` and remove DI from `@prodkit/std` (done).
 - Policy subpath and `.with(Policy.*)` cutover: ADR 0009 ([#129](https://github.com/trvswgnr/prodkit/issues/129), [#130](https://github.com/trvswgnr/prodkit/issues/130), [#131](https://github.com/trvswgnr/prodkit/issues/131)).
