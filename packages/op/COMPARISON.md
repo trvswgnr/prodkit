@@ -40,7 +40,7 @@ const program = Op.all([
 ])
   .with(Policy.retry({ attempts: 2 }))
   .with(Policy.timeout(1_500))
-  .with(Policy.signal(request.signal));
+  .with(Policy.cancel(request.signal));
 ```
 
 That gives you the part `Promise` never tried to give you: one place to say what happens when the
@@ -165,7 +165,7 @@ The value is the combination:
 - generator composition that reads top-to-bottom
 - lazy execution with a clear `.run(...args)` boundary
 - retry and timeout as composable policy
-- external cancellation through `.with(Policy.signal(...))`
+- external cancellation through `.with(Policy.cancel(...))`
 - fail-fast concurrency that aborts siblings
 - registered cleanup that unwinds before the result settles
 - ordinary TypeScript at the edges

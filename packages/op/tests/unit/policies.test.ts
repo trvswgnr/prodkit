@@ -370,14 +370,14 @@ describe("withTimeout", () => {
   });
 });
 
-describe("withSignal", () => {
+describe("Policy.cancel", () => {
   test("passes a live signal into Op.try by default", async () => {
     const controller = new AbortController();
     let seenSignal: AbortSignal | undefined;
     const program = _try((signal) => {
       seenSignal = signal;
       return Promise.resolve(69);
-    }).with(Policy.signal(controller.signal));
+    }).with(Policy.cancel(controller.signal));
 
     const result = await program.run();
     assert(result.isOk(), "result should be Ok");
@@ -404,7 +404,7 @@ describe("withSignal", () => {
             });
           }),
         (cause) => String(cause instanceof Error ? cause.message : cause),
-      ).with(Policy.signal(controller.signal));
+      ).with(Policy.cancel(controller.signal));
 
       const runPromise = program.run();
       controller.abort(new Error("request cancelled"));

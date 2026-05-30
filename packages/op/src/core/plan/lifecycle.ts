@@ -28,7 +28,7 @@ export function withReleasePlan<T, E, M>(
     {
       withRetry: (policy) => build(source.withRetry(policy)),
       withTimeout: (timeoutMs) => withReleasePlan(source.withTimeout(timeoutMs), release),
-      withSignal: (signal) => build(source.withSignal(signal)),
+      withCancel: (abortSignal) => build(source.withCancel(abortSignal)),
     },
   );
 }
@@ -60,7 +60,7 @@ export function onEnterPlan<T, E, A, M>(
     {
       withRetry: (policy) => build(source.withRetry(policy)),
       withTimeout: (timeoutMs) => onEnterPlan(source.withTimeout(timeoutMs), initialize),
-      withSignal: (signal) => build(source.withSignal(signal)),
+      withCancel: (abortSignal) => build(source.withCancel(abortSignal)),
     },
   );
 }
@@ -98,7 +98,7 @@ export function onExitPlan<T, E, A, M>(
           source.withTimeout(timeoutMs),
           finalize as unknown as ExitFn<T, E | TimeoutError, A>,
         ),
-      withSignal: (signal) => build(source.withSignal(signal)),
+      withCancel: (abortSignal) => build(source.withCancel(abortSignal)),
     },
   );
 }

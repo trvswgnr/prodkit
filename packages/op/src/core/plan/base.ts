@@ -12,7 +12,7 @@ import type {
   RunContext,
   TrackedErr,
 } from "../types.js";
-import { retryPlan, signalPlan, timeoutPlan } from "./policies.js";
+import { cancelPlan, retryPlan, timeoutPlan } from "./policies.js";
 
 export const OP_PLAN_BIND: unique symbol = Symbol("prodkit.op.plan-bind");
 
@@ -26,7 +26,7 @@ export interface Plan<T, E, M = EmptyMeta> {
   readonly iterate: () => PlanIterator<T, E, M>;
   readonly withRetry: (policy?: NormalizedRetryPolicy) => Plan<T, E, M>;
   readonly withTimeout: (timeoutMs: number) => Plan<T, E | TimeoutError, M>;
-  readonly withSignal: (signal: AbortSignal) => Plan<T, E, M>;
+  readonly withCancel: (abortSignal: AbortSignal) => Plan<T, E, M>;
 }
 
 export type PlanBinder<T, E, A, M> = (...args: AsArgs<A>) => Plan<T, E, M>;
@@ -38,7 +38,7 @@ export type PlanBackedOp<T, E, A, M> = OpInterface<T, E, A, M> & {
 interface PlanPolicyOverrides<T, E, M> {
   readonly withRetry?: (policy?: NormalizedRetryPolicy) => Plan<T, E, M>;
   readonly withTimeout?: (timeoutMs: number) => Plan<T, E | TimeoutError, M>;
-  readonly withSignal?: (signal: AbortSignal) => Plan<T, E, M>;
+  readonly withCancel?: (abortSignal: AbortSignal) => Plan<T, E, M>;
 }
 
 export function createPlan<T, E, M>(
@@ -51,7 +51,7 @@ export function createPlan<T, E, M>(
     withRetry:
       overrides.withRetry ?? ((policy = normalizeRetryPolicy()) => retryPlan(plan, policy)),
     withTimeout: overrides.withTimeout ?? ((timeoutMs) => timeoutPlan(plan, timeoutMs)),
-    withSignal: overrides.withSignal ?? ((signal) => signalPlan(plan, signal)),
+    withCancel: overrides.withCancel ?? ((abortSignal) => cancelPlan(plan, abortSignal)),
   };
   return plan;
 }

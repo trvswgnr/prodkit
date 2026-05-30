@@ -35,7 +35,7 @@ describe("OpFactory", () => {
 
     expect(op.withRetry).toBeUndefined();
     expect(op.withTimeout).toBeUndefined();
-    expect(op.withSignal).toBeUndefined();
+    expect(op.withCancel).toBeUndefined();
     expect(op.withRelease).toBeUndefined();
   });
 });

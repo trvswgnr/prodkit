@@ -127,7 +127,7 @@ describe("sleep", () => {
     vi.useFakeTimers();
     try {
       const controller = new AbortController();
-      const runPromise = sleep(100).with(Policy.signal(controller.signal)).run();
+      const runPromise = sleep(100).with(Policy.cancel(controller.signal)).run();
 
       controller.abort("cancelled");
       await vi.advanceTimersByTimeAsync(0);

@@ -194,21 +194,18 @@ Suspends are how policies and combinators nest work: they call `drive` (or `driv
 on child ops with child or merged `RunContext` values rather than blocking the outer generator
 thread.
 
-### Policy wrappers (retry, timeout, signal)
+### Policy wrappers (retry, timeout, cancel)
 
-Policy methods on `OpInterface` (`withRetry`, `withTimeout`, `withSignal` in
-`packages/op/src/core/fluent.ts` and `packages/op/src/policies.ts`) wrap the inner op in new
-nullary core ops via `makePolicyCoreOp` / `makePolicyLiftedOp`:
+Built-in policies attach through `.with(Policy.*)` on the op value (`packages/op/src/core/plan/shell.ts`,
+`packages/op/src/policy/index.ts`) and compose as plan wrappers:
 
-- **Retry** (`withRetryCoreOp`): loops `drive(inner, context)` inside a `SuspendInstruction`,
-  applies `RetryPolicy` delay via abortable sleep, and stops on success, non-retryable `Err`, or
-  abort.
-- **Timeout** (`withTimeoutCoreOp`): races inner `driveInterruptOnAbort` against a timer;
+- **Retry** (`retryPlan`): loops inner execution inside a `SuspendInstruction`, applies
+  `RetryPolicy` delay via abortable sleep, and stops on success, non-retryable `Err`, or abort.
+- **Timeout** (`timeoutPlan`): races inner `executePlanInterruptOnAbort` against a timer;
   surfaces `TimeoutError` on the typed channel. Transforms that change error types use timeout-specific
   rebuild hooks ([ADR 0002](docs/adr/0002-ophooks-rebuild-and-timeout-asymmetry.md)).
-- **Signal** (`withSignalCoreOp`): merges a caller-supplied `AbortSignal` with the run context
-  signal through a composed `AbortController` so either parent or bound signal can cancel the
-  inner `drive`.
+- **Cancel** (`cancelPlan`): merges a caller-supplied `AbortSignal` with the run context signal
+  through a composed `AbortController` so either parent or bound signal can cancel the inner run.
 
 Method order on the fluent object defines wrapper nesting (outermost policy is applied last in
 the chain). See policy ordering notes in `packages/op/DESIGN.md`.

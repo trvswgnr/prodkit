@@ -861,7 +861,7 @@ describe("Op.defer ordering and policies", () => {
     }
   });
 
-  test("runs Op.defer cleanup when withSignal aborts inner work", async () => {
+  test("runs Op.defer cleanup when Policy.cancel aborts inner work", async () => {
     vi.useFakeTimers();
     try {
       const cleanup = vi.fn();
@@ -877,7 +877,7 @@ describe("Op.defer ordering and policies", () => {
               }
               signal.addEventListener("abort", () => reject(signal.reason), { once: true });
             }),
-        ).with(Policy.signal(controller.signal));
+        ).with(Policy.cancel(controller.signal));
       });
 
       const runPromise = op.run();

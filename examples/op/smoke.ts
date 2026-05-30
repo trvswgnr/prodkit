@@ -215,7 +215,7 @@ async function runSimpleExampleSmoke() {
     until: () => false,
     intervalMs: 50,
   })
-    .with(Policy.signal(controller.signal))
+    .with(Policy.cancel(controller.signal))
     .run();
   controller.abort("poll cancelled");
   const cancelledPoll = await cancelledPollPromise;
@@ -396,7 +396,7 @@ async function runSignalPropagationExampleSmoke() {
 
   const controller = new AbortController();
   const cancelledRun = cancelApp.loadProductPage
-    .with(Policy.signal(controller.signal))
+    .with(Policy.cancel(controller.signal))
     .run("sku-1");
   // oxlint-disable-next-line no-unmodified-loop-condition
   for (let attempt = 0; attempt < 20 && !pricingStarted; attempt += 1) {
@@ -651,7 +651,7 @@ async function runQueueConsumerExampleSmoke() {
 
   const controller = new AbortController();
   const shutdownRun = shutdownApp.runConsumerLoop
-    .with(Policy.signal(controller.signal))
+    .with(Policy.cancel(controller.signal))
     .run({ pollIntervalMs: 100, batchSize: 5 });
   await delay(30);
   controller.abort("shutdown requested");
@@ -686,7 +686,7 @@ async function runQueueConsumerExampleSmoke() {
 
   const pollController = new AbortController();
   const pollAbortRun = abortDuringPollApp.runConsumerLoop
-    .with(Policy.signal(pollController.signal))
+    .with(Policy.cancel(pollController.signal))
     .run({ pollIntervalMs: 100, batchSize: 1, maxIterations: 2 });
   await delay(10);
   pollController.abort(new ConsumerServiceCallError({ service: "queue", retryable: false }));

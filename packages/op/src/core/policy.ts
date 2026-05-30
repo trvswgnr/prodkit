@@ -13,9 +13,9 @@ export interface TimeoutPolicyAttachment {
   readonly timeoutMs: number;
 }
 
-export interface SignalPolicyAttachment {
-  readonly [OP_POLICY]: "signal";
-  readonly signal: AbortSignal;
+export interface CancelPolicyAttachment {
+  readonly [OP_POLICY]: "cancel";
+  readonly abortSignal: AbortSignal;
 }
 
 export interface ReleasePolicyAttachment<T> {
@@ -26,5 +26,5 @@ export interface ReleasePolicyAttachment<T> {
 export type BuiltInPolicy<T = unknown> =
   | RetryPolicyAttachment
   | TimeoutPolicyAttachment
-  | SignalPolicyAttachment
+  | CancelPolicyAttachment
   | ReleasePolicyAttachment<T>;

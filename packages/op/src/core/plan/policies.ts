@@ -69,11 +69,18 @@ export function timeoutPlan<T, E, M>(
   });
 }
 
-export function signalPlan<T, E, M>(source: Plan<T, E, M>, signal: AbortSignal): Plan<T, E, M> {
+export function cancelPlan<T, E, M>(
+  source: Plan<T, E, M>,
+  abortSignal: AbortSignal,
+): Plan<T, E, M> {
   return createPlan(function* () {
     const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
       (outerContext) =>
-        runWithBoundSignal((mergedContext) => source.execute(mergedContext), signal, outerContext),
+        runWithBoundSignal(
+          (mergedContext) => source.execute(mergedContext),
+          abortSignal,
+          outerContext,
+        ),
     );
 
     if (result.isErr()) return yield* result;

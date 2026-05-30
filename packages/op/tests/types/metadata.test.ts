@@ -123,7 +123,7 @@ describe("metadata type contracts", () => {
     const mappedErr = source.mapErr((error) => error);
     const retried = source.with(Policy.retry());
     const timed = source.with(Policy.timeout(1));
-    const signaled = source.with(Policy.signal(new AbortController().signal));
+    const cancelled = source.with(Policy.cancel(new AbortController().signal));
     const released = source.with(Policy.release(() => {}));
     const entered = source.on("enter", () => {});
     const exited = source.on("exit", () => {});
@@ -135,7 +135,7 @@ describe("metadata type contracts", () => {
     type _MappedErr = Assert<IsEqual<InferOpMeta<typeof mappedErr>, DatabaseReq>>;
     type _Retried = Assert<IsEqual<InferOpMeta<typeof retried>, DatabaseReq>>;
     type _Timed = Assert<IsEqual<InferOpMeta<typeof timed>, DatabaseReq>>;
-    type _Signaled = Assert<IsEqual<InferOpMeta<typeof signaled>, DatabaseReq>>;
+    type _Cancelled = Assert<IsEqual<InferOpMeta<typeof cancelled>, DatabaseReq>>;
     type _Released = Assert<IsEqual<InferOpMeta<typeof released>, DatabaseReq>>;
     type _Entered = Assert<IsEqual<InferOpMeta<typeof entered>, DatabaseReq>>;
     type _Exited = Assert<IsEqual<InferOpMeta<typeof exited>, DatabaseReq>>;

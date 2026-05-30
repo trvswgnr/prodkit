@@ -4,7 +4,7 @@ import type { Err, Result } from "../result.js";
 import type {
   ReleasePolicyAttachment,
   RetryPolicyAttachment,
-  SignalPolicyAttachment,
+  CancelPolicyAttachment,
   TimeoutPolicyAttachment,
 } from "./policy.js";
 import type { RegisterExitFinalizerInstruction, SuspendInstruction } from "./instructions.js";
@@ -289,7 +289,7 @@ export interface FluentOp<T, E, A, M = EmptyMeta> {
   with(policy: ReleasePolicyAttachment<T>): Op<T, E, A, M>;
   with(policy: RetryPolicyAttachment): Op<T, E, A, M>;
   with(policy: TimeoutPolicyAttachment): Op<T, E | TimeoutError, A, M>;
-  with(policy: SignalPolicyAttachment): Op<T, E, A, M>;
+  with(policy: CancelPolicyAttachment): Op<T, E, A, M>;
 
   /**
    * Register a handler that runs before the operation body starts.

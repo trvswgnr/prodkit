@@ -103,7 +103,7 @@ async function runDiCancellationExampleSmoke() {
 
   const midFactoryController = new AbortController();
   const midFactoryRun = midFactoryApp.loadAccountSnapshot
-    .with(Policy.signal(midFactoryController.signal))
+    .with(Policy.cancel(midFactoryController.signal))
     .run("acct-mid");
   midFactoryController.abort(new Error("cancelled mid-factory"));
   const midFactoryResult = await midFactoryRun;
@@ -134,7 +134,7 @@ async function runDiCancellationExampleSmoke() {
   });
 
   const preAbortResult = await preAbortApp.loadAccountSnapshot
-    .with(Policy.signal(preAbortController.signal))
+    .with(Policy.cancel(preAbortController.signal))
     .run("acct-pre");
   assert(preAbortResult.isErr(), "di cancellation pre-abort should fail");
   assert(preAbortCalls === 0, "di cancellation pre-abort should skip scoped factory");
@@ -169,7 +169,7 @@ async function runDiCancellationExampleSmoke() {
   });
 
   const postCacheRun = postCacheApp.loadAccountSnapshot
-    .with(Policy.signal(postCacheController.signal))
+    .with(Policy.cancel(postCacheController.signal))
     .run("acct-post");
   postCacheController.abort(new Error("cancelled after cache"));
   const postCacheResult = await postCacheRun;

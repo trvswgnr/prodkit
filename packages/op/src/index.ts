@@ -32,7 +32,7 @@ const empty: Op<void, never, []> = succeed(undefined);
  *   for common patterns.
  *
  * Use `Op.run(op)` to execute an operation directly. For external cancellation,
- *   compose with `.with(Policy.signal(signal))` first and then run.
+ *   compose with `.with(Policy.cancel(signal))` first and then run.
  *
  * @example
  * const op = Op(function* () {
@@ -98,7 +98,7 @@ export const Op = Object.assign(fromGenFn, {
    *
    * Negative durations are normalized to `0`. Non-finite durations fail at run time
    * with `UnhandledException`.
-   * The sleep observes surrounding cancellation from `.with(Policy.signal(...))`,
+   * The sleep observes surrounding cancellation from `.with(Policy.cancel(...))`,
    * `.with(Policy.timeout(...))`, and combinators.
    *
    * @example

@@ -44,7 +44,7 @@ export function mapPlan<T, E, U, M>(
     {
       withRetry: (policy) => build(source.withRetry(policy)),
       withTimeout: (timeoutMs) => mapPlan(source.withTimeout(timeoutMs), transform),
-      withSignal: (signal) => build(source.withSignal(signal)),
+      withCancel: (abortSignal) => build(source.withCancel(abortSignal)),
     },
   );
 }
@@ -106,7 +106,7 @@ export function tapPlan<T, E, R, M>(
     {
       withRetry: (policy) => build(source.withRetry(policy)),
       withTimeout: (timeoutMs) => tapPlan(source.withTimeout(timeoutMs), observe),
-      withSignal: (signal) => build(source.withSignal(signal)),
+      withCancel: (abortSignal) => build(source.withCancel(abortSignal)),
     },
   );
 }
@@ -138,7 +138,7 @@ export function mapErrPlan<T, E, E2, M>(
       withRetry: (policy) => build(source.withRetry(policy)),
       withTimeout: (timeoutMs) =>
         mapErrPlan<T, E | TimeoutError, E2, M>(source.withTimeout(timeoutMs), transform),
-      withSignal: (signal) => build(source.withSignal(signal)),
+      withCancel: (abortSignal) => build(source.withCancel(abortSignal)),
     },
   );
 }
@@ -181,7 +181,7 @@ export function tapErrPlan<T, E, R, M>(
       withRetry: (policy) => build(source.withRetry(policy)),
       withTimeout: (timeoutMs) =>
         tapErrPlan<T, E | TimeoutError, R, M>(source.withTimeout(timeoutMs), observe),
-      withSignal: (signal) => build(source.withSignal(signal)),
+      withCancel: (abortSignal) => build(source.withCancel(abortSignal)),
     },
   );
 }
@@ -238,7 +238,7 @@ export function recoverPlan<T, E, ECaught extends TrackedErr<E>, R, M>(
           predicate,
           handler,
         ),
-      withSignal: (signal) => build(source.withSignal(signal)),
+      withCancel: (abortSignal) => build(source.withCancel(abortSignal)),
     },
   );
 }

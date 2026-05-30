@@ -10,7 +10,7 @@
 
 - Prefers principal-level technical reasoning with clear tradeoffs and long-term system impact.
 - Prefers agreeing on API/design direction before implementation when requirements are ambiguous.
-- Prefers `.run(...args)` to stay args-only; cancellation/config should compose fluently (for example via `.with(Policy.signal(...))`) rather than be passed to `run`.
+- Prefers `.run(...args)` to stay args-only; cancellation/config should compose fluently (for example via `.with(Policy.cancel(...))`) rather than be passed to `run`.
 - Prefers user-facing docs and comments to emphasize outcomes and usage over internal implementation details.
 - Requires ASCII-only in repo text (comments, docs, changelogs): no Unicode symbols or typographic punctuation (arrows, em dashes, etc.).
 - When requesting commit message drafts, prefers why-focused messages grounded in the actual staged/unstaged diff.

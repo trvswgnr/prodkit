@@ -95,11 +95,11 @@ describe("type inference contracts", () => {
       Promise<Result<number, TimeoutError | UnhandledException>>
     >();
 
-    const withSignal = Op(function* (id: string) {
+    const withCancel = Op(function* (id: string) {
       return id.length;
-    }).with(Policy.signal(new AbortController().signal));
-    expectTypeOf(withSignal).toEqualTypeOf<Op<number, never, [id: string]>>();
-    expectTypeOf(withSignal.run("abc")).toEqualTypeOf<
+    }).with(Policy.cancel(new AbortController().signal));
+    expectTypeOf(withCancel).toEqualTypeOf<Op<number, never, [id: string]>>();
+    expectTypeOf(withCancel.run("abc")).toEqualTypeOf<
       Promise<Result<number, UnhandledException>>
     >();
 
@@ -107,8 +107,8 @@ describe("type inference contracts", () => {
     timeout.run();
     // @ts-expect-error - parameterized timeout op does not accept extra args
     timeout.run("abc", "extra");
-    // @ts-expect-error - parameterized withSignal op requires argument
-    withSignal.run();
+    // @ts-expect-error - parameterized withCancel op requires argument
+    withCancel.run();
 
     const base = Op.of(1);
     type BasePolicyOp = typeof base;
@@ -116,8 +116,8 @@ describe("type inference contracts", () => {
     type _NoWithRetry = BasePolicyOp["withRetry"];
     // @ts-expect-error - timeout attaches through .with(Policy.timeout(...))
     type _NoWithTimeout = BasePolicyOp["withTimeout"];
-    // @ts-expect-error - signals attach through .with(Policy.signal(...))
-    type _NoWithSignal = BasePolicyOp["withSignal"];
+    // @ts-expect-error - cancellation attaches through .with(Policy.cancel(...))
+    type _NoWithCancel = BasePolicyOp["withCancel"];
     // @ts-expect-error - release attaches through .with(Policy.release(...))
     type _NoWithRelease = BasePolicyOp["withRelease"];
   });

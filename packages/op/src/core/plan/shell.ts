@@ -59,8 +59,8 @@ function fluentMethodsForContext<T, E, A, M, Yieldable extends boolean>(
         }
         case "timeout":
           return wrap((plan) => plan.withTimeout(policy.timeoutMs));
-        case "signal":
-          return wrap((plan) => plan.withSignal(policy.signal));
+        case "cancel":
+          return wrap((plan) => plan.withCancel(policy.abortSignal));
         case "release":
           return wrap((plan) => withReleasePlan(plan, policy.release));
         default:

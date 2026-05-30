@@ -171,7 +171,7 @@ describe("DI cutover runtime", () => {
       return yield* dependency.query("user", [id]);
     });
 
-    const signal: Parameters<typeof Policy.signal>[0] = {
+    const signal: Parameters<typeof Policy.cancel>[0] = {
       aborted: false,
       reason: undefined,
       addEventListener: () => {},
@@ -183,7 +183,7 @@ describe("DI cutover runtime", () => {
         DI.singleton(DatabaseDependency, db),
       ),
       DI.provide(findUser.with(Policy.timeout(1_000)), DI.singleton(DatabaseDependency, db)),
-      DI.provide(findUser.with(Policy.signal(signal)), DI.singleton(DatabaseDependency, db)),
+      DI.provide(findUser.with(Policy.cancel(signal)), DI.singleton(DatabaseDependency, db)),
       DI.provide(findUser.with(Policy.release(() => {})), DI.singleton(DatabaseDependency, db)),
       DI.provide(
         findUser.on("enter", () => {}),
@@ -201,7 +201,7 @@ describe("DI cutover runtime", () => {
         }),
       ),
       DI.provide(findUser, DI.singleton(DatabaseDependency, db)).with(Policy.timeout(1_000)),
-      DI.provide(findUser, DI.singleton(DatabaseDependency, db)).with(Policy.signal(signal)),
+      DI.provide(findUser, DI.singleton(DatabaseDependency, db)).with(Policy.cancel(signal)),
       DI.provide(findUser, DI.singleton(DatabaseDependency, db)).with(Policy.release(() => {})),
       DI.provide(findUser, DI.singleton(DatabaseDependency, db)).on("enter", () => {}),
       DI.provide(findUser, DI.singleton(DatabaseDependency, db)).on("exit", () => {}),
@@ -261,7 +261,7 @@ describe("DI cutover runtime", () => {
         factoryCalls += 1;
         return makeDatabase();
       }),
-    ).with(Policy.signal(controller.signal));
+    ).with(Policy.cancel(controller.signal));
 
     const result = await op.run();
     const cause = getUnhandledCause(result);
@@ -292,7 +292,7 @@ describe("DI cutover runtime", () => {
           );
         });
       }),
-    ).with(Policy.signal(controller.signal));
+    ).with(Policy.cancel(controller.signal));
 
     const runPromise = op.run();
     controller.abort(new Error("cancelled mid-factory"));
@@ -347,7 +347,7 @@ describe("DI cutover runtime", () => {
         factoryCalls += 1;
         return Promise.resolve(makeDatabase());
       }),
-    ).with(Policy.signal(controller.signal));
+    ).with(Policy.cancel(controller.signal));
 
     const runPromise = op.run();
     controller.abort(new Error("cancelled after cache"));
@@ -357,7 +357,7 @@ describe("DI cutover runtime", () => {
     assert(result.isErr(), "result should be Err");
   });
 
-  test("DI-native abort await cancels pending async factory under withSignal", async () => {
+  test("DI-native abort await cancels pending async factory under Policy.cancel", async () => {
     let factoryCalls = 0;
     const controller = new AbortController();
     const op = DI.provide(
@@ -369,7 +369,7 @@ describe("DI cutover runtime", () => {
         factoryCalls += 1;
         return new Promise<Database>(() => {});
       }),
-    ).with(Policy.signal(controller.signal));
+    ).with(Policy.cancel(controller.signal));
 
     const runPromise = op.run();
     controller.abort(new Error("cancelled without cooperative factory"));

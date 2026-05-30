@@ -8,12 +8,12 @@ packages:
 # Policy attaches via .with(Policy.*)
 
 ADR 0006 established args-only `.run()` and fluent policy composition on the op value. The public
-surface exposed dedicated retry, timeout, signal, and release methods, while policy constructors
+surface exposed dedicated retry, timeout, cancel, and release methods, while policy constructors
 and delay helpers lived on the root `@prodkit/op` export.
 
 ## Decision
 
-**Single attachment surface for execution policy.** Retry, timeout, signal, and release compose through
+**Single attachment surface for execution policy.** Retry, timeout, cancel, and release compose through
 `.with(policy)` on the op value:
 
 ```ts
@@ -23,15 +23,15 @@ import * as Policy from "@prodkit/op/policy";
 acquireConnection
   .with(Policy.timeout(1_000))
   .with(Policy.retry({ attempts: 3, delay: Delay.exponential({ baseMs: 100, maxMs: 1_000 }) }))
-  .with(Policy.signal(signal))
+  .with(Policy.cancel(signal))
   .with(Policy.release((conn) => conn.close()));
 ```
 
-Dedicated retry, timeout, signal, and release methods are removed after the new surface is in place
+Dedicated retry, timeout, cancel, and release methods are removed after the new surface is in place
 (hard cutover).
 
 **Constructors on `@prodkit/op/policy`.** Policy constructors (`Policy.retry`, `Policy.timeout`,
-`Policy.signal`, `Policy.release`), `Delay`, and related public types ship on the policy subpath
+`Policy.cancel`, `Policy.release`), `Delay`, and related public types ship on the policy subpath
 per ADR 0008. The main entry owns `.with(...)`, policy ordering, plan application, runtime behavior,
 and `TimeoutError`.
 
@@ -78,6 +78,6 @@ known type transforms; higher-kinded typing becomes relevant only for third-part
 
 - [#129](https://github.com/trvswgnr/prodkit/issues/129): Add typed `.with(...)` policy composition.
 - [#130](https://github.com/trvswgnr/prodkit/issues/130): Add `@prodkit/op/policy` subpath (blocked by #129).
-- [#131](https://github.com/trvswgnr/prodkit/issues/131): Hard-cutover from dedicated retry, timeout, and signal methods (blocked by #129, #130).
+- [#131](https://github.com/trvswgnr/prodkit/issues/131): Hard-cutover from dedicated retry, timeout, and cancel methods (blocked by #129, #130).
 
 Package boundary for the policy subpath: ADR 0008 ([#128](https://github.com/trvswgnr/prodkit/issues/128)).

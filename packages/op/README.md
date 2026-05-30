@@ -137,7 +137,7 @@ const result = await Op.try(() => fetch("https://example.com"))
   .run();
 ```
 
-Public exports: `retry`, `timeout`, `signal`, `Delay`, `RetryPolicy`, `RetryDelay`, and
+Public exports: `retry`, `timeout`, `cancel`, `Delay`, `RetryPolicy`, `RetryDelay`, and
 `ExponentialDelayOptions`.
 
 ## Quick start
@@ -254,7 +254,7 @@ Negative durations are normalized to `0`. Non-finite durations fail at run time 
 `UnhandledException`.
 
 `Op.sleep` observes surrounding cancellation policy. If a run is cancelled by
-`.with(Policy.signal(...))`, `.with(Policy.timeout(...))`, or a combinator abort while sleeping,
+`.with(Policy.cancel(...))`, `.with(Policy.timeout(...))`, or a combinator abort while sleeping,
 the sleep stops early and the run surfaces the cancellation through the normal
 `UnhandledException` channel.
 
@@ -277,7 +277,7 @@ returns an `Op`/generator object, `Op.try` treats that object as the error value
 it.
 
 `f` receives an `AbortSignal` tied to surrounding cancellation policy (`Policy.timeout`,
-`Policy.signal`, and combinator cancellation). Forward it to cancellable APIs so in-flight work
+`Policy.cancel`, and combinator cancellation). Forward it to cancellable APIs so in-flight work
 (e.g. `fetch`, DB queries) actually stops instead of leaking after a timeout.
 
 ```ts
@@ -301,7 +301,7 @@ const mapped = await Op.try(
 Static runner for ops. This is equivalent to `op.run(...args)`, and is useful when you want to
 execute an op value passed around as data.
 `Op.run(op, ...args)` does not expose a cancel handle; if the caller needs external cancellation, compose
-the op with `.with(Policy.signal(signal))` before running it.
+the op with `.with(Policy.cancel(signal))` before running it.
 
 ```ts
 const result = await Op.run(Op.of(7));
@@ -448,7 +448,7 @@ const fetchWithRetry = Op.try(() => fetch("https://example.com")).with(Policy.re
 
 `Policy.retry(policy?)` wraps an operation with retries. `Policy.timeout(timeoutMs)` wraps an
 operation with a timeout and fails with `TimeoutError` when the wrapped operation does not finish
-before `timeoutMs`. `Policy.signal(signal)` binds an operation to an external `AbortSignal` so you
+before `timeoutMs`. `Policy.cancel(signal)` binds an operation to an external `AbortSignal` so you
 can cancel in-flight work, for example when an HTTP request is aborted or a job is shut down.
 `Policy.release(release)` registers success-gated release logic for the wrapped operation's
 successful value.
@@ -470,7 +470,7 @@ const perAttempt = Op.try(() => fetch("https://example.com"))
 ```ts
 const controller = new AbortController();
 const fetchUser = Op.try((signal) => fetch("/api/users/1", { signal })).with(
-  Policy.signal(controller.signal),
+  Policy.cancel(controller.signal),
 );
 
 const runPromise = fetchUser.run();
@@ -486,7 +486,7 @@ stop quickly.
 
 Runtime guarantees:
 
-- `.with(Policy.timeout(...))`, `.with(Policy.signal(...))`, and short-circuiting combinators
+- `.with(Policy.timeout(...))`, `.with(Policy.cancel(...))`, and short-circuiting combinators
   (`Op.all`, `Op.any`, `Op.race`) propagate abort through `AbortSignal`.
 - `Op.sleep(ms)` observes abort signals and stops waiting early when its enclosing run is cancelled.
 - When a combinator decides its final result early, in-flight siblings are aborted and the
@@ -522,7 +522,7 @@ const loadDashboard = Op.all([
   fetchJson("/api/settings"),
 ])
   .with(Policy.timeout(1_500))
-  .with(Policy.signal(controller.signal));
+  .with(Policy.cancel(controller.signal));
 
 const runPromise = loadDashboard.run();
 

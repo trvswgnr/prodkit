@@ -2,9 +2,9 @@ import { OP_POLICY } from "../core/policy.js";
 import { Delay } from "../core/retry-policy.js";
 import type {
   BuiltInPolicy,
+  CancelPolicyAttachment,
   ReleasePolicyAttachment,
   RetryPolicyAttachment,
-  SignalPolicyAttachment,
   TimeoutPolicyAttachment,
 } from "../core/policy.js";
 import type { ExponentialDelayOptions, RetryDelay, RetryPolicy } from "../core/retry-policy.js";
@@ -20,9 +20,9 @@ export function timeout(timeoutMs: number): TimeoutPolicyAttachment {
   return { [OP_POLICY]: "timeout", timeoutMs };
 }
 
-/** Creates an abort-signal policy attachment for `op.with(...)`. */
-export function signal(abortSignal: AbortSignal): SignalPolicyAttachment {
-  return { [OP_POLICY]: "signal", signal: abortSignal };
+/** Creates a cancellation policy attachment for `op.with(...)`. */
+export function cancel(abortSignal: AbortSignal): CancelPolicyAttachment {
+  return { [OP_POLICY]: "cancel", abortSignal };
 }
 
 /** Creates a release policy attachment for `op.with(...)`. */
@@ -33,11 +33,11 @@ export function release<T>(releaseFn: ReleaseFn<T>): ReleasePolicyAttachment<T> 
 export { Delay };
 export type {
   BuiltInPolicy,
+  CancelPolicyAttachment,
   ExponentialDelayOptions,
   ReleasePolicyAttachment,
   RetryDelay,
   RetryPolicy,
   RetryPolicyAttachment,
-  SignalPolicyAttachment,
   TimeoutPolicyAttachment,
 };

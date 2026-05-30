@@ -145,7 +145,7 @@ describe("Op.race invariants (property-based)", () => {
         try {
           const ops = delays.map((delay, index) => Op.try(() => resolveAfter(index, delay)));
 
-          const result = await Op.race(ops).with(Policy.signal(outer.signal)).run();
+          const result = await Op.race(ops).with(Policy.cancel(outer.signal)).run();
           assert(result.isOk(), "expected race success");
 
           expect(tracked.activeAbortListeners).toBe(0);

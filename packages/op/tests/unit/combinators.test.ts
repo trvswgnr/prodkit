@@ -544,7 +544,7 @@ describe("combinator abort listener cleanup", () => {
     const tracked = trackAbortListeners(outer.signal);
     try {
       await Op.all([Op.of(1), Op.of(2)])
-        .with(Policy.signal(outer.signal))
+        .with(Policy.cancel(outer.signal))
         .run();
       expect(tracked.activeAbortListeners).toBe(0);
     } finally {
@@ -557,7 +557,7 @@ describe("combinator abort listener cleanup", () => {
     const tracked = trackAbortListeners(outer.signal);
     try {
       const r = await Op.all([Op.of(1), Op.of(2)])
-        .with(Policy.signal(outer.signal))
+        .with(Policy.cancel(outer.signal))
         .run();
       assert(r.isOk(), "should be Ok");
       expect(r.value).toEqual([1, 2]);
@@ -575,7 +575,7 @@ describe("combinator abort listener cleanup", () => {
     const tracked = trackAbortListeners(outer.signal);
     try {
       const r = await Op.all([Op.of(1), Op.of(2)], 1)
-        .with(Policy.signal(outer.signal))
+        .with(Policy.cancel(outer.signal))
         .run();
       assert(r.isOk(), "should be Ok");
       expect(r.value).toEqual([1, 2]);
@@ -612,7 +612,7 @@ describe("combinator abort listener cleanup", () => {
         ],
         1,
       )
-        .with(Policy.signal(outer.signal))
+        .with(Policy.cancel(outer.signal))
         .run();
 
       await Promise.resolve();
@@ -640,7 +640,7 @@ describe("combinator abort listener cleanup", () => {
             }),
         ),
       ])
-        .with(Policy.signal(outer.signal))
+        .with(Policy.cancel(outer.signal))
         .run();
 
       await Promise.resolve();

@@ -683,7 +683,7 @@ async function main() {
 
   const smokeResult = await smoke
     .with(Policy.timeout(getEnvInt(SMOKE_TIMEOUT_MS_ENV, DEFAULT_SMOKE_TIMEOUT_MS)))
-    .with(Policy.signal(controller.signal))
+    .with(Policy.cancel(controller.signal))
     .run(process.argv[2]);
 
   smokeResult.match({
