@@ -279,7 +279,7 @@ export interface FluentOp<T, E, A, M = EmptyMeta> {
    * @example
    * const resilient = Op.try(() => fetch("/ping")).withRetry();
    */
-  withRetry(policy?: RequireOne<RetryPolicy>): Op<T, E, A, M>;
+  withRetry(policy?: RetryPolicy): Op<T, E, A, M>;
 
   /**
    * Applies a timeout budget in milliseconds to the wrapped operation.

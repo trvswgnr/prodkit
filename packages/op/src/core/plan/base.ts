@@ -3,7 +3,7 @@ import type { Op } from "../../index.js";
 import { Result } from "../../result.js";
 import { isIterableOp, unsafeCoerce } from "../../shared.js";
 import { driveIterator } from "../runtime.js";
-import { DEFAULT_RETRY_POLICY, type RetryPolicy } from "../retry-policy.js";
+import { normalizeRetryPolicy, type NormalizedRetryPolicy } from "../retry-policy.js";
 import type {
   AsArgs,
   EmptyMeta,
@@ -24,7 +24,7 @@ export interface Plan<T, E, M = EmptyMeta> {
     context: RunContext<readonly unknown[]>,
   ) => Promise<Result<T, E | UnhandledException>>;
   readonly iterate: () => PlanIterator<T, E, M>;
-  readonly withRetry: (policy?: RetryPolicy) => Plan<T, E, M>;
+  readonly withRetry: (policy?: NormalizedRetryPolicy) => Plan<T, E, M>;
   readonly withTimeout: (timeoutMs: number) => Plan<T, E | TimeoutError, M>;
   readonly withSignal: (signal: AbortSignal) => Plan<T, E, M>;
 }
@@ -36,7 +36,7 @@ export type PlanBackedOp<T, E, A, M> = OpInterface<T, E, A, M> & {
 };
 
 interface PlanPolicyOverrides<T, E, M> {
-  readonly withRetry?: (policy?: RetryPolicy) => Plan<T, E, M>;
+  readonly withRetry?: (policy?: NormalizedRetryPolicy) => Plan<T, E, M>;
   readonly withTimeout?: (timeoutMs: number) => Plan<T, E | TimeoutError, M>;
   readonly withSignal?: (signal: AbortSignal) => Plan<T, E, M>;
 }
@@ -48,7 +48,8 @@ export function createPlan<T, E, M>(
   const plan: Plan<T, E, M> = {
     execute: (context) => executePlan(plan, context),
     iterate,
-    withRetry: overrides.withRetry ?? ((policy = DEFAULT_RETRY_POLICY) => retryPlan(plan, policy)),
+    withRetry:
+      overrides.withRetry ?? ((policy = normalizeRetryPolicy()) => retryPlan(plan, policy)),
     withTimeout: overrides.withTimeout ?? ((timeoutMs) => timeoutPlan(plan, timeoutMs)),
     withSignal: overrides.withSignal ?? ((signal) => signalPlan(plan, signal)),
   };

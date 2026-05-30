@@ -34,9 +34,9 @@ describe("op.map", () => {
         throw new Error("parse failed");
       })
       .withRetry({
-        maxAttempts: 3,
-        shouldRetry: () => true,
-        getDelay: () => 0,
+        attempts: 3,
+        when: () => true,
+        delay: () => 0,
       })
       .run();
 
@@ -86,9 +86,9 @@ describe("op.mapErr", () => {
     })
       .mapErr((error) => ({ code: error }))
       .withRetry({
-        maxAttempts: 2,
-        shouldRetry: (cause) => cause === "retryable",
-        getDelay: () => 0,
+        attempts: 2,
+        when: (cause) => cause === "retryable",
+        delay: () => 0,
       });
 
     const result = await mapped.run();
@@ -125,9 +125,9 @@ describe("op.flatMap", () => {
     })
       .flatMap((value) => Op.of(value * 2))
       .withRetry({
-        maxAttempts: 2,
-        shouldRetry: (cause) => cause === "retry",
-        getDelay: () => 0,
+        attempts: 2,
+        when: (cause) => cause === "retry",
+        delay: () => 0,
       });
 
     const result = await op.run(4);
@@ -151,9 +151,9 @@ describe("op.flatMap", () => {
         }),
       )
       .withRetry({
-        maxAttempts: 2,
-        shouldRetry: () => true,
-        getDelay: () => 0,
+        attempts: 2,
+        when: () => true,
+        delay: () => 0,
       })
       .run();
 

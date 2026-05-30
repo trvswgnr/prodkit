@@ -227,9 +227,9 @@ export const COMPARISON_SCENARIOS: readonly ComparisonScenario[] = [
           return 1;
         })
           .withRetry({
-            maxAttempts: RETRY_ATTEMPTS,
-            shouldRetry: () => true,
-            getDelay: () => 0,
+            attempts: RETRY_ATTEMPTS,
+            when: () => true,
+            delay: () => 0,
           })
           .run();
         if (!result.isOk()) throw new Error("retry.opWithRetry failed unexpectedly.");

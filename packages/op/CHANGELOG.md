@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Replaced the public retry policy shape with `attempts`, `when`, and `delay`, moved built-in
+  delay helpers under `Delay`, and removed the root `exponentialBackoff` export.
 - Replaced the wall-clock `bench.ts` harness with CodSpeed (simulation + walltime Vitest benches)
   and `compressed-size-action` for bundle-size PR comments. Added a shared comparison matrix
   (`comparison-matrix.ts`), local `compare` report harness, `overhead.*.ratio` CodSpeed benches,
@@ -73,7 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Property-based regression tests for `Op.any`, `Op.race`, `exponentialBackoff`, and retry
+- Property-based regression tests for `Op.any`, `Op.race`, retry delays, and retry
   policy attempt-count invariants.
 - Performance snapshot in [`PERFORMANCE.md`](PERFORMANCE.md) (all harness scenarios, ops/sec,
   slowdown ratios, and bundle size), refreshable via
@@ -205,8 +207,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `@prodkit/op-scripts` workspace that owns the `examples:smoke:*` scripts.
 - Corrected `Op.run` README wording to reflect parameterized
   `Op.run(op, ...args)` support.
-- Passed the same unwrapped retry cause to `RetryPolicy.shouldRetry` and
-  `RetryPolicy.getDelay`, so cause-aware delay functions see the same value as
+- Passed the same unwrapped retry cause to `RetryPolicy.when` and
+  `RetryPolicy.delay`, so cause-aware delay functions see the same value as
   retry predicates.
 - Hardened Op detection against plain functions with `_tag: "Op"` and made
   nullary op calls return another runnable Op instead of an internal state
@@ -426,5 +428,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retry timing, and composed operation semantics).
 - Improved examples and parsing validation in places where earlier behavior
   could produce weaker diagnostics or drift from production expectations.
-
-

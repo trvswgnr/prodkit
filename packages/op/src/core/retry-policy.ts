@@ -1,69 +1,194 @@
-import type { RequireOne } from "./types.js";
+/** Delay in milliseconds, or a function that returns one for a retry attempt. */
+export type RetryDelay = number | ((attempt: number, cause: unknown) => number);
 
 /** Retry policy for `op.withRetry(policy)`. */
 export interface RetryPolicy {
   /** Total tries, including the first attempt. */
-  maxAttempts: number;
-  /** Whether to retry after a failure (receives the root cause). */
-  shouldRetry: (cause: unknown) => boolean;
-  /** Delay in milliseconds before the next attempt (attempt starts at 1). */
-  getDelay: (attempt: number, cause: unknown) => number;
+  attempts?: number;
+  /** Whether to retry after a failure. Receives the root cause. */
+  when?: (cause: unknown) => boolean;
+  /** Delay in milliseconds before the next attempt. */
+  delay?: RetryDelay;
 }
 
-/**
- * Creates a retry delay function with exponential growth and optional jitter
- */
-export interface BackoffOptions {
+/** Options for `Delay.exponential(options)`. */
+export interface ExponentialDelayOptions {
   /** Initial delay in milliseconds. */
-  base: number;
+  baseMs?: number;
   /** Maximum delay in milliseconds. */
-  max: number;
-  /** Fraction of the computed delay to randomize (0 = none, 1 = full jitter). */
-  jitter: number;
+  maxMs?: number;
+  /** Fraction of the computed delay to randomize, from `0` to `1`. */
+  jitter?: number;
 }
 
-const DEFAULT_BACKOFF_OPTIONS: BackoffOptions = { base: 1_000, max: 30_000, jitter: 1 };
-
-function normalizeBackoffOptions(opts?: RequireOne<BackoffOptions>): BackoffOptions {
-  const baseCandidate = opts?.base ?? DEFAULT_BACKOFF_OPTIONS.base;
-  const base =
-    Number.isFinite(baseCandidate) && baseCandidate > 0
-      ? baseCandidate
-      : DEFAULT_BACKOFF_OPTIONS.base;
-
-  const maxCandidate = opts?.max ?? DEFAULT_BACKOFF_OPTIONS.max;
-  const max = Number.isFinite(maxCandidate) && maxCandidate >= base ? maxCandidate : base;
-
-  const jitterCandidate = opts?.jitter ?? DEFAULT_BACKOFF_OPTIONS.jitter;
-  const jitter = Number.isFinite(jitterCandidate)
-    ? Math.min(1, Math.max(0, jitterCandidate))
-    : DEFAULT_BACKOFF_OPTIONS.jitter;
-
-  return { base, max, jitter };
+export interface NormalizedRetryPolicy {
+  readonly validate: () => void;
+  readonly maxAttempts: number;
+  readonly shouldRetry: (cause: unknown) => boolean;
+  readonly getDelay: (attempt: number, cause: unknown) => number;
 }
 
-/**
- * Creates a delay function for exponential backoff with optional jitter
- * @param opts Options for the backoff function
- * @returns A function that calculates the delay in milliseconds for a given attempt
- */
-export function exponentialBackoff(opts?: RequireOne<BackoffOptions>): (attempt: number) => number {
-  const { base, max, jitter } = normalizeBackoffOptions(opts);
+const DELAY_VALIDATE: unique symbol = Symbol("prodkit.op.delay.validate");
+const DEFAULT_ATTEMPTS = 3;
+const DEFAULT_EXPONENTIAL_DELAY_OPTIONS = Object.freeze({
+  baseMs: 1_000,
+  maxMs: 30_000,
+  jitter: 1,
+}) satisfies Required<ExponentialDelayOptions>;
 
-  return (attempt) => {
-    const exp = Math.min(base * Math.pow(2, Math.max(0, attempt - 1)), max);
+function assertFiniteNumber(value: number, name: string): void {
+  if (!Number.isFinite(value)) {
+    throw new RangeError(`${name} must be a finite number`);
+  }
+}
 
-    if (jitter === 0) return exp;
+function assertNonNegativeNumber(value: number, name: string): void {
+  assertFiniteNumber(value, name);
+  if (value < 0) {
+    throw new RangeError(`${name} must be greater than or equal to 0`);
+  }
+}
 
-    const spread = exp * jitter;
+function assertPositiveNumber(value: number, name: string): void {
+  assertFiniteNumber(value, name);
+  if (value <= 0) {
+    throw new RangeError(`${name} must be greater than 0`);
+  }
+}
 
-    return exp - spread + Math.random() * spread;
+function assertPositiveInteger(value: number, name: string): void {
+  assertPositiveNumber(value, name);
+  if (!Number.isInteger(value)) {
+    throw new RangeError(`${name} must be an integer`);
+  }
+}
+
+function assertJitter(value: number): void {
+  assertFiniteNumber(value, "jitter");
+  if (value < 0 || value > 1) {
+    throw new RangeError("jitter must be between 0 and 1");
+  }
+}
+
+function normalizeExponentialDelayOptions(
+  options?: ExponentialDelayOptions,
+): Required<ExponentialDelayOptions> {
+  return {
+    baseMs: options?.baseMs ?? DEFAULT_EXPONENTIAL_DELAY_OPTIONS.baseMs,
+    maxMs: options?.maxMs ?? DEFAULT_EXPONENTIAL_DELAY_OPTIONS.maxMs,
+    jitter: options?.jitter ?? DEFAULT_EXPONENTIAL_DELAY_OPTIONS.jitter,
   };
 }
-exponentialBackoff.DEFAULT = exponentialBackoff(DEFAULT_BACKOFF_OPTIONS);
 
-export const DEFAULT_RETRY_POLICY = Object.freeze({
-  maxAttempts: 3,
-  shouldRetry: () => true,
-  getDelay: exponentialBackoff.DEFAULT,
-}) satisfies RetryPolicy;
+function validateExponentialDelayOptions(options: Required<ExponentialDelayOptions>): void {
+  assertPositiveNumber(options.baseMs, "baseMs");
+  assertFiniteNumber(options.maxMs, "maxMs");
+  if (options.maxMs < options.baseMs) {
+    throw new RangeError("maxMs must be greater than or equal to baseMs");
+  }
+  assertJitter(options.jitter);
+}
+
+type ValidatedDelay = ((attempt: number, cause: unknown) => number) & {
+  readonly [DELAY_VALIDATE]: () => void;
+};
+
+function withDelayValidation(
+  getDelay: (attempt: number, cause: unknown) => number,
+  validate: () => void,
+): ValidatedDelay {
+  return Object.assign(getDelay, { [DELAY_VALIDATE]: validate });
+}
+
+function isValidatedDelay(
+  delay: (attempt: number, cause: unknown) => number,
+): delay is ValidatedDelay {
+  return DELAY_VALIDATE in delay;
+}
+
+function validateDelay(delay: RetryDelay): void {
+  if (typeof delay === "number") {
+    assertNonNegativeNumber(delay, "delay");
+    return;
+  }
+
+  if (isValidatedDelay(delay)) {
+    delay[DELAY_VALIDATE]();
+  }
+}
+
+const fixed = (ms: number) =>
+  withDelayValidation(
+    () => ms,
+    () => assertNonNegativeNumber(ms, "delay"),
+  );
+
+const exponential = (options?: ExponentialDelayOptions) => {
+  const normalized = normalizeExponentialDelayOptions(options);
+  const validate = () => validateExponentialDelayOptions(normalized);
+
+  return withDelayValidation((attempt) => {
+    validate();
+
+    const exp = Math.min(
+      normalized.baseMs * Math.pow(2, Math.max(0, attempt - 1)),
+      normalized.maxMs,
+    );
+
+    if (normalized.jitter === 0) return exp;
+
+    const spread = exp * normalized.jitter;
+    return exp - spread + Math.random() * spread;
+  }, validate);
+};
+
+export const Delay = Object.freeze({
+  fixed,
+  exponential,
+  immediate: fixed(0),
+  defaultRetry: exponential(DEFAULT_EXPONENTIAL_DELAY_OPTIONS),
+});
+
+const DEFAULT_RETRY_POLICY = Object.freeze({
+  attempts: DEFAULT_ATTEMPTS,
+  when: () => true,
+  delay: Delay.defaultRetry,
+}) satisfies Required<RetryPolicy>;
+
+function validateRetryPolicy(policy: Required<RetryPolicy>): void {
+  assertPositiveInteger(policy.attempts, "attempts");
+
+  if (typeof policy.when !== "function") {
+    throw new TypeError("when must be a function");
+  }
+
+  if (typeof policy.delay !== "number" && typeof policy.delay !== "function") {
+    throw new TypeError("delay must be a number or function");
+  }
+
+  validateDelay(policy.delay);
+}
+
+function normalizeDelay(delay: RetryDelay): (attempt: number, cause: unknown) => number {
+  if (typeof delay === "number") return () => delay;
+  return delay;
+}
+
+export function normalizeRetryPolicy(policy?: RetryPolicy): NormalizedRetryPolicy {
+  const normalized = {
+    attempts: policy?.attempts ?? DEFAULT_RETRY_POLICY.attempts,
+    when: policy?.when ?? DEFAULT_RETRY_POLICY.when,
+    delay: policy?.delay ?? DEFAULT_RETRY_POLICY.delay,
+  } satisfies Required<RetryPolicy>;
+
+  return {
+    validate: () => validateRetryPolicy(normalized),
+    maxAttempts: normalized.attempts,
+    shouldRetry: normalized.when,
+    getDelay: (attempt, cause) => {
+      const delay = normalizeDelay(normalized.delay)(attempt, cause);
+      assertNonNegativeNumber(delay, "delay");
+      return delay;
+    },
+  };
+}

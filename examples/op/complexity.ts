@@ -1,5 +1,5 @@
 // oxlint-disable no-unused-vars
-import { Op, exponentialBackoff } from "@prodkit/op";
+import { Delay, Op } from "@prodkit/op";
 import { TaggedError } from "better-result";
 
 {
@@ -119,9 +119,9 @@ const getTodo = (id: number): Effect.Effect<unknown, HttpClientError> =>
 
   const result = await getTodo // same as before
     .withRetry({
-      maxAttempts: 3,
-      shouldRetry: RequestFailed.is,
-      getDelay: exponentialBackoff.DEFAULT,
+      attempts: 3,
+      when: RequestFailed.is,
+      delay: Delay.defaultRetry,
     })
     .run(1);
 }
@@ -221,9 +221,9 @@ const getTodo = (id: number): Effect.Effect<unknown, HttpClientError | TimeoutEx
     const result = await getTodo
       .withTimeout(1000)
       .withRetry({
-        maxAttempts: 3,
-        shouldRetry: RequestFailed.is,
-        getDelay: exponentialBackoff.DEFAULT,
+        attempts: 3,
+        when: RequestFailed.is,
+        delay: Delay.defaultRetry,
       })
       .run(1);
   }
@@ -392,9 +392,9 @@ const getTodo = (id: number): Effect.Effect<unknown, HttpClientError | TimeoutEx
   const result = await getTodo
     .withTimeout(1000)
     .withRetry({
-      maxAttempts: 3,
-      shouldRetry: RequestFailed.is,
-      getDelay: exponentialBackoff.DEFAULT,
+      attempts: 3,
+      when: RequestFailed.is,
+      delay: Delay.defaultRetry,
     })
     .on("enter", ({ args: [id] }) => {
       span = tracer.startSpan("getTodo", { attributes: { id } });

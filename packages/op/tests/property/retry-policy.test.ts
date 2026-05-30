@@ -1,50 +1,50 @@
 import * as fc from "fast-check";
 import { assert, describe, expect, test } from "vitest";
-import { Op, exponentialBackoff } from "../../src/index.js";
-import type { RequireOne } from "../../src/core/types.js";
-import type { BackoffOptions } from "../../src/core/retry-policy.js";
+import { Delay, Op } from "../../src/index.js";
+import { UnhandledException } from "../../src/errors.js";
+import type { ExponentialDelayOptions } from "../../src/core/retry-policy.js";
 
-const invalidBackoffOptionsArb: fc.Arbitrary<RequireOne<BackoffOptions>> = fc.oneof(
-  fc.record({ base: fc.constant(0), max: fc.constant(1000), jitter: fc.constant(0.5) }),
-  fc.record({ base: fc.constant(100), max: fc.constant(0), jitter: fc.constant(0.5) }),
-  fc.record({ base: fc.constant(100), max: fc.constant(1000), jitter: fc.constant(-0.5) }),
-  fc.record({ base: fc.constant(100), max: fc.constant(1000), jitter: fc.constant(1.5) }),
+const invalidExponentialDelayOptionsArb: fc.Arbitrary<ExponentialDelayOptions> = fc.oneof(
+  fc.record({ baseMs: fc.constant(0), maxMs: fc.constant(1000), jitter: fc.constant(0.5) }),
+  fc.record({ baseMs: fc.constant(100), maxMs: fc.constant(0), jitter: fc.constant(0.5) }),
+  fc.record({ baseMs: fc.constant(100), maxMs: fc.constant(1000), jitter: fc.constant(-0.5) }),
+  fc.record({ baseMs: fc.constant(100), maxMs: fc.constant(1000), jitter: fc.constant(1.5) }),
   fc.record({
-    base: fc.constant(Number.NaN),
-    max: fc.constant(1000),
+    baseMs: fc.constant(Number.NaN),
+    maxMs: fc.constant(1000),
     jitter: fc.constant(0.5),
   }),
   fc.record({
-    base: fc.constant(100),
-    max: fc.constant(Number.NaN),
+    baseMs: fc.constant(100),
+    maxMs: fc.constant(Number.NaN),
     jitter: fc.constant(0.5),
   }),
   fc.record({
-    base: fc.constant(100),
-    max: fc.constant(1000),
+    baseMs: fc.constant(100),
+    maxMs: fc.constant(1000),
     jitter: fc.constant(Number.NaN),
   }),
-  fc.record({ base: fc.constant(-1), max: fc.constant(1000), jitter: fc.constant(0.5) }),
+  fc.record({ baseMs: fc.constant(-1), maxMs: fc.constant(1000), jitter: fc.constant(0.5) }),
 );
 
-describe("exponentialBackoff invariants (property-based)", () => {
-  test("delays are finite, non-negative, and clamped to max", async () => {
+describe("Delay.exponential invariants (property-based)", () => {
+  test("delays are finite, non-negative, and clamped to maxMs", async () => {
     await fc.assert(
       fc.asyncProperty(
         fc.record({
-          base: fc.integer({ min: 1, max: 5_000 }),
-          max: fc.integer({ min: 1, max: 20_000 }),
+          baseMs: fc.integer({ min: 1, max: 5_000 }),
+          maxMs: fc.integer({ min: 1, max: 20_000 }),
           jitter: fc.double({ min: 0, max: 1, noNaN: true }),
         }),
         fc.integer({ min: 1, max: 20 }),
         async (options, attempt) => {
-          const max = Math.max(options.base, options.max);
-          const getDelay = exponentialBackoff({ ...options, max });
-          const delay = getDelay(attempt);
+          const maxMs = Math.max(options.baseMs, options.maxMs);
+          const getDelay = Delay.exponential({ ...options, maxMs });
+          const delay = getDelay(attempt, undefined);
 
           expect(Number.isFinite(delay)).toBe(true);
           expect(delay).toBeGreaterThanOrEqual(0);
-          expect(delay).toBeLessThanOrEqual(max + 1);
+          expect(delay).toBeLessThanOrEqual(maxMs + 1);
         },
       ),
     );
@@ -54,17 +54,17 @@ describe("exponentialBackoff invariants (property-based)", () => {
     fc.assert(
       fc.property(
         fc.record({
-          base: fc.integer({ min: 1, max: 2_000 }),
-          max: fc.integer({ min: 1, max: 20_000 }),
+          baseMs: fc.integer({ min: 1, max: 2_000 }),
+          maxMs: fc.integer({ min: 1, max: 20_000 }),
         }),
         fc.integer({ min: 2, max: 15 }),
         (options, maxAttempt) => {
-          const max = Math.max(options.base, options.max);
-          const getDelay = exponentialBackoff({ ...options, max, jitter: 0 });
+          const maxMs = Math.max(options.baseMs, options.maxMs);
+          const getDelay = Delay.exponential({ ...options, maxMs, jitter: 0 });
 
-          let previous = getDelay(1);
+          let previous = getDelay(1, undefined);
           for (let attempt = 2; attempt <= maxAttempt; attempt += 1) {
-            const next = getDelay(attempt);
+            const next = getDelay(attempt, undefined);
             expect(next).toBeGreaterThanOrEqual(previous);
             previous = next;
           }
@@ -73,82 +73,88 @@ describe("exponentialBackoff invariants (property-based)", () => {
     );
   });
 
-  test("invalid option inputs normalize to safe defaults", () => {
-    fc.assert(
-      fc.property(invalidBackoffOptionsArb, fc.integer({ min: 1, max: 10 }), (options, attempt) => {
-        expect(() => exponentialBackoff(options)).not.toThrow();
+  test("invalid exponential delay inputs fail at run time as UnhandledException", async () => {
+    await fc.assert(
+      fc.asyncProperty(invalidExponentialDelayOptionsArb, async (options) => {
+        const result = await Op.fail("retryable" as const)
+          .withRetry({
+            attempts: 2,
+            when: () => true,
+            delay: Delay.exponential(options),
+          })
+          .run();
 
-        const getDelay = exponentialBackoff(options);
-        const delay = getDelay(attempt);
-
-        expect(Number.isFinite(delay)).toBe(true);
-        expect(delay).toBeGreaterThanOrEqual(0);
+        assert(result.isErr(), "expected invalid policy failure");
+        expect(result.error).toBeInstanceOf(UnhandledException);
+        if (result.error instanceof UnhandledException) {
+          expect(result.error.cause).toBeInstanceOf(RangeError);
+        }
       }),
     );
   });
 });
 
 describe("retry policy invariants (property-based)", () => {
-  test("attempts never exceed maxAttempts", async () => {
+  test("run attempts never exceed policy attempts", async () => {
     await fc.assert(
-      fc.asyncProperty(fc.integer({ min: 1, max: 8 }), async (maxAttempts) => {
-        let attempts = 0;
+      fc.asyncProperty(fc.integer({ min: 1, max: 8 }), async (policyAttempts) => {
+        let runAttempts = 0;
 
         const program = Op(function* () {
-          attempts += 1;
+          runAttempts += 1;
           return yield* Op.fail("always fails" as const);
         }).withRetry({
-          maxAttempts,
-          shouldRetry: () => true,
-          getDelay: () => 0,
+          attempts: policyAttempts,
+          when: () => true,
+          delay: 0,
         });
 
         const result = await program.run();
         assert(result.isErr(), "expected terminal failure");
-        expect(attempts).toBeLessThanOrEqual(maxAttempts);
-        expect(attempts).toBe(maxAttempts);
+        expect(runAttempts).toBeLessThanOrEqual(policyAttempts);
+        expect(runAttempts).toBe(policyAttempts);
       }),
     );
   });
 
-  test("shouldRetry false yields exactly one attempt", async () => {
+  test("when false yields exactly one attempt", async () => {
     await fc.assert(
-      fc.asyncProperty(fc.integer({ min: 2, max: 10 }), async (maxAttempts) => {
-        let attempts = 0;
+      fc.asyncProperty(fc.integer({ min: 2, max: 10 }), async (policyAttempts) => {
+        let runAttempts = 0;
 
         const program = Op(function* () {
-          attempts += 1;
+          runAttempts += 1;
           return yield* Op.fail("no retry" as const);
         }).withRetry({
-          maxAttempts,
-          shouldRetry: () => false,
-          getDelay: () => 0,
+          attempts: policyAttempts,
+          when: () => false,
+          delay: 0,
         });
 
         const result = await program.run();
         assert(result.isErr(), "expected failure");
-        expect(attempts).toBe(1);
+        expect(runAttempts).toBe(1);
       }),
     );
   });
 
-  test("always-fail with always-retry yields exactly maxAttempts", async () => {
+  test("always-fail with always-retry yields exactly policy attempts", async () => {
     await fc.assert(
-      fc.asyncProperty(fc.integer({ min: 1, max: 8 }), async (maxAttempts) => {
-        let attempts = 0;
+      fc.asyncProperty(fc.integer({ min: 1, max: 8 }), async (policyAttempts) => {
+        let runAttempts = 0;
 
         const program = Op(function* () {
-          attempts += 1;
+          runAttempts += 1;
           return yield* Op.fail("retryable" as const);
         }).withRetry({
-          maxAttempts,
-          shouldRetry: () => true,
-          getDelay: () => 0,
+          attempts: policyAttempts,
+          when: () => true,
+          delay: 0,
         });
 
         const result = await program.run();
         assert(result.isErr(), "expected terminal failure");
-        expect(attempts).toBe(maxAttempts);
+        expect(runAttempts).toBe(policyAttempts);
       }),
     );
   });
@@ -158,27 +164,27 @@ describe("retry policy invariants (property-based)", () => {
       fc.asyncProperty(
         fc.integer({ min: 1, max: 6 }),
         fc.integer({ min: 1, max: 8 }),
-        async (successAttempt, maxAttempts) => {
-          fc.pre(successAttempt <= maxAttempts);
+        async (successAttempt, policyAttempts) => {
+          fc.pre(successAttempt <= policyAttempts);
 
-          let attempts = 0;
+          let runAttempts = 0;
 
           const program = Op(function* () {
-            attempts += 1;
-            if (attempts < successAttempt) {
+            runAttempts += 1;
+            if (runAttempts < successAttempt) {
               return yield* Op.fail("transient" as const);
             }
-            return yield* Op.of(attempts);
+            return yield* Op.of(runAttempts);
           }).withRetry({
-            maxAttempts,
-            shouldRetry: () => true,
-            getDelay: () => 0,
+            attempts: policyAttempts,
+            when: () => true,
+            delay: 0,
           });
 
           const result = await program.run();
           assert(result.isOk(), "expected success on configured attempt");
           expect(result.value).toBe(successAttempt);
-          expect(attempts).toBe(successAttempt);
+          expect(runAttempts).toBe(successAttempt);
         },
       ),
     );

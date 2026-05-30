@@ -1,4 +1,4 @@
-import { Op, exponentialBackoff } from "@prodkit/op";
+import { Delay, Op } from "@prodkit/op";
 import { TaggedError } from "better-result";
 
 export type QueueMessage = {
@@ -30,9 +30,9 @@ export type ConsumerDeps = {
 export const BATCH_CONCURRENCY = 2;
 
 const retryTransient = {
-  maxAttempts: 3,
-  shouldRetry: (cause: unknown) => ServiceCallError.is(cause) && cause.retryable,
-  getDelay: exponentialBackoff({ base: 25, max: 200, jitter: 0 }),
+  attempts: 3,
+  when: (cause: unknown) => ServiceCallError.is(cause) && cause.retryable,
+  delay: Delay.exponential({ baseMs: 25, maxMs: 200, jitter: 0 }),
 };
 
 function isRetryable(cause: unknown): boolean {

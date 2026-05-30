@@ -20,9 +20,9 @@ describe("withRetry", () => {
   };
 
   const retryFetchError: RetryPolicy = {
-    maxAttempts: 3,
-    shouldRetry: (cause) => cause instanceof FetchError,
-    getDelay: () => 0,
+    attempts: 3,
+    when: (cause) => cause instanceof FetchError,
+    delay: () => 0,
   };
 
   const createFetchProgram = (
@@ -46,9 +46,9 @@ describe("withRetry", () => {
   test("retries until success with custom retry predicate and delay", async () => {
     const fetcher = vi.fn(createFetcher());
     const policy: RetryPolicy = {
-      maxAttempts: 3,
-      shouldRetry: (cause) => cause instanceof FetchError,
-      getDelay: (attempt) => attempt * 100,
+      attempts: 3,
+      when: (cause) => cause instanceof FetchError,
+      delay: (attempt) => attempt * 100,
     };
     const program = createFetchProgram(fetcher, policy);
 
@@ -58,7 +58,7 @@ describe("withRetry", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
-  test("stops after maxAttempts and returns the last error", async () => {
+  test("stops after attempts and returns the last error", async () => {
     const fetcher = vi.fn(async (_url: string) => {
       throw new FetchError("always fails");
     });
@@ -70,15 +70,15 @@ describe("withRetry", () => {
     expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
-  test("does not retry when shouldRetry returns false", async () => {
+  test("does not retry when when returns false", async () => {
     const fetcher = vi.fn(async (_url: string) => {
       throw new FetchError("retry denied");
     });
 
     const policy: RetryPolicy = {
-      maxAttempts: 5,
-      shouldRetry: () => false,
-      getDelay: () => 0,
+      attempts: 5,
+      when: () => false,
+      delay: () => 0,
     };
 
     const program = createFetchProgram(fetcher, policy);
@@ -94,9 +94,9 @@ describe("withRetry", () => {
     try {
       const fetcher = vi.fn(createFetcher());
       const policy: RetryPolicy = {
-        maxAttempts: 2,
-        shouldRetry: () => true,
-        getDelay: () => 100,
+        attempts: 2,
+        when: () => true,
+        delay: () => 100,
       };
       const program = createFetchProgram(fetcher, policy);
 
@@ -116,6 +116,29 @@ describe("withRetry", () => {
     }
   });
 
+  test("invalid attempts fail at run time", async () => {
+    const result = await createFetchProgram(vi.fn(createFetcher()), { attempts: 0 }).run("123");
+
+    assert(result.isErr(), "result should be Err");
+    expect(result.error).toBeInstanceOf(UnhandledException);
+    if (result.error instanceof UnhandledException) {
+      expect(result.error.cause).toBeInstanceOf(RangeError);
+    }
+  });
+
+  test("invalid custom delay output fails at run time", async () => {
+    const result = await createFetchProgram(vi.fn(createFetcher()), {
+      attempts: 2,
+      delay: () => -1,
+    }).run("123");
+
+    assert(result.isErr(), "result should be Err");
+    expect(result.error).toBeInstanceOf(UnhandledException);
+    if (result.error instanceof UnhandledException) {
+      expect(result.error.cause).toBeInstanceOf(RangeError);
+    }
+  });
+
   test("works when wrapping _try directly", async () => {
     let attempts = 0;
     const program = _try(async () => {
@@ -125,9 +148,9 @@ describe("withRetry", () => {
       }
       return { ok: true as const };
     }).withRetry({
-      maxAttempts: 3,
-      shouldRetry: (cause) => cause instanceof FetchError,
-      getDelay: () => 0,
+      attempts: 3,
+      when: (cause) => cause instanceof FetchError,
+      delay: () => 0,
     });
 
     const result = await program.run();
@@ -147,9 +170,9 @@ describe("withRetry", () => {
       }
       return "done";
     }).withRetry({
-      maxAttempts: 3,
-      shouldRetry: (cause) => cause === transient,
-      getDelay: (_attempt, cause) => {
+      attempts: 3,
+      when: (cause) => cause === transient,
+      delay: (_attempt, cause) => {
         delayCauses.push(cause);
         return 0;
       },
@@ -177,9 +200,9 @@ describe("withRetry", () => {
     const parent = fromGenFn(function* () {
       const base = yield* succeed(50);
       const fetched = yield* child().withRetry({
-        maxAttempts: 3,
-        shouldRetry: (cause) => cause instanceof FetchError,
-        getDelay: () => 0,
+        attempts: 3,
+        when: (cause) => cause instanceof FetchError,
+        delay: () => 0,
       });
       return base + fetched;
     });
@@ -200,9 +223,9 @@ describe("withRetry", () => {
       }
       return yield* _try(() => Promise.resolve({ url: `https://example.com/${id}` }));
     }).withRetry({
-      maxAttempts: 3,
-      shouldRetry: (cause: unknown) => cause === transient,
-      getDelay: () => 0,
+      attempts: 3,
+      when: (cause: unknown) => cause === transient,
+      delay: () => 0,
     });
 
     const result = await program.run("123");
@@ -220,9 +243,9 @@ describe("withRetry", () => {
       }
       return { url: `https://example.com/${id}` };
     }).withRetry({
-      maxAttempts: 3,
-      shouldRetry: (cause) => cause instanceof FetchError,
-      getDelay: () => 0,
+      attempts: 3,
+      when: (cause) => cause instanceof FetchError,
+      delay: () => 0,
     });
 
     const result = await program.run("123");
@@ -282,9 +305,9 @@ describe("withTimeout", () => {
           }),
       )
         .withRetry({
-          maxAttempts: 3,
-          shouldRetry: (cause) => cause === transient,
-          getDelay: () => 0,
+          attempts: 3,
+          when: (cause) => cause === transient,
+          delay: () => 0,
         })
         .withTimeout(100);
 
@@ -314,9 +337,9 @@ describe("withTimeout", () => {
       )
         .withTimeout(100)
         .withRetry({
-          maxAttempts: 2,
-          shouldRetry: (cause) => cause instanceof TimeoutError,
-          getDelay: () => 0,
+          attempts: 2,
+          when: (cause) => cause instanceof TimeoutError,
+          delay: () => 0,
         });
 
       const runPromise = program.run();
@@ -442,9 +465,9 @@ describe("AbortSignal", () => {
           }),
       )
         .withRetry({
-          maxAttempts: 10,
-          shouldRetry: () => true,
-          getDelay: () => 10,
+          attempts: 10,
+          when: () => true,
+          delay: () => 10,
         })
         .withTimeout(120);
 
@@ -471,9 +494,9 @@ describe("AbortSignal", () => {
         return Promise.reject(transient);
       })
         .withRetry({
-          maxAttempts: 5,
-          shouldRetry: () => true,
-          getDelay: () => 1000,
+          attempts: 5,
+          when: () => true,
+          delay: () => 1000,
         })
         .withTimeout(50);
 

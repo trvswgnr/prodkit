@@ -158,10 +158,11 @@ function resolveBaseRef(): string {
   }
 }
 
-function pathChangedSinceBase(baseRef: string, relativePath: string): boolean {
+function pathChangedSinceBase(repoRoot: string, baseRef: string, relativePath: string): boolean {
   try {
     // Compare merge-base to the working tree so local uncommitted changelog edits count.
     execFileSync("git", ["diff", "--quiet", baseRef, "--", relativePath], {
+      cwd: repoRoot,
       stdio: "ignore",
     });
     return false;
@@ -196,7 +197,7 @@ function main(): number {
       continue;
     }
 
-    if (!pathChangedSinceBase(baseRef, target.changelog)) {
+    if (!pathChangedSinceBase(repoRoot, baseRef, target.changelog)) {
       failures.push(
         `${target.label} changed since ${baseRef} but ${target.changelog} was not updated. Add a note under ## [Unreleased].`,
       );

@@ -131,7 +131,7 @@ nullary core ops and always settle through the same driver:
 packages/op/src/index.ts          (Op factory, Op.run, re-exports)
   |-- builders.ts                 (Op.of, Op.try, fromGenFn, Op.defer, ...)
   |-- combinators.ts              (Op.all, Op.any, Op.race, ...)
-  |-- core/retry-policy.ts          (RetryPolicy, exponentialBackoff)
+  |-- core/retry-policy.ts          (RetryPolicy, Delay)
   |-- core/run-op.ts              (runOp -> drive)
   |-- core/fluent.ts              (makeCoreOp, makePlanOp shell, fluent transforms)
   |-- core/plan/                  (Plan AST, policy nodes, shell)

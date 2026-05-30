@@ -377,9 +377,9 @@ Useful for transient IO failures while preserving typed control flow.
 
 ```ts
 const policy = {
-  maxAttempts: 3,
-  shouldRetry: (cause: unknown) => cause instanceof Error,
-  getDelay: (attempt: number) => attempt * 100,
+  attempts: 3,
+  when: (cause: unknown) => cause instanceof Error,
+  delay: (attempt: number) => attempt * 100,
 };
 
 const fetchWithRetry = Op.try(() => fetch("https://example.com")).withRetry(policy);
@@ -545,20 +545,21 @@ const validate = Op(function* (name: string) {
 
 `withRetry()` with no policy uses:
 
-- `maxAttempts: 3`
-- `shouldRetry: () => true`
+- `attempts: 3`
+- `when: () => true`
 - exponential backoff from `1000ms` up to `30000ms` with full jitter (`1.0`)
 
-You can also build your own delay function with `exponentialBackoff({ base, max, jitter })`.
-`exponentialBackoff.DEFAULT` is the pre-built delay function used by the default retry policy.
+You can also build your own delay function with `Delay.fixed(ms)` or
+`Delay.exponential({ baseMs, maxMs, jitter })`.
+`Delay.defaultRetry` is the pre-built delay function used by the default retry policy.
 
 ```ts
-import { exponentialBackoff } from "@prodkit/op";
+import { Delay } from "@prodkit/op";
 
 const policy = {
-  maxAttempts: 5,
-  shouldRetry: (cause: unknown) => cause instanceof Error,
-  getDelay: exponentialBackoff({ base: 200, max: 2_000, jitter: 0.5 }),
+  attempts: 5,
+  when: (cause: unknown) => cause instanceof Error,
+  delay: Delay.exponential({ baseMs: 200, maxMs: 2_000, jitter: 0.5 }),
 };
 ```
 

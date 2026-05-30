@@ -1,5 +1,5 @@
 import { assert, describe, expect, test, vi } from "vitest";
-import { Op, TimeoutError, exponentialBackoff } from "../../src/index.js";
+import { Delay, Op, TimeoutError } from "../../src/index.js";
 import { TaggedError, UnhandledException } from "../../src/errors.js";
 import { Result } from "../../src/result.js";
 import { resolveAfter } from "../support/utils.js";
@@ -30,33 +30,38 @@ describe("OpFactory", () => {
   });
 });
 
-describe("exponentialBackoff", () => {
+describe("Delay", () => {
   test("is exported and produces exponential delays", () => {
-    const getDelay = exponentialBackoff({ base: 100, max: 1000, jitter: 0 });
-    expect(getDelay(1)).toBe(100);
-    expect(getDelay(2)).toBe(200);
-    expect(getDelay(3)).toBe(400);
-    expect(getDelay(5)).toBe(1000);
+    const delay = Delay.exponential({ baseMs: 100, maxMs: 1000, jitter: 0 });
+    expect(delay(1, undefined)).toBe(100);
+    expect(delay(2, undefined)).toBe(200);
+    expect(delay(3, undefined)).toBe(400);
+    expect(delay(5, undefined)).toBe(1000);
   });
 
-  test("default is exported", () => {
+  test("default retry delay is exported", () => {
     const randomSpy = vi.spyOn(Math, "random").mockReturnValue(1);
     try {
-      expect(exponentialBackoff.DEFAULT).toBeInstanceOf(Function);
-      expect(exponentialBackoff.DEFAULT(1)).toBe(1_000);
-      expect(exponentialBackoff.DEFAULT(2)).toBe(2_000);
-      expect(exponentialBackoff.DEFAULT(5)).toBe(16_000);
-      expect(exponentialBackoff.DEFAULT(6)).toBe(30_000);
+      expect(Delay.defaultRetry).toBeInstanceOf(Function);
+      expect(Delay.defaultRetry(1, undefined)).toBe(1_000);
+      expect(Delay.defaultRetry(2, undefined)).toBe(2_000);
+      expect(Delay.defaultRetry(5, undefined)).toBe(16_000);
+      expect(Delay.defaultRetry(6, undefined)).toBe(30_000);
     } finally {
       randomSpy.mockRestore();
     }
   });
 
-  test("normalizes invalid options instead of throwing", () => {
-    expect(() => exponentialBackoff({ base: 0, max: 1000, jitter: 0.5 })).not.toThrow();
-    expect(() => exponentialBackoff({ base: 100, max: 0, jitter: 0.5 })).not.toThrow();
-    expect(() => exponentialBackoff({ base: 100, max: 1000, jitter: -0.5 })).not.toThrow();
-    expect(() => exponentialBackoff({ base: 100, max: 1000, jitter: 1.5 })).not.toThrow();
+  test("invalid exponential delay policy fails at run time", async () => {
+    const result = await Op.of("ok")
+      .withRetry({
+        delay: Delay.exponential({ baseMs: 0 }),
+      })
+      .run();
+
+    assert(result.isErr(), "should be Err");
+    expect(result.error).toBeInstanceOf(UnhandledException);
+    expect(result.error.cause).toBeInstanceOf(RangeError);
   });
 });
 
@@ -214,7 +219,7 @@ describe("Op combinators compose with withTimeout / withRetry", () => {
       return yield* Op.of(11);
     });
     const r = await Op.any([flaky()])
-      .withRetry({ maxAttempts: 3, shouldRetry: () => true, getDelay: () => 0 })
+      .withRetry({ attempts: 3, when: () => true, delay: () => 0 })
       .run();
     assert(r.isOk(), "should be Ok");
     expect(r.value).toBe(11);

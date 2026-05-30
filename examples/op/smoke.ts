@@ -96,9 +96,9 @@ async function runCoreApiSmoke() {
 
   const result = await compute
     .withRetry({
-      maxAttempts: 2,
-      shouldRetry: () => false,
-      getDelay: () => 10,
+      attempts: 2,
+      when: () => false,
+      delay: () => 10,
     })
     .withTimeout(500)
     .run();

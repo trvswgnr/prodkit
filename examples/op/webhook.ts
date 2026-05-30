@@ -53,9 +53,9 @@ export type AppDeps = {
 };
 
 const retryTransient = {
-  maxAttempts: 3,
-  shouldRetry: (cause: unknown) => cause instanceof ServiceCallError && cause.retryable,
-  getDelay: (attempt: number) => Math.min(50 * 2 ** (attempt - 1), 200),
+  attempts: 3,
+  when: (cause: unknown) => cause instanceof ServiceCallError && cause.retryable,
+  delay: (attempt: number) => Math.min(50 * 2 ** (attempt - 1), 200),
 };
 
 const BEST_EFFORT_SIDE_EFFECT_CONCURRENCY = 1;

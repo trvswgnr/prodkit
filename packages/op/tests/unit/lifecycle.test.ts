@@ -230,9 +230,9 @@ describe('op.on("enter")', () => {
 
   test("runs once regardless of position in chain", async () => {
     const policy = {
-      maxAttempts: 3,
-      shouldRetry: () => true,
-      getDelay: () => 0,
+      attempts: 3,
+      when: () => true,
+      delay: () => 0,
     };
     const runCase = async (order: "before-retry" | "after-retry") => {
       let attempts = 0;

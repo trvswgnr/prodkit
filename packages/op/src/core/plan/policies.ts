@@ -3,15 +3,17 @@ import { Result } from "../../result.js";
 import { sleepWithSignal } from "../../shared.js";
 import { SuspendInstruction } from "../instructions.js";
 import { createRunContext } from "../runtime.js";
-import { DEFAULT_RETRY_POLICY, type RetryPolicy } from "../retry-policy.js";
+import { normalizeRetryPolicy, type NormalizedRetryPolicy } from "../retry-policy.js";
 import type { RunContext } from "../types.js";
 import { createPlan, executePlanInterruptOnAbort, type Plan } from "./base.js";
 
 export function retryPlan<T, E, M>(
   source: Plan<T, E, M>,
-  policy: RetryPolicy = DEFAULT_RETRY_POLICY,
+  policy: NormalizedRetryPolicy = normalizeRetryPolicy(),
 ): Plan<T, E, M> {
   return createPlan(function* () {
+    policy.validate();
+
     let attempt = 1;
 
     while (true) {

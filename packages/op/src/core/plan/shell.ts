@@ -1,7 +1,7 @@
 import { Result } from "../../result.js";
 import { OP_BOUND_BRAND, OP_BRAND, unsafeCoerce } from "../../shared.js";
 import { createRunContext } from "../runtime.js";
-import { DEFAULT_RETRY_POLICY, type RetryPolicy } from "../retry-policy.js";
+import { normalizeRetryPolicy, type RetryPolicy } from "../retry-policy.js";
 import type {
   AnyNullaryOp,
   AsArgs,
@@ -52,7 +52,7 @@ function fluentMethodsForContext<T, E, A, M, Yieldable extends boolean>(
 
   return {
     withRetry: (policy?: RetryPolicy) => {
-      const retryPolicy = policy ?? DEFAULT_RETRY_POLICY;
+      const retryPolicy = normalizeRetryPolicy(policy);
       return wrap((plan) => plan.withRetry(retryPolicy));
     },
     withTimeout: (timeoutMs: number) => wrap((plan) => plan.withTimeout(timeoutMs)),
