@@ -1,21 +1,19 @@
+import { fromGenFn } from "../builders.js";
+import { SuspendInstruction } from "../core/instructions.js";
+import { createRunContext, drive } from "../core/runtime.js";
 import {
   CUSTOM_INSTRUCTION_META,
-  NEVER,
-  SuspendInstruction,
-  createRunContext,
-  drive,
-  isPromiseLike,
-  unsafeCoerce,
-  hasOwn,
-  type CustomInstruction,
+  type AsArgs,
   type Blocking,
+  type CustomInstruction,
+  type EmptyMeta,
   type NormalizeMeta,
   type RunContext,
   type Simplify,
   type StripEmpty,
-  type AsArgs,
-} from "@prodkit/op/internal";
-import { Op, type EmptyMeta } from "@prodkit/op";
+} from "../core/types.js";
+import { NEVER, hasOwn, isPromiseLike, unsafeCoerce } from "../shared.js";
+import type { Op } from "../index.js";
 import type { Dependency } from "./index.js";
 export class MissingDependencyError extends Error {
   override readonly name = "MissingDependencyError";
@@ -47,11 +45,11 @@ export class AlreadyProvidedError extends Error {
   }
 }
 
-export const DI_TOKEN = Symbol("prodkit.std.di.dependency");
+export const DI_TOKEN = Symbol("prodkit.op.di.dependency");
 export const DI_TAG = "DI";
 
-const DI_ENV_EXTENSION = Symbol("prodkit.std.di.env");
-const MISSING_DEPENDENCY = Symbol("prodkit.std.di.missing-dependency");
+const DI_ENV_EXTENSION = Symbol("prodkit.op.di.env");
+const MISSING_DEPENDENCY = Symbol("prodkit.op.di.missing-dependency");
 
 export type AnyDependency = Dependency<unknown, string>;
 
@@ -155,8 +153,12 @@ export class DependencyReqInstruction<T, R> implements CustomInstruction<
       throw new MissingDependencyError(this.dependency.key);
     }
     if (isPromiseLike(value)) {
-      return value.then((resolved) => unsafeCoerce(resolved));
+      return value.then((resolved) =>
+        // SAFETY: lazy binding resolution is checked before coercion.
+        unsafeCoerce(resolved),
+      );
     }
+    // SAFETY: resolved dependency values are typed at the instruction boundary.
     return unsafeCoerce(value);
   }
 
@@ -201,6 +203,7 @@ function dependencyTokenFromEntry(entry: AnyDependency): AnyDependency {
       hasOwn(current, "key") &&
       hasOwn(current, DI_TOKEN)
     ) {
+      // SAFETY: prototype walk finds the DI token constructor when present.
       return unsafeCoerce(current);
     }
     current = Object.getPrototypeOf(current);
@@ -240,6 +243,7 @@ function withDependencyEntry(env: Env, entry: UseEntry): Env {
 
 function readEnv(context: RunContext<readonly unknown[]>): Env {
   const env = context.extensions.get(DI_ENV_EXTENSION);
+  // SAFETY: RunContext.extensions stores the DI env map under an internal key.
   if (env instanceof Map) return unsafeCoerce(env);
   return new Map();
 }
@@ -338,7 +342,7 @@ export function provideOp<T, E, A, M, const Entries extends readonly UseEntry[]>
   op: Op<T, E, A, M>,
   entries: Entries,
 ): Op<T, E, A, ProvidedMeta<M, Entries>> {
-  const provided = Op(function* (...args: AsArgs<A>) {
+  const provided = fromGenFn(function* (...args: AsArgs<A>) {
     const result = yield* new SuspendInstruction((context) =>
       drive(op(...args), extendContext(context, entries)),
     );
@@ -346,5 +350,6 @@ export function provideOp<T, E, A, M, const Entries extends readonly UseEntry[]>
     return result.value;
   });
 
+  // SAFETY: provideOp preserves the inner op type while updating dependency metadata.
   return unsafeCoerce(provided);
 }

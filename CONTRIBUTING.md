@@ -37,16 +37,16 @@ from `npm pack` tarballs via `examples/` in an isolated temp workspace.
 Pull requests and pushes to `main` run the same gate in `.github/workflows/ci.yml`.
 CI also publishes Vitest coverage reports as workflow artifacts (`op-coverage`, `std-coverage`)
 so reviewers can audit unit, integration, type, and property-law coverage evidence from the run.
-The gate runs `@prodkit/std` coverage with enforced floors; `@prodkit/op` coverage is published in
-CI for review.
+The gate runs `@prodkit/op` coverage for review; `@prodkit/std` coverage runs when utility modules
+ship.
 A `changelog:api:check` gate step fails when `packages/op/src/index.ts` or
-`packages/std/src/di/index.ts` public export names change without an update to that package's
+`packages/op/src/di/index.ts` public export names change without an update to that package's
 `CHANGELOG.md` under `## [Unreleased]`. Internal re-export paths do not count as API changes.
 A `bundle-size` job compares `@prodkit/op` minified + gzip bundle size on pull requests via
 `compressed-size-action`; runtime regressions are tracked separately by CodSpeed
 (see [`packages/op/PERFORMANCE.md`](packages/op/PERFORMANCE.md) and [`benchmarks/op/README.md`](benchmarks/op/README.md)).
 
-All runnable consumer examples and smoke entrypoints live in the **`examples/`** workspace (`@prodkit/examples`): Op-oriented samples under [`examples/op/`](examples/op/), std/di samples under [`examples/std/`](examples/std/), with root [`examples/smoke.ts`](examples/smoke.ts) running both suites.
+All runnable consumer examples and smoke entrypoints live in the **`examples/`** workspace (`@prodkit/examples`): Op-oriented samples under [`examples/op/`](examples/op/) (including DI under [`examples/op/di/`](examples/op/di/)), with [`examples/std/`](examples/std/) reserved for future `@prodkit/std` utilities. Root [`examples/smoke.ts`](examples/smoke.ts) runs the Op, DI, and std smoke suites.
 
 ## Benchmarking
 
@@ -86,7 +86,8 @@ Published baseline interpretation lives in [`packages/op/PERFORMANCE.md`](packag
 
 If a behavior is an internal invariant of one module, keep it in unit; if it is a public composition/API contract, keep it in integration. Avoid duplicate assertions across tiers unless each tier validates meaningfully different risk.
 
-**`@prodkit/std`** uses Vitest alongside implementation under `packages/std/src/` (for example `packages/std/src/di/index.test.ts`). Run `pnpm --filter @prodkit/std run coverage` locally to reproduce the CI coverage floor.
+**`@prodkit/op/di`** tests live under `packages/op/tests/di/` (for example `index.test.ts`). Run
+`pnpm --filter @prodkit/op run coverage` locally to reproduce CI coverage for DI and the core runtime.
 
 ## Source Layout (`@prodkit/op`)
 
@@ -140,12 +141,11 @@ packages/op/src/index.ts          (Op factory, Op.run, re-exports)
   |-- core/runtime.ts             (createRunContext, drive)  <-- single execution engine
   |-- core/instructions.ts        (Suspend, RegisterExitFinalizer, Err yields)
 
-packages/std/src/di/              (DI.provide, DI.inject via CustomInstruction + extensions)
-  '-- uses @prodkit/op/internal   (drive, createRunContext, SuspendInstruction)
-```
+packages/op/src/di/                 (DI.provide, DI.inject via CustomInstruction + extensions)
+  '-- imports core/runtime, core/instructions, core/types, builders directly
 
-`packages/op/src/internal.ts` is the supported extension surface for workspace packages such as
-`@prodkit/std` that need driver primitives without importing private module paths.
+packages/std/src/                   (future runtime-agnostic utility subpaths)
+```
 
 ### From `Op.run()` to `drive()`
 
@@ -207,11 +207,11 @@ the chain). See policy ordering notes in `packages/op/DESIGN.md`.
 
 ### DI integration via `RunContext.extensions`
 
-`@prodkit/std/di` extends the runtime without forking the driver:
+`@prodkit/op/di` extends the runtime without forking the driver:
 
 1. **`DI.inject(dependency)`** yields a `DependencyReqInstruction`, a `CustomInstruction` whose
    `resolve(context)` reads bindings from `context.extensions`.
-2. **`DI.provide(op, entries)`** (`provideOp` in `packages/std/src/di/internal.ts`) wraps the
+2. **`DI.provide(op, entries)`** (`provideOp` in `packages/op/src/di/internal.ts`) wraps the
    user op in a suspend that calls `drive(inner, extendContext(context, entries))`, cloning
    `extensions` and storing the binding `Map` under an internal extension key.
 3. **Metadata.** Provided dependencies block bare `.run()` until satisfied via `ProvidedMeta`
@@ -270,7 +270,8 @@ combinator samples) and follow imports into `core/runtime.ts`.
 
 ## Source layout (`@prodkit/std`)
 
-- Source under `packages/std/src/`; published entrypoints are `@prodkit/std` and `@prodkit/std/di`.
+- Source under `packages/std/src/`; published entrypoint is `@prodkit/std` (utility subpaths such as
+  `@prodkit/std/array` are planned).
 - Package docs: [`packages/std/README.md`](packages/std/README.md). Ship changelog: [`packages/std/CHANGELOG.md`](packages/std/CHANGELOG.md).
 
 You can run consumer install path checks directly. Each mode builds a temporary mini-pnpm workspace (reusing the repo `catalog:` from `pnpm-workspace.yaml`), installs `@prodkit/op` and `@prodkit/std` from the chosen source, then runs `examples/` smoke:

@@ -5,9 +5,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Changed
 
-- No entries yet.
+- Removed `@prodkit/std/di`; import DI from `@prodkit/op/di` instead.
+- Repositioned `@prodkit/std` as a general runtime-agnostic utility layer with no `@prodkit/op` peer
+  dependency.
 
 ## [0.1.2] - 2026-05-28
 

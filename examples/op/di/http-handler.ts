@@ -1,5 +1,5 @@
 import { Op } from "@prodkit/op";
-import { DI } from "@prodkit/std/di";
+import { DI } from "@prodkit/op/di";
 import { TaggedError } from "better-result";
 import * as v from "valibot";
 

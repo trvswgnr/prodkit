@@ -9,7 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- No entries yet.
+- Added `@prodkit/op/di` subpath export with dependency tokens, inject, provide, and scoped/singleton
+  bindings (moved from `@prodkit/std/di`).
+
+### Removed
+
+- Removed the `@prodkit/op/internal` export.
 
 ## [0.1.73] - 2026-05-30
 

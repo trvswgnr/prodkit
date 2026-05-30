@@ -34,9 +34,9 @@
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
     },
-    "./internal": {
-      "types": "./dist/internal.d.mts",
-      "import": "./dist/internal.mjs"
+    "./di": {
+      "types": "./dist/di/index.d.mts",
+      "import": "./dist/di/index.mjs"
     }
   },
   "publishConfig": {

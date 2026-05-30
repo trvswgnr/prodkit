@@ -1,5 +1,5 @@
-import { NEVER } from "@prodkit/op/internal";
-import type { Op } from "@prodkit/op";
+import { NEVER } from "../shared.js";
+import type { Op } from "../index.js";
 import {
   DI_TAG,
   DI_TOKEN,

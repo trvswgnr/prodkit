@@ -21,7 +21,6 @@ npm packages or as `@prodkit/std` modules.
 
 ```txt
 @prodkit/op              core runtime (Op factory, combinators, .run(), lifecycle)
-@prodkit/op/internal     low-level extension surface for third-party library authors
 @prodkit/op/di           dependency tokens, inject, provide, scoped/singleton bindings
 @prodkit/op/policy       policy constructors and Delay helpers (see ADR 0009)
 ```
@@ -83,8 +82,7 @@ constructors.
 
 - Add op subpaths via move-first source layout under `packages/op/src/<name>/`, separate tsdown
   entries, and `package.json` `exports` entries. Tests live under `packages/op/tests/`.
-- Consumers import op subpaths explicitly (`@prodkit/op/di`, `@prodkit/op/policy`). Library
-  authors extending the driver continue to use `@prodkit/op/internal`.
+- Consumers import op subpaths explicitly (`@prodkit/op/di`, `@prodkit/op/policy`).
 - CI `bundle-size` continues to measure only the main `@prodkit/op` entry.
 - Do not add op-native modules to `@prodkit/std` or as separate npm packages without a new ADR.
 - `@prodkit/std` drops its `@prodkit/op` peer dependency once DI leaves; std utilities should not

@@ -683,11 +683,11 @@ or `runtime:smoke:edge`.
 
 - [`examples/op/simple.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/simple.ts):
   minimal composition and typed error walkthrough.
-- [`examples/std/onboarding.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/std/onboarding.ts):
-  `@prodkit/std/di` wiring with `DI` dependencies.
+- [`examples/op/di/onboarding.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/di/onboarding.ts):
+  `@prodkit/op/di` wiring with `DI` dependencies.
 - [`examples/smoke.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/smoke.ts):
-  consumer-level scenario assertions for Op flows (`examples/op/smoke.ts`) and DI onboarding
-  (`examples/std/smoke.ts`).
+  consumer-level scenario assertions for Op flows (`examples/op/smoke.ts`) and DI
+  (`examples/op/di/smoke.ts`).
 
 ## Performance
 

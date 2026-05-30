@@ -1,8 +1,8 @@
 import { assert, describe, expect, test } from "vitest";
-import { Op, TimeoutError } from "@prodkit/op";
+import { Op, TimeoutError } from "../../src/index.js";
 import { UnhandledException } from "better-result";
-import { DI } from "./index.js";
-import { AlreadyProvidedError, MissingDependencyError } from "./internal.js";
+import { DI } from "../../src/di/index.js";
+import { AlreadyProvidedError, MissingDependencyError } from "../../src/di/internal.js";
 
 class DatabaseError extends Error {
   readonly _tag = "DatabaseError";

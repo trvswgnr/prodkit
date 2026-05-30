@@ -233,7 +233,7 @@ async function smokeEdge(workspaceDir: string) {
     throw new Error(`Missing better-result entry: ${resultEntryPath}`);
 
   for (const file of await readdir(opDistDir)) {
-    if (!file.endsWith(".mjs") || file === "internal.mjs") continue;
+    if (!file.endsWith(".mjs")) continue;
     const content = await readFile(path.join(opDistDir, file), "utf8");
     await writeFile(path.join(edgeDir, file), rewriteBetterResultImports(content), "utf8");
   }

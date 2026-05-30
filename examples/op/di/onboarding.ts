@@ -1,4 +1,4 @@
-import { DI } from "@prodkit/std/di";
+import { DI } from "@prodkit/op/di";
 import { Op } from "@prodkit/op";
 import { TaggedError } from "better-result";
 

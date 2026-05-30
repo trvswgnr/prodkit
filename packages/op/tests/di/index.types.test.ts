@@ -1,7 +1,7 @@
 import { describe, expectTypeOf, test } from "vitest";
-import { Op, type EmptyMeta, type InferOpMeta, type Blocking } from "@prodkit/op";
-import { type IsRunnable } from "@prodkit/op/internal";
-import { DI, type Dependency } from "./index.js";
+import { Op, type EmptyMeta, type InferOpMeta, type Blocking } from "../../src/index.js";
+import { type IsRunnable } from "../../src/core/types.js";
+import { DI, type Dependency } from "../../src/di/index.js";
 import type {
   DependencyReq,
   DependencyValue,
@@ -10,7 +10,7 @@ import type {
   ProvidedReq,
   UseReq,
   WithDIMeta,
-} from "./internal.js";
+} from "../../src/di/internal.js";
 
 type Assert<T extends true> = T;
 type IsEqual<X, Y> =

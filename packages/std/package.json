@@ -1,13 +1,11 @@
 {
   "name": "@prodkit/std",
   "version": "0.1.2",
-  "description": "Standard library utilities for @prodkit/op programs.",
+  "description": "Runtime-agnostic utility helpers for TypeScript programs.",
   "keywords": [
-    "dependency injection",
-    "effect",
-    "operations",
     "runtime-agnostic",
-    "typescript"
+    "typescript",
+    "utilities"
   ],
   "homepage": "https://github.com/trvswgnr/prodkit#readme",
   "bugs": {
@@ -30,10 +28,6 @@
     ".": {
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
-    },
-    "./di": {
-      "types": "./dist/di/index.d.mts",
-      "import": "./dist/di/index.mjs"
     }
   },
   "publishConfig": {
@@ -58,7 +52,6 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@prodkit/op": "workspace:*",
     "@prodkit/shared": "workspace:*",
     "@vitest/coverage-v8": "catalog:",
     "oxfmt": "catalog:",
@@ -66,9 +59,5 @@
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
-  },
-  "peerDependencies": {
-    "@prodkit/op": "^0.1.0",
-    "better-result": "^2.9.0"
   }
 }

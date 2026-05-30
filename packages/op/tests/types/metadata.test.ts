@@ -15,7 +15,7 @@ import {
   type IsRunnable,
   type NormalizeMeta,
   type RunContext,
-} from "../../src/internal.js";
+} from "../../src/core/types.js";
 import type { IsEqual, Assert } from "../support/type-utils.js";
 import type { Result } from "../../src/result.js";
 import type { UnhandledException } from "../../src/errors.js";

@@ -13,9 +13,9 @@ const MONITORED = [
     label: "@prodkit/op public exports",
   },
   {
-    entrypoint: "packages/std/src/di/index.ts",
-    changelog: "packages/std/CHANGELOG.md",
-    label: "@prodkit/std/di public exports",
+    entrypoint: "packages/op/src/di/index.ts",
+    changelog: "packages/op/CHANGELOG.md",
+    label: "@prodkit/op/di public exports",
   },
 ] as const;
 
