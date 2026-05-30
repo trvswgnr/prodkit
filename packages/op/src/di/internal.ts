@@ -252,7 +252,9 @@ function abortReason(signal: AbortSignal): unknown {
   return signal.reason ?? new Error("Aborted");
 }
 
-function assertNotAborted(signal: AbortSignal): void {
+function assertNotAborted(
+  signal: AbortSignal,
+): asserts signal is AbortSignal & { readonly aborted: false } {
   if (signal.aborted) {
     throw abortReason(signal);
   }
