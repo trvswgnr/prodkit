@@ -49,6 +49,9 @@ pnpm --filter @prodkit/tools run adr:sync
 Add an ADR when a decision is hard to reverse, surprising without context, and the result of a
 real trade-off. Skip obvious or easily reversed choices.
 
+Track implementation work in GitHub issues; link them from the ADR `Implementation` section. Do
+not add ad hoc plan docs under `docs/` for issue checklists.
+
 ## Index
 
 <!-- adr-index:start -->
@@ -62,5 +65,7 @@ real trade-off. Skip obvious or easily reversed choices.
 | [0005](0005-unhandled-exception-runtime-channel.md) | `@prodkit/op` | UnhandledException is the non-recoverable runtime error channel |
 | [0006](0006-run-args-only-fluent-policy-composition.md) | `@prodkit/op` | run takes args only; cancellation and policy compose fluently |
 | [0007](0007-timeout-widening-at-composition-boundary.md) | `@prodkit/op` | Op execution plan AST vs push-through rebuild hooks |
+| [0008](0008-op-subpath-exports.md) | `@prodkit/op` | Op-native modules ship as @prodkit/op subpath exports |
+| [0009](0009-policy-with-attachment.md) | `@prodkit/op` | Policy attaches via .with(Policy.*) |
 
 <!-- adr-index:end -->

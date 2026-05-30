@@ -114,6 +114,8 @@ If a behavior is an internal invariant of one module, keep it in unit; if it is 
 - Structural rationale for core/fluent choices (why separate paths exist) lives in `docs/adr/`.
   Each ADR declares `title`, `status`, and `packages` in YAML frontmatter; run
   `pnpm --filter @prodkit/tools run adr:sync` after adding or editing one.
+- Implementation work for accepted or proposed ADRs is tracked in GitHub issues, not in ad hoc
+  docs under `docs/`. Link issues from the ADR `Implementation` section when filing them.
 
 ## Core runtime architecture (`@prodkit/op`)
 
