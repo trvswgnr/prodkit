@@ -1,11 +1,7 @@
 import type { RetryPolicy } from "./retry-policy.js";
 import type { ReleaseFn } from "./types.js";
 
-declare const OP_POLICY_BRAND: unique symbol;
-
-export const OP_POLICY: typeof OP_POLICY_BRAND = Symbol.for(
-  "prodkit.op.policy",
-) as typeof OP_POLICY_BRAND;
+export const OP_POLICY = Symbol("prodkit.op.policy");
 
 export interface RetryPolicyAttachment {
   readonly [OP_POLICY]: "retry";

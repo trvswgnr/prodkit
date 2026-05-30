@@ -285,7 +285,7 @@ export interface FluentOp<T, E, A, M = EmptyMeta> {
    * import * as Policy from "@prodkit/op/policy";
    * const resilient = Op.try(() => fetch("/ping")).with(Policy.retry());
    */
-  // Keep release first so nested Policy.release(...) callbacks infer the success value type.
+  // @note: keep release first so nested Policy.release(...) callbacks infer the success value type
   with(policy: ReleasePolicyAttachment<T>): Op<T, E, A, M>;
   with(policy: RetryPolicyAttachment): Op<T, E, A, M>;
   with(policy: TimeoutPolicyAttachment): Op<T, E | TimeoutError, A, M>;
