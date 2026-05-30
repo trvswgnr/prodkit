@@ -150,14 +150,7 @@ importers:
         version: 6.0.3
 
   packages/std:
-    dependencies:
-      better-result:
-        specifier: ^2.9.0
-        version: 2.9.0
     devDependencies:
-      '@prodkit/op':
-        specifier: workspace:*
-        version: link:../op
       '@prodkit/shared':
         specifier: workspace:*
         version: link:../shared
