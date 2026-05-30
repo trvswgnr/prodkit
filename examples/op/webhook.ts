@@ -1,6 +1,7 @@
 import { Op } from "@prodkit/op";
 import { TaggedError } from "better-result";
 import * as v from "valibot";
+import * as Policy from "@prodkit/op/policy";
 
 type InventoryReservation = {
   reservationId: string;
@@ -122,8 +123,8 @@ export function createApp(deps: AppDeps) {
       (signal) => deps.isDuplicateEvent(eventId, signal),
       (cause) => new ServiceCallError({ service: "idempotency-store", retryable: false, cause }),
     )
-      .withRetry(retryTransient)
-      .withTimeout(300);
+      .with(Policy.retry(retryTransient))
+      .with(Policy.timeout(300));
 
     if (duplicate) return yield* new DuplicateEventError({ eventId });
     return;
@@ -138,15 +139,15 @@ export function createApp(deps: AppDeps) {
       (signal) => readRisk(userId, signal),
       (cause) => ServiceCallError.from(providerName, cause),
     )
-      .withRetry(retryTransient)
-      .withTimeout(250);
+      .with(Policy.retry(retryTransient))
+      .with(Policy.timeout(250));
   });
 
   const pickRiskScore = Op(function* (userId: string) {
     return yield* Op.any([
       riskFromProvider("risk-primary", deps.riskPrimary, userId),
       riskFromProvider("risk-secondary", deps.riskSecondary, userId),
-    ]).withTimeout(600);
+    ]).with(Policy.timeout(600));
   });
 
   const loadFraudPolicyVersion = Op(function* () {
@@ -154,11 +155,11 @@ export function createApp(deps: AppDeps) {
       Op.try(
         (signal) => deps.loadFraudPolicyFromCache(signal),
         (cause) => ServiceCallError.from("fraud-policy-cache", cause),
-      ).withTimeout(80),
+      ).with(Policy.timeout(80)),
       Op.try(
         (signal) => deps.loadFraudPolicyFromConfig(signal),
         (cause) => ServiceCallError.from("fraud-policy-config", cause),
-      ).withTimeout(200),
+      ).with(Policy.timeout(200)),
     ]);
   });
 
@@ -167,8 +168,8 @@ export function createApp(deps: AppDeps) {
       (signal) => deps.reserveInventory(payload, signal),
       (cause) => ServiceCallError.from("inventory", cause),
     )
-      .withRetry(retryTransient)
-      .withTimeout(500);
+      .with(Policy.retry(retryTransient))
+      .with(Policy.timeout(500));
 
     if (!reservation.reserved) {
       return yield* new InventoryUnavailableError({ orderId: payload.orderId });
@@ -181,8 +182,8 @@ export function createApp(deps: AppDeps) {
       (signal) => deps.authorizePayment(payload, signal),
       (cause) => ServiceCallError.from("payment", cause),
     )
-      .withRetry(retryTransient)
-      .withTimeout(500);
+      .with(Policy.retry(retryTransient))
+      .with(Policy.timeout(500));
 
     if (!payment.approved || payment.authorizationId === undefined) {
       return yield* new PaymentDeclinedError({
@@ -240,15 +241,15 @@ export function createApp(deps: AppDeps) {
         ),
       (cause) => ServiceCallError.from("orders-store", cause),
     )
-      .withRetry(retryTransient)
-      .withTimeout(500);
+      .with(Policy.retry(retryTransient))
+      .with(Policy.timeout(500));
 
     yield* Op.try(
       (signal) => deps.markEventProcessed(payload.eventId, signal),
       (cause) => ServiceCallError.from("idempotency-store", cause),
     )
-      .withRetry(retryTransient)
-      .withTimeout(300);
+      .with(Policy.retry(retryTransient))
+      .with(Policy.timeout(300));
 
     // Bounded fan-out is useful for best-effort side effects that may share provider limits
     const [receiptResult, analyticsResult] = yield* Op.allSettled(
@@ -256,11 +257,11 @@ export function createApp(deps: AppDeps) {
         Op.try(
           (signal) => deps.sendReceipt(processed, signal),
           (cause) => ServiceCallError.from("email", cause),
-        ).withTimeout(300),
+        ).with(Policy.timeout(300)),
         Op.try(
           (signal) => deps.publishAnalytics(processed, signal),
           (cause) => ServiceCallError.from("analytics", cause),
-        ).withTimeout(300),
+        ).with(Policy.timeout(300)),
       ],
       BEST_EFFORT_SIDE_EFFECT_CONCURRENCY,
     );

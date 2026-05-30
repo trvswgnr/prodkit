@@ -11,6 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Op } from "@prodkit/op";
+import * as Policy from "@prodkit/op/policy";
 import * as v from "valibot";
 import { TaggedError, matchErrorPartial } from "better-result";
 import {
@@ -681,8 +682,8 @@ async function main() {
   };
 
   const smokeResult = await smoke
-    .withTimeout(getEnvInt(SMOKE_TIMEOUT_MS_ENV, DEFAULT_SMOKE_TIMEOUT_MS))
-    .withSignal(controller.signal)
+    .with(Policy.timeout(getEnvInt(SMOKE_TIMEOUT_MS_ENV, DEFAULT_SMOKE_TIMEOUT_MS)))
+    .with(Policy.signal(controller.signal))
     .run(process.argv[2]);
 
   smokeResult.match({

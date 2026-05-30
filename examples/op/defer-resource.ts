@@ -1,5 +1,6 @@
 import { Op } from "@prodkit/op";
 import { TaggedError } from "better-result";
+import * as Policy from "@prodkit/op/policy";
 
 export type AuditSession = { sessionId: string };
 export type DbConnection = { connId: string };
@@ -43,9 +44,9 @@ export function createDbApp(deps: DbDeps) {
     // Op.defer: the audit scope must end on every exit after it starts, including checkout failure
     yield* Op.defer((ctx) => deps.endAuditSession(auditSession, ctx.signal));
 
-    // withRelease: only connections that checkout actually returned get released
-    const conn = yield* acquireConnection.withRelease((connection) =>
-      deps.releaseConnection(connection),
+    // Policy.release: only connections that checkout actually returned get released
+    const conn = yield* acquireConnection.with(
+      Policy.release((connection) => deps.releaseConnection(connection)),
     );
 
     const user = yield* executeQuery(conn, `SELECT * FROM users WHERE id = '${userId}'`);

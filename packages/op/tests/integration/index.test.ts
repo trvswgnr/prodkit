@@ -1,5 +1,6 @@
 import { assert, describe, expect, test, vi } from "vitest";
-import { Delay, Op, TimeoutError } from "../../src/index.js";
+import { Op, TimeoutError } from "../../src/index.js";
+import { Delay, release, retry, timeout } from "../../src/policy/index.js";
 import { TaggedError, UnhandledException } from "../../src/errors.js";
 import { Result } from "../../src/result.js";
 import { resolveAfter } from "../support/utils.js";
@@ -28,6 +29,15 @@ describe("OpFactory", () => {
     assert(result.isOk(), "should be Ok");
     expect(result.value).toBeUndefined();
   });
+
+  test("dedicated retry, timeout, signal, and release methods are not exposed", () => {
+    const op = Op.of(1) as unknown as Record<string, unknown>;
+
+    expect(op.withRetry).toBeUndefined();
+    expect(op.withTimeout).toBeUndefined();
+    expect(op.withSignal).toBeUndefined();
+    expect(op.withRelease).toBeUndefined();
+  });
 });
 
 describe("Delay", () => {
@@ -54,14 +64,22 @@ describe("Delay", () => {
 
   test("invalid exponential delay policy fails at run time", async () => {
     const result = await Op.of("ok")
-      .withRetry({
-        delay: Delay.exponential({ baseMs: 0 }),
-      })
+      .with(
+        retry({
+          delay: Delay.exponential({ baseMs: 0 }),
+        }),
+      )
       .run();
 
     assert(result.isErr(), "should be Err");
     expect(result.error).toBeInstanceOf(UnhandledException);
     expect(result.error.cause).toBeInstanceOf(RangeError);
+  });
+});
+
+describe("Policy constructors", () => {
+  test("release is exported", () => {
+    expect(release).toBeInstanceOf(Function);
   });
 });
 
@@ -196,12 +214,12 @@ describe("Op namespace value", () => {
   });
 });
 
-describe("Op combinators compose with withTimeout / withRetry", () => {
-  test("Op.all().withTimeout() times out the whole fan-out", async () => {
+describe("Op combinators compose with Policy.timeout / Policy.retry", () => {
+  test("Op.all().with(Policy.timeout()) times out the whole fan-out", async () => {
     vi.useFakeTimers();
     try {
       const slow = Op.try(() => resolveAfter(1000, 1000));
-      const promise = Op.all([slow, slow]).withTimeout(10).run();
+      const promise = Op.all([slow, slow]).with(timeout(10)).run();
       await vi.advanceTimersByTimeAsync(15);
       const r = await promise;
       assert(r.isErr(), "should be Err");
@@ -211,7 +229,7 @@ describe("Op combinators compose with withTimeout / withRetry", () => {
     }
   });
 
-  test("Op.any().withRetry() retries the whole combinator", async () => {
+  test("Op.any().with(Policy.retry()) retries the whole combinator", async () => {
     let attempts = 0;
     const flaky = Op(function* () {
       attempts += 1;
@@ -219,7 +237,7 @@ describe("Op combinators compose with withTimeout / withRetry", () => {
       return yield* Op.of(11);
     });
     const r = await Op.any([flaky()])
-      .withRetry({ attempts: 3, when: () => true, delay: () => 0 })
+      .with(retry({ attempts: 3, when: () => true, delay: () => 0 }))
       .run();
     assert(r.isOk(), "should be Ok");
     expect(r.value).toBe(11);

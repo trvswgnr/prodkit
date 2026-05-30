@@ -9,6 +9,7 @@ import {
 import { TaggedError, UnhandledException, type TaggedErrorInstance } from "../../src/errors.js";
 import { Result } from "../../src/result.js";
 import { TRUE } from "../support/utils.js";
+import * as Policy from "../../src/policy/index.js";
 
 describe("type inference contracts", () => {
   test("builders infer Op shape and run() output", () => {
@@ -64,14 +65,14 @@ describe("type inference contracts", () => {
   });
 
   test("policy chaining preserves arity and widens error channels", () => {
-    const retryNullary = Op.try(() => Promise.resolve(1)).withRetry();
+    const retryNullary = Op.try(() => Promise.resolve(1)).with(Policy.retry());
     expectTypeOf(retryNullary).toEqualTypeOf<Op<number, never, []>>();
     expectTypeOf(retryNullary.run()).toEqualTypeOf<Promise<Result<number, UnhandledException>>>();
 
     const retryMapped = Op.try(
       () => Promise.resolve(1),
       () => "mapped",
-    ).withRetry();
+    ).with(Policy.retry());
     expectTypeOf(retryMapped).toEqualTypeOf<Op<number, string, []>>();
     expectTypeOf(retryMapped.run()).toEqualTypeOf<
       Promise<Result<number, string | UnhandledException>>
@@ -80,7 +81,7 @@ describe("type inference contracts", () => {
     const retryAsyncMapped = Op.try(
       () => Promise.resolve(1),
       async () => "mapped",
-    ).withRetry();
+    ).with(Policy.retry());
     expectTypeOf(retryAsyncMapped).toEqualTypeOf<Op<number, string, []>>();
     expectTypeOf(retryAsyncMapped.run()).toEqualTypeOf<
       Promise<Result<number, string | UnhandledException>>
@@ -88,7 +89,7 @@ describe("type inference contracts", () => {
 
     const timeout = Op(function* (id: string) {
       return id.length;
-    }).withTimeout(10);
+    }).with(Policy.timeout(10));
     expectTypeOf(timeout).toEqualTypeOf<Op<number, TimeoutError, [id: string]>>();
     expectTypeOf(timeout.run("abc")).toEqualTypeOf<
       Promise<Result<number, TimeoutError | UnhandledException>>
@@ -96,7 +97,7 @@ describe("type inference contracts", () => {
 
     const withSignal = Op(function* (id: string) {
       return id.length;
-    }).withSignal(new AbortController().signal);
+    }).with(Policy.signal(new AbortController().signal));
     expectTypeOf(withSignal).toEqualTypeOf<Op<number, never, [id: string]>>();
     expectTypeOf(withSignal.run("abc")).toEqualTypeOf<
       Promise<Result<number, UnhandledException>>
@@ -108,6 +109,17 @@ describe("type inference contracts", () => {
     timeout.run("abc", "extra");
     // @ts-expect-error - parameterized withSignal op requires argument
     withSignal.run();
+
+    const base = Op.of(1);
+    type BasePolicyOp = typeof base;
+    // @ts-expect-error - retry attaches through .with(Policy.retry(...))
+    type _NoWithRetry = BasePolicyOp["withRetry"];
+    // @ts-expect-error - timeout attaches through .with(Policy.timeout(...))
+    type _NoWithTimeout = BasePolicyOp["withTimeout"];
+    // @ts-expect-error - signals attach through .with(Policy.signal(...))
+    type _NoWithSignal = BasePolicyOp["withSignal"];
+    // @ts-expect-error - release attaches through .with(Policy.release(...))
+    type _NoWithRelease = BasePolicyOp["withRelease"];
   });
 
   test("operator combinators transform success and error channels correctly", () => {
@@ -276,8 +288,13 @@ describe("type inference contracts", () => {
   });
 
   test("lifecycle helpers preserve op shape and expose hook contexts", () => {
-    const withRelease = Op.of({ id: 1 }).withRelease((value) => value.id);
-    expectTypeOf(withRelease).toEqualTypeOf<Op<{ id: number }, never, []>>();
+    const released = Op.of({ id: 1 }).with(
+      Policy.release((value) => {
+        expectTypeOf(value).toEqualTypeOf<{ id: number }>();
+        return value.id;
+      }),
+    );
+    expectTypeOf(released).toEqualTypeOf<Op<{ id: number }, never, []>>();
 
     const onEnter = Op(function* (name: string) {
       return name.length;

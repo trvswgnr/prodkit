@@ -32,8 +32,8 @@ Add library columns by extending `IMPLEMENTATION_COLUMNS` and scenario implement
 | Parallel batch (8 children) | `Promise.all([...])` | 1,601,262.93 | `Op.all([...]).run()` | 123,858.07 | 12.93x | `Effect.all(..., { concurrency: 'unbounded' })` | 26,925.05 | 59.47x |
 | First success (8 children) | Hand-rolled first success + abort | 64,468.18 | `Op.any([...]).run()` | 43,412.65 | 1.49x | `Effect.firstSuccessOf([...])` | 657,306.92 | 10.20x faster |
 | First settler (8 children) | Hand-rolled first settler + abort | 63,823.36 | `Op.race([...]).run()` | 43,300.63 | 1.47x | `Effect.raceFirst` folded over children | 11,516.78 | 5.54x |
-| Retry loop | Hand-rolled try/catch retry | 254,546.86 | `Op.try(...).withRetry(...).run()` | 50,808.01 | 5.01x | `Effect.retry(..., { times, schedule })` | 48,237.74 | 5.28x |
-| Timeout guard | `Promise.race` + `setTimeout` | 3,678,050.32 | `Op.of(x).withTimeout(ms).run()` | 315,388.35 | 11.66x | `Effect.timeout(ms)` | 134,374.8 | 27.37x |
+| Retry loop | Hand-rolled try/catch retry | 254,546.86 | `Op.try(...).with(Policy.retry(...)).run()` | 50,808.01 | 5.01x | `Effect.retry(..., { times, schedule })` | 48,237.74 | 5.28x |
+| Timeout guard | `Promise.race` + `setTimeout` | 3,678,050.32 | `Op.of(x).with(Policy.timeout(ms)).run()` | 315,388.35 | 11.66x | `Effect.timeout(ms)` | 134,374.8 | 27.37x |
 | Sequential compose (6 steps) | `await Promise.resolve` chain | 3,507,651.31 | `yield* Op.of` generator chain | 262,939.89 | 13.34x | `Effect.gen` + `yield* Effect.succeed` chain | 947,189.57 | 3.70x |
 
 ### Bundle size

@@ -31,14 +31,16 @@ const result = await program.run();
 But inside the program, failure and execution policy are explicit:
 
 ```ts
+import * as Policy from "@prodkit/op/policy";
+
 const program = Op.all([
   fetchJson("/api/user"),
   fetchJson("/api/alerts"),
   fetchJson("/api/settings"),
 ])
-  .withRetry({ attempts: 2 })
-  .withTimeout(1_500)
-  .withSignal(request.signal);
+  .with(Policy.retry({ attempts: 2 }))
+  .with(Policy.timeout(1_500))
+  .with(Policy.signal(request.signal));
 ```
 
 That gives you the part `Promise` never tried to give you: one place to say what happens when the
@@ -63,10 +65,12 @@ the caller receives a result?", "what happens to the other requests when one bra
 operation runtime around it:
 
 ```ts
+import * as Policy from "@prodkit/op/policy";
+
 const updateOrder = Op(function* (id: string) {
   const order = yield* loadOrder(id);
   yield* Op.defer(() => releaseOrderLock(id));
-  const payment = yield* chargePayment(order).withRetry();
+  const payment = yield* chargePayment(order).with(Policy.retry());
   return yield* persistOrder({ order, payment });
 });
 ```
@@ -161,7 +165,7 @@ The value is the combination:
 - generator composition that reads top-to-bottom
 - lazy execution with a clear `.run(...args)` boundary
 - retry and timeout as composable policy
-- external cancellation through `.withSignal(...)`
+- external cancellation through `.with(Policy.signal(...))`
 - fail-fast concurrency that aborts siblings
 - registered cleanup that unwinds before the result settles
 - ordinary TypeScript at the edges

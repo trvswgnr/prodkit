@@ -4,6 +4,7 @@ import { UnhandledException } from "../../src/errors.js";
 import { Op } from "../../src/index.js";
 import { Result } from "../../src/result.js";
 import { rejectAfter, resolveAfter, trackAbortListeners } from "../support/utils.js";
+import * as Policy from "../../src/policy/index.js";
 
 type RaceBranch =
   | { kind: "ok"; value: number; delay: number }
@@ -144,7 +145,7 @@ describe("Op.race invariants (property-based)", () => {
         try {
           const ops = delays.map((delay, index) => Op.try(() => resolveAfter(index, delay)));
 
-          const result = await Op.race(ops).withSignal(outer.signal).run();
+          const result = await Op.race(ops).with(Policy.signal(outer.signal)).run();
           assert(result.isOk(), "expected race success");
 
           expect(tracked.activeAbortListeners).toBe(0);

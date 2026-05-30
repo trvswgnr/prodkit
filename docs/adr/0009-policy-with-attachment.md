@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 title: Policy attaches via .with(Policy.*)
 packages:
   - "@prodkit/op"
@@ -8,13 +8,13 @@ packages:
 # Policy attaches via .with(Policy.*)
 
 ADR 0006 established args-only `.run()` and fluent policy composition on the op value. The public
-surface still exposes dedicated methods (`.withRetry()`, `.withTimeout()`, `.withSignal()`,
-`.withRelease()`). Policy constructors and delay helpers also live on the root `@prodkit/op`
-export today.
+surface exposed dedicated retry, timeout, signal, and release methods, while policy constructors
+and delay helpers lived on the root `@prodkit/op` export.
 
 ## Decision
 
-**Single attachment surface.** Policies compose through `.with(policy)` on the op value:
+**Single attachment surface for execution policy.** Retry, timeout, signal, and release compose through
+`.with(policy)` on the op value:
 
 ```ts
 import { Delay } from "@prodkit/op/policy";
@@ -27,12 +27,13 @@ acquireConnection
   .with(Policy.release((conn) => conn.close()));
 ```
 
-Dedicated fluent policy methods are removed after the new surface is in place (hard cutover).
+Dedicated retry, timeout, signal, and release methods are removed after the new surface is in place
+(hard cutover).
 
 **Constructors on `@prodkit/op/policy`.** Policy constructors (`Policy.retry`, `Policy.timeout`,
 `Policy.signal`, `Policy.release`), `Delay`, and related public types ship on the policy subpath
-per ADR 0008. The main entry owns `.with(...)`, policy ordering, plan application, runtime
-behavior, and `TimeoutError`.
+per ADR 0008. The main entry owns `.with(...)`, policy ordering, plan application, runtime behavior,
+and `TimeoutError`.
 
 **Lifecycle and transforms stay on `Op`.** Do not move `on(...)`, `map(...)`, `mapErr(...)`,
 `flatMap(...)`, `tap(...)`, `tapErr(...)`, or `recover(...)` under `Policy`.
@@ -45,9 +46,11 @@ Before committing `Policy.release(...)`, verify contextual typing:
 acquireConnection.with(Policy.release((conn) => conn.close()));
 ```
 
-`conn` must infer from the source op success type. If TypeScript cannot preserve that inference,
-keep `.withRelease(...)` as a dedicated method and move only retry, timeout, and signal to
-`Policy`.
+`conn` must infer from the source op success type.
+
+Result: the spike passed once the release overload was placed first. With the release overload
+last, TypeScript infers the callback parameter as `unknown`; with release first, `conn` infers from
+the source op success value while timeout still widens the error channel.
 
 ## Considered options
 
@@ -66,13 +69,15 @@ known type transforms; higher-kinded typing becomes relevant only for third-part
 - Invalid retry and delay inputs continue to surface at run time as `Err(UnhandledException)` with
   the validation error as `cause`.
 - Retry defaults, policy ordering with `.with(...)`, and other behavioral contracts belong in
-  `packages/op/DESIGN.md` once implemented.
+  `packages/op/DESIGN.md`.
 - Public docs use `@prodkit/op/policy` for constructors and `Delay`; core docs cover `.with(...)`.
+- Keep the release overload first in the `.with(...)` type surface; this preserves contextual
+  typing for `Policy.release((value) => ...)`.
 
 ## Implementation
 
 - [#129](https://github.com/trvswgnr/prodkit/issues/129): Add typed `.with(...)` policy composition.
 - [#130](https://github.com/trvswgnr/prodkit/issues/130): Add `@prodkit/op/policy` subpath (blocked by #129).
-- [#131](https://github.com/trvswgnr/prodkit/issues/131): Hard-cutover from dedicated fluent policy methods (blocked by #129, #130).
+- [#131](https://github.com/trvswgnr/prodkit/issues/131): Hard-cutover from dedicated retry, timeout, and signal methods (blocked by #129, #130).
 
 Package boundary for the policy subpath: ADR 0008 ([#128](https://github.com/trvswgnr/prodkit/issues/128)).

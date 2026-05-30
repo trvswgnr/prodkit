@@ -1,7 +1,8 @@
 import { Result } from "../../result.js";
 import { OP_BOUND_BRAND, OP_BRAND, unsafeCoerce } from "../../shared.js";
+import { OP_POLICY, type BuiltInPolicy } from "../policy.js";
 import { createRunContext } from "../runtime.js";
-import { normalizeRetryPolicy, type RetryPolicy } from "../retry-policy.js";
+import { normalizeRetryPolicy } from "../retry-policy.js";
 import type {
   AnyNullaryOp,
   AsArgs,
@@ -10,7 +11,6 @@ import type {
   ExitFn,
   OpInterface,
   OpLifecycleHook,
-  ReleaseFn,
   TrackedErr,
 } from "../types.js";
 import { OP_PLAN_BIND, genPlan, type Plan, type PlanBackedOp, type PlanBinder } from "./base.js";
@@ -51,13 +51,22 @@ function fluentMethodsForContext<T, E, A, M, Yieldable extends boolean>(
   ) => wrapPlanTransform<T, E, A, M, Yieldable, TNext, ENext, MNext>(ctx, transform);
 
   return {
-    withRetry: (policy?: RetryPolicy) => {
-      const retryPolicy = normalizeRetryPolicy(policy);
-      return wrap((plan) => plan.withRetry(retryPolicy));
+    with: (policy: BuiltInPolicy<T>) => {
+      switch (policy[OP_POLICY]) {
+        case "retry": {
+          const retryPolicy = normalizeRetryPolicy(policy.policy);
+          return wrap((plan) => plan.withRetry(retryPolicy));
+        }
+        case "timeout":
+          return wrap((plan) => plan.withTimeout(policy.timeoutMs));
+        case "signal":
+          return wrap((plan) => plan.withSignal(policy.signal));
+        case "release":
+          return wrap((plan) => withReleasePlan(plan, policy.release));
+        default:
+          throw new TypeError("Invalid Op policy");
+      }
     },
-    withTimeout: (timeoutMs: number) => wrap((plan) => plan.withTimeout(timeoutMs)),
-    withSignal: (signal: AbortSignal) => wrap((plan) => plan.withSignal(signal)),
-    withRelease: (release: ReleaseFn<T>) => wrap((plan) => withReleasePlan(plan, release)),
     on: (event: OpLifecycleHook, handler: unknown) => {
       if (event === "enter") {
         const initialize = handler as EnterFn<A>;
@@ -111,10 +120,7 @@ function createSyncValueFluentPrototype(): PropertyDescriptorMap {
   });
 
   const methodNames = [
-    "withRetry",
-    "withTimeout",
-    "withSignal",
-    "withRelease",
+    "with",
     "on",
     "map",
     "mapErr",

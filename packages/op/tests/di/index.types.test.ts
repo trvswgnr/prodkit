@@ -11,6 +11,7 @@ import type {
   UseReq,
   WithDIMeta,
 } from "../../src/di/internal.js";
+import * as Policy from "../../src/policy/index.js";
 
 type Assert<T extends true> = T;
 type IsEqual<X, Y> =
@@ -185,7 +186,7 @@ describe("DI cutover type contracts", () => {
     });
 
     const mapped = findUser.map((user) => user.id);
-    const timed = findUser.withTimeout(1);
+    const timed = findUser.with(Policy.timeout(1));
     const tapped = findUser("1").tap(() => log);
     const flatMapped = findUser("1").flatMap(() => log);
 

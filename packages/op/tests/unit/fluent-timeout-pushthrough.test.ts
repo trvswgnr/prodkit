@@ -1,6 +1,7 @@
 import { assert, describe, expect, test, vi } from "vitest";
 import { Op, TimeoutError, type ExitContext } from "../../src/index.js";
 import { UnhandledException } from "../../src/errors.js";
+import * as Policy from "../../src/policy/index.js";
 
 const TIMEOUT_MS = 10;
 const GENEROUS_TIMEOUT_MS = 1000;
@@ -26,7 +27,7 @@ describe("withTimeout push-through matrix", () => {
         const result = await runWithFakeTimeout(
           hangingOp()
             .mapErr((error) => ({ kind: "app" as const, error }))
-            .withTimeout(TIMEOUT_MS),
+            .with(Policy.timeout(TIMEOUT_MS)),
         );
         assert(result.isErr(), "should be Err");
         expect(result.error).toBeInstanceOf(TimeoutError);
@@ -37,7 +38,7 @@ describe("withTimeout push-through matrix", () => {
       run: async () => {
         const observe = vi.fn(() => undefined);
         const result = await runWithFakeTimeout(
-          hangingOp().tapErr(observe).withTimeout(TIMEOUT_MS),
+          hangingOp().tapErr(observe).with(Policy.timeout(TIMEOUT_MS)),
         );
         assert(result.isErr(), "should be Err");
         expect(result.error).toBeInstanceOf(TimeoutError);
@@ -53,7 +54,7 @@ describe("withTimeout push-through matrix", () => {
               (_e): _e is never => true,
               () => Op.of(69),
             )
-            .withTimeout(TIMEOUT_MS),
+            .with(Policy.timeout(TIMEOUT_MS)),
         );
         assert(result.isErr(), "should be Err");
         expect(result.error).toBeInstanceOf(TimeoutError);
@@ -69,7 +70,7 @@ describe("withTimeout push-through matrix", () => {
       run: async () => {
         const result = await Op.fail("bad" as const)
           .mapErr((error) => ({ kind: "app" as const, error }))
-          .withTimeout(GENEROUS_TIMEOUT_MS)
+          .with(Policy.timeout(GENEROUS_TIMEOUT_MS))
           .run();
         assert(result.isErr(), "should be Err");
         expect(result.error).toEqual({ kind: "app", error: "bad" });
@@ -83,7 +84,7 @@ describe("withTimeout push-through matrix", () => {
           .tapErr((error) => {
             seen.push(error);
           })
-          .withTimeout(GENEROUS_TIMEOUT_MS)
+          .with(Policy.timeout(GENEROUS_TIMEOUT_MS))
           .run();
         assert(result.isErr(), "should be Err");
         expect(result.error).toBe("bad-input");
@@ -98,7 +99,7 @@ describe("withTimeout push-through matrix", () => {
             (error): error is "retryable" => error === "retryable",
             () => Op.of(69),
           )
-          .withTimeout(GENEROUS_TIMEOUT_MS)
+          .with(Policy.timeout(GENEROUS_TIMEOUT_MS))
           .run();
         assert(result.isOk(), "should be Ok");
         expect(result.value).toBe(69);
@@ -115,12 +116,12 @@ describe("withTimeout push-through matrix", () => {
     {
       placement: "after combinator",
       build: (captureExit: (ctx: ExitContext<number, never>) => void) =>
-        hangingOp().on("exit", captureExit).withTimeout(TIMEOUT_MS),
+        hangingOp().on("exit", captureExit).with(Policy.timeout(TIMEOUT_MS)),
     },
     {
       placement: "before combinator",
       build: (captureExit: (ctx: ExitContext<number, UnhandledException | TimeoutError>) => void) =>
-        hangingOp().withTimeout(TIMEOUT_MS).on("exit", captureExit),
+        hangingOp().with(Policy.timeout(TIMEOUT_MS)).on("exit", captureExit),
     },
   ])('on("exit") $placement: ExitContext.result preserves TimeoutError', async ({ build }) => {
     let exitCtx!: ExitContext<number, UnhandledException | TimeoutError>;

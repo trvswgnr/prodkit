@@ -16,6 +16,7 @@ import {
   runOpYieldChain,
   TIMEOUT_BUDGET_MS,
 } from "./scenarios.ts";
+import * as Policy from "@prodkit/op/policy";
 
 export { CONCURRENCY_CHILDREN, RETRY_ATTEMPTS, TIMEOUT_BUDGET_MS } from "./scenarios.ts";
 
@@ -217,8 +218,8 @@ export const COMPARISON_SCENARIOS: readonly ComparisonScenario[] = [
       },
     },
     op: {
-      benchName: "retry.opWithRetry",
-      description: "`Op.try(...).withRetry(...).run()`",
+      benchName: "retry.opWithPolicyRetry",
+      description: "`Op.try(...).with(Policy.retry(...)).run()`",
       run: async () => {
         let attempt = 0;
         const result = await Op.try(() => {
@@ -226,13 +227,15 @@ export const COMPARISON_SCENARIOS: readonly ComparisonScenario[] = [
           if (attempt < RETRY_ATTEMPTS) throw new Error("retry");
           return 1;
         })
-          .withRetry({
-            attempts: RETRY_ATTEMPTS,
-            when: () => true,
-            delay: () => 0,
-          })
+          .with(
+            Policy.retry({
+              attempts: RETRY_ATTEMPTS,
+              when: () => true,
+              delay: () => 0,
+            }),
+          )
           .run();
-        if (!result.isOk()) throw new Error("retry.opWithRetry failed unexpectedly.");
+        if (!result.isOk()) throw new Error("retry.opWithPolicyRetry failed unexpectedly.");
       },
     },
     effect: {
@@ -258,11 +261,11 @@ export const COMPARISON_SCENARIOS: readonly ComparisonScenario[] = [
       },
     },
     op: {
-      benchName: "timeout.opWithTimeout",
-      description: "`Op.of(x).withTimeout(ms).run()`",
+      benchName: "timeout.opWithPolicyTimeout",
+      description: "`Op.of(x).with(Policy.timeout(ms)).run()`",
       run: async () => {
-        const result = await Op.of(7).withTimeout(TIMEOUT_BUDGET_MS).run();
-        if (!result.isOk()) throw new Error("timeout.opWithTimeout failed unexpectedly.");
+        const result = await Op.of(7).with(Policy.timeout(TIMEOUT_BUDGET_MS)).run();
+        if (!result.isOk()) throw new Error("timeout.opWithPolicyTimeout failed unexpectedly.");
       },
     },
     effect: {

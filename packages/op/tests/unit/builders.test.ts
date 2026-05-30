@@ -1,6 +1,7 @@
 import { describe, expect, test, assert, vi } from "vitest";
 import { fail, fromGenFn, sleep, succeed, _try } from "../../src/builders.js";
 import { UnhandledException } from "../../src/errors.js";
+import * as Policy from "../../src/policy/index.js";
 
 describe("succeed", () => {
   test("run returns Ok with value", async () => {
@@ -126,7 +127,7 @@ describe("sleep", () => {
     vi.useFakeTimers();
     try {
       const controller = new AbortController();
-      const runPromise = sleep(100).withSignal(controller.signal).run();
+      const runPromise = sleep(100).with(Policy.signal(controller.signal)).run();
 
       controller.abort("cancelled");
       await vi.advanceTimersByTimeAsync(0);

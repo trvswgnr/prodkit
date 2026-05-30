@@ -16,6 +16,7 @@ import { assert } from "../../assert.ts";
 import { Op } from "@prodkit/op";
 import { DI } from "@prodkit/op/di";
 import { UnhandledException } from "better-result";
+import * as Policy from "@prodkit/op/policy";
 
 async function runSuccessfulRegistrationSmoke() {
   const { op, services } = runnableRegisterUser();
@@ -102,7 +103,7 @@ async function runDiCancellationExampleSmoke() {
 
   const midFactoryController = new AbortController();
   const midFactoryRun = midFactoryApp.loadAccountSnapshot
-    .withSignal(midFactoryController.signal)
+    .with(Policy.signal(midFactoryController.signal))
     .run("acct-mid");
   midFactoryController.abort(new Error("cancelled mid-factory"));
   const midFactoryResult = await midFactoryRun;
@@ -133,7 +134,7 @@ async function runDiCancellationExampleSmoke() {
   });
 
   const preAbortResult = await preAbortApp.loadAccountSnapshot
-    .withSignal(preAbortController.signal)
+    .with(Policy.signal(preAbortController.signal))
     .run("acct-pre");
   assert(preAbortResult.isErr(), "di cancellation pre-abort should fail");
   assert(preAbortCalls === 0, "di cancellation pre-abort should skip scoped factory");
@@ -168,7 +169,7 @@ async function runDiCancellationExampleSmoke() {
   });
 
   const postCacheRun = postCacheApp.loadAccountSnapshot
-    .withSignal(postCacheController.signal)
+    .with(Policy.signal(postCacheController.signal))
     .run("acct-post");
   postCacheController.abort(new Error("cancelled after cache"));
   const postCacheResult = await postCacheRun;

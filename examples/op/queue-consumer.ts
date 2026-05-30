@@ -1,5 +1,7 @@
-import { Delay, Op } from "@prodkit/op";
+import { Op } from "@prodkit/op";
+import { Delay } from "@prodkit/op/policy";
 import { TaggedError } from "better-result";
+import * as Policy from "@prodkit/op/policy";
 
 export type QueueMessage = {
   id: string;
@@ -60,28 +62,28 @@ export function createConsumerApp(deps: ConsumerDeps) {
     return yield* Op.try(
       (signal) => deps.pollBatch(batchSize, signal),
       (cause) => ServiceCallError.from("queue", cause),
-    ).withRetry(retryTransient);
+    ).with(Policy.retry(retryTransient));
   });
 
   const processMessage = Op(function* (message: QueueMessage) {
     yield* Op.try(
       (signal) => deps.processMessage(message, signal),
       (cause) => ServiceCallError.from("processor", cause),
-    ).withRetry(retryTransient);
+    ).with(Policy.retry(retryTransient));
   });
 
   const ackMessage = Op(function* (messageId: string) {
     yield* Op.try(
       (signal) => deps.ackMessage(messageId, signal),
       (cause) => ServiceCallError.from("ack", cause),
-    ).withRetry(retryTransient);
+    ).with(Policy.retry(retryTransient));
   });
 
   const nackMessage = Op(function* (messageId: string) {
     yield* Op.try(
       (signal) => deps.nackMessage(messageId, signal),
       (cause) => ServiceCallError.from("nack", cause),
-    ).withRetry(retryTransient);
+    ).with(Policy.retry(retryTransient));
   });
 
   const handleMessage = Op(function* (message: QueueMessage) {

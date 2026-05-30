@@ -28,7 +28,7 @@ Representative tests:
 - `packages/op/tests/unit/core.test.ts` (`registerExitFinalizer runs all handlers in LIFO order`)
 - `packages/op/tests/unit/core.test.ts` (`multiple throwing finalizers are folded into a cause chain`)
 - `packages/op/tests/unit/lifecycle.test.ts` (`runs multiple defers in LIFO order on success`)
-- `packages/op/tests/unit/lifecycle.test.ts` (`shares LIFO stack with withRelease (release runs before defer registered earlier)`)
+- `packages/op/tests/unit/lifecycle.test.ts` (`shares LIFO stack with release policy (release runs before defer registered earlier)`)
 
 ## Invariant 2: registered exit-finalizer faults take precedence at settlement
 
@@ -105,8 +105,8 @@ If you change the scheduler, combinators, or policy wrappers, these are the beha
 holding steady. Stuff that reads like a micro-optimization can still blow up determinism or
 what callers see when something fails.
 
-The references here are `packages/op/src/core/runtime.ts`, `packages/op/src/core/ops.ts`, and `packages/op/src/combinators.ts`,
-plus the tests named inline so regressions stay obvious.
+The references here are `packages/op/src/core/runtime.ts`, `packages/op/src/core/plan/`, and
+`packages/op/src/combinators.ts`, plus the tests named inline so regressions stay obvious.
 
 ## Single-run driver (`drive`)
 
@@ -127,8 +127,8 @@ registered finalizers unwind last-in-first-out: `runFinalizersSafely` walks the 
 tail (`packages/op/src/core/runtime.ts`). In one generator body, multiple defers unwind in reverse yield order
 (second defer runs before the first).
 
-Chained `.on("exit", ...)` builds wrappers (`onExitCoreOp` in `packages/op/src/core/ops.ts`) where the
-hand you attach first behaves like the inner scope, so at exit time the inner-most handler runs
+Chained `.on("exit", ...)` builds plan wrappers where the hand you attach first behaves like the
+inner scope, so at exit time the inner-most handler runs
 before the outer ones (`packages/op/tests/unit/lifecycle.test.ts`, "chains `.on("exit")` in LIFO order with inner
 registration running first"). That matches how people think about stacking defer-like behavior.
 
@@ -142,10 +142,10 @@ already settled to typed `Err` ("cleanup fault takes precedence over typed body 
 successful bodies where a finalizer throws ("finalizer throw after successful body converts to
 `UnhandledException`").
 
-`withRelease` / `withCleanupCoreOp` is different (`packages/op/src/core/ops.ts`). The release hook
+`.with(Policy.release(...))` is different (`packages/op/src/core/plan/lifecycle.ts`). The release hook
 arms only after a successful inner completion. Typed failure short-circuits without scheduling that
 release, so primary errors stay intact (`packages/op/tests/unit/lifecycle.test.ts`, "preserves primary error..." on
-`Op.fail` with `withRelease`). That isn't swapping semantics with exit finalizers registered while
+`Op.fail` with release policy). That isn't swapping semantics with exit finalizers registered while
 the run is unwinding inside `drive`.
 
 ### Generator finalization (`closeGenerator`)
@@ -153,7 +153,7 @@ the run is unwinding inside `drive`.
 `drive` touches `iterator.return` through `closeGenerator` so synchronous native `finally` code runs
 (`packages/op/src/core/runtime.ts`). This is best-effort generator finalization, not the effectful
 cleanup path: yielded or async work inside a `finally` block is not driven after early exit. Use
-`Op.defer`, `.withRelease`, or `.on("exit", ...)` for cleanup that must suspend, fail explicitly, or
+`Op.defer`, `.with(Policy.release(...))`, or `.on("exit", ...)` for cleanup that must suspend, fail explicitly, or
 complete before `.run()` settles. Throws from `return` are swallowed on purpose
 (`packages/op/tests/unit/lifecycle.test.ts`, "preserves original Err result when cleanup throws during `iter.return()`").
 
@@ -175,9 +175,10 @@ chosen error ("winner error keeps precedence over loser abort-time failures").
 
 ## Policy ordering (retry and timeout)
 
-Method order chooses what's inside which wrapper. Putting retry first and timeout second means one
-overall clock around the retry loop ("timeout wraps the entire retried run when chained outside
-retry"). Putting timeout inside retry means timeout applies independently per retry attempt
+`.with(...)` order chooses what's inside which wrapper. Putting `Policy.retry(...)` first and
+`Policy.timeout(...)` second means one overall clock around the retry loop ("timeout wraps the
+entire retried run when chained outside retry"). Putting timeout inside retry means timeout
+applies independently per retry attempt
 (`packages/op/tests/unit/policies.test.ts`, "timeout applies per-attempt when chained inside retry", also the converse
 scenario in the sibling test quoted there).
 

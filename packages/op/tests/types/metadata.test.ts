@@ -19,6 +19,7 @@ import {
 import type { IsEqual, Assert } from "../support/type-utils.js";
 import type { Result } from "../../src/result.js";
 import type { UnhandledException } from "../../src/errors.js";
+import * as Policy from "../../src/policy/index.js";
 
 type DatabaseReq = { deps: "database" };
 type LoggerReq = { deps: "logger" };
@@ -120,10 +121,10 @@ describe("metadata type contracts", () => {
 
     const mapped = source.map((value) => value + 1);
     const mappedErr = source.mapErr((error) => error);
-    const retried = source.withRetry();
-    const timed = source.withTimeout(1);
-    const signaled = source.withSignal(new AbortController().signal);
-    const released = source.withRelease(() => {});
+    const retried = source.with(Policy.retry());
+    const timed = source.with(Policy.timeout(1));
+    const signaled = source.with(Policy.signal(new AbortController().signal));
+    const released = source.with(Policy.release(() => {}));
     const entered = source.on("enter", () => {});
     const exited = source.on("exit", () => {});
     const flatMapped = source.flatMap(() => observed);

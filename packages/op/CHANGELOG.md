@@ -9,7 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- No entries yet.
+- Added `@prodkit/op/policy` with `retry`, `timeout`, `signal`, `release`, `Delay`, and retry
+  policy types for policy composition through `.with(Policy.*)`.
+
+### Changed
+
+- Replaced `.withRetry(...)`, `.withTimeout(...)`, `.withSignal(...)`, and `.withRelease(...)`
+  with `.with(Policy.retry(...))`, `.with(Policy.timeout(...))`, `.with(Policy.signal(...))`,
+  and `.with(Policy.release(...))`.
+
+### Removed
+
+- Removed root `Delay` and retry policy type exports from `@prodkit/op`; import them from
+  `@prodkit/op/policy` instead.
 
 ## [0.1.74] - 2026-05-30
 
@@ -445,5 +457,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retry timing, and composed operation semantics).
 - Improved examples and parsing validation in places where earlier behavior
   could produce weaker diagnostics or drift from production expectations.
-
-

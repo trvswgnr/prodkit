@@ -37,6 +37,10 @@
     "./di": {
       "types": "./dist/di/index.d.mts",
       "import": "./dist/di/index.mjs"
+    },
+    "./policy": {
+      "types": "./dist/policy/index.d.mts",
+      "import": "./dist/policy/index.mjs"
     }
   },
   "publishConfig": {

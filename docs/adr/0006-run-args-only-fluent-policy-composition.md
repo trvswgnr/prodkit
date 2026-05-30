@@ -11,26 +11,31 @@ packages:
 configuration (abort signals, retry, timeout, and other policies) attaches through fluent methods
 on the op before `.run()`, not through extra parameters on `.run()` itself.
 
+ADR 0009 later narrowed built-in execution policy attachment to `.with(Policy.*)` for retry,
+timeout, signal, and release. The args-only `.run()` decision here still holds.
+
 ## Decision
 
 **Args-only `.run()`.** `runOp` in `packages/op/src/core/run-op.ts` binds a fresh
-`AbortController` signal when no `.withSignal()` was composed. Tuple arguments flow from
+`AbortController` signal when no signal policy was composed. Tuple arguments flow from
 `op(...args)` into `createRunContext(..., args)` for lifecycle hooks; they are not a general
 options bag.
 
-**Policy stacks on the op value.** `.withRetry()`, `.withTimeout()`, `.withSignal()`, transforms,
-and lifecycle hooks compose left-to-right on the callable op object. Method order defines wrapper
-nesting (documented under policy ordering in `DESIGN.md`).
+**Policy stacks on the op value.** `.with(Policy.retry(...))`, `.with(Policy.timeout(...))`,
+`.with(Policy.signal(...))`, `.with(Policy.release(...))`, transforms, and lifecycle hooks compose
+left-to-right on the callable op object. Method order defines wrapper nesting (documented under
+policy ordering in `DESIGN.md`).
 
 **Static `Op.run` is sugar, not a second config surface.** `Op.run(op, ...args)` delegates to
 `op(...args).run()` with the same semantics; it does not accept signals or policies.
 
 ## Why not pass options to run?
 
-**Composition stays visible in the value.** `fetchUser(id).withTimeout(1000).withSignal(signal)`
-shows the full execution contract at the call site. Hiding retry or timeout in
-`run(id, { timeoutMs })` splits "what the op is" from "how it runs" and makes reused op values
-ambiguous (same op, different run options in different callers).
+**Composition stays visible in the value.**
+`fetchUser(id).with(Policy.timeout(1000)).with(Policy.signal(signal))` shows the full execution
+contract at the call site. Hiding retry or timeout in `run(id, { timeoutMs })` splits "what the op
+is" from "how it runs" and makes reused op values ambiguous (same op, different run options in
+different callers).
 
 **Tuple arity stays honest.** `A` in `Op<T, E, A, M>` is call arguments flowing into
 `EnterContext` / `ExitContext`, not a merged args-plus-options tuple. Mixing options into `.run()`
@@ -50,12 +55,12 @@ duplicates the fluent surface.
 documentation and test matrix cost without a clearer model than fluent composition.
 
 **Implicit global or ambient signal.** Rejected: breaks runtime-agnostic, explicit cancellation;
-callers must thread `AbortSignal` through `.withSignal()` per run intent.
+callers must thread `AbortSignal` through `.with(Policy.signal(...))` per run intent.
 
 ## Consequences
 
 - Do not add cancellation, timeout, or retry parameters to `.run()` or `Op.run`; extend fluent
-  policy methods or document new ones if a policy is missing.
+  policy attachment or document new constructors if a policy is missing.
 - Extension packages that block `.run()` until metadata is satisfied still use fluent composition
   for policies on the unblocked op.
 - README documents usage patterns; this ADR documents why execution configuration stays off the

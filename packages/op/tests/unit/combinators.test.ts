@@ -9,6 +9,7 @@ import {
   trackAbortListeners,
   TRUE,
 } from "../support/utils.js";
+import * as Policy from "../../src/policy/index.js";
 
 describe("Op.all", () => {
   test("tuple of successes in input order", async () => {
@@ -543,7 +544,7 @@ describe("combinator abort listener cleanup", () => {
     const tracked = trackAbortListeners(outer.signal);
     try {
       await Op.all([Op.of(1), Op.of(2)])
-        .withSignal(outer.signal)
+        .with(Policy.signal(outer.signal))
         .run();
       expect(tracked.activeAbortListeners).toBe(0);
     } finally {
@@ -556,7 +557,7 @@ describe("combinator abort listener cleanup", () => {
     const tracked = trackAbortListeners(outer.signal);
     try {
       const r = await Op.all([Op.of(1), Op.of(2)])
-        .withSignal(outer.signal)
+        .with(Policy.signal(outer.signal))
         .run();
       assert(r.isOk(), "should be Ok");
       expect(r.value).toEqual([1, 2]);
@@ -574,7 +575,7 @@ describe("combinator abort listener cleanup", () => {
     const tracked = trackAbortListeners(outer.signal);
     try {
       const r = await Op.all([Op.of(1), Op.of(2)], 1)
-        .withSignal(outer.signal)
+        .with(Policy.signal(outer.signal))
         .run();
       assert(r.isOk(), "should be Ok");
       expect(r.value).toEqual([1, 2]);
@@ -611,7 +612,7 @@ describe("combinator abort listener cleanup", () => {
         ],
         1,
       )
-        .withSignal(outer.signal)
+        .with(Policy.signal(outer.signal))
         .run();
 
       await Promise.resolve();
@@ -639,7 +640,7 @@ describe("combinator abort listener cleanup", () => {
             }),
         ),
       ])
-        .withSignal(outer.signal)
+        .with(Policy.signal(outer.signal))
         .run();
 
       await Promise.resolve();

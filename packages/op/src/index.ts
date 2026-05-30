@@ -17,7 +17,6 @@ import type {
   AsArgs,
 } from "./core/types.js";
 import { runOp } from "./core/run-op.js";
-import { Delay } from "./core/retry-policy.js";
 import { withBlocking, type BlockingOp } from "./blocking.js";
 import { Tagged } from "./tagged.js";
 import { type Result } from "./result.js";
@@ -33,7 +32,7 @@ const empty: Op<void, never, []> = succeed(undefined);
  *   for common patterns.
  *
  * Use `Op.run(op)` to execute an operation directly. For external cancellation,
- *   compose with `.withSignal(signal)` first and then run.
+ *   compose with `.with(Policy.signal(signal))` first and then run.
  *
  * @example
  * const op = Op(function* () {
@@ -99,8 +98,8 @@ export const Op = Object.assign(fromGenFn, {
    *
    * Negative durations are normalized to `0`. Non-finite durations fail at run time
    * with `UnhandledException`.
-   * The sleep observes surrounding cancellation from `.withSignal(...)`,
-   * `.withTimeout(...)`, and combinators.
+   * The sleep observes surrounding cancellation from `.with(Policy.signal(...))`,
+   * `.with(Policy.timeout(...))`, and combinators.
    *
    * @example
    * const delayed = Op(function* () {
@@ -194,6 +193,5 @@ export type {
   OpLifecycleHook,
 };
 export { withBlocking, type BlockingOp };
-export type { ExponentialDelayOptions, RetryDelay, RetryPolicy } from "./core/retry-policy.js";
 
-export { TimeoutError, ErrorGroup, Delay };
+export { TimeoutError, ErrorGroup };

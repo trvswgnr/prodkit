@@ -9,6 +9,8 @@ packages:
 
 Superseded by [ADR 0007](0007-timeout-widening-at-composition-boundary.md). This record documents
 the pre-plan implementation that existed before the internal Plan AST cutover.
+Policy method names in this record are historical; ADR 0009 replaced public retry, timeout,
+signal, and release methods with `.with(Policy.*)`.
 
 Policy methods (`.withRetry`, `.withTimeout`, `.withSignal`) can apply in two ways: wrap the
 current op shell, or push through to an inner op and rebuild the shell around the result.

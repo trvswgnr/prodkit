@@ -92,8 +92,9 @@ async function createPackTarball(): Promise<string> {
   return tarballPath;
 }
 
-function smokeSource(opImport: string, resultImport: string): string {
+function smokeSource(opImport: string, policyImport: string, resultImport: string): string {
   return `import { Op, TimeoutError } from ${JSON.stringify(opImport)};
+import * as Policy from ${JSON.stringify(policyImport)};
 import { TaggedError, UnhandledException } from ${JSON.stringify(resultImport)};
 
 class AssertionError extends Error {
@@ -134,7 +135,7 @@ async function runRuntimeSmoke() {
         }, { once: true });
       }),
   )
-    .withTimeout(1)
+    .with(Policy.timeout(1))
     .run();
   assert(timeoutResult.isErr() && timeoutResult.error instanceof TimeoutError, "timeout failed");
 
@@ -178,7 +179,7 @@ async function createRuntimeWorkspace(tarballPath: string) {
 async function smokeBun(workspaceDir: string) {
   await writeFile(
     path.join(workspaceDir, "runtime-smoke.mjs"),
-    `${smokeSource("@prodkit/op", "better-result")}\nawait runRuntimeSmoke();\n`,
+    `${smokeSource("@prodkit/op", "@prodkit/op/policy", "better-result")}\nawait runRuntimeSmoke();\n`,
     "utf8",
   );
   await run("bun", ["./runtime-smoke.mjs"], workspaceDir);
@@ -187,7 +188,7 @@ async function smokeBun(workspaceDir: string) {
 async function smokeDeno(workspaceDir: string) {
   await writeFile(
     path.join(workspaceDir, "runtime-smoke.mjs"),
-    `${smokeSource("@prodkit/op", "better-result")}\nawait runRuntimeSmoke();\n`,
+    `${smokeSource("@prodkit/op", "@prodkit/op/policy", "better-result")}\nawait runRuntimeSmoke();\n`,
     "utf8",
   );
   await writeFile(
@@ -215,6 +216,21 @@ function rewriteBetterResultImports(content: string): string {
   return content.replaceAll(/(from\s*["'])better-result(["'])/g, "$1./better-result.mjs$2");
 }
 
+async function copyDistMjsFiles(sourceDir: string, targetDir: string): Promise<void> {
+  mkdirSync(targetDir, { recursive: true });
+  for (const entry of await readdir(sourceDir, { withFileTypes: true })) {
+    const sourcePath = path.join(sourceDir, entry.name);
+    const targetPath = path.join(targetDir, entry.name);
+    if (entry.isDirectory()) {
+      await copyDistMjsFiles(sourcePath, targetPath);
+      continue;
+    }
+    if (!entry.name.endsWith(".mjs")) continue;
+    const content = await readFile(sourcePath, "utf8");
+    await writeFile(targetPath, rewriteBetterResultImports(content), "utf8");
+  }
+}
+
 async function smokeEdge(workspaceDir: string) {
   const edgeDir = path.join(workspaceDir, "edge");
   mkdirSync(edgeDir);
@@ -232,15 +248,11 @@ async function smokeEdge(workspaceDir: string) {
   if (!existsSync(resultEntryPath))
     throw new Error(`Missing better-result entry: ${resultEntryPath}`);
 
-  for (const file of await readdir(opDistDir)) {
-    if (!file.endsWith(".mjs")) continue;
-    const content = await readFile(path.join(opDistDir, file), "utf8");
-    await writeFile(path.join(edgeDir, file), rewriteBetterResultImports(content), "utf8");
-  }
+  await copyDistMjsFiles(opDistDir, edgeDir);
   await cp(resultEntryPath, path.join(edgeDir, "better-result.mjs"));
   await writeFile(
     path.join(edgeDir, "worker.mjs"),
-    `${smokeSource("./index.mjs", "./better-result.mjs")}
+    `${smokeSource("./index.mjs", "./policy/index.mjs", "./better-result.mjs")}
 
 export default {
   async fetch() {

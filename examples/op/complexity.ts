@@ -1,6 +1,8 @@
 // oxlint-disable no-unused-vars
-import { Delay, Op } from "@prodkit/op";
+import { Op } from "@prodkit/op";
+import { Delay } from "@prodkit/op/policy";
 import { TaggedError } from "better-result";
+import * as Policy from "@prodkit/op/policy";
 
 {
   // plain TS - error handling
@@ -118,11 +120,13 @@ const getTodo = (id: number): Effect.Effect<unknown, HttpClientError> =>
   });
 
   const result = await getTodo // same as before
-    .withRetry({
-      attempts: 3,
-      when: RequestFailed.is,
-      delay: Delay.defaultRetry,
-    })
+    .with(
+      Policy.retry({
+        attempts: 3,
+        when: RequestFailed.is,
+        delay: Delay.defaultRetry,
+      }),
+    )
     .run(1);
 }
 
@@ -219,12 +223,14 @@ const getTodo = (id: number): Effect.Effect<unknown, HttpClientError | TimeoutEx
 
   {
     const result = await getTodo
-      .withTimeout(1000)
-      .withRetry({
-        attempts: 3,
-        when: RequestFailed.is,
-        delay: Delay.defaultRetry,
-      })
+      .with(Policy.timeout(1000))
+      .with(
+        Policy.retry({
+          attempts: 3,
+          when: RequestFailed.is,
+          delay: Delay.defaultRetry,
+        }),
+      )
       .run(1);
   }
 }
@@ -390,12 +396,14 @@ const getTodo = (id: number): Effect.Effect<unknown, HttpClientError | TimeoutEx
 
   let span: Span | undefined;
   const result = await getTodo
-    .withTimeout(1000)
-    .withRetry({
-      attempts: 3,
-      when: RequestFailed.is,
-      delay: Delay.defaultRetry,
-    })
+    .with(Policy.timeout(1000))
+    .with(
+      Policy.retry({
+        attempts: 3,
+        when: RequestFailed.is,
+        delay: Delay.defaultRetry,
+      }),
+    )
     .on("enter", ({ args: [id] }) => {
       span = tracer.startSpan("getTodo", { attributes: { id } });
     })

@@ -1,8 +1,8 @@
 import * as fc from "fast-check";
 import { assert, describe, expect, test } from "vitest";
-import { Delay, Op } from "../../src/index.js";
+import { Op } from "../../src/index.js";
 import { UnhandledException } from "../../src/errors.js";
-import type { ExponentialDelayOptions } from "../../src/core/retry-policy.js";
+import { Delay, retry, type ExponentialDelayOptions } from "../../src/policy/index.js";
 
 const invalidExponentialDelayOptionsArb: fc.Arbitrary<ExponentialDelayOptions> = fc.oneof(
   fc.record({ baseMs: fc.constant(0), maxMs: fc.constant(1000), jitter: fc.constant(0.5) }),
@@ -77,11 +77,13 @@ describe("Delay.exponential invariants (property-based)", () => {
     await fc.assert(
       fc.asyncProperty(invalidExponentialDelayOptionsArb, async (options) => {
         const result = await Op.fail("retryable" as const)
-          .withRetry({
-            attempts: 2,
-            when: () => true,
-            delay: Delay.exponential(options),
-          })
+          .with(
+            retry({
+              attempts: 2,
+              when: () => true,
+              delay: Delay.exponential(options),
+            }),
+          )
           .run();
 
         assert(result.isErr(), "expected invalid policy failure");
@@ -103,11 +105,13 @@ describe("retry policy invariants (property-based)", () => {
         const program = Op(function* () {
           runAttempts += 1;
           return yield* Op.fail("always fails" as const);
-        }).withRetry({
-          attempts: policyAttempts,
-          when: () => true,
-          delay: 0,
-        });
+        }).with(
+          retry({
+            attempts: policyAttempts,
+            when: () => true,
+            delay: 0,
+          }),
+        );
 
         const result = await program.run();
         assert(result.isErr(), "expected terminal failure");
@@ -125,11 +129,13 @@ describe("retry policy invariants (property-based)", () => {
         const program = Op(function* () {
           runAttempts += 1;
           return yield* Op.fail("no retry" as const);
-        }).withRetry({
-          attempts: policyAttempts,
-          when: () => false,
-          delay: 0,
-        });
+        }).with(
+          retry({
+            attempts: policyAttempts,
+            when: () => false,
+            delay: 0,
+          }),
+        );
 
         const result = await program.run();
         assert(result.isErr(), "expected failure");
@@ -146,11 +152,13 @@ describe("retry policy invariants (property-based)", () => {
         const program = Op(function* () {
           runAttempts += 1;
           return yield* Op.fail("retryable" as const);
-        }).withRetry({
-          attempts: policyAttempts,
-          when: () => true,
-          delay: 0,
-        });
+        }).with(
+          retry({
+            attempts: policyAttempts,
+            when: () => true,
+            delay: 0,
+          }),
+        );
 
         const result = await program.run();
         assert(result.isErr(), "expected terminal failure");
@@ -175,11 +183,13 @@ describe("retry policy invariants (property-based)", () => {
               return yield* Op.fail("transient" as const);
             }
             return yield* Op.of(runAttempts);
-          }).withRetry({
-            attempts: policyAttempts,
-            when: () => true,
-            delay: 0,
-          });
+          }).with(
+            retry({
+              attempts: policyAttempts,
+              when: () => true,
+              delay: 0,
+            }),
+          );
 
           const result = await program.run();
           assert(result.isOk(), "expected success on configured attempt");

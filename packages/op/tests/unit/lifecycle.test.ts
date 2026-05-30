@@ -2,9 +2,10 @@ import { assert, describe, expect, test, vi } from "vitest";
 import { Op, TimeoutError, type EnterContext, type ExitContext } from "../../src/index.js";
 import { UnhandledException } from "../../src/errors.js";
 import { SuspendInstruction } from "../../src/core/instructions.js";
+import * as Policy from "../../src/policy/index.js";
 
 // Scope: integration behavior for cleanup/finalization and lifecycle hooks
-describe("op.withRelease", () => {
+describe("op.with(Policy.release(...))", () => {
   test("runs registered cleanup after a successful run", async () => {
     const events: string[] = [];
     const release = vi.fn((conn: { id: number }) => {
@@ -12,7 +13,7 @@ describe("op.withRelease", () => {
     });
 
     const program = Op(function* () {
-      const conn = yield* Op.of({ id: 7 }).withRelease(release);
+      const conn = yield* Op.of({ id: 7 }).with(Policy.release(release));
       events.push(`query:${conn.id}`);
       return conn.id;
     });
@@ -27,9 +28,11 @@ describe("op.withRelease", () => {
   test("runs cleanup when downstream logic fails with a typed error", async () => {
     const release = vi.fn();
     const result = await Op(function* () {
-      yield* Op.of({ id: 1 }).withRelease(() => {
-        release();
-      });
+      yield* Op.of({ id: 1 }).with(
+        Policy.release(() => {
+          release();
+        }),
+      );
       return yield* Op.fail("boom" as const);
     }).run();
 
@@ -43,7 +46,7 @@ describe("op.withRelease", () => {
     try {
       const release = vi.fn();
       const op = Op(function* () {
-        yield* Op.of({ close: release }).withRelease((conn) => conn.close());
+        yield* Op.of({ close: release }).with(Policy.release((conn) => conn.close()));
         return yield* Op.try(
           (signal) =>
             new Promise<number>((_resolve, reject) => {
@@ -53,7 +56,7 @@ describe("op.withRelease", () => {
               }
               signal.addEventListener("abort", () => reject(signal.reason), { once: true });
             }),
-        ).withTimeout(10);
+        ).with(Policy.timeout(10));
       });
 
       const runPromise = op.run();
@@ -67,7 +70,7 @@ describe("op.withRelease", () => {
     }
   });
 
-  test("withTimeout waits for async withRelease cleanup before run settles", async () => {
+  test("withTimeout waits for async release cleanup before run settles", async () => {
     vi.useFakeTimers();
     try {
       let released = false;
@@ -82,7 +85,7 @@ describe("op.withRelease", () => {
               }, 20);
             });
           },
-        }).withRelease((conn) => conn.close());
+        }).with(Policy.release((conn) => conn.close()));
 
         return yield* Op.try(
           (signal) =>
@@ -94,7 +97,7 @@ describe("op.withRelease", () => {
               signal.addEventListener("abort", () => reject(signal.reason), { once: true });
             }),
         );
-      }).withTimeout(10);
+      }).with(Policy.timeout(10));
 
       const runPromise = op.run();
       runPromise.then(() => {
@@ -121,9 +124,11 @@ describe("op.withRelease", () => {
   test("fails with UnhandledException when cleanup throws after success", async () => {
     const cleanupFault = new Error("cleanup failed");
     const result = await Op.of(1)
-      .withRelease(() => {
-        throw cleanupFault;
-      })
+      .with(
+        Policy.release(() => {
+          throw cleanupFault;
+        }),
+      )
       .run();
 
     assert(result.isErr(), "should be Err");
@@ -135,9 +140,11 @@ describe("op.withRelease", () => {
 
   test("preserves primary error when cleanup throws after typed failure", async () => {
     const result = await Op.fail("boom" as const)
-      .withRelease(() => {
-        throw new Error("cleanup failed");
-      })
+      .with(
+        Policy.release(() => {
+          throw new Error("cleanup failed");
+        }),
+      )
       .run();
 
     assert(result.isErr(), "should be Err");
@@ -145,10 +152,10 @@ describe("op.withRelease", () => {
   });
 
   test("preserves inferred op shapes", async () => {
-    const p1 = Op.of({ id: 1 }).withRelease((_value) => {});
+    const p1 = Op.of({ id: 1 }).with(Policy.release((_value) => {}));
     const p2 = Op(function* (name: string) {
       return name.length;
-    }).withRelease((_len) => {});
+    }).with(Policy.release((_len) => {}));
 
     expect((await p1.run()).isOk()).toBe(true);
     expect((await p2.run("abc")).isOk()).toBe(true);
@@ -244,8 +251,8 @@ describe('op.on("enter")', () => {
       });
       const op =
         order === "before-retry"
-          ? base.on("enter", enter).withRetry(policy)
-          : base.withRetry(policy).on("enter", enter);
+          ? base.on("enter", enter).with(Policy.retry(policy))
+          : base.with(Policy.retry(policy)).on("enter", enter);
       const result = await op.run();
       assert(result.isOk(), "should be Ok");
       expect(result.value).toBe(69);
@@ -262,7 +269,7 @@ describe('op.on("enter")', () => {
       const enter = vi.fn();
       const runPromise = Op.try((_signal) => new Promise<number>(() => {}))
         .on("enter", enter)
-        .withTimeout(10)
+        .with(Policy.timeout(10))
         .run();
       await vi.advanceTimersByTimeAsync(10);
       const result = await runPromise;
@@ -320,7 +327,7 @@ describe('op.on("exit")', () => {
 
   test('.on("exit") preserves fluent combinators', async () => {
     const finalize = vi.fn();
-    const result = await Op.of(1).withRetry().on("exit", finalize).run();
+    const result = await Op.of(1).with(Policy.retry()).on("exit", finalize).run();
     assert(result.isOk());
     expect(finalize).toHaveBeenCalledTimes(1);
   });
@@ -392,7 +399,7 @@ describe('op.on("exit")', () => {
     try {
       let timedCtx!: ExitContext<number, UnhandledException | TimeoutError>;
       const runPromise = Op.try((_signal) => new Promise<number>(() => {}))
-        .withTimeout(10)
+        .with(Policy.timeout(10))
         .on("exit", (c) => {
           timedCtx = c;
         })
@@ -435,7 +442,7 @@ describe('op.on("exit")', () => {
       let finalized = false;
       let settled = false;
       const runPromise = Op.try((_signal) => new Promise<number>(() => {}))
-        .withTimeout(10)
+        .with(Policy.timeout(10))
         .on("exit", async () => {
           await new Promise<void>((resolve) => {
             setTimeout(() => {
@@ -541,7 +548,7 @@ describe("generator finalization on early exit", () => {
                 }
                 signal.addEventListener("abort", () => reject(signal.reason), { once: true });
               }),
-          ).withTimeout(10);
+          ).with(Policy.timeout(10));
           return 1;
         } finally {
           finalized = true;
@@ -807,15 +814,17 @@ describe("Op.defer ordering and policies", () => {
     expect(mid.cause).toBe(boomSecond);
   });
 
-  test("shares LIFO stack with withRelease (release runs before defer registered earlier)", async () => {
+  test("shares LIFO stack with release policy (release runs before defer registered earlier)", async () => {
     const events: string[] = [];
     const op = Op(function* () {
       yield* Op.defer(() => {
         events.push("defer");
       });
-      yield* Op.of(2).withRelease(() => {
-        events.push("release");
-      });
+      yield* Op.of(2).with(
+        Policy.release(() => {
+          events.push("release");
+        }),
+      );
       return 3;
     });
     const r = await op.run();
@@ -838,7 +847,7 @@ describe("Op.defer ordering and policies", () => {
               }
               signal.addEventListener("abort", () => reject(signal.reason), { once: true });
             }),
-        ).withTimeout(10);
+        ).with(Policy.timeout(10));
       });
 
       const runPromise = op.run();
@@ -868,7 +877,7 @@ describe("Op.defer ordering and policies", () => {
               }
               signal.addEventListener("abort", () => reject(signal.reason), { once: true });
             }),
-        ).withSignal(controller.signal);
+        ).with(Policy.signal(controller.signal));
       });
 
       const runPromise = op.run();

@@ -1,7 +1,12 @@
 // oxlint-disable typescript/no-explicit-any
 import type { TimeoutError, UnhandledException } from "../errors.js";
 import type { Err, Result } from "../result.js";
-import type { RetryPolicy } from "./retry-policy.js";
+import type {
+  ReleasePolicyAttachment,
+  RetryPolicyAttachment,
+  SignalPolicyAttachment,
+  TimeoutPolicyAttachment,
+} from "./policy.js";
 import type { RegisterExitFinalizerInstruction, SuspendInstruction } from "./instructions.js";
 import type { Op } from "../index.js";
 
@@ -274,36 +279,17 @@ export type RequireOne<T> = {
 
 export interface FluentOp<T, E, A, M = EmptyMeta> {
   /**
-   * Wraps the operation in retry policy logic.
+   * Attaches a built-in execution policy to the operation.
    *
    * @example
-   * const resilient = Op.try(() => fetch("/ping")).withRetry();
+   * import * as Policy from "@prodkit/op/policy";
+   * const resilient = Op.try(() => fetch("/ping")).with(Policy.retry());
    */
-  withRetry(policy?: RetryPolicy): Op<T, E, A, M>;
-
-  /**
-   * Applies a timeout budget in milliseconds to the wrapped operation.
-   *
-   * @example
-   * const bounded = Op.try(() => fetch("/slow")).withTimeout(1000);
-   */
-  withTimeout(timeoutMs: number): Op<T, E | TimeoutError, A, M>;
-
-  /**
-   * Binds an external abort signal to the wrapped operation run.
-   *
-   * @example
-   * const linked = Op.of(1).withSignal(new AbortController().signal);
-   */
-  withSignal(signal: AbortSignal): Op<T, E, A, M>;
-
-  /**
-   * Registers release logic that runs after a successful value is produced.
-   *
-   * @example
-   * const managed = Op.of({ close() {} }).withRelease((r) => r.close());
-   */
-  withRelease(release: ReleaseFn<T>): Op<T, E, A, M>;
+  // Keep release first so nested Policy.release(...) callbacks infer the success value type.
+  with(policy: ReleasePolicyAttachment<T>): Op<T, E, A, M>;
+  with(policy: RetryPolicyAttachment): Op<T, E, A, M>;
+  with(policy: TimeoutPolicyAttachment): Op<T, E | TimeoutError, A, M>;
+  with(policy: SignalPolicyAttachment): Op<T, E, A, M>;
 
   /**
    * Register a handler that runs before the operation body starts.

@@ -10,7 +10,7 @@
 
 - Prefers principal-level technical reasoning with clear tradeoffs and long-term system impact.
 - Prefers agreeing on API/design direction before implementation when requirements are ambiguous.
-- Prefers `.run(...args)` to stay args-only; cancellation/config should compose fluently (for example via `.withSignal(...)`) rather than be passed to `run`.
+- Prefers `.run(...args)` to stay args-only; cancellation/config should compose fluently (for example via `.with(Policy.signal(...))`) rather than be passed to `run`.
 - Prefers user-facing docs and comments to emphasize outcomes and usage over internal implementation details.
 - Requires ASCII-only in repo text (comments, docs, changelogs): no Unicode symbols or typographic punctuation (arrows, em dashes, etc.).
 - When requesting commit message drafts, prefers why-focused messages grounded in the actual staged/unstaged diff.
@@ -37,5 +37,6 @@
 - Workspace taxonomy: `packages/*` (publishable), `packages/shared` (`@prodkit/shared`, private workspace types/config), `examples` (`@prodkit/examples`, consumer smoke workspace), `benchmarks` (`@prodkit/benchmarks`, performance harnesses), `tools` (`@prodkit/tools`, maintainer scripts), and `apps/*` reserved for runnable product/demo apps.
 - Op-native modules (runtime-agnostic, no third-party deps beyond `better-result`) ship as `@prodkit/op` subpath exports (for example `@prodkit/op/di`, `@prodkit/op/policy`); do not put them in `@prodkit/std` or separate npm packages.
 - `@prodkit/std` is a general runtime-agnostic utility layer (typed helpers for platform gaps, prefer-native, zero runtime deps, tree-shakeable subpaths such as `@prodkit/std/array`); it is not the home for op-specific features. DI lives on `@prodkit/op/di`.
+- `@prodkit/op/policy` exposes retry, timeout, signal, release, Delay, and retry policy types; keep the release `.with(...)` overload first so `Policy.release((value) => ...)` keeps success-value contextual typing.
 - Root `pnpm run gate` runs Turborepo in two phases: `build`, `typecheck`, `test`, `lint`, and `fmt:check` first (upstream `build` before downstream `typecheck`), then `@prodkit/tools` pack smoke only; do not run `examples#smoke` in gate -- it races workspace `dist/` with tools smoke rebuilds and is already covered by the tools pack harness.
 - GitHub repository canonical path is `trvswgnr/prodkit` (renamed from `trvswgnr/op`).

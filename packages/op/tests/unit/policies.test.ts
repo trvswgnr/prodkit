@@ -1,7 +1,8 @@
 import { describe, expect, test, assert, vi } from "vitest";
 import { fail, fromGenFn, succeed, _try } from "../../src/builders.js";
 import { TimeoutError, UnhandledException } from "../../src/errors.js";
-import type { RetryPolicy } from "../../src/core/retry-policy.js";
+import * as Policy from "../../src/policy/index.js";
+import type { RetryPolicy } from "../../src/policy/index.js";
 
 describe("withRetry", () => {
   class FetchError extends Error {
@@ -31,7 +32,7 @@ describe("withRetry", () => {
   ) =>
     fromGenFn(function* (id: string) {
       return yield* _try(() => fetcher(`https://example.com/${id}`));
-    }).withRetry(policy);
+    }).with(Policy.retry(policy));
 
   test("retries on failure with default options", async () => {
     const fetcher = vi.fn(createFetcher());
@@ -147,11 +148,13 @@ describe("withRetry", () => {
         throw new FetchError("transient failure");
       }
       return { ok: true as const };
-    }).withRetry({
-      attempts: 3,
-      when: (cause) => cause instanceof FetchError,
-      delay: () => 0,
-    });
+    }).with(
+      Policy.retry({
+        attempts: 3,
+        when: (cause) => cause instanceof FetchError,
+        delay: () => 0,
+      }),
+    );
 
     const result = await program.run();
     assert(result.isOk(), "result should be Ok");
@@ -169,14 +172,16 @@ describe("withRetry", () => {
         throw transient;
       }
       return "done";
-    }).withRetry({
-      attempts: 3,
-      when: (cause) => cause === transient,
-      delay: (_attempt, cause) => {
-        delayCauses.push(cause);
-        return 0;
-      },
-    });
+    }).with(
+      Policy.retry({
+        attempts: 3,
+        when: (cause) => cause === transient,
+        delay: (_attempt, cause) => {
+          delayCauses.push(cause);
+          return 0;
+        },
+      }),
+    );
 
     const result = await program.run();
     assert(result.isOk(), "result should be Ok");
@@ -199,11 +204,13 @@ describe("withRetry", () => {
 
     const parent = fromGenFn(function* () {
       const base = yield* succeed(50);
-      const fetched = yield* child().withRetry({
-        attempts: 3,
-        when: (cause) => cause instanceof FetchError,
-        delay: () => 0,
-      });
+      const fetched = yield* child().with(
+        Policy.retry({
+          attempts: 3,
+          when: (cause) => cause instanceof FetchError,
+          delay: () => 0,
+        }),
+      );
       return base + fetched;
     });
 
@@ -222,11 +229,13 @@ describe("withRetry", () => {
         throw transient;
       }
       return yield* _try(() => Promise.resolve({ url: `https://example.com/${id}` }));
-    }).withRetry({
-      attempts: 3,
-      when: (cause: unknown) => cause === transient,
-      delay: () => 0,
-    });
+    }).with(
+      Policy.retry({
+        attempts: 3,
+        when: (cause: unknown) => cause === transient,
+        delay: () => 0,
+      }),
+    );
 
     const result = await program.run("123");
     assert(result.isOk(), "result should be Ok");
@@ -242,11 +251,13 @@ describe("withRetry", () => {
         return yield* fail(new FetchError("first attempt failed"));
       }
       return { url: `https://example.com/${id}` };
-    }).withRetry({
-      attempts: 3,
-      when: (cause) => cause instanceof FetchError,
-      delay: () => 0,
-    });
+    }).with(
+      Policy.retry({
+        attempts: 3,
+        when: (cause) => cause instanceof FetchError,
+        delay: () => 0,
+      }),
+    );
 
     const result = await program.run("123");
     assert(result.isOk(), "result should be Ok");
@@ -257,7 +268,7 @@ describe("withRetry", () => {
 
 describe("withTimeout", () => {
   test("succeeds when the operation completes before timeout", async () => {
-    const program = _try(() => Promise.resolve(69)).withTimeout(100);
+    const program = _try(() => Promise.resolve(69)).with(Policy.timeout(100));
     const result = await program.run();
     assert(result.isOk(), "result should be Ok");
     expect(result.value).toBe(69);
@@ -271,7 +282,7 @@ describe("withTimeout", () => {
           new Promise<number>((resolve) => {
             setTimeout(() => resolve(69), 200);
           }),
-      ).withTimeout(100);
+      ).with(Policy.timeout(100));
       const runPromise = program.run();
       await vi.advanceTimersByTimeAsync(100);
 
@@ -304,12 +315,14 @@ describe("withTimeout", () => {
             }, 75);
           }),
       )
-        .withRetry({
-          attempts: 3,
-          when: (cause) => cause === transient,
-          delay: () => 0,
-        })
-        .withTimeout(100);
+        .with(
+          Policy.retry({
+            attempts: 3,
+            when: (cause) => cause === transient,
+            delay: () => 0,
+          }),
+        )
+        .with(Policy.timeout(100));
 
       const runPromise = program.run();
       await vi.advanceTimersByTimeAsync(100);
@@ -335,12 +348,14 @@ describe("withTimeout", () => {
             setTimeout(() => resolve(69), delay);
           }),
       )
-        .withTimeout(100)
-        .withRetry({
-          attempts: 2,
-          when: (cause) => cause instanceof TimeoutError,
-          delay: () => 0,
-        });
+        .with(Policy.timeout(100))
+        .with(
+          Policy.retry({
+            attempts: 2,
+            when: (cause) => cause instanceof TimeoutError,
+            delay: () => 0,
+          }),
+        );
 
       const runPromise = program.run();
       await vi.advanceTimersByTimeAsync(150);
@@ -362,7 +377,7 @@ describe("withSignal", () => {
     const program = _try((signal) => {
       seenSignal = signal;
       return Promise.resolve(69);
-    }).withSignal(controller.signal);
+    }).with(Policy.signal(controller.signal));
 
     const result = await program.run();
     assert(result.isOk(), "result should be Ok");
@@ -389,7 +404,7 @@ describe("withSignal", () => {
             });
           }),
         (cause) => String(cause instanceof Error ? cause.message : cause),
-      ).withSignal(controller.signal);
+      ).with(Policy.signal(controller.signal));
 
       const runPromise = program.run();
       controller.abort(new Error("request cancelled"));
@@ -431,7 +446,7 @@ describe("AbortSignal", () => {
               reject(signal.reason);
             });
           }),
-      ).withTimeout(100);
+      ).with(Policy.timeout(100));
 
       const runPromise = program.run();
       await vi.advanceTimersByTimeAsync(100);
@@ -464,12 +479,14 @@ describe("AbortSignal", () => {
             });
           }),
       )
-        .withRetry({
-          attempts: 10,
-          when: () => true,
-          delay: () => 10,
-        })
-        .withTimeout(120);
+        .with(
+          Policy.retry({
+            attempts: 10,
+            when: () => true,
+            delay: () => 10,
+          }),
+        )
+        .with(Policy.timeout(120));
 
       const runPromise = program.run();
       await vi.advanceTimersByTimeAsync(200);
@@ -493,12 +510,14 @@ describe("AbortSignal", () => {
         attempts += 1;
         return Promise.reject(transient);
       })
-        .withRetry({
-          attempts: 5,
-          when: () => true,
-          delay: () => 1000,
-        })
-        .withTimeout(50);
+        .with(
+          Policy.retry({
+            attempts: 5,
+            when: () => true,
+            delay: () => 1000,
+          }),
+        )
+        .with(Policy.timeout(50));
 
       const runPromise = program.run();
       await vi.advanceTimersByTimeAsync(200);

@@ -18,7 +18,7 @@ policy, and run parallel work without scattering reliability logic across your a
 
 ## Why this exists
 
-Async TypeScript has two huge flaws: you can't see from a function's type what it might fail with, and the standard concurrency helpers happily let sibling tasks keep running after one of them blows up. `@prodkit/op` fixes both. It builds on `better-result`'s `Result` model, generator composition, and typed error inference, then adds an async runtime with suspend/resume semantics, structured resource cleanup, cancellation-aware concurrency, and composable retry/timeout policies on top. Concurrency combinators thread cancellation through every child, so when one fails the rest actually stop instead of burning quota in the background. Retry, timeout, and external cancellation are one chained method each. Minimal runtime dependencies, a small footprint, and an API that's easy to learn and use.
+Async TypeScript has two huge flaws: you can't see from a function's type what it might fail with, and the standard concurrency helpers happily let sibling tasks keep running after one of them blows up. `@prodkit/op` fixes both. It builds on `better-result`'s `Result` model, generator composition, and typed error inference, then adds an async runtime with suspend/resume semantics, structured resource cleanup, cancellation-aware concurrency, and composable retry/timeout policies on top. Concurrency combinators thread cancellation through every child, so when one fails the rest actually stop instead of burning quota in the background. Retry, timeout, and external cancellation attach through `.with(Policy.*)` before `.run()`. Minimal runtime dependencies, a small footprint, and an API that's easy to learn and use.
 
 ## Installation
 
@@ -77,8 +77,8 @@ From **`better-result`** (recommended import path):
 
 From **`@prodkit/op`**:
 
-- `TimeoutError` -- built-in timeout failure from `.withTimeout(...)`; uses the same `TaggedError`
-  pattern as domain errors from `better-result`
+- `TimeoutError` -- built-in timeout failure from `.with(Policy.timeout(...))`; uses the same
+  `TaggedError` pattern as domain errors from `better-result`
 - `ErrorGroup` -- aggregate error from `Op.any` when every branch fails (prodkit-specific, not from
   `better-result`)
 
@@ -114,6 +114,31 @@ Public exports: `DI`, `Dependency`, `inject`, `provide`, `scoped`, `singleton`, 
 Runnable consumer examples live under
 [`examples/op/di/`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/di/) (onboarding,
 scoped cancellation, HTTP handler with pool checkout).
+
+### `@prodkit/op/policy`
+
+Policy constructors and retry delay helpers. The main `@prodkit/op` entry owns execution mechanics;
+the policy subpath only builds values passed to `.with(...)`.
+
+```ts
+import { Op } from "@prodkit/op";
+import { Delay } from "@prodkit/op/policy";
+import * as Policy from "@prodkit/op/policy";
+
+const policy = {
+  attempts: 3,
+  when: (cause: unknown) => cause instanceof Error,
+  delay: Delay.exponential({ baseMs: 100, maxMs: 1_000, jitter: 0.5 }),
+};
+
+const result = await Op.try(() => fetch("https://example.com"))
+  .with(Policy.retry(policy))
+  .with(Policy.timeout(1_000))
+  .run();
+```
+
+Public exports: `retry`, `timeout`, `signal`, `Delay`, `RetryPolicy`, `RetryDelay`, and
+`ExponentialDelayOptions`.
 
 ## Quick start
 
@@ -181,7 +206,7 @@ Registers cleanup for the **current** op run inside a generator. **`finalize(ctx
 the run `AbortSignal`, runtime **`args`**, plus **`result`**: the operation's pre-finalizer settlement result (from `better-result`, so use `.isOk()` / `.isErr()` as usual).
 
 Deferred callbacks share one stack
-with `.withRelease` / `.on("exit", ...)`: they run in **LIFO** order when the run unwinds (success, typed
+with `.with(Policy.release(...))` / `.on("exit", ...)`: they run in **LIFO** order when the run unwinds (success, typed
 failure, `UnhandledException`, timeout, or external cancellation). **All** scheduled finalizers run;
 even if one throws, the **remaining** callbacks in the stack **still run**. If a single finalizer throws, `.run()` returns
 `Err(UnhandledException)` with `cause` set to that fault. If **multiple** finalizers throw, `cause`
@@ -191,14 +216,14 @@ is a nested **`Error` chain**: the outer error matches the **first** failure dur
 without throwing add no links. `finalize` can
 be sync or async.
 
-Use `Op.defer`/`.withRelease`/`.on("exit", ...)` for effectful cleanup. Native generator
+Use `Op.defer`/`.with(Policy.release(...))`/`.on("exit", ...)` for effectful cleanup. Native generator
 `finally` blocks are only best-effort synchronous finalization; yielded or async work inside
 `finally` is not driven during early exit.
 
-`.withRelease` still invokes only `release(successValue)` (no context parameter); its stack slot is invoked with the
+`Policy.release` invokes only `release(successValue)` (no context parameter); its stack slot is invoked with the
 same **`ExitContext`** as other finalizers for this run, but the release function ignores it.
 
-Use this for step-local teardown that reads better than chaining `.withRelease` on every producer,
+Use this for step-local teardown that reads better than attaching release policy to every producer,
 or for "always run" cleanup before a risky step.
 
 ```ts
@@ -218,7 +243,7 @@ const risky = Op(function* () {
 ```
 
 `Op.defer` is only meaningful inside an `Op(function* () { ... })` body (compose with `yield*`).
-For releasing the **success value** of a single op, `.withRelease` on that op is often clearer.
+For releasing the **success value** of a single op, `.with(Policy.release(...))` on that op is often clearer.
 For lifecycle hooks at op boundaries, `.on("enter", fn)` runs setup when a wrapper starts and
 `.on("exit", fn)` runs teardown when the run unwinds.
 
@@ -228,9 +253,10 @@ Creates an op that waits for `ms` milliseconds and then succeeds with `void`.
 Negative durations are normalized to `0`. Non-finite durations fail at run time with
 `UnhandledException`.
 
-`Op.sleep` observes surrounding cancellation policy. If a run is cancelled by `.withSignal(...)`,
-`.withTimeout(...)`, or a combinator abort while sleeping, the sleep stops early and the run surfaces
-the cancellation through the normal `UnhandledException` channel.
+`Op.sleep` observes surrounding cancellation policy. If a run is cancelled by
+`.with(Policy.signal(...))`, `.with(Policy.timeout(...))`, or a combinator abort while sleeping,
+the sleep stops early and the run surfaces the cancellation through the normal
+`UnhandledException` channel.
 
 ```ts
 const poll = Op(function* () {
@@ -250,13 +276,15 @@ If `onError` is omitted, failures become `UnhandledException`.
 returns an `Op`/generator object, `Op.try` treats that object as the error value and does not run
 it.
 
-`f` receives an `AbortSignal` tied to surrounding cancellation policy (`withTimeout`, `withSignal`,
-and combinator cancellation). Forward it to cancellable APIs so in-flight work (e.g. `fetch`, DB queries) actually stops instead of
-leaking after a timeout.
+`f` receives an `AbortSignal` tied to surrounding cancellation policy (`Policy.timeout`,
+`Policy.signal`, and combinator cancellation). Forward it to cancellable APIs so in-flight work
+(e.g. `fetch`, DB queries) actually stops instead of leaking after a timeout.
 
 ```ts
+import * as Policy from "@prodkit/op/policy";
+
 const fetchUser = Op.try((signal) => fetch("/api/users/1", { signal }));
-const result = await fetchUser.withTimeout(1000).run();
+const result = await fetchUser.with(Policy.timeout(1000)).run();
 // when the 1s budget elapses, the fetch is aborted.
 ```
 
@@ -273,7 +301,7 @@ const mapped = await Op.try(
 Static runner for ops. This is equivalent to `op.run(...args)`, and is useful when you want to
 execute an op value passed around as data.
 `Op.run(op, ...args)` does not expose a cancel handle; if the caller needs external cancellation, compose
-the op with `.withSignal(signal)` before running it.
+the op with `.with(Policy.signal(signal))` before running it.
 
 ```ts
 const result = await Op.run(Op.of(7));
@@ -401,49 +429,48 @@ const lookup = Op(function* (id: string) {
 // lookup: Op<{ id: string }, PermissionError, [string]>
 ```
 
-### `.withRetry(policy?)`
+### `.with(policy)`
 
-Wraps an operation with retries.
-Useful for transient IO failures while preserving typed control flow.
+Attaches retry, timeout, external cancellation, or success-value release policy to an operation. Built-in policy values
+come from `@prodkit/op/policy`.
 
 ```ts
+import * as Policy from "@prodkit/op/policy";
+
 const policy = {
   attempts: 3,
   when: (cause: unknown) => cause instanceof Error,
   delay: (attempt: number) => attempt * 100,
 };
 
-const fetchWithRetry = Op.try(() => fetch("https://example.com")).withRetry(policy);
+const fetchWithRetry = Op.try(() => fetch("https://example.com")).with(Policy.retry(policy));
 ```
 
-### `.withTimeout(timeoutMs)`
-
-Wraps an operation with a timeout and fails with `TimeoutError` when the wrapped operation does not
-finish before `timeoutMs`.
+`Policy.retry(policy?)` wraps an operation with retries. `Policy.timeout(timeoutMs)` wraps an
+operation with a timeout and fails with `TimeoutError` when the wrapped operation does not finish
+before `timeoutMs`. `Policy.signal(signal)` binds an operation to an external `AbortSignal` so you
+can cancel in-flight work, for example when an HTTP request is aborted or a job is shut down.
+`Policy.release(release)` registers success-gated release logic for the wrapped operation's
+successful value.
 
 Composition order determines semantics:
 
 ```ts
 // timeout applies to the ENTIRE retried run
 const totalBudget = Op.try(() => fetch("https://example.com"))
-  .withRetry(policy)
-  .withTimeout(5000);
+  .with(Policy.retry(policy))
+  .with(Policy.timeout(5000));
 
 // timeout applies to EACH attempt
 const perAttempt = Op.try(() => fetch("https://example.com"))
-  .withTimeout(5000)
-  .withRetry(policy);
+  .with(Policy.timeout(5000))
+  .with(Policy.retry(policy));
 ```
-
-### `.withSignal(signal)`
-
-Binds an operation to an external `AbortSignal` so you can cancel in-flight work (for example when
-an HTTP request is aborted or a job is shut down).
 
 ```ts
 const controller = new AbortController();
-const fetchUser = Op.try((signal) => fetch("/api/users/1", { signal })).withSignal(
-  controller.signal,
+const fetchUser = Op.try((signal) => fetch("/api/users/1", { signal })).with(
+  Policy.signal(controller.signal),
 );
 
 const runPromise = fetchUser.run();
@@ -459,12 +486,12 @@ stop quickly.
 
 Runtime guarantees:
 
-- `.withTimeout(...)`, `.withSignal(...)`, and short-circuiting combinators (`Op.all`, `Op.any`,
-  `Op.race`) propagate abort through `AbortSignal`.
+- `.with(Policy.timeout(...))`, `.with(Policy.signal(...))`, and short-circuiting combinators
+  (`Op.all`, `Op.any`, `Op.race`) propagate abort through `AbortSignal`.
 - `Op.sleep(ms)` observes abort signals and stops waiting early when its enclosing run is cancelled.
 - When a combinator decides its final result early, in-flight siblings are aborted and the
   combinator waits for them to settle before returning.
-- Scheduled teardown still runs (`Op.defer`, `.withRelease`, `.on("exit", ...)`) even when a run
+- Scheduled teardown still runs (`Op.defer`, `.with(Policy.release(...))`, `.on("exit", ...)`) even when a run
   ends via timeout or external abort.
 
 Caller responsibilities:
@@ -479,6 +506,8 @@ Caller responsibilities:
 Recommended composed-run wiring:
 
 ```ts
+import * as Policy from "@prodkit/op/policy";
+
 const controller = new AbortController();
 
 const fetchJson = (url: string) =>
@@ -492,8 +521,8 @@ const loadDashboard = Op.all([
   fetchJson("/api/alerts"),
   fetchJson("/api/settings"),
 ])
-  .withTimeout(1_500)
-  .withSignal(controller.signal);
+  .with(Policy.timeout(1_500))
+  .with(Policy.signal(controller.signal));
 
 const runPromise = loadDashboard.run();
 
@@ -503,28 +532,30 @@ controller.abort(new Error("caller aborted dashboard load"));
 const result = await runPromise;
 ```
 
-### `.withRelease(release)`
+### `.with(Policy.release(release))`
 
 Registers resource release logic that runs after a successful resource-producing step settles.
 
 ```ts
+import * as Policy from "@prodkit/op/policy";
+
 const runQuery = Op(function* () {
-  const conn = yield* acquireDbConnection.withRelease((conn) => conn.release());
+  const conn = yield* acquireDbConnection.with(Policy.release((conn) => conn.release()));
   return yield* getActiveUsers(conn);
 });
 
-const result = await runQuery.withTimeout(1000).run();
+const result = await runQuery.with(Policy.timeout(1000)).run();
 // conn.release() runs even if the run times out or is externally aborted.
 ```
 
-`release` can be sync or async. `withRelease` only schedules `release` after the wrapped op
+`release` can be sync or async. `Policy.release` only schedules `release` after the wrapped op
 **succeeds**, so a failing inner op does not call `release`. If `release` throws, the run fails
 with `UnhandledException` and `cause` set to that fault (other registered finalizers **still run**
 afterward in LIFO order; multiple faults become a **nested `Error.cause` chain**, same as `Op.defer`).
 
 ### `.on("exit", finalize)`
 
-Registers unconditional finalization when the enclosing run settles (success or failure), on the same LIFO stack as `Op.defer` and `.withRelease`. **`finalize(ctx)`** receives **`ExitContext`** with run `args` and the pre-finalizer **`ctx.result`**. If `finalize` throws, `.run()` fails with `UnhandledException` and `cause` set to that fault (or a nested **`error.cause` chain** if several finalizers fault).
+Registers unconditional finalization when the enclosing run settles (success or failure), on the same LIFO stack as `Op.defer` and `.with(Policy.release(...))`. **`finalize(ctx)`** receives **`ExitContext`** with run `args` and the pre-finalizer **`ctx.result`**. If `finalize` throws, `.run()` fails with `UnhandledException` and `cause` set to that fault (or a nested **`error.cause` chain** if several finalizers fault).
 
 ```ts
 const result = await doWork.on("exit", (ctx) => telemetry.record(ctx)).run();
@@ -549,7 +580,7 @@ Ordering/composition rules:
 - Enter handlers run in wrapper order (last chained runs first).
 - Exit handlers keep the current unwind ordering.
 - Enter handlers run once per wrapper run; retry attempts happen inside that wrapper regardless
-  of whether `.withRetry(...)` is chained before or after `.on("enter", fn)`.
+  of whether `.with(Policy.retry(...))` is chained before or after `.on("enter", fn)`.
 
 ## Typed errors
 
@@ -574,7 +605,7 @@ const validate = Op(function* (name: string) {
 
 ## Retry defaults
 
-`withRetry()` with no policy uses:
+`.with(Policy.retry())` with no policy uses:
 
 - `attempts: 3`
 - `when: () => true`
@@ -585,7 +616,7 @@ You can also build your own delay function with `Delay.fixed(ms)` or
 `Delay.defaultRetry` is the pre-built delay function used by the default retry policy.
 
 ```ts
-import { Delay } from "@prodkit/op";
+import { Delay } from "@prodkit/op/policy";
 
 const policy = {
   attempts: 5,
@@ -597,9 +628,9 @@ const policy = {
 ## Built-in errors
 
 - `UnhandledException`: default wrapper when a thrown/rejected value is not mapped to a domain error.
-- `TimeoutError`: produced by `.withTimeout(timeoutMs)` when the budget expires.
+- `TimeoutError`: produced by `.with(Policy.timeout(timeoutMs))` when the budget expires.
 - `ErrorGroup`: produced by `Op.any` when all children fail.
-- **Teardown chains:** if several of `Op.defer`, `.withRelease`, or `.on("exit", ...)` callbacks throw in one run, `UnhandledException.cause` may be an `Error` whose `.cause` links onward (**first failure in LIFO execution order is the outermost message**).
+- **Teardown chains:** if several of `Op.defer`, `.with(Policy.release(...))`, or `.on("exit", ...)` callbacks throw in one run, `UnhandledException.cause` may be an `Error` whose `.cause` links onward (**first failure in LIFO execution order is the outermost message**).
 
 ## Concurrent combinators
 
@@ -691,7 +722,7 @@ that demonstrates:
 - cache/config policy lookup via `Op.race`
 - concurrent inventory/payment orchestration via `Op.all`
 - best-effort side effects via `Op.allSettled`
-- retry + timeout budgets with `withRetry`/`withTimeout`
+- retry + timeout budgets with `.with(Policy.retry(...))` and `.with(Policy.timeout(...))`
 - abort propagation into in-flight calls through `AbortSignal`
 
 Run the consumer-level checks (repo contributors, from monorepo root):

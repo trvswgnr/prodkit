@@ -2,6 +2,7 @@ import { describe, test, expect, assert, vi } from "vitest";
 import { Op } from "../../src/index.js";
 import { TaggedError, UnhandledException } from "../../src/errors.js";
 import { TRUE } from "../support/utils.js";
+import * as Policy from "../../src/policy/index.js";
 
 describe("op.map", () => {
   test("map transforms success values and preserves arity", async () => {
@@ -33,11 +34,13 @@ describe("op.map", () => {
         transformAttempts += 1;
         throw new Error("parse failed");
       })
-      .withRetry({
-        attempts: 3,
-        when: () => true,
-        delay: () => 0,
-      })
+      .with(
+        Policy.retry({
+          attempts: 3,
+          when: () => true,
+          delay: () => 0,
+        }),
+      )
       .run();
 
     assert(result.isErr(), "should be Err");
@@ -85,11 +88,13 @@ describe("op.mapErr", () => {
       return 69;
     })
       .mapErr((error) => ({ code: error }))
-      .withRetry({
-        attempts: 2,
-        when: (cause) => cause === "retryable",
-        delay: () => 0,
-      });
+      .with(
+        Policy.retry({
+          attempts: 2,
+          when: (cause) => cause === "retryable",
+          delay: () => 0,
+        }),
+      );
 
     const result = await mapped.run();
     assert(result.isOk(), "should be Ok");
@@ -124,11 +129,13 @@ describe("op.flatMap", () => {
       return n;
     })
       .flatMap((value) => Op.of(value * 2))
-      .withRetry({
-        attempts: 2,
-        when: (cause) => cause === "retry",
-        delay: () => 0,
-      });
+      .with(
+        Policy.retry({
+          attempts: 2,
+          when: (cause) => cause === "retry",
+          delay: () => 0,
+        }),
+      );
 
     const result = await op.run(4);
     assert(result.isOk(), "should be Ok");
@@ -150,11 +157,13 @@ describe("op.flatMap", () => {
           return 69;
         }),
       )
-      .withRetry({
-        attempts: 2,
-        when: () => true,
-        delay: () => 0,
-      })
+      .with(
+        Policy.retry({
+          attempts: 2,
+          when: () => true,
+          delay: () => 0,
+        }),
+      )
       .run();
 
     assert(result.isOk(), "should be Ok");

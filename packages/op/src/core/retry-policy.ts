@@ -1,7 +1,7 @@
 /** Delay in milliseconds, or a function that returns one for a retry attempt. */
 export type RetryDelay = number | ((attempt: number, cause: unknown) => number);
 
-/** Retry policy for `op.withRetry(policy)`. */
+/** Retry policy for `op.with(Policy.retry(policy))`. */
 export interface RetryPolicy {
   /** Total tries, including the first attempt. */
   attempts?: number;

@@ -1,5 +1,5 @@
 import { genPlan, getIterablePlan, getPlan } from "./plan/base.js";
-import { onEnterPlan, onExitPlan, withReleasePlan } from "./plan/lifecycle.js";
+import { onEnterPlan, onExitPlan } from "./plan/lifecycle.js";
 import { makePlanOp } from "./plan/shell.js";
 import type {
   EmptyMeta,
@@ -9,7 +9,6 @@ import type {
   LifecycleFn,
   OpInterface,
   OpLifecycleHook,
-  ReleaseFn,
   TrackedErr,
 } from "./types.js";
 import type { Op } from "../index.js";
@@ -87,19 +86,6 @@ export function onOp<T, E, A, M, Yieldable extends boolean>(
   }
 
   throw new Error(`Invalid event: ${event}`);
-}
-
-export function withReleaseOp<T, E, A, M, Yieldable extends boolean>(
-  op: OpInterface<T, E, A, M, Yieldable>,
-  release: ReleaseFn<T>,
-): OpInterface<T, E, A, M, Yieldable> {
-  const source = asPublicOp(op);
-  const iterable = iterablePlanFor(op);
-  return makePlanOp<T, E, A, M, Yieldable>(
-    (...args) => withReleasePlan(getPlan(source, args), release),
-    iterable === undefined ? undefined : () => withReleasePlan(iterable, release),
-    coerceToNullaryOp(source) !== undefined,
-  );
 }
 
 export type { EmptyMeta };

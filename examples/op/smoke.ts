@@ -30,6 +30,7 @@ import {
   createConsumerApp,
 } from "./queue-consumer.ts";
 import { assert } from "../assert.ts";
+import * as Policy from "@prodkit/op/policy";
 
 function isNamedUser(value: unknown): value is { name: string } {
   return (
@@ -95,12 +96,14 @@ async function runCoreApiSmoke() {
   });
 
   const result = await compute
-    .withRetry({
-      attempts: 2,
-      when: () => false,
-      delay: () => 10,
-    })
-    .withTimeout(500)
+    .with(
+      Policy.retry({
+        attempts: 2,
+        when: () => false,
+        delay: () => 10,
+      }),
+    )
+    .with(Policy.timeout(500))
     .run();
 
   assert(result.isOk() && result.value === Math.sqrt(5), "core smoke computation failed");
@@ -115,7 +118,7 @@ async function runCoreApiSmoke() {
         });
       }),
   )
-    .withTimeout(1)
+    .with(Policy.timeout(1))
     .run();
 
   assert(
@@ -212,7 +215,7 @@ async function runSimpleExampleSmoke() {
     until: () => false,
     intervalMs: 50,
   })
-    .withSignal(controller.signal)
+    .with(Policy.signal(controller.signal))
     .run();
   controller.abort("poll cancelled");
   const cancelledPoll = await cancelledPollPromise;
@@ -392,7 +395,9 @@ async function runSignalPropagationExampleSmoke() {
   });
 
   const controller = new AbortController();
-  const cancelledRun = cancelApp.loadProductPage.withSignal(controller.signal).run("sku-1");
+  const cancelledRun = cancelApp.loadProductPage
+    .with(Policy.signal(controller.signal))
+    .run("sku-1");
   // oxlint-disable-next-line no-unmodified-loop-condition
   for (let attempt = 0; attempt < 20 && !pricingStarted; attempt += 1) {
     await Promise.resolve();
@@ -646,7 +651,7 @@ async function runQueueConsumerExampleSmoke() {
 
   const controller = new AbortController();
   const shutdownRun = shutdownApp.runConsumerLoop
-    .withSignal(controller.signal)
+    .with(Policy.signal(controller.signal))
     .run({ pollIntervalMs: 100, batchSize: 5 });
   await delay(30);
   controller.abort("shutdown requested");
@@ -681,7 +686,7 @@ async function runQueueConsumerExampleSmoke() {
 
   const pollController = new AbortController();
   const pollAbortRun = abortDuringPollApp.runConsumerLoop
-    .withSignal(pollController.signal)
+    .with(Policy.signal(pollController.signal))
     .run({ pollIntervalMs: 100, batchSize: 1, maxIterations: 2 });
   await delay(10);
   pollController.abort(new ConsumerServiceCallError({ service: "queue", retryable: false }));
