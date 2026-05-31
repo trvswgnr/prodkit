@@ -28,6 +28,16 @@ export function assertPositiveInteger(value: number, name: string): void {
   }
 }
 
+export function assertNonNegativeInteger(value: number, name: string): void {
+  assertFiniteNumber(value, name);
+  if (!Number.isInteger(value)) {
+    throw new TypeError(`${name} must be an integer`);
+  }
+  if (value < 0) {
+    throw new RangeError(`${name} must be greater than or equal to 0`);
+  }
+}
+
 export function assertJitter(value: number): void {
   assertFiniteNumber(value, "jitter");
   if (value < 0 || value > 1) {

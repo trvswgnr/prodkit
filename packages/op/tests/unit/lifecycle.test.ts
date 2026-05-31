@@ -237,7 +237,7 @@ describe('op.on("enter")', () => {
 
   test("runs once regardless of position in chain", async () => {
     const policy = {
-      attempts: 3,
+      retries: 2,
       when: () => true,
       delay: () => 0,
     };

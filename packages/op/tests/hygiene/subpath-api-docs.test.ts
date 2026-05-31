@@ -59,6 +59,10 @@ describe("@prodkit/op/policy JSDoc coverage", () => {
     );
     expect(documented).toEqual(helperNames);
   });
+
+  test("retry policy types are documented", () => {
+    expectDocumented(checker, exports, ["RetryPolicy", "RetryDelay", "ExponentialDelayOptions"]);
+  });
 });
 
 describe("@prodkit/op/hkt JSDoc coverage", () => {

@@ -36,11 +36,11 @@ describe("Delay.exponential invariants (property-based)", () => {
           maxMs: fc.integer({ min: 1, max: 20_000 }),
           jitter: fc.double({ min: 0, max: 1, noNaN: true }),
         }),
-        fc.integer({ min: 1, max: 20 }),
-        async (options, attempt) => {
+        fc.integer({ min: 0, max: 19 }),
+        async (options, retryIndex) => {
           const maxMs = Math.max(options.baseMs, options.maxMs);
           const getDelay = Delay.exponential({ ...options, maxMs });
-          const delay = getDelay(attempt, undefined);
+          const delay = getDelay(retryIndex, undefined);
 
           expect(Number.isFinite(delay)).toBe(true);
           expect(delay).toBeGreaterThanOrEqual(0);
@@ -58,13 +58,13 @@ describe("Delay.exponential invariants (property-based)", () => {
           maxMs: fc.integer({ min: 1, max: 20_000 }),
         }),
         fc.integer({ min: 2, max: 15 }),
-        (options, maxAttempt) => {
+        (options, maxRetry) => {
           const maxMs = Math.max(options.baseMs, options.maxMs);
           const getDelay = Delay.exponential({ ...options, maxMs, jitter: 0 });
 
-          let previous = getDelay(1, undefined);
-          for (let attempt = 2; attempt <= maxAttempt; attempt += 1) {
-            const next = getDelay(attempt, undefined);
+          let previous = getDelay(0, undefined);
+          for (let retryIndex = 1; retryIndex < maxRetry; retryIndex += 1) {
+            const next = getDelay(retryIndex, undefined);
             expect(next).toBeGreaterThanOrEqual(previous);
             previous = next;
           }
@@ -79,7 +79,7 @@ describe("Delay.exponential invariants (property-based)", () => {
         const result = await Op.fail("retryable" as const)
           .with(
             retry({
-              attempts: 2,
+              retries: 1,
               when: () => true,
               delay: Delay.exponential(options),
             }),
@@ -97,17 +97,18 @@ describe("Delay.exponential invariants (property-based)", () => {
 });
 
 describe("retry policy invariants (property-based)", () => {
-  test("run attempts never exceed policy attempts", async () => {
+  test("run attempts never exceed one plus policy retries", async () => {
     await fc.assert(
-      fc.asyncProperty(fc.integer({ min: 1, max: 8 }), async (policyAttempts) => {
+      fc.asyncProperty(fc.integer({ min: 0, max: 7 }), async (policyRetries) => {
         let runAttempts = 0;
+        const maxRuns = policyRetries + 1;
 
         const program = Op(function* () {
           runAttempts += 1;
           return yield* Op.fail("always fails" as const);
         }).with(
           retry({
-            attempts: policyAttempts,
+            retries: policyRetries,
             when: () => true,
             delay: 0,
           }),
@@ -115,15 +116,15 @@ describe("retry policy invariants (property-based)", () => {
 
         const result = await program.run();
         assert(result.isErr(), "expected terminal failure");
-        expect(runAttempts).toBeLessThanOrEqual(policyAttempts);
-        expect(runAttempts).toBe(policyAttempts);
+        expect(runAttempts).toBeLessThanOrEqual(maxRuns);
+        expect(runAttempts).toBe(maxRuns);
       }),
     );
   });
 
   test("when false yields exactly one attempt", async () => {
     await fc.assert(
-      fc.asyncProperty(fc.integer({ min: 2, max: 10 }), async (policyAttempts) => {
+      fc.asyncProperty(fc.integer({ min: 1, max: 10 }), async (policyRetries) => {
         let runAttempts = 0;
 
         const program = Op(function* () {
@@ -131,7 +132,7 @@ describe("retry policy invariants (property-based)", () => {
           return yield* Op.fail("no retry" as const);
         }).with(
           retry({
-            attempts: policyAttempts,
+            retries: policyRetries,
             when: () => false,
             delay: 0,
           }),
@@ -144,17 +145,18 @@ describe("retry policy invariants (property-based)", () => {
     );
   });
 
-  test("always-fail with always-retry yields exactly policy attempts", async () => {
+  test("always-fail with always-retry yields exactly one plus policy retries", async () => {
     await fc.assert(
-      fc.asyncProperty(fc.integer({ min: 1, max: 8 }), async (policyAttempts) => {
+      fc.asyncProperty(fc.integer({ min: 0, max: 7 }), async (policyRetries) => {
         let runAttempts = 0;
+        const maxRuns = policyRetries + 1;
 
         const program = Op(function* () {
           runAttempts += 1;
           return yield* Op.fail("retryable" as const);
         }).with(
           retry({
-            attempts: policyAttempts,
+            retries: policyRetries,
             when: () => true,
             delay: 0,
           }),
@@ -162,7 +164,7 @@ describe("retry policy invariants (property-based)", () => {
 
         const result = await program.run();
         assert(result.isErr(), "expected terminal failure");
-        expect(runAttempts).toBe(policyAttempts);
+        expect(runAttempts).toBe(maxRuns);
       }),
     );
   });
@@ -171,9 +173,9 @@ describe("retry policy invariants (property-based)", () => {
     await fc.assert(
       fc.asyncProperty(
         fc.integer({ min: 1, max: 6 }),
-        fc.integer({ min: 1, max: 8 }),
-        async (successAttempt, policyAttempts) => {
-          fc.pre(successAttempt <= policyAttempts);
+        fc.integer({ min: 0, max: 7 }),
+        async (successAttempt, policyRetries) => {
+          fc.pre(successAttempt <= policyRetries + 1);
 
           let runAttempts = 0;
 
@@ -185,7 +187,7 @@ describe("retry policy invariants (property-based)", () => {
             return yield* Op.of(runAttempts);
           }).with(
             retry({
-              attempts: policyAttempts,
+              retries: policyRetries,
               when: () => true,
               delay: 0,
             }),

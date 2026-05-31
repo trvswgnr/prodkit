@@ -133,7 +133,7 @@ export function retryPlan<T, E, M>(
 
       let delayMs: number;
       try {
-        delayMs = policy.getDelay(attempt, retryCause);
+        delayMs = policy.getDelay(attempt - 1, retryCause);
       } catch (cause) {
         return yield* Result.err(new UnhandledException({ cause }));
       }

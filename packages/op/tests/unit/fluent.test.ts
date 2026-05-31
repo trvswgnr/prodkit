@@ -36,7 +36,7 @@ describe("op.map", () => {
       })
       .with(
         Policy.retry({
-          attempts: 3,
+          retries: 2,
           when: () => true,
           delay: () => 0,
         }),
@@ -90,7 +90,7 @@ describe("op.mapErr", () => {
       .mapErr((error) => ({ code: error }))
       .with(
         Policy.retry({
-          attempts: 2,
+          retries: 1,
           when: (cause) => cause === "retryable",
           delay: () => 0,
         }),
@@ -131,7 +131,7 @@ describe("op.flatMap", () => {
       .flatMap((value) => Op.of(value * 2))
       .with(
         Policy.retry({
-          attempts: 2,
+          retries: 1,
           when: (cause) => cause === "retry",
           delay: () => 0,
         }),
@@ -159,7 +159,7 @@ describe("op.flatMap", () => {
       )
       .with(
         Policy.retry({
-          attempts: 2,
+          retries: 1,
           when: () => true,
           delay: () => 0,
         }),

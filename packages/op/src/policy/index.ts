@@ -18,7 +18,7 @@ import type {
 import type { ExponentialDelayOptions, RetryDelay, RetryPolicy } from "./retry-policy.js";
 import type { ReleaseFn } from "../core/types.js";
 
-/** Creates a retry policy attachment for `op.with(...)`. */
+/** Creates a retry policy attachment for `op.with(...)`. Uses default `retries: 2` when omitted. */
 export function retry(policy?: RetryPolicy): RetryPolicyAttachment {
   const rewriter = retryRewriter(normalizeRetryPolicy(policy));
   return define<unknown, OpPolicyType, { readonly policy: RetryPolicy | undefined }>({

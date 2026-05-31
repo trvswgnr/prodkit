@@ -179,7 +179,7 @@ describe("DI cutover runtime", () => {
     };
     const cases = [
       DI.provide(
-        findUser.with(Policy.retry({ attempts: 1, when: () => true, delay: () => 0 })),
+        findUser.with(Policy.retry({ retries: 0, when: () => true, delay: () => 0 })),
         DI.singleton(DatabaseDependency, db),
       ),
       DI.provide(findUser.with(Policy.timeout(1_000)), DI.singleton(DatabaseDependency, db)),
@@ -195,7 +195,7 @@ describe("DI cutover runtime", () => {
       ),
       DI.provide(findUser, DI.singleton(DatabaseDependency, db)).with(
         Policy.retry({
-          attempts: 1,
+          retries: 0,
           when: () => true,
           delay: () => 0,
         }),

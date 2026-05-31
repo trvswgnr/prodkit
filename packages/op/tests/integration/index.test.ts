@@ -55,20 +55,20 @@ describe("OpFactory", () => {
 describe("Delay", () => {
   test("is exported and produces exponential delays", () => {
     const delay = Delay.exponential({ baseMs: 100, maxMs: 1000, jitter: 0 });
-    expect(delay(1, undefined)).toBe(100);
-    expect(delay(2, undefined)).toBe(200);
-    expect(delay(3, undefined)).toBe(400);
-    expect(delay(5, undefined)).toBe(1000);
+    expect(delay(0, undefined)).toBe(100);
+    expect(delay(1, undefined)).toBe(200);
+    expect(delay(2, undefined)).toBe(400);
+    expect(delay(4, undefined)).toBe(1000);
   });
 
   test("default retry delay is exported", () => {
     const randomSpy = vi.spyOn(Math, "random").mockReturnValue(1);
     try {
       expect(Delay.defaultRetry).toBeInstanceOf(Function);
-      expect(Delay.defaultRetry(1, undefined)).toBe(1_000);
-      expect(Delay.defaultRetry(2, undefined)).toBe(2_000);
-      expect(Delay.defaultRetry(5, undefined)).toBe(16_000);
-      expect(Delay.defaultRetry(6, undefined)).toBe(30_000);
+      expect(Delay.defaultRetry(0, undefined)).toBe(1_000);
+      expect(Delay.defaultRetry(1, undefined)).toBe(2_000);
+      expect(Delay.defaultRetry(4, undefined)).toBe(16_000);
+      expect(Delay.defaultRetry(5, undefined)).toBe(30_000);
     } finally {
       randomSpy.mockRestore();
     }
@@ -249,7 +249,7 @@ describe("Op combinators compose with Policy.timeout / Policy.retry", () => {
       return yield* Op.of(11);
     });
     const r = await Op.any([flaky()])
-      .with(retry({ attempts: 3, when: () => true, delay: () => 0 }))
+      .with(retry({ retries: 2, when: () => true, delay: () => 0 }))
       .run();
     assert(r.isOk(), "should be Ok");
     expect(r.value).toBe(11);

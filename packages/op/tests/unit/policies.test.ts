@@ -21,7 +21,7 @@ describe("Policy.retry", () => {
   };
 
   const retryFetchError: RetryPolicy = {
-    attempts: 3,
+    retries: 2,
     when: (cause) => cause instanceof FetchError,
     delay: () => 0,
   };
@@ -47,9 +47,9 @@ describe("Policy.retry", () => {
   test("retries until success with custom retry predicate and delay", async () => {
     const fetcher = vi.fn(createFetcher());
     const policy: RetryPolicy = {
-      attempts: 3,
+      retries: 2,
       when: (cause) => cause instanceof FetchError,
-      delay: (attempt) => attempt * 100,
+      delay: (retry) => (retry + 1) * 100,
     };
     const program = createFetchProgram(fetcher, policy);
 
@@ -59,7 +59,7 @@ describe("Policy.retry", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
-  test("stops after attempts and returns the last error", async () => {
+  test("stops after retries and returns the last error", async () => {
     const fetcher = vi.fn(async (_url: string) => {
       throw new FetchError("always fails");
     });
@@ -77,7 +77,7 @@ describe("Policy.retry", () => {
     });
 
     const policy: RetryPolicy = {
-      attempts: 5,
+      retries: 4,
       when: () => false,
       delay: () => 0,
     };
@@ -95,7 +95,7 @@ describe("Policy.retry", () => {
     try {
       const fetcher = vi.fn(createFetcher());
       const policy: RetryPolicy = {
-        attempts: 2,
+        retries: 1,
         when: () => true,
         delay: () => 100,
       };
@@ -117,8 +117,27 @@ describe("Policy.retry", () => {
     }
   });
 
-  test("invalid attempts fail at run time", async () => {
-    const result = await createFetchProgram(vi.fn(createFetcher()), { attempts: 0 }).run("123");
+  test("delay callback receives 0-based retry index", async () => {
+    const delayRetries: number[] = [];
+    const fetcher = vi.fn(async (_url: string) => {
+      throw new FetchError("always fails");
+    });
+    const program = createFetchProgram(fetcher, {
+      retries: 2,
+      when: () => true,
+      delay: (retry) => {
+        delayRetries.push(retry);
+        return 0;
+      },
+    });
+
+    const result = await program.run("123");
+    assert(result.isErr(), "result should be Err");
+    expect(delayRetries).toEqual([0, 1]);
+  });
+
+  test("invalid retries fail at run time", async () => {
+    const result = await createFetchProgram(vi.fn(createFetcher()), { retries: -1 }).run("123");
 
     assert(result.isErr(), "result should be Err");
     expect(result.error).toBeInstanceOf(UnhandledException);
@@ -127,8 +146,8 @@ describe("Policy.retry", () => {
     }
   });
 
-  test("non-integer attempts fail at run time", async () => {
-    const result = await createFetchProgram(vi.fn(createFetcher()), { attempts: 1.5 }).run("123");
+  test("non-integer retries fail at run time", async () => {
+    const result = await createFetchProgram(vi.fn(createFetcher()), { retries: 1.5 }).run("123");
 
     assert(result.isErr(), "result should be Err");
     expect(result.error).toBeInstanceOf(UnhandledException);
@@ -137,9 +156,20 @@ describe("Policy.retry", () => {
     }
   });
 
+  test("retries zero does not retry after failure", async () => {
+    const fetcher = vi.fn(async (_url: string) => {
+      throw new FetchError("always fails");
+    });
+    const program = createFetchProgram(fetcher, { retries: 0, when: () => true, delay: () => 0 });
+
+    const result = await program.run("123");
+    assert(result.isErr(), "result should be Err");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
   test("invalid custom delay output fails at run time", async () => {
     const result = await createFetchProgram(vi.fn(createFetcher()), {
-      attempts: 2,
+      retries: 1,
       delay: () => -1,
     }).run("123");
 
@@ -152,7 +182,7 @@ describe("Policy.retry", () => {
 
   test("invalid when fails at run time", async () => {
     const result = await createFetchProgram(vi.fn(createFetcher()), {
-      attempts: 2,
+      retries: 1,
       when: "not a function",
       delay: () => 0,
     } as unknown as RetryPolicy).run("123");
@@ -174,7 +204,7 @@ describe("Policy.retry", () => {
       return { ok: true as const };
     }).with(
       Policy.retry({
-        attempts: 3,
+        retries: 2,
         when: (cause) => cause instanceof FetchError,
         delay: () => 0,
       }),
@@ -198,9 +228,9 @@ describe("Policy.retry", () => {
       return "done";
     }).with(
       Policy.retry({
-        attempts: 3,
+        retries: 2,
         when: (cause) => cause === transient,
-        delay: (_attempt, cause) => {
+        delay: (_retry, cause) => {
           delayCauses.push(cause);
           return 0;
         },
@@ -230,7 +260,7 @@ describe("Policy.retry", () => {
       const base = yield* succeed(50);
       const fetched = yield* child().with(
         Policy.retry({
-          attempts: 3,
+          retries: 2,
           when: (cause) => cause instanceof FetchError,
           delay: () => 0,
         }),
@@ -255,7 +285,7 @@ describe("Policy.retry", () => {
       return yield* _try(() => Promise.resolve({ url: `https://example.com/${id}` }));
     }).with(
       Policy.retry({
-        attempts: 3,
+        retries: 2,
         when: (cause: unknown) => cause === transient,
         delay: () => 0,
       }),
@@ -277,7 +307,7 @@ describe("Policy.retry", () => {
       return { url: `https://example.com/${id}` };
     }).with(
       Policy.retry({
-        attempts: 3,
+        retries: 2,
         when: (cause) => cause instanceof FetchError,
         delay: () => 0,
       }),
@@ -365,7 +395,7 @@ describe("Policy.timeout", () => {
       )
         .with(
           Policy.retry({
-            attempts: 3,
+            retries: 2,
             when: (cause) => cause === transient,
             delay: () => 0,
           }),
@@ -399,7 +429,7 @@ describe("Policy.timeout", () => {
         .with(Policy.timeout(100))
         .with(
           Policy.retry({
-            attempts: 2,
+            retries: 1,
             when: (cause) => cause instanceof TimeoutError,
             delay: () => 0,
           }),
@@ -529,7 +559,7 @@ describe("AbortSignal", () => {
       )
         .with(
           Policy.retry({
-            attempts: 10,
+            retries: 9,
             when: () => true,
             delay: () => 10,
           }),
@@ -560,7 +590,7 @@ describe("AbortSignal", () => {
       })
         .with(
           Policy.retry({
-            attempts: 5,
+            retries: 4,
             when: () => true,
             delay: () => 1000,
           }),

@@ -1,21 +1,21 @@
 import {
   assertJitter,
+  assertNonNegativeInteger,
   assertNonNegativeNumber,
-  assertPositiveInteger,
   assertPositiveNumber,
   assertFiniteNumber,
 } from "./validate.js";
 
-/** Delay in milliseconds, or a function that returns one for a retry attempt. */
-export type RetryDelay = number | ((attempt: number, cause: unknown) => number);
+/** Delay in milliseconds, or `(retry, cause) => ms` before an upcoming retry. `retry` is 0-based. */
+export type RetryDelay = number | ((retry: number, cause: unknown) => number);
 
-/** Retry policy for `op.with(Policy.retry(policy))`. */
+/** Configuration for `Policy.retry(policy)`. `retries` is the post-failure budget; `delay(retry, cause)` uses a 0-based retry index. */
 export interface RetryPolicy {
-  /** Total tries, including the first attempt. */
-  attempts?: number;
+  /** How many times to retry after the first failure. */
+  retries?: number;
   /** Whether to retry after a failure. Receives the root cause. */
   when?: (cause: unknown) => boolean;
-  /** Delay in milliseconds before the next attempt. */
+  /** Delay before the next retry: fixed milliseconds or `(retry, cause) => ms`. */
   delay?: RetryDelay;
 }
 
@@ -33,11 +33,11 @@ export interface NormalizedRetryPolicy {
   readonly validate: () => void;
   readonly maxAttempts: number;
   readonly shouldRetry: (cause: unknown) => boolean;
-  readonly getDelay: (attempt: number, cause: unknown) => number;
+  readonly getDelay: (retry: number, cause: unknown) => number;
 }
 
 const DELAY_VALIDATE: unique symbol = Symbol("prodkit.op.delay.validate");
-const DEFAULT_ATTEMPTS = 3;
+const DEFAULT_RETRIES = 2;
 const DEFAULT_EXPONENTIAL_DELAY_OPTIONS = Object.freeze({
   baseMs: 1_000,
   maxMs: 30_000,
@@ -63,19 +63,19 @@ function validateExponentialDelayOptions(options: Required<ExponentialDelayOptio
   assertJitter(options.jitter);
 }
 
-type ValidatedDelay = ((attempt: number, cause: unknown) => number) & {
+type ValidatedDelay = ((retry: number, cause: unknown) => number) & {
   readonly [DELAY_VALIDATE]: () => void;
 };
 
 function withDelayValidation(
-  getDelay: (attempt: number, cause: unknown) => number,
+  getDelay: (retry: number, cause: unknown) => number,
   validate: () => void,
 ): ValidatedDelay {
   return Object.assign(getDelay, { [DELAY_VALIDATE]: validate });
 }
 
 function isValidatedDelay(
-  delay: (attempt: number, cause: unknown) => number,
+  delay: (retry: number, cause: unknown) => number,
 ): delay is ValidatedDelay {
   return DELAY_VALIDATE in delay;
 }
@@ -101,11 +101,8 @@ const exponential = (options?: ExponentialDelayOptions) => {
   const normalized = normalizeExponentialDelayOptions(options);
   const validate = () => validateExponentialDelayOptions(normalized);
 
-  return withDelayValidation((attempt) => {
-    const exp = Math.min(
-      normalized.baseMs * Math.pow(2, Math.max(0, attempt - 1)),
-      normalized.maxMs,
-    );
+  return withDelayValidation((retry) => {
+    const exp = Math.min(normalized.baseMs * Math.pow(2, retry), normalized.maxMs);
 
     if (normalized.jitter === 0) return exp;
 
@@ -118,22 +115,22 @@ const exponential = (options?: ExponentialDelayOptions) => {
 export const Delay = Object.freeze({
   /** Constant delay in milliseconds before each retry attempt. */
   fixed,
-  /** Exponential backoff with optional jitter, capped at `maxMs`. */
+  /** Exponential backoff: `baseMs * 2 ** retry`, capped at `maxMs`. */
   exponential,
-  /** Zero delay between attempts. */
+  /** Zero delay between retries. */
   immediate: fixed(0),
   /** Default exponential backoff used by `Policy.retry()` with no policy argument. */
   defaultRetry: exponential(DEFAULT_EXPONENTIAL_DELAY_OPTIONS),
 });
 
 const DEFAULT_RETRY_POLICY = Object.freeze({
-  attempts: DEFAULT_ATTEMPTS,
+  retries: DEFAULT_RETRIES,
   when: () => true,
   delay: Delay.defaultRetry,
 }) satisfies Required<RetryPolicy>;
 
 function validateRetryPolicy(policy: Required<RetryPolicy>): void {
-  assertPositiveInteger(policy.attempts, "attempts");
+  assertNonNegativeInteger(policy.retries, "retries");
 
   if (typeof policy.when !== "function") {
     throw new TypeError("when must be a function");
@@ -146,24 +143,24 @@ function validateRetryPolicy(policy: Required<RetryPolicy>): void {
   validateDelay(policy.delay);
 }
 
-function normalizeDelay(delay: RetryDelay): (attempt: number, cause: unknown) => number {
+function normalizeDelay(delay: RetryDelay): (retry: number, cause: unknown) => number {
   if (typeof delay === "number") return () => delay;
   return delay;
 }
 
 export function normalizeRetryPolicy(policy?: RetryPolicy): NormalizedRetryPolicy {
   const normalized = {
-    attempts: policy?.attempts ?? DEFAULT_RETRY_POLICY.attempts,
+    retries: policy?.retries ?? DEFAULT_RETRY_POLICY.retries,
     when: policy?.when ?? DEFAULT_RETRY_POLICY.when,
     delay: policy?.delay ?? DEFAULT_RETRY_POLICY.delay,
   } satisfies Required<RetryPolicy>;
 
   return {
     validate: () => validateRetryPolicy(normalized),
-    maxAttempts: normalized.attempts,
+    maxAttempts: normalized.retries + 1,
     shouldRetry: normalized.when,
-    getDelay: (attempt, cause) => {
-      const delay = normalizeDelay(normalized.delay)(attempt, cause);
+    getDelay: (retry, cause) => {
+      const delay = normalizeDelay(normalized.delay)(retry, cause);
       assertNonNegativeNumber(delay, "delay");
       return delay;
     },
