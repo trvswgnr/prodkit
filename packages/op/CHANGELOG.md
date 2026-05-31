@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added `Policy` namespace export on `@prodkit/op/policy` with `retry`, `timeout`, `cancel`,
   `release`, and `define`.
+- Added runnable custom policy example at `examples/op/custom-policy.ts` and a README custom policy
+  checklist linking `@prodkit/op/hkt` and `Policy.define`.
 - Restored `@prodkit/op/internal` for extension and maintainer helpers (`Blocking`, `withBlocking`,
   `CustomInstruction`, metadata inference types, `AbortSignalLike`, `unsafeCoerce`, `NEVER`, and
   related symbols).
