@@ -15,6 +15,7 @@ import {
 import { NEVER, hasBrand, isPromiseLike, unsafeCoerce } from "../shared.js";
 import type { Op } from "../index.js";
 import type { Dependency } from "./index.js";
+/** Binding failure when an injected dependency was not provided for the run. */
 export class MissingDependencyError extends Error {
   override readonly name = "MissingDependencyError";
   readonly _tag = "MissingDependencyError";
@@ -30,18 +31,19 @@ export class MissingDependencyError extends Error {
   }
 }
 
-export class AlreadyProvidedError extends Error {
-  override readonly name = "AlreadyProvidedError";
-  readonly _tag = "AlreadyProvidedError";
+/** Binding failure when the same dependency token is provided more than once. */
+export class DuplicateDependencyError extends Error {
+  override readonly name = "DuplicateDependencyError";
+  readonly _tag = "DuplicateDependencyError";
   readonly key: string;
 
   constructor(key: string) {
-    super(`${key} was already provided`);
+    super(`${key} was provided more than once`);
     this.key = key;
   }
 
-  static is(value: unknown): value is AlreadyProvidedError {
-    return value instanceof AlreadyProvidedError;
+  static is(value: unknown): value is DuplicateDependencyError {
+    return value instanceof DuplicateDependencyError;
   }
 }
 
@@ -192,7 +194,7 @@ function findProvidedToken(env: Env, dependency: AnyDependency): AnyDependency |
 
 function withProvisionEntry(env: Env, entry: AnyBinding): Env {
   if (findProvidedToken(env, entry.dependency) !== undefined) {
-    throw new AlreadyProvidedError(entry.dependency.key);
+    throw new DuplicateDependencyError(entry.dependency.key);
   }
   const value = hasBrand(entry, DI_SINGLETON_BINDING) ? entry.value : entry;
   env.set(entry.dependency, value);

@@ -2,7 +2,6 @@ import { assert, describe, expect, test } from "vitest";
 import { Op, TimeoutError } from "../../../src/index.js";
 import { UnhandledException } from "better-result";
 import { DI } from "../../../src/di/index.js";
-import { AlreadyProvidedError, MissingDependencyError } from "../../../src/di/internal.js";
 import { Policy } from "../../../src/policy/index.js";
 
 class DatabaseError extends Error {
@@ -61,7 +60,7 @@ describe("DI", () => {
     const result = await op.run();
     const cause = getUnhandledCause(result);
 
-    assert(MissingDependencyError.is(cause));
+    assert(DI.MissingDependencyError.is(cause));
     expect(cause.key).toBe("DatabaseDependency");
   });
 
@@ -107,7 +106,7 @@ describe("DI", () => {
     expect(seen).toEqual(["abc"]);
   });
 
-  test("duplicate provisioning returns UnhandledException with AlreadyProvidedError cause", async () => {
+  test("duplicate provisioning returns UnhandledException with DuplicateDependencyError cause", async () => {
     const op = Op(function* () {
       const db = yield* DI.inject(DatabaseDependency);
       return yield* db.query("user", ["1"]);
@@ -121,11 +120,11 @@ describe("DI", () => {
     ).run();
     const cause = getUnhandledCause(result);
 
-    assert(AlreadyProvidedError.is(cause));
+    assert(DI.DuplicateDependencyError.is(cause));
     expect(cause.key).toBe("DatabaseDependency");
   });
 
-  test("runtime nested provide with overlapping binding throws AlreadyProvidedError", async () => {
+  test("runtime nested provide with overlapping binding throws DuplicateDependencyError", async () => {
     const op = DI.provide(
       Op(function* () {
         const inner = DI.provide(
@@ -143,7 +142,7 @@ describe("DI", () => {
 
     const cause = getUnhandledCause(await op.run());
 
-    assert(AlreadyProvidedError.is(cause));
+    assert(DI.DuplicateDependencyError.is(cause));
     expect(cause.key).toBe("DatabaseDependency");
   });
 

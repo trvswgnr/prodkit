@@ -18,6 +18,8 @@ import {
   type ValidProvideEntries,
   type RequiredDepsOfMeta,
   ProvidedMeta,
+  MissingDependencyError,
+  DuplicateDependencyError,
 } from "./internal.js";
 
 /** Phantom-typed dependency token created with {@link Dependency}. */
@@ -84,12 +86,16 @@ export const provide = <T, E, A, M, const Entries extends readonly AnyBinding[]>
 ): Op<T, E, A, ProvidedMeta<M, Entries>> => provideOp(op, entries);
 
 /** Namespace object for dependency injection helpers. */
-export const DI = Object.freeze({
+export const DI = {
   Dependency,
   inject,
   singleton,
   scoped,
   provide,
-});
+  /** Error type for a missing binding on `error.cause` after `.run()`. */
+  MissingDependencyError,
+  /** Error type for a duplicate binding on `error.cause` after `.run()`. */
+  DuplicateDependencyError,
+} as const;
 
 export type { RequiredDeps } from "./internal.js";

@@ -112,4 +112,16 @@ describe("@prodkit/op/di JSDoc coverage", () => {
       "singleton",
     ]);
   });
+
+  test("DI binding errors are documented", () => {
+    const diSymbol = exports.find((symbol) => symbol.name === "DI");
+    assert(diSymbol, "Expected DI export");
+    const diDeclaration = diSymbol.valueDeclaration ?? diSymbol.declarations?.[0];
+    assert(diDeclaration, "Expected DI declaration");
+    const diType = checker.getTypeOfSymbolAtLocation(diSymbol, diDeclaration);
+    expectDocumented(checker, diType.getProperties(), [
+      "MissingDependencyError",
+      "DuplicateDependencyError",
+    ]);
+  });
 });
