@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added `Policy` namespace export on `@prodkit/op/policy` with `retry`, `timeout`, `cancel`,
   `release`, and `define`.
+- Added `Policy` type alias and nested type helpers (`Policy.Input`, `Policy.Source`, `Policy.Type`,
+  `Policy.BuiltIn`) on `@prodkit/op/policy` for custom policy authors.
 - Added runnable custom policy example at `examples/op/custom-policy.ts` and a README custom policy
   checklist linking `@prodkit/op/hkt` and `Policy.define`.
 - Restored `@prodkit/op/internal` for extension and maintainer helpers (`Blocking`, `withBlocking`,
@@ -40,6 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `RangeError`.
 - Renamed policy-related test suites to `Policy.retry` / `Policy.timeout` vocabulary and documented
   pre-ADR 0009 policy method names in superseded ADRs 0002 and 0007.
+- Renamed retry delay type `RetryDelay` to `Delay` so it shares a name with the `Delay` helper
+  namespace; `.with(...)` result typing now uses `HKT.Apply` directly instead of `OpPolicyResult`.
 
 ### Removed
 
@@ -52,6 +56,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed `OpPolicyArg`, `OpPolicyArgs`, `RetryPolicyType`, `CancelPolicyType`, and
   `ReleasePolicyType` from `@prodkit/op/policy`; identity policies use `OpPolicyType`, and only
   `TimeoutPolicyType` remains as a distinct HKT for error widening.
+- Removed `OpPolicy`, `OpPolicyInput`, `OpPolicySource`, `OpPolicyType`, `OpPolicyResult`,
+  `ApplyOpPolicy`, and `BuiltInPolicy` from `@prodkit/op/policy` public exports; use the `Policy`
+  type alias and nested helpers instead.
 - Removed `definePolicy` from `@prodkit/op/policy`; use `define` only.
 - Removed extension-only exports from the main `@prodkit/op` entry (`Blocking`, `withBlocking`,
   `BlockingOp`, `EmptyMeta`, `CustomInstruction`, `MergeMeta`, `InferOpMeta`, `InferInstructionMeta`,

@@ -145,9 +145,10 @@ const result = await Op.try(() => fetch("https://example.com"))
 Public exports:
 
 - Values: `Policy`, `Delay`
-- Types: `RetryPolicy`, `RetryDelay`, `ExponentialDelayOptions`, `RetryPolicyAttachment`,
-  `TimeoutPolicyAttachment`, `CancelPolicyAttachment`, `ReleasePolicyAttachment`, `BuiltInPolicy`,
-  `OpPolicy`, `OpPolicyInput`, `OpPolicySource`, `OpPolicyType`, `OpPolicyResult`, `ApplyOpPolicy`
+- Types: `Policy` (custom policy values and factories), `Policy.Input`, `Policy.Source`, `Policy.Type`,
+  `Policy.BuiltIn`, `RetryPolicy`, `Delay` (retry delay configuration), `ExponentialDelayOptions`,
+  `RetryPolicyAttachment`, `TimeoutPolicyAttachment`, `CancelPolicyAttachment`,
+  `ReleasePolicyAttachment`, `TimeoutPolicyType`
 
 Built-in attachments use `Policy.retry`, `Policy.timeout`, `Policy.cancel`, and `Policy.release`.
 Custom policies use `Policy.define(...)`. Custom policies that transform `Op<T, E, A, M>` at the
@@ -205,8 +206,8 @@ subpath does not re-export these symbols.
    re-export HKT).
 2. Declare a policy HKT with `[HKT.TYPE]: Op<...>` describing how the attachment transforms
    `Op<T, E, A, M>` (for example widening `E` with a domain error).
-3. Return `Policy.define(...)` from a factory; use `source.wrap`, `source.rewrite`, or
-   `source.around` inside `apply`.
+3. Return `Policy.define(...)` from a factory typed as `Policy<unknown, YourPolicyHKT>`; use
+   `source.wrap`, `source.rewrite`, or `source.around` inside `apply`.
 4. Attach with `.with(yourPolicy(...))` before `.run()`.
 
 Runnable walkthrough:

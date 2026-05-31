@@ -227,7 +227,8 @@ existing "stop retrying and return the last result" behavior.
 
 ## Open policy protocol
 
-`.with(...)` is a single generic hook over `OpPolicy<OpPolicyInput<T, E, A, M>, F>`.
+`.with(...)` is a single generic hook over `Policy<Policy.Input<T, E, A, M>, F>` (internal name:
+`OpPolicy<OpPolicyInput<T, E, A, M>, F>`).
 The policy protocol lives under `packages/op/src/policy/`, while the reusable HKT encoding lives in
 `packages/op/src/hkt.ts` and is exported as `@prodkit/op/hkt`. The `F` parameter is an HKT:
 `HKT.PARAMS` receives `[T, E, A, M]`, and `[HKT.TYPE]` returns the next `Op<T, E, A, M>`.
@@ -236,7 +237,7 @@ Built-in policy types are just instances of that protocol, so
 Custom policy authors use `HKT.Param<this, n>` to read applied slots and declare
 `readonly [HKT.TYPE]: Op<...>`.
 
-`OpPolicyInput` is carried in a contravariant phantom slot. That is what keeps
+`Policy.Input` (internal: `OpPolicyInput`) is carried in a contravariant phantom slot. That is what keeps
 `Policy.release((value) => ...)` contextually typed from the wrapped op's success value while still
 letting universal policies use `unknown` input.
 
