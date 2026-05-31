@@ -77,9 +77,6 @@ importers:
       '@prodkit/op':
         specifier: workspace:*
         version: link:../packages/op
-      '@prodkit/std':
-        specifier: workspace:*
-        version: link:../packages/std
       better-result:
         specifier: 2.9.0
         version: 2.9.0

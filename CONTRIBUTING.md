@@ -35,10 +35,9 @@ The quality gate includes a consumer-level smoke test that installs `@prodkit/op
 from `npm pack` tarballs via `examples/` in an isolated temp workspace.
 
 Pull requests and pushes to `main` run the same gate in `.github/workflows/ci.yml`.
-CI also publishes Vitest coverage reports as workflow artifacts (`op-coverage`, `std-coverage`)
-so reviewers can audit unit, integration, type, and property-law coverage evidence from the run.
-The gate runs `@prodkit/op` coverage for review; `@prodkit/std` coverage runs when utility modules
-ship.
+CI also publishes a Vitest coverage report as a workflow artifact (`op-coverage`) so reviewers can
+audit unit, integration, type, and property-law coverage evidence from the run. `@prodkit/std`
+coverage is omitted until utility modules ship in `packages/std/src/`.
 A `changelog:api:check` gate step fails when `packages/op/src/index.ts`,
 `packages/op/src/di/index.ts`, `packages/op/src/policy/index.ts`, or `packages/op/src/hkt.ts`
 public export names change without an update to that package's `CHANGELOG.md` under

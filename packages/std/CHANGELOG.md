@@ -5,9 +5,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Changed
 
-- No entries yet.
+- Trimmed package README to a reserved placeholder; removed `@prodkit/std` from the examples
+  workspace until utility modules ship.
+- Dropped `@prodkit/std` coverage from the root quality gate and CI until `packages/std/src/` has
+  code to cover.
 
 ## [0.1.3] - 2026-05-30
 

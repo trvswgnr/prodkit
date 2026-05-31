@@ -9,7 +9,7 @@ examples, benchmarks, and maintainer tooling.
 Use each publishable package README under `packages/*/README.md` as the source of truth for that package's installation, API reference, usage examples, and consumer-facing commands:
 
 - [`@prodkit/op`](packages/op/README.md) (published to npm with the package)
-- [`@prodkit/std`](packages/std/README.md) (runtime-agnostic utilities; DI lives on `@prodkit/op/di`)
+- [`@prodkit/std`](packages/std/README.md) (reserved; runtime-agnostic utilities planned)
 
 Other workspace roots are maintainer- or CI-oriented: [`examples`](examples/) (`@prodkit/examples`, with Op samples under `examples/op/` and DI under `examples/op/di/`), [`tools`](tools/) (`@prodkit/tools`), and [`benchmarks`](benchmarks/) (`@prodkit/benchmarks`).
 
