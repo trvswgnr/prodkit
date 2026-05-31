@@ -39,9 +39,10 @@ CI also publishes Vitest coverage reports as workflow artifacts (`op-coverage`, 
 so reviewers can audit unit, integration, type, and property-law coverage evidence from the run.
 The gate runs `@prodkit/op` coverage for review; `@prodkit/std` coverage runs when utility modules
 ship.
-A `changelog:api:check` gate step fails when `packages/op/src/index.ts` or
-`packages/op/src/di/index.ts` public export names change without an update to that package's
-`CHANGELOG.md` under `## [Unreleased]`. Internal re-export paths do not count as API changes.
+A `changelog:api:check` gate step fails when `packages/op/src/index.ts`,
+`packages/op/src/di/index.ts`, `packages/op/src/policy/index.ts`, or `packages/op/src/hkt.ts`
+public export names change without an update to that package's `CHANGELOG.md` under
+`## [Unreleased]`. Internal re-export paths do not count as API changes.
 A `bundle-size` job compares `@prodkit/op` minified + gzip bundle size on pull requests via
 `compressed-size-action`; runtime regressions are tracked separately by CodSpeed
 (see [`packages/op/PERFORMANCE.md`](packages/op/PERFORMANCE.md) and [`benchmarks/op/README.md`](benchmarks/op/README.md)).
@@ -104,7 +105,8 @@ If a behavior is an internal invariant of one module, keep it in unit; if it is 
 - Internal runtime concerns are split into focused modules under `packages/op/src/`:
   - `core/` (core operation contracts and execution runtime pieces)
   - `builders.ts` (primitive operation constructors)
-  - `policies.ts` (retry, timeout, and signal policies)
+  - `policy/` (retry, timeout, cancel, release policies and `Delay` helpers)
+  - `hkt.ts` (reusable HKT primitives for `@prodkit/op/hkt`)
   - `combinators.ts` (all/any/race combinators)
   - `errors.ts`, `result.ts`, `tagged.ts` (shared domain contracts)
   - `shared.ts` (small shared type/runtime helpers)
@@ -142,10 +144,11 @@ nullary core ops and always settle through the same driver:
 packages/op/src/index.ts          (Op factory, Op.run, re-exports)
   |-- builders.ts                 (Op.of, Op.try, fromGenFn, Op.defer, ...)
   |-- combinators.ts              (Op.all, Op.any, Op.race, ...)
-  |-- core/retry-policy.ts          (RetryPolicy, Delay)
+  |-- policy/                     (Policy.* constructors, retry-policy, plan rewriters)
+  |-- hkt.ts                      (@prodkit/op/hkt entry)
   |-- core/run-op.ts              (runOp -> drive)
   |-- core/fluent.ts              (makeCoreOp, makePlanOp shell, fluent transforms)
-  |-- core/plan/                  (Plan AST, policy nodes, shell)
+  |-- core/plan/                  (Plan AST, lifecycle, shell)
   |-- core/runtime.ts             (createRunContext, drive)  <-- single execution engine
   |-- core/instructions.ts        (Suspend, RegisterExitFinalizer, Err yields)
 
@@ -174,7 +177,7 @@ packages/std/src/                   (future runtime-agnostic utility subpaths)
    `Err(UnhandledException)` when teardown fails ([ADR 0003](docs/adr/0003-three-cleanup-channels.md),
    [ADR 0005](docs/adr/0005-unhandled-exception-runtime-channel.md)).
 
-Fluent policies (retry, timeout, signal) attach on the op value **before** `.run()`, not as extra
+Built-in policies (retry, timeout, cancel) attach on the op value **before** `.run()`, not as extra
 `run` parameters ([ADR 0006](docs/adr/0006-run-args-only-fluent-policy-composition.md)).
 
 ### Instruction lifecycle
@@ -202,8 +205,9 @@ Built-in policies attach through `.with(Policy.*)` on the op value (`packages/op
 - **Retry** (`retryPlan`): loops inner execution inside a `SuspendInstruction`, applies
   `RetryPolicy` delay via abortable sleep, and stops on success, non-retryable `Err`, or abort.
 - **Timeout** (`timeoutPlan`): races inner `executePlanInterruptOnAbort` against a timer;
-  surfaces `TimeoutError` on the typed channel. Transforms that change error types use timeout-specific
-  rebuild hooks ([ADR 0002](docs/adr/0002-ophooks-rebuild-and-timeout-asymmetry.md)).
+  surfaces `TimeoutError` on the typed channel. Error-channel transforms compose through plan
+  rewriters ([ADR 0007](docs/adr/0007-timeout-widening-at-composition-boundary.md); historical
+  hook detail in superseded [ADR 0002](docs/adr/0002-ophooks-rebuild-and-timeout-asymmetry.md)).
 - **Cancel** (`cancelPlan`): merges a caller-supplied `AbortSignal` with the run context signal
   through a composed `AbortController` so either parent or bound signal can cancel the inner run.
 

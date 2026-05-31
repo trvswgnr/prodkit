@@ -17,6 +17,16 @@ const MONITORED = [
     changelog: "packages/op/CHANGELOG.md",
     label: "@prodkit/op/di public exports",
   },
+  {
+    entrypoint: "packages/op/src/policy/index.ts",
+    changelog: "packages/op/CHANGELOG.md",
+    label: "@prodkit/op/policy public exports",
+  },
+  {
+    entrypoint: "packages/op/src/hkt.ts",
+    changelog: "packages/op/CHANGELOG.md",
+    label: "@prodkit/op/hkt public exports",
+  },
 ] as const;
 
 type ExportEntry = {

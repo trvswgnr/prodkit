@@ -1,44 +1,14 @@
-import { TimeoutError, UnhandledException } from "../../errors.js";
+import { UnhandledException } from "../../errors.js";
 import { Result } from "../../result.js";
 import { unsafeCoerce } from "../../shared.js";
 import { RegisterExitFinalizerInstruction, SuspendInstruction } from "../instructions.js";
-import type { EnterContext, EnterFn, ExitContext, ExitFn, ReleaseFn } from "../types.js";
+import type { EnterContext, EnterFn, ExitContext, ExitFn } from "../types.js";
 import { createPlan, type Plan } from "./base.js";
-
-export function withReleasePlan<T, E, M>(
-  source: Plan<T, E, M>,
-  release: ReleaseFn<T>,
-): Plan<T, E, M> {
-  const build = (inner: Plan<T, E, M>) => withReleasePlan(inner, release);
-
-  return createPlan(
-    function* () {
-      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
-        source.execute(context),
-      );
-
-      if (result.isErr()) return yield* result;
-
-      yield new RegisterExitFinalizerInstruction(() =>
-        Promise.resolve(release(result.value)).then(() => {}),
-      );
-
-      return result.value;
-    },
-    {
-      withRetry: (policy) => build(source.withRetry(policy)),
-      withTimeout: (timeoutMs) => withReleasePlan(source.withTimeout(timeoutMs), release),
-      withCancel: (abortSignal) => build(source.withCancel(abortSignal)),
-    },
-  );
-}
 
 export function onEnterPlan<T, E, A, M>(
   source: Plan<T, E, M>,
   initialize: EnterFn<A>,
 ): Plan<T, E, M> {
-  const build = (inner: Plan<T, E, M>) => onEnterPlan(inner, initialize);
-
   return createPlan(
     function* () {
       yield new SuspendInstruction(async (context) => {
@@ -58,9 +28,7 @@ export function onEnterPlan<T, E, A, M>(
       return result.value;
     },
     {
-      withRetry: (policy) => build(source.withRetry(policy)),
-      withTimeout: (timeoutMs) => onEnterPlan(source.withTimeout(timeoutMs), initialize),
-      withCancel: (abortSignal) => build(source.withCancel(abortSignal)),
+      rewrite: (self, rewriter) => rewriter.enter?.(source, initialize) ?? rewriter.apply(self),
     },
   );
 }
@@ -69,8 +37,6 @@ export function onExitPlan<T, E, A, M>(
   source: Plan<T, E, M>,
   finalize: ExitFn<T, E, A>,
 ): Plan<T, E, M> {
-  const build = (inner: Plan<T, E, M>) => onExitPlan(inner, finalize);
-
   return createPlan(
     function* () {
       yield new RegisterExitFinalizerInstruction(async (ctx) => {
@@ -92,13 +58,7 @@ export function onExitPlan<T, E, A, M>(
       return result.value;
     },
     {
-      withRetry: (policy) => build(source.withRetry(policy)),
-      withTimeout: (timeoutMs) =>
-        onExitPlan(
-          source.withTimeout(timeoutMs),
-          finalize as unknown as ExitFn<T, E | TimeoutError, A>,
-        ),
-      withCancel: (abortSignal) => build(source.withCancel(abortSignal)),
+      rewrite: (self, rewriter) => rewriter.exit?.(source, finalize) ?? rewriter.apply(self),
     },
   );
 }

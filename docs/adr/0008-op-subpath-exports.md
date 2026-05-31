@@ -23,6 +23,7 @@ npm packages or as `@prodkit/std` modules.
 @prodkit/op              core runtime (Op factory, combinators, .run(), lifecycle)
 @prodkit/op/di           dependency tokens, inject, provide, scoped/singleton bindings
 @prodkit/op/policy       policy constructors and Delay helpers (see ADR 0009)
+@prodkit/op/hkt          reusable HKT primitives for open type-level transforms (see ADR 0009)
 ```
 
 Each subpath is a separate tsdown entry and `exports` map entry. The main `@prodkit/op` entry must

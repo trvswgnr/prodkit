@@ -1,11 +1,103 @@
-import { TimeoutError, UnhandledException } from "../../errors.js";
-import { Result } from "../../result.js";
-import { sleepWithSignal } from "../../shared.js";
-import { SuspendInstruction } from "../instructions.js";
-import { createRunContext } from "../runtime.js";
-import { normalizeRetryPolicy, type NormalizedRetryPolicy } from "../retry-policy.js";
-import type { RunContext } from "../types.js";
-import { createPlan, executePlanInterruptOnAbort, type Plan } from "./base.js";
+import { TimeoutError, UnhandledException } from "../errors.js";
+import { Result } from "../result.js";
+import { sleepWithSignal } from "../shared.js";
+import { RegisterExitFinalizerInstruction, SuspendInstruction } from "../core/instructions.js";
+import { createRunContext } from "../core/runtime.js";
+import { normalizeRetryPolicy, type NormalizedRetryPolicy } from "./retry-policy.js";
+import type { EnterFn, ExitFn, ReleaseFn, RunContext, TrackedErr } from "../core/types.js";
+import {
+  createPlan,
+  executePlanInterruptOnAbort,
+  type Plan,
+  type PlanRewriter,
+} from "../core/plan/base.js";
+import { onEnterPlan, onExitPlan } from "../core/plan/lifecycle.js";
+import { mapErrPlan, mapPlan, recoverPlan, tapErrPlan, tapPlan } from "../core/plan/transforms.js";
+
+class DelegatingPlanRewriter implements PlanRewriter {
+  apply!: PlanRewriter["apply"];
+
+  release<T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T>): Plan<unknown, unknown, unknown> {
+    return releasePlan(source.rewrite<T, E, M>(this), release);
+  }
+
+  enter<T, E, A, M>(
+    source: Plan<T, E, M>,
+    initialize: EnterFn<A>,
+  ): Plan<unknown, unknown, unknown> {
+    return onEnterPlan(source.rewrite<T, E, M>(this), initialize);
+  }
+
+  exit<T, E, A, M>(
+    source: Plan<T, E, M>,
+    finalize: ExitFn<T, E, A>,
+  ): Plan<unknown, unknown, unknown> {
+    return onExitPlan(source.rewrite<T, E, M>(this), finalize);
+  }
+
+  map<T, E, U, M>(
+    source: Plan<T, E, M>,
+    transform: (value: T) => U,
+  ): Plan<unknown, unknown, unknown> {
+    return mapPlan(source.rewrite<T, E, M>(this), transform);
+  }
+
+  tap<T, E, R, M>(
+    source: Plan<T, E, M>,
+    observe: (value: T) => R,
+  ): Plan<unknown, unknown, unknown> {
+    return tapPlan(source.rewrite<T, E, M>(this), observe);
+  }
+
+  mapErr<T, E, E2, M>(
+    source: Plan<T, E, M>,
+    transform: (error: TrackedErr<E>) => E2,
+  ): Plan<unknown, unknown, unknown> {
+    return mapErrPlan(source.rewrite<T, E, M>(this), transform);
+  }
+
+  tapErr<T, E, R, M>(
+    source: Plan<T, E, M>,
+    observe: (error: TrackedErr<E>) => R,
+  ): Plan<unknown, unknown, unknown> {
+    return tapErrPlan(source.rewrite<T, E, M>(this), observe);
+  }
+
+  recover<T, E, ECaught extends TrackedErr<E>, R, M>(
+    source: Plan<T, E, M>,
+    predicate: (error: TrackedErr<E>) => error is ECaught,
+    handler: (error: ECaught) => R,
+  ): Plan<unknown, unknown, unknown> {
+    return recoverPlan(source.rewrite<T, E, M>(this), predicate, handler);
+  }
+}
+
+function createDelegatingRewriter(apply: PlanRewriter["apply"]): PlanRewriter {
+  const rewriter = new DelegatingPlanRewriter();
+  rewriter.apply = apply;
+  return rewriter;
+}
+
+export function releasePlan<T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T>): Plan<T, E, M> {
+  return createPlan(
+    function* () {
+      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
+        source.execute(context),
+      );
+
+      if (result.isErr()) return yield* result;
+
+      yield new RegisterExitFinalizerInstruction(() =>
+        Promise.resolve(release(result.value)).then(() => {}),
+      );
+
+      return result.value;
+    },
+    {
+      rewrite: (self, rewriter) => rewriter.release?.(source, release) ?? rewriter.apply(self),
+    },
+  );
+}
 
 export function retryPlan<T, E, M>(
   source: Plan<T, E, M>,
@@ -88,8 +180,25 @@ export function cancelPlan<T, E, M>(
   });
 }
 
-function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
-  return sleepWithSignal(ms, signal).catch(() => {});
+export function retryRewriter(policy?: NormalizedRetryPolicy): PlanRewriter {
+  const retryPolicy = policy ?? normalizeRetryPolicy();
+  return createDelegatingRewriter((source) => retryPlan(source, retryPolicy));
+}
+
+export function timeoutRewriter(timeoutMs: number): PlanRewriter {
+  return createDelegatingRewriter((source) => timeoutPlan(source, timeoutMs));
+}
+
+export function cancelRewriter(abortSignal: AbortSignal): PlanRewriter {
+  return createDelegatingRewriter((source) => cancelPlan(source, abortSignal));
+}
+
+async function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
+  try {
+    return await sleepWithSignal(ms, signal);
+  } catch {
+    // intentionally ignored
+  }
 }
 
 async function runWithBoundSignal<T, E>(

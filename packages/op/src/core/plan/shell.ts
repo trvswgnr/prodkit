@@ -1,8 +1,10 @@
 import { Result } from "../../result.js";
 import { OP_BOUND_BRAND, OP_BRAND, unsafeCoerce } from "../../shared.js";
-import { OP_POLICY, type BuiltInPolicy } from "../policy.js";
 import { createRunContext } from "../runtime.js";
-import { normalizeRetryPolicy } from "../retry-policy.js";
+import { SuspendInstruction } from "../instructions.js";
+import type { UnhandledException } from "../../errors.js";
+import type { Op } from "../../index.js";
+import type { OpPolicy, OpPolicyInput, OpPolicySource, OpPolicyType } from "../../policy/types.js";
 import type {
   AnyNullaryOp,
   AsArgs,
@@ -11,10 +13,19 @@ import type {
   ExitFn,
   OpInterface,
   OpLifecycleHook,
+  RunContext,
   TrackedErr,
 } from "../types.js";
-import { OP_PLAN_BIND, genPlan, type Plan, type PlanBackedOp, type PlanBinder } from "./base.js";
-import { onEnterPlan, onExitPlan, withReleasePlan } from "./lifecycle.js";
+import {
+  OP_PLAN_BIND,
+  createPlan,
+  genPlan,
+  type Plan,
+  type PlanBackedOp,
+  type PlanBinder,
+  type PlanRewriter,
+} from "./base.js";
+import { onEnterPlan, onExitPlan } from "./lifecycle.js";
 import {
   flatMapPlan,
   mapErrPlan,
@@ -31,6 +42,58 @@ type PlanShellContext<T, E, A, M> = {
   ) => (() => Plan<TNext, ENext, MNext>) | undefined;
   bound: boolean;
 };
+
+type PolicyWrapFn = <TNext, ENext, MNext>(
+  transform: (plan: Plan<unknown, unknown, unknown>) => Plan<TNext, ENext, MNext>,
+) => unknown;
+
+class PolicySourceImpl {
+  wrapPlan: PolicyWrapFn;
+
+  constructor(wrapPlan: PolicyWrapFn) {
+    this.wrapPlan = wrapPlan;
+  }
+
+  wrap<T, E, A, M, TNext, ENext, MNext>(
+    transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
+  ): Op<TNext, ENext, AsArgs<A>, MNext> {
+    // SAFETY: wrapPlan returns the same branded Op runtime shell for the enclosing arity.
+    return unsafeCoerce<Op<TNext, ENext, AsArgs<A>, MNext>>(
+      this.wrapPlan(
+        transform as (plan: Plan<unknown, unknown, unknown>) => Plan<TNext, ENext, MNext>,
+      ),
+    );
+  }
+
+  rewrite<A, TNext, ENext, MNext>(rewriter: PlanRewriter): Op<TNext, ENext, AsArgs<A>, MNext> {
+    // SAFETY: Plan.rewrite returns a branded plan with the policy layer's selected type target.
+    return unsafeCoerce<Op<TNext, ENext, AsArgs<A>, MNext>>(
+      this.wrapPlan((plan) => plan.rewrite<TNext, ENext, MNext>(rewriter)),
+    );
+  }
+
+  around<T, E, A, M, TNext, ENext, MNext = M>(
+    run: (
+      next: (context: RunContext<readonly unknown[]>) => Promise<Result<T, E | UnhandledException>>,
+      context: RunContext<readonly unknown[]>,
+    ) => PromiseLike<Result<TNext, ENext | UnhandledException>>,
+  ): Op<TNext, ENext, AsArgs<A>, MNext> {
+    // SAFETY: the generated plan preserves the enclosing policy source arity.
+    return unsafeCoerce<Op<TNext, ENext, AsArgs<A>, MNext>>(
+      this.wrapPlan((plan) => {
+        const typedPlan = plan as Plan<T, E, M>;
+        return createPlan<TNext, ENext, MNext>(function* () {
+          const result: Result<TNext, ENext | UnhandledException> = yield* new SuspendInstruction(
+            (context) => run((nextContext) => typedPlan.execute(nextContext), context),
+          );
+
+          if (result.isErr()) return yield* result;
+          return result.value;
+        });
+      }),
+    );
+  }
+}
 
 function wrapPlanTransform<T, E, A, M, Yieldable extends boolean, TNext, ENext, MNext>(
   ctx: PlanShellContext<T, E, A, M>,
@@ -50,23 +113,11 @@ function fluentMethodsForContext<T, E, A, M, Yieldable extends boolean>(
     transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
   ) => wrapPlanTransform<T, E, A, M, Yieldable, TNext, ENext, MNext>(ctx, transform);
 
+  const policySource = new PolicySourceImpl(wrap) as OpPolicySource<T, E, AsArgs<A>, M>;
+
   return {
-    with: (policy: BuiltInPolicy<T>) => {
-      switch (policy[OP_POLICY]) {
-        case "retry": {
-          const retryPolicy = normalizeRetryPolicy(policy.policy);
-          return wrap((plan) => plan.withRetry(retryPolicy));
-        }
-        case "timeout":
-          return wrap((plan) => plan.withTimeout(policy.timeoutMs));
-        case "cancel":
-          return wrap((plan) => plan.withCancel(policy.abortSignal));
-        case "release":
-          return wrap((plan) => withReleasePlan(plan, policy.release));
-        default:
-          throw new TypeError("Invalid Op policy");
-      }
-    },
+    with: <F extends OpPolicyType>(policy: OpPolicy<OpPolicyInput<T, E, AsArgs<A>, M>, F>) =>
+      policy.apply(policySource),
     on: (event: OpLifecycleHook, handler: unknown) => {
       if (event === "enter") {
         const initialize = handler as EnterFn<A>;

@@ -1,18 +1,19 @@
-import { TimeoutError, UnhandledException } from "../../errors.js";
+import { UnhandledException } from "../../errors.js";
 import type { Op } from "../../index.js";
 import { Result } from "../../result.js";
 import { isIterableOp, unsafeCoerce } from "../../shared.js";
 import { driveIterator } from "../runtime.js";
-import { normalizeRetryPolicy, type NormalizedRetryPolicy } from "../retry-policy.js";
 import type {
   AsArgs,
   EmptyMeta,
+  EnterFn,
+  ExitFn,
   Instruction,
   OpInterface,
+  ReleaseFn,
   RunContext,
   TrackedErr,
 } from "../types.js";
-import { cancelPlan, retryPlan, timeoutPlan } from "./policies.js";
 
 export const OP_PLAN_BIND: unique symbol = Symbol("prodkit.op.plan-bind");
 
@@ -24,9 +25,7 @@ export interface Plan<T, E, M = EmptyMeta> {
     context: RunContext<readonly unknown[]>,
   ) => Promise<Result<T, E | UnhandledException>>;
   readonly iterate: () => PlanIterator<T, E, M>;
-  readonly withRetry: (policy?: NormalizedRetryPolicy) => Plan<T, E, M>;
-  readonly withTimeout: (timeoutMs: number) => Plan<T, E | TimeoutError, M>;
-  readonly withCancel: (abortSignal: AbortSignal) => Plan<T, E, M>;
+  readonly rewrite: <TNext, ENext, MNext>(rewriter: PlanRewriter) => Plan<TNext, ENext, MNext>;
 }
 
 export type PlanBinder<T, E, A, M> = (...args: AsArgs<A>) => Plan<T, E, M>;
@@ -35,23 +34,63 @@ export type PlanBackedOp<T, E, A, M> = OpInterface<T, E, A, M> & {
   readonly [OP_PLAN_BIND]: PlanBinder<T, E, A, M>;
 };
 
-interface PlanPolicyOverrides<T, E, M> {
-  readonly withRetry?: (policy?: NormalizedRetryPolicy) => Plan<T, E, M>;
-  readonly withTimeout?: (timeoutMs: number) => Plan<T, E | TimeoutError, M>;
-  readonly withCancel?: (abortSignal: AbortSignal) => Plan<T, E, M>;
+export interface PlanRewriter {
+  readonly apply: <T, E, M>(source: Plan<T, E, M>) => Plan<unknown, unknown, unknown>;
+  readonly release?: <T, E, M>(
+    source: Plan<T, E, M>,
+    release: ReleaseFn<T>,
+  ) => Plan<unknown, unknown, unknown>;
+  readonly enter?: <T, E, A, M>(
+    source: Plan<T, E, M>,
+    initialize: EnterFn<A>,
+  ) => Plan<unknown, unknown, unknown>;
+  readonly exit?: <T, E, A, M>(
+    source: Plan<T, E, M>,
+    finalize: ExitFn<T, E, A>,
+  ) => Plan<unknown, unknown, unknown>;
+  readonly map?: <T, E, U, M>(
+    source: Plan<T, E, M>,
+    transform: (value: T) => U,
+  ) => Plan<unknown, unknown, unknown>;
+  readonly tap?: <T, E, R, M>(
+    source: Plan<T, E, M>,
+    observe: (value: T) => R,
+  ) => Plan<unknown, unknown, unknown>;
+  readonly mapErr?: <T, E, E2, M>(
+    source: Plan<T, E, M>,
+    transform: (error: TrackedErr<E>) => E2,
+  ) => Plan<unknown, unknown, unknown>;
+  readonly tapErr?: <T, E, R, M>(
+    source: Plan<T, E, M>,
+    observe: (error: TrackedErr<E>) => R,
+  ) => Plan<unknown, unknown, unknown>;
+  readonly recover?: <T, E, ECaught extends TrackedErr<E>, R, M>(
+    source: Plan<T, E, M>,
+    predicate: (error: TrackedErr<E>) => error is ECaught,
+    handler: (error: ECaught) => R,
+  ) => Plan<unknown, unknown, unknown>;
+}
+
+interface PlanRewriteOverrides<T, E, M> {
+  readonly rewrite?: (
+    self: Plan<T, E, M>,
+    rewriter: PlanRewriter,
+  ) => Plan<unknown, unknown, unknown>;
 }
 
 export function createPlan<T, E, M>(
   iterate: () => PlanIterator<T, E, M>,
-  overrides: PlanPolicyOverrides<T, E, M> = {},
+  overrides: PlanRewriteOverrides<T, E, M> = {},
 ): Plan<T, E, M> {
   const plan: Plan<T, E, M> = {
     execute: (context) => executePlan(plan, context),
     iterate,
-    withRetry:
-      overrides.withRetry ?? ((policy = normalizeRetryPolicy()) => retryPlan(plan, policy)),
-    withTimeout: overrides.withTimeout ?? ((timeoutMs) => timeoutPlan(plan, timeoutMs)),
-    withCancel: overrides.withCancel ?? ((abortSignal) => cancelPlan(plan, abortSignal)),
+    rewrite: (rewriter) => {
+      const rewritten = overrides.rewrite?.(plan, rewriter) ?? rewriter.apply(plan);
+      // SAFETY: PlanRewriter is an internal generic rewrite protocol. Callers choose the typed
+      // target when they supply the matching rewriter from the policy layer.
+      return unsafeCoerce(rewritten);
+    },
   };
   return plan;
 }
@@ -91,7 +130,9 @@ export function getIterablePlan<T, E, M>(op: Op<T, E, [], M>): Plan<T, E, M> | u
   if (!isIterableOp(op)) return undefined;
 
   if (isPlanBackedOp(op)) {
-    return op[OP_PLAN_BIND]();
+    // SAFETY: the iterable guard proves the public op is nullary for this branch; the plan-backed
+    // binder was installed on the same branded Op value and returns the matching plan shape.
+    return unsafeCoerce<Plan<T, E, M>>(op[OP_PLAN_BIND]());
   }
 
   return genPlan(() => op[Symbol.iterator]());

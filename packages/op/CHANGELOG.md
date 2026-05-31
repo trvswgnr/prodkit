@@ -9,14 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Documented `@prodkit/op/policy`, `@prodkit/op/hkt`, and subpath export surfaces in README;
+  refreshed `PERFORMANCE.md` snapshot; ADR index now includes `status`; contributor docs and
+  `changelog:api:check` cover policy and HKT entrypoints.
+
 - Added `@prodkit/op/policy` with `retry`, `timeout`, `cancel`, `release`, `Delay`, and retry
   policy types for policy composition through `.with(Policy.*)`.
+- Added `@prodkit/op/hkt` with reusable `HKT`, `HKTArg`, and `Apply` helpers for open type-level
+  transforms.
+- Added the open `Policy.define(...)` protocol so library authors can build custom `.with(...)`
+  policies without adding core overloads.
 
 ### Changed
 
+- Reduced per-`.with(...)` allocation overhead for the open policy protocol by sharing
+  `PolicySourceImpl` and `DelegatingPlanRewriter` prototype methods, hoisting built-in rewriter
+  construction to policy factory time, and assigning `OP_POLICY` directly in `definePolicy`.
 - Replaced `.withRetry(...)`, `.withTimeout(...)`, `.withSignal(...)`, and `.withRelease(...)`
   with `.with(Policy.retry(...))`, `.with(Policy.timeout(...))`, `.with(Policy.cancel(...))`,
   and `.with(Policy.release(...))`.
+- Moved policy runtime wrappers and retry policy helpers out of core internals and under the
+  policy module.
 - Renamed `Policy.signal` to `Policy.cancel` and `SignalPolicyAttachment` to
   `CancelPolicyAttachment`.
 
@@ -111,8 +124,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Performance snapshot in [`PERFORMANCE.md`](PERFORMANCE.md) (all harness scenarios, ops/sec,
   slowdown ratios, and bundle size), refreshable via
   `pnpm --filter @prodkit/tools run performance:sync -- --write`.
-- Published Op benchmark baseline guidance in repo-root `BENCHMARKS.md`, with CI
-  `op-benchmarks` artifacts carrying machine-readable `report.json` overhead ratios.
+- Published Op benchmark baseline guidance in [`benchmarks/op/README.md`](../../benchmarks/op/README.md),
+  with CI `op-benchmarks` artifacts carrying machine-readable `report.json` overhead ratios.
 
 ## [0.1.70] - 2026-05-27
 

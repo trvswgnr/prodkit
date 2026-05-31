@@ -19,7 +19,7 @@ contributor commands live in
 
 <!-- op-performance-snapshot:start -->
 
-Captured on **2026-05-29** at commit [`7acc286`](https://github.com/trvswgnr/prodkit/commit/7acc2867bf1da142758be3bea1b6fe917c3c5b95) (`@prodkit/op@0.1.72`).
+Captured on **2026-05-31** at commit [`785920a`](https://github.com/trvswgnr/prodkit/commit/785920a3772cbea27dd0294bfd7ae87d67bca8fc) (`@prodkit/op@0.1.74`).
 Environment: v24.14.1, darwin/arm64.
 Versus-native ratios use native ops/sec divided by library ops/sec (values above 1x mean slower than native).
 Add library columns by extending `IMPLEMENTATION_COLUMNS` and scenario implementations in `benchmarks/op/comparison-matrix.ts`.
@@ -28,20 +28,20 @@ Add library columns by extending `IMPLEMENTATION_COLUMNS` and scenario implement
 
 | Scenario | Native baseline | Native baseline ops/sec | @prodkit/op | @prodkit/op ops/sec | @prodkit/op vs native | effect | effect ops/sec | effect vs native |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Single value | `Promise.resolve(x)` | 13,314,986.59 | `Op.of(x).run()` | 2,294,811.7 | 5.80x | `Effect.runPromise(Effect.succeed(x))` | 1,998,755.32 | 6.66x |
-| Parallel batch (8 children) | `Promise.all([...])` | 1,601,262.93 | `Op.all([...]).run()` | 123,858.07 | 12.93x | `Effect.all(..., { concurrency: 'unbounded' })` | 26,925.05 | 59.47x |
-| First success (8 children) | Hand-rolled first success + abort | 64,468.18 | `Op.any([...]).run()` | 43,412.65 | 1.49x | `Effect.firstSuccessOf([...])` | 657,306.92 | 10.20x faster |
-| First settler (8 children) | Hand-rolled first settler + abort | 63,823.36 | `Op.race([...]).run()` | 43,300.63 | 1.47x | `Effect.raceFirst` folded over children | 11,516.78 | 5.54x |
-| Retry loop | Hand-rolled try/catch retry | 254,546.86 | `Op.try(...).with(Policy.retry(...)).run()` | 50,808.01 | 5.01x | `Effect.retry(..., { times, schedule })` | 48,237.74 | 5.28x |
-| Timeout guard | `Promise.race` + `setTimeout` | 3,678,050.32 | `Op.of(x).with(Policy.timeout(ms)).run()` | 315,388.35 | 11.66x | `Effect.timeout(ms)` | 134,374.8 | 27.37x |
-| Sequential compose (6 steps) | `await Promise.resolve` chain | 3,507,651.31 | `yield* Op.of` generator chain | 262,939.89 | 13.34x | `Effect.gen` + `yield* Effect.succeed` chain | 947,189.57 | 3.70x |
+| Single value | `Promise.resolve(x)` | 13,388,486.68 | `Op.of(x).run()` | 2,249,524.28 | 5.95x | `Effect.runPromise(Effect.succeed(x))` | 1,993,726.95 | 6.72x |
+| Parallel batch (8 children) | `Promise.all([...])` | 1,592,849.43 | `Op.all([...]).run()` | 126,517.6 | 12.59x | `Effect.all(..., { concurrency: 'unbounded' })` | 26,361.64 | 60.42x |
+| First success (8 children) | Hand-rolled first success + abort | 61,418.45 | `Op.any([...]).run()` | 42,371.1 | 1.45x | `Effect.firstSuccessOf([...])` | 634,540.48 | 10.33x faster |
+| First settler (8 children) | Hand-rolled first settler + abort | 61,726.01 | `Op.race([...]).run()` | 42,996.93 | 1.44x | `Effect.raceFirst` folded over children | 11,084.86 | 5.57x |
+| Retry loop | Hand-rolled try/catch retry | 248,740.26 | `Op.try(...).with(Policy.retry(...)).run()` | 50,310.56 | 4.94x | `Effect.retry(..., { times, schedule })` | 47,151.61 | 5.28x |
+| Timeout guard | `Promise.race` + `setTimeout` | 3,654,420.01 | `Op.of(x).with(Policy.timeout(ms)).run()` | 337,497.71 | 10.83x | `Effect.timeout(ms)` | 127,791.45 | 28.60x |
+| Sequential compose (6 steps) | `await Promise.resolve` chain | 3,471,454.52 | `yield* Op.of` generator chain | 274,303.38 | 12.66x | `Effect.gen` + `yield* Effect.succeed` chain | 928,023.83 | 3.74x |
 
 ### Bundle size
 
 | Metric | Size |
 | --- | --- |
-| ESM entry minified | 12,738 B |
-| ESM entry minified + gzip | 3,702 B |
+| ESM entry minified | 4,654 B |
+| ESM entry minified + gzip | 1,576 B |
 
 <!-- op-performance-snapshot:end -->
 
