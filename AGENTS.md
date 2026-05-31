@@ -29,7 +29,7 @@
 - `pnpm install` must be run outside the sandbox (request full permissions / non-sandbox); it hangs or fails reliably in the default sandbox.
 - Run `pnpm run gate` outside the sandbox by default; the final `@prodkit/tools` pack smoke step needs network and a temp `pnpm install`, which reliably times out or hangs in restricted/no-network sandboxes.
 - Node 24.x is Active LTS (current LTS line; Node 22.x is maintenance LTS only). Contributors need Node >=24.14.0. Do not suggest Node 22 or 20 for this workspace.
-- Contributors should use `pnpm@10` locally (CI/release stays pinned to `10.11.0`).
+- Contributors should use `pnpm@11` locally (CI/release stays pinned to `11.5.0`). Global install via `npm install -g pnpm@11.5.0` is fine; corepack is optional.
 - Shared workspace dev-tool versions (`typescript`, `vitest`, `oxfmt`, `oxlint`, `tsdown`, `@vitest/coverage-v8`) are declared once under `catalog:` in `pnpm-workspace.yaml`; workspace packages (including `packages/*`, repo root, `examples`, `tools`, `benchmarks`) reference them as `"catalog:"`. Pack/runtime smoke harnesses also use `pnpm` so those manifests stay valid outside the main workspace checkout.
 - npm publishing is configured with GitHub Actions trusted publishing (OIDC + provenance), not long-lived `NPM_TOKEN` auth.
 - The library is designed to be runtime-agnostic, not Node-specific in behavior.

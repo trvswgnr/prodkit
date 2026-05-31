@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Changed
 
-- No entries yet.
+- Upgraded the monorepo toolchain to pnpm 11 and enabled an explicit 24-hour dependency
+  release-age gate in `pnpm-workspace.yaml` so freshly published package versions are not
+  installed immediately.
 
 ## [0.1.76] - 2026-05-31
 

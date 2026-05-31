@@ -13,5 +13,13 @@ catalog:
   typescript: 6.0.3
   vitest: 4.1.0
 
-onlyBuiltDependencies:
-  - esbuild
+minimumReleaseAge: 1440
+minimumReleaseAgeStrict: true
+minimumReleaseAgeIgnoreMissingTime: false
+
+ignoreScripts: true
+allowBuilds:
+  esbuild: true
+
+overrides:
+  tsdown>unrun: 0.3.0

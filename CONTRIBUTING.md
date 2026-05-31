@@ -2,7 +2,8 @@
 
 ## Setup
 
-- Use Node `>=24.14.0` on the 24.x Active LTS line (current LTS; codename Krypton) and `pnpm@10` (validated in CI on `10.11.0`). `.nvmrc` pins `24.14.0`.
+- Use Node `>=24.14.0` on the 24.x Active LTS line (current LTS; codename Krypton) and `pnpm@11` (validated in CI on `11.5.0`). Install with `npm install -g pnpm@11.5.0` or enable corepack; `.nvmrc` pins `24.14.0`.
+- Dependency installs reject npm package versions published less than 24 hours ago (`minimumReleaseAge` in `pnpm-workspace.yaml`). Pin explicit versions or wait for maturity when adding fresh releases.
 - Run commands from the repo root unless noted otherwise.
 
 ```bash
