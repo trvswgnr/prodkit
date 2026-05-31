@@ -1,4 +1,4 @@
-import { definePolicy } from "./types.js";
+import { define } from "./types.js";
 import { cancelRewriter, releasePlan, retryRewriter, timeoutRewriter } from "./plan.js";
 import { Delay, normalizeRetryPolicy } from "./retry-policy.js";
 import type {
@@ -26,7 +26,7 @@ import type { ReleaseFn } from "../core/types.js";
 /** Creates a retry policy attachment for `op.with(...)`. */
 export function retry(policy?: RetryPolicy): RetryPolicyAttachment {
   const rewriter = retryRewriter(normalizeRetryPolicy(policy));
-  return definePolicy<unknown, RetryPolicyType, { readonly policy: RetryPolicy | undefined }>({
+  return define<unknown, RetryPolicyType, { readonly policy: RetryPolicy | undefined }>({
     policy,
     apply: (source) => source.rewrite(rewriter),
   });
@@ -35,7 +35,7 @@ export function retry(policy?: RetryPolicy): RetryPolicyAttachment {
 /** Creates a timeout policy attachment for `op.with(...)`. */
 export function timeout(timeoutMs: number): TimeoutPolicyAttachment {
   const rewriter = timeoutRewriter(timeoutMs);
-  return definePolicy<unknown, TimeoutPolicyType, { readonly timeoutMs: number }>({
+  return define<unknown, TimeoutPolicyType, { readonly timeoutMs: number }>({
     timeoutMs,
     apply: (source) => source.rewrite(rewriter),
   });
@@ -44,7 +44,7 @@ export function timeout(timeoutMs: number): TimeoutPolicyAttachment {
 /** Creates a cancellation policy attachment for `op.with(...)`. */
 export function cancel(abortSignal: AbortSignal): CancelPolicyAttachment {
   const rewriter = cancelRewriter(abortSignal);
-  return definePolicy<unknown, CancelPolicyType, { readonly abortSignal: AbortSignal }>({
+  return define<unknown, CancelPolicyType, { readonly abortSignal: AbortSignal }>({
     abortSignal,
     apply: (source) => source.rewrite(rewriter),
   });
@@ -52,13 +52,13 @@ export function cancel(abortSignal: AbortSignal): CancelPolicyAttachment {
 
 /** Creates a release policy attachment for `op.with(...)`. */
 export function release<T>(releaseFn: ReleaseFn<T>): ReleasePolicyAttachment<T> {
-  return definePolicy<OpPolicyInput<T>, ReleasePolicyType, { readonly release: ReleaseFn<T> }>({
+  return define<OpPolicyInput<T>, ReleasePolicyType, { readonly release: ReleaseFn<T> }>({
     release: releaseFn,
     apply: (source) => source.wrap((plan) => releasePlan(plan, releaseFn as ReleaseFn<unknown>)),
   });
 }
 
-export { Delay, definePolicy, definePolicy as define };
+export { Delay, define };
 export type {
   ApplyOpPolicy,
   BuiltInPolicy,

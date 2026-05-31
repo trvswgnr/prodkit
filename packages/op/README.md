@@ -145,7 +145,7 @@ const result = await Op.try(() => fetch("https://example.com"))
 
 Public exports:
 
-- Values: `retry`, `timeout`, `cancel`, `release`, `Delay`, `define` (alias of `definePolicy`)
+- Values: `retry`, `timeout`, `cancel`, `release`, `Delay`, `define`
 - Types: `RetryPolicy`, `RetryDelay`, `ExponentialDelayOptions`, `RetryPolicyAttachment`,
   `TimeoutPolicyAttachment`, `CancelPolicyAttachment`, `ReleasePolicyAttachment`, `BuiltInPolicy`,
   `OpPolicy`, `OpPolicyInput`, `OpPolicySource`, `OpPolicyType`, `OpPolicyArg`, `OpPolicyArgs`,
