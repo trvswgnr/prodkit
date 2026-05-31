@@ -1,9 +1,9 @@
 import { assert, describe, expect, test } from "vitest";
-import { Op, TimeoutError } from "../../src/index.js";
+import { Op, TimeoutError } from "../../../src/index.js";
 import { UnhandledException } from "better-result";
-import { DI } from "../../src/di/index.js";
-import { AlreadyProvidedError, MissingDependencyError } from "../../src/di/internal.js";
-import { Policy } from "../../src/policy/index.js";
+import { DI } from "../../../src/di/index.js";
+import { AlreadyProvidedError, MissingDependencyError } from "../../../src/di/internal.js";
+import { Policy } from "../../../src/policy/index.js";
 
 class DatabaseError extends Error {
   readonly _tag = "DatabaseError";
