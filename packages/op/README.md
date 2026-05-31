@@ -111,12 +111,12 @@ const runnable = DI.provide(getUser, DI.singleton(DatabaseDependency, db));
 const result = await runnable.run(1);
 ```
 
-Public exports: `DI`, `Dependency`, `inject`, `provide`, `scoped`, `singleton`, and `InferReqs` for
+Public exports: `DI`, `Dependency`, `inject`, `provide`, `scoped`, `singleton`, and `RequiredDeps` for
 unsatisfied dependency requirements on an op.
 
 An op that uses `DI.inject` cannot be `.run()` until you satisfy bindings with `DI.provide(...)` (or
 partial `provide` while requirements remain). TypeScript surfaces missing dependencies through
-`InferReqs` and by omitting `.run()` on the op type until they are provided.
+`RequiredDeps` and by omitting `.run()` on the op type until they are provided.
 
 Runnable consumer examples live under
 [`examples/op/di/`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/di/) (onboarding,

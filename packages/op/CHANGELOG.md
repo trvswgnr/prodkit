@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Renamed internal DI requirement types for clarity: `ProvidedDeps` to `RemainingRequiredDeps`,
+  `InvalidUseReq` to `ExcessProvidedDeps`, and `ValidUseEntries` to `ValidProvideEntries`.
+- Split DI provision naming between singleton and lazy shapes: `ScopedResolveFn` to `LazyResolveFn`,
+  `Binding` to `SingletonBinding`, and singleton/lazy-specific internal helpers. Provision entries
+  are branded with `DI_SINGLETON_BINDING` and `DI_LAZY_BINDING` instead of string `_tag` fields.
+- Renamed `DependencyReqInstruction` to `InjectInstruction`, `InferMetaReqs` to
+  `RequiredDepsOfMeta`, and public `InferReqs` to `RequiredDeps`.
 - Consolidated `@prodkit/op/hkt` under a single `HKT` export (interface, namespace, and
   `HKT.PARAMS` / `HKT.TYPE` symbol constants). Use `HKT.Param`, `HKT.Apply`, and the compositional
   helpers on the namespace instead of former top-level exports.
@@ -47,6 +54,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- Removed direct dependency implementation instances from `DI.provide` entries; use
+  `DI.singleton(dependency, value)` or `DI.scoped(dependency, resolve)` instead of subclassing a
+  token and passing `new MyImpl()`.
 - Removed top-level `retry`, `timeout`, `cancel`, `release`, and `define` exports from
   `@prodkit/op/policy`; use `Policy.retry`, `Policy.timeout`, `Policy.cancel`, `Policy.release`, and
   `Policy.define` instead.
@@ -65,7 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Meta`); import them from `@prodkit/op/internal` instead. `EnterContext`, `ExitContext`, and
   `OpLifecycleHook` remain on the main entry for lifecycle typing.
 - Removed unused `InferOk`, `InferErr`, and `InferArgs` type exports from `@prodkit/op/di`; use `Op`
-  conditional types or `better-result`'s `InferErr` for result typing. `InferReqs` remains for
+  conditional types or `better-result`'s `InferErr` for result typing. `RequiredDeps` remains for
   dependency metadata.
 
 ## [0.1.75] - 2026-05-31

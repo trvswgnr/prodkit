@@ -222,7 +222,7 @@ the chain). See policy ordering notes in `packages/op/DESIGN.md`.
 
 `@prodkit/op/di` extends the runtime without forking the driver:
 
-1. **`DI.inject(dependency)`** yields a `DependencyReqInstruction`, a `CustomInstruction` whose
+1. **`DI.inject(dependency)`** yields an `InjectInstruction`, a `CustomInstruction` whose
    `resolve(context)` reads bindings from `context.extensions`.
 2. **`DI.provide(op, entries)`** (`provideOp` in `packages/op/src/di/internal.ts`) wraps the
    user op in a suspend that calls `drive(inner, extendContext(context, entries))`, cloning
