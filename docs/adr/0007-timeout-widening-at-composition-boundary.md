@@ -7,6 +7,8 @@ packages:
 
 # Op execution plan AST vs push-through rebuild hooks
 
+For current `.with(Policy.*)` behavior, see [ADR 0009](0009-policy-with-attachment.md).
+
 Issue #111 explored whether timeout widening can be simplified without a bigger refactor. Three
 prototype approaches were evaluated locally; none were merged into the tree. **This ADR supersedes
 the narrower boundary-widening recommendation in the first draft of ADR 0007.**

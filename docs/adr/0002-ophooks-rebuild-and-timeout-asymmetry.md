@@ -7,7 +7,8 @@ packages:
 
 # OpHooks push-through rebuild and timeout-specific rebuild hooks
 
-Superseded by [ADR 0007](0007-timeout-widening-at-composition-boundary.md). This record documents
+Superseded by [ADR 0007](0007-timeout-widening-at-composition-boundary.md). For current
+`.with(Policy.*)` behavior, see [ADR 0009](0009-policy-with-attachment.md). This record documents
 the pre-plan implementation that existed before the internal Plan AST cutover.
 
 ## Historical API names

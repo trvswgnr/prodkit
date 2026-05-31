@@ -23,7 +23,7 @@ import {
   createApp,
 } from "./webhook.ts";
 import { ConnectionError, QueryFailedError, createDbApp } from "./defer-resource.ts";
-import { createCatalogApp, CatalogFetchError } from "./signal-propagation.ts";
+import { createCatalogApp, CatalogFetchError } from "./cancel-propagation.ts";
 import {
   BATCH_CONCURRENCY,
   ServiceCallError as ConsumerServiceCallError,

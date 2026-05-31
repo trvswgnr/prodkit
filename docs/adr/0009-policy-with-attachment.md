@@ -60,14 +60,16 @@ in both paths.
 **Policy constructors on the root export.** Rejected: couples optional policy sugar to the default
 bundle; ADR 0008 subpath model keeps the main entry lean.
 
-**Open user-extensible policy protocol in the first cutover.** Deferred: built-in policies have
-known type transforms; higher-kinded typing becomes relevant only for third-party policies later.
+**Open user-extensible policy protocol in the first cutover.** Initially deferred for the
+hard cutover; shipped afterward via `Policy.define(...)` and `@prodkit/op/hkt` (see consequences).
 
 ## Consequences
 
 - Invalid retry and delay inputs continue to surface at run time as `Err(UnhandledException)` with
   the validation error as `cause`. `RetryPolicy.retries` counts post-failure retries; custom
   `delay(retry, cause)` uses a 0-based retry index.
+- The open policy protocol (`Policy.define`, `@prodkit/op/hkt`) is part of the public surface; custom
+  attachments can describe type-level op transforms without core `.with` overloads.
 - Retry defaults, policy ordering with `.with(...)`, and other behavioral contracts belong in
   `packages/op/DESIGN.md`.
 - Public docs use `@prodkit/op/policy` for constructors and `Delay`; core docs cover `.with(...)`.
