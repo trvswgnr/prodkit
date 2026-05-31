@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- No entries yet.
+
+## [0.1.76] - 2026-05-31
+
+### Added
+
 - Added `Policy` namespace export on `@prodkit/op/policy` with `retry`, `timeout`, `cancel`,
   `release`, and `define`.
 - Added `Policy` type alias and nested type helpers (`Policy.Input`, `Policy.Source`, `Policy.Type`,
@@ -547,4 +553,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retry timing, and composed operation semantics).
 - Improved examples and parsing validation in places where earlier behavior
   could produce weaker diagnostics or drift from production expectations.
+
 
