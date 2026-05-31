@@ -19,7 +19,7 @@ async function runWithFakeTimeout<T, E, M>(program: Op<T, E, [], M>) {
   }
 }
 
-describe("withTimeout push-through matrix", () => {
+describe("Policy.timeout push-through matrix", () => {
   test.each([
     {
       combinator: "mapErr",

@@ -23,7 +23,7 @@ describe("op.map", () => {
     expect(result.error).toBe("boom");
   });
 
-  test("map withRetry only retries the source op, not transform throws", async () => {
+  test("map + Policy.retry only retries the source op, not transform throws", async () => {
     let sourceAttempts = 0;
     let transformAttempts = 0;
     const result = await Op.try(() => {
@@ -78,7 +78,7 @@ describe("op.mapErr", () => {
     expect(result.error).toBeInstanceOf(UnhandledException);
   });
 
-  test("mapErr withRetry retries against original error channel", async () => {
+  test("mapErr + Policy.retry retries against original error channel", async () => {
     let attempts = 0;
     const mapped = Op(function* () {
       attempts += 1;
@@ -143,7 +143,7 @@ describe("op.flatMap", () => {
     expect(attempts).toBe(2);
   });
 
-  test("flatMap withRetry retries the whole composition including bind", async () => {
+  test("flatMap + Policy.retry retries the whole composition including bind", async () => {
     let sourceAttempts = 0;
     let bindAttempts = 0;
     const result = await Op.try(() => {

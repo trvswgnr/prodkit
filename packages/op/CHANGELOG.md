@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - No entries yet.
 
+### Changed
+
+- Renamed policy-related test suites to `Policy.retry` / `Policy.timeout` vocabulary and documented
+  pre-ADR 0009 policy method names in superseded ADRs 0002 and 0007.
+
 ### Removed
 
 - Removed unused `InferOk`, `InferErr`, and `InferArgs` type exports from `@prodkit/op/di`; use `Op`

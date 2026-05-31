@@ -41,7 +41,7 @@ describe("op.with(Policy.release(...))", () => {
     expect(release).toHaveBeenCalledTimes(1);
   });
 
-  test("runs cleanup when withTimeout aborts inner work", async () => {
+  test("runs cleanup when Policy.timeout aborts inner work", async () => {
     vi.useFakeTimers();
     try {
       const release = vi.fn();
@@ -70,7 +70,7 @@ describe("op.with(Policy.release(...))", () => {
     }
   });
 
-  test("withTimeout waits for async release cleanup before run settles", async () => {
+  test("Policy.timeout waits for async release cleanup before run settles", async () => {
     vi.useFakeTimers();
     try {
       let released = false;
@@ -436,7 +436,7 @@ describe('op.on("exit")', () => {
     expect(seenCtx.result).not.toBe(result);
   });
 
-  test("withTimeout waits for async exit finalizers before run settles", async () => {
+  test("Policy.timeout waits for async exit finalizers before run settles", async () => {
     vi.useFakeTimers();
     try {
       let finalized = false;
@@ -533,7 +533,7 @@ describe("generator finalization on early exit", () => {
     expect(events).toEqual(["start", "finally"]);
   });
 
-  test("runs finally when withTimeout aborts inner work", async () => {
+  test("runs finally when Policy.timeout aborts inner work", async () => {
     vi.useFakeTimers();
     try {
       let finalized = false;
@@ -832,7 +832,7 @@ describe("Op.defer ordering and policies", () => {
     expect(events).toEqual(["release", "defer"]);
   });
 
-  test("runs Op.defer cleanup when withTimeout aborts inner work", async () => {
+  test("runs Op.defer cleanup when Policy.timeout aborts inner work", async () => {
     vi.useFakeTimers();
     try {
       const cleanup = vi.fn();

@@ -10,8 +10,18 @@ packages:
 Issue #111 explored whether timeout widening can be simplified without a bigger refactor. Three
 prototype approaches were evaluated locally; none were merged into the tree. **This ADR supersedes
 the narrower boundary-widening recommendation in the first draft of ADR 0007.**
-Policy method names in the spike notes are historical; ADR 0009 replaced public retry, timeout,
-signal, and release methods with `.with(Policy.*)`.
+
+## Historical API names
+
+ADR 0009 replaced dedicated policy methods with `.with(Policy.*)`. Spike notes and internal hook
+names below may use pre-cutover public names. Map them as follows:
+
+| Pre-ADR 0009 | Current |
+| --- | --- |
+| `.withRetry(...)` | `.with(Policy.retry(...))` |
+| `.withTimeout(...)` | `.with(Policy.timeout(...))` |
+| `.withSignal(...)` | `.with(Policy.cancel(...))` |
+| `.withRelease(...)` | `.with(Policy.release(...))` |
 
 ## Problem
 

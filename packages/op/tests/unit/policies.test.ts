@@ -4,7 +4,7 @@ import { TimeoutError, UnhandledException } from "../../src/errors.js";
 import * as Policy from "../../src/policy/index.js";
 import type { RetryPolicy } from "../../src/policy/index.js";
 
-describe("withRetry", () => {
+describe("Policy.retry", () => {
   class FetchError extends Error {
     readonly _tag = "FetchError";
   }
@@ -266,7 +266,7 @@ describe("withRetry", () => {
   });
 });
 
-describe("withTimeout", () => {
+describe("Policy.timeout", () => {
   test("succeeds when the operation completes before timeout", async () => {
     const program = _try(() => Promise.resolve(69)).with(Policy.timeout(100));
     const result = await program.run();

@@ -30,7 +30,7 @@ describe("OpFactory", () => {
     expect(result.value).toBeUndefined();
   });
 
-  test("dedicated retry, timeout, signal, and release methods are not exposed", () => {
+  test("legacy withRetry, withTimeout, withCancel, and withRelease methods are not exposed", () => {
     const op = Op.of(1) as unknown as Record<string, unknown>;
 
     expect(op.withRetry).toBeUndefined();
