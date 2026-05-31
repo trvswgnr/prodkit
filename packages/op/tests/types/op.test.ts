@@ -32,11 +32,11 @@ describe("type inference contracts", () => {
     expectTypeOf(p4.run()).toEqualTypeOf<Promise<Result<void, UnhandledException>>>();
 
     // @ts-expect-error - nullary run does not accept arguments
-    p1.run(1);
+    void p1.run(1);
     // @ts-expect-error - parameterized run requires argument
-    p2.run();
+    void p2.run();
     // @ts-expect-error - parameterized run does not accept extra args
-    p2.run(1, 2);
+    void p2.run(1, 2);
   });
 
   test("only parameterized generator-built ops must be invoked before yield-star composition", () => {
@@ -104,11 +104,11 @@ describe("type inference contracts", () => {
     >();
 
     // @ts-expect-error - parameterized timeout op requires argument
-    timeout.run();
+    void timeout.run();
     // @ts-expect-error - parameterized timeout op does not accept extra args
-    timeout.run("abc", "extra");
+    void timeout.run("abc", "extra");
     // @ts-expect-error - parameterized withCancel op requires argument
-    withCancel.run();
+    void withCancel.run();
 
     const base = Op.of(1);
     type BasePolicyOp = typeof base;

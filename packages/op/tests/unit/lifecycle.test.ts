@@ -100,7 +100,7 @@ describe("op.with(Policy.release(...))", () => {
       }).with(Policy.timeout(10));
 
       const runPromise = op.run();
-      runPromise.then(() => {
+      void runPromise.then(() => {
         settled = true;
       });
 
@@ -452,7 +452,7 @@ describe('op.on("exit")', () => {
           });
         })
         .run();
-      runPromise.then(() => {
+      void runPromise.then(() => {
         settled = true;
       });
 

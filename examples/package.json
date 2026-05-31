@@ -6,8 +6,8 @@
   "scripts": {
     "fmt": "oxfmt \"**/*.ts\"",
     "fmt:check": "oxfmt --check \"**/*.ts\"",
-    "lint": "oxlint --config ../oxlint.config.ts .",
-    "lint:fix": "oxlint --config ../oxlint.config.ts --fix .",
+    "lint": "pnpm -w exec oxlint --config oxlint.config.ts examples",
+    "lint:fix": "pnpm -w exec oxlint --config oxlint.config.ts --fix examples",
     "smoke": "node ./smoke.ts",
     "typecheck": "tsc --noEmit"
   },

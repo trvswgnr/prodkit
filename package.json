@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:",
     "turbo": "^2.9.0"
   }
 }

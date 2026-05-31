@@ -82,7 +82,7 @@ describe("sleep", () => {
     try {
       let settled = false;
       const runPromise = sleep(25).run();
-      runPromise.then(() => {
+      void runPromise.then(() => {
         settled = true;
       });
 

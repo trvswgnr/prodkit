@@ -14,8 +14,8 @@
     "test": "vitest run",
     "fmt": "oxfmt \"**/*.ts\"",
     "fmt:check": "oxfmt --check \"**/*.ts\"",
-    "lint": "oxlint --config ../oxlint.config.ts .",
-    "lint:fix": "oxlint --config ../oxlint.config.ts --fix .",
+    "lint": "pnpm -w exec oxlint --config oxlint.config.ts benchmarks",
+    "lint:fix": "pnpm -w exec oxlint --config oxlint.config.ts --fix benchmarks",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

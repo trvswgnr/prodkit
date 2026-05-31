@@ -14,7 +14,7 @@
   "scripts": {
     "fmt": "oxfmt \"**/*.ts\" \"**/*.d.ts\"",
     "fmt:check": "oxfmt --check \"**/*.ts\" \"**/*.d.ts\"",
-    "lint": "oxlint --config ../../oxlint.config.ts .",
+    "lint": "pnpm -w exec oxlint --config oxlint.config.ts packages/shared",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

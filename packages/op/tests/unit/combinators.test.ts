@@ -354,7 +354,7 @@ describe("Op.any", () => {
 
     const run = Op.any([loser, Op.of(7)]).run();
     let settled = false;
-    run.then(() => (settled = true));
+    void run.then(() => (settled = true));
 
     await vi.waitFor(() => expect(loserCleanupStarted).toBe(true));
     expect(settled).toBe(false);
@@ -490,7 +490,7 @@ describe("Op.race", () => {
 
     const run = Op.race([loser, Op.of(99)]).run();
     let settled = false;
-    run.then(() => {
+    void run.then(() => {
       settled = true;
     });
 
@@ -595,7 +595,7 @@ describe("combinator abort listener cleanup", () => {
                 signal.addEventListener("abort", () => reject(new Error("aborted")), {
                   once: true,
                 });
-                secondGate.promise.then(resolve);
+                void secondGate.promise.then(resolve);
               }),
           ),
         ],

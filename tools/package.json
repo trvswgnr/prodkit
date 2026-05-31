@@ -19,8 +19,8 @@
     "adr:sync": "node ./sync-adr-index.ts --write",
     "fmt": "oxfmt \"**/*.ts\"",
     "fmt:check": "oxfmt --check \"**/*.ts\"",
-    "lint": "oxlint --config ../oxlint.config.ts .",
-    "lint:fix": "oxlint --config ../oxlint.config.ts --fix .",
+    "lint": "pnpm -w exec oxlint --config oxlint.config.ts tools",
+    "lint:fix": "pnpm -w exec oxlint --config oxlint.config.ts --fix tools",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

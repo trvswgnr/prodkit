@@ -56,7 +56,7 @@ const main = Op(function* (packageIdArg: string | undefined) {
   return version;
 });
 
-main.run(process.argv[2]).then((result) => {
+void main.run(process.argv[2]).then((result) => {
   result.match({
     ok: (version) => {
       logger.info(`changelog version check passed for version ${version}`);

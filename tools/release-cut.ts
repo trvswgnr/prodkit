@@ -225,7 +225,7 @@ const main = Op(function* (packageIdArg: string | undefined, bumpKindArg: string
   return { nextVersion, npmName: releasePackage.npmName, packageId, tag };
 });
 
-main.run(process.argv[2], process.argv[3]).then((result) => {
+void main.run(process.argv[2], process.argv[3]).then((result) => {
   result.match({
     ok: ({ tag, npmName }) => {
       logger.info(`release cut complete: ${tag}\n`);
