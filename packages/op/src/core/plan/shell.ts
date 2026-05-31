@@ -43,6 +43,58 @@ type PlanShellContext<T, E, A, M> = {
   bound: boolean;
 };
 
+type PolicyWrapFn = <TNext, ENext, MNext>(
+  transform: (plan: Plan<unknown, unknown, unknown>) => Plan<TNext, ENext, MNext>,
+) => unknown;
+
+class PolicySourceImpl {
+  wrapPlan: PolicyWrapFn;
+
+  constructor(wrapPlan: PolicyWrapFn) {
+    this.wrapPlan = wrapPlan;
+  }
+
+  wrap<T, E, A, M, TNext, ENext, MNext>(
+    transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
+  ): Op<TNext, ENext, AsArgs<A>, MNext> {
+    // SAFETY: wrapPlan returns the same branded Op runtime shell for the enclosing arity.
+    return unsafeCoerce<Op<TNext, ENext, AsArgs<A>, MNext>>(
+      this.wrapPlan(
+        transform as (plan: Plan<unknown, unknown, unknown>) => Plan<TNext, ENext, MNext>,
+      ),
+    );
+  }
+
+  rewrite<A, TNext, ENext, MNext>(rewriter: PlanRewriter): Op<TNext, ENext, AsArgs<A>, MNext> {
+    // SAFETY: Plan.rewrite returns a branded plan with the policy layer's selected type target.
+    return unsafeCoerce<Op<TNext, ENext, AsArgs<A>, MNext>>(
+      this.wrapPlan((plan) => plan.rewrite<TNext, ENext, MNext>(rewriter)),
+    );
+  }
+
+  around<T, E, A, M, TNext, ENext, MNext = M>(
+    run: (
+      next: (context: RunContext<readonly unknown[]>) => Promise<Result<T, E | UnhandledException>>,
+      context: RunContext<readonly unknown[]>,
+    ) => PromiseLike<Result<TNext, ENext | UnhandledException>>,
+  ): Op<TNext, ENext, AsArgs<A>, MNext> {
+    // SAFETY: the generated plan preserves the enclosing policy source arity.
+    return unsafeCoerce<Op<TNext, ENext, AsArgs<A>, MNext>>(
+      this.wrapPlan((plan) => {
+        const typedPlan = plan as Plan<T, E, M>;
+        return createPlan<TNext, ENext, MNext>(function* () {
+          const result: Result<TNext, ENext | UnhandledException> = yield* new SuspendInstruction(
+            (context) => run((nextContext) => typedPlan.execute(nextContext), context),
+          );
+
+          if (result.isErr()) return yield* result;
+          return result.value;
+        });
+      }),
+    );
+  }
+}
+
 function wrapPlanTransform<T, E, A, M, Yieldable extends boolean, TNext, ENext, MNext>(
   ctx: PlanShellContext<T, E, A, M>,
   transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
@@ -61,48 +113,11 @@ function fluentMethodsForContext<T, E, A, M, Yieldable extends boolean>(
     transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
   ) => wrapPlanTransform<T, E, A, M, Yieldable, TNext, ENext, MNext>(ctx, transform);
 
+  const policySource = new PolicySourceImpl(wrap) as OpPolicySource<T, E, AsArgs<A>, M>;
+
   return {
-    with: <F extends OpPolicyType>(policy: OpPolicy<OpPolicyInput<T, E, AsArgs<A>, M>, F>) => {
-      const source: OpPolicySource<T, E, AsArgs<A>, M> = {
-        wrap: <TNext, ENext, MNext>(
-          transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
-        ) =>
-          // SAFETY: wrapPlanTransform returns the same branded Op runtime shell; this narrows the
-          // public type to the policy source arity already supplied by the enclosing FluentOp.
-          unsafeCoerce<Op<TNext, ENext, AsArgs<A>, MNext>>(wrap(transform)),
-        rewrite: <TNext, ENext, MNext>(rewriter: PlanRewriter) =>
-          // SAFETY: Plan.rewrite returns a branded plan with the policy layer's selected type
-          // target; wrapPlanTransform preserves the enclosing Op arity.
-          unsafeCoerce<Op<TNext, ENext, AsArgs<A>, MNext>>(
-            wrap((plan) => plan.rewrite<TNext, ENext, MNext>(rewriter)),
-          ),
-        around: <TNext, ENext, MNext = M>(
-          run: (
-            next: (
-              context: RunContext<readonly unknown[]>,
-            ) => Promise<Result<T, E | UnhandledException>>,
-            context: RunContext<readonly unknown[]>,
-          ) => PromiseLike<Result<TNext, ENext | UnhandledException>>,
-        ) =>
-          // SAFETY: the generated plan preserves the enclosing policy source arity and returns
-          // the typed Result supplied by the policy around hook.
-          unsafeCoerce<Op<TNext, ENext, AsArgs<A>, MNext>>(
-            wrap((plan) =>
-              createPlan<TNext, ENext, MNext>(function* () {
-                const result: Result<TNext, ENext | UnhandledException> =
-                  yield* new SuspendInstruction((context) =>
-                    run((nextContext) => plan.execute(nextContext), context),
-                  );
-
-                if (result.isErr()) return yield* result;
-                return result.value;
-              }),
-            ),
-          ),
-      };
-
-      return policy.apply(source);
-    },
+    with: <F extends OpPolicyType>(policy: OpPolicy<OpPolicyInput<T, E, AsArgs<A>, M>, F>) =>
+      policy.apply(policySource),
     on: (event: OpLifecycleHook, handler: unknown) => {
       if (event === "enter") {
         const initialize = handler as EnterFn<A>;

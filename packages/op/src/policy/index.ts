@@ -27,28 +27,28 @@ import type { ReleaseFn } from "../core/types.js";
 
 /** Creates a retry policy attachment for `op.with(...)`. */
 export function retry(policy?: RetryPolicy): RetryPolicyAttachment {
+  const rewriter = retryRewriter(normalizeRetryPolicy(policy));
   return definePolicy<unknown, RetryPolicyType, { readonly policy: RetryPolicy | undefined }>({
     policy,
-    apply: (source) => {
-      const retryPolicy = normalizeRetryPolicy(policy);
-      return source.rewrite(retryRewriter(retryPolicy));
-    },
+    apply: (source) => source.rewrite(rewriter),
   });
 }
 
 /** Creates a timeout policy attachment for `op.with(...)`. */
 export function timeout(timeoutMs: number): TimeoutPolicyAttachment {
+  const rewriter = timeoutRewriter(timeoutMs);
   return definePolicy<unknown, TimeoutPolicyType, { readonly timeoutMs: number }>({
     timeoutMs,
-    apply: (source) => source.rewrite(timeoutRewriter(timeoutMs)),
+    apply: (source) => source.rewrite(rewriter),
   });
 }
 
 /** Creates a cancellation policy attachment for `op.with(...)`. */
 export function cancel(abortSignal: AbortSignal): CancelPolicyAttachment {
+  const rewriter = cancelRewriter(abortSignal);
   return definePolicy<unknown, CancelPolicyType, { readonly abortSignal: AbortSignal }>({
     abortSignal,
-    apply: (source) => source.rewrite(cancelRewriter(abortSignal)),
+    apply: (source) => source.rewrite(rewriter),
   });
 }
 

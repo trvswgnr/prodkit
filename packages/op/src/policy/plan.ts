@@ -14,6 +14,70 @@ import {
 import { onEnterPlan, onExitPlan } from "../core/plan/lifecycle.js";
 import { mapErrPlan, mapPlan, recoverPlan, tapErrPlan, tapPlan } from "../core/plan/transforms.js";
 
+class DelegatingPlanRewriter implements PlanRewriter {
+  apply!: PlanRewriter["apply"];
+
+  release<T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T>): Plan<unknown, unknown, unknown> {
+    return releasePlan(source.rewrite<T, E, M>(this), release);
+  }
+
+  enter<T, E, A, M>(
+    source: Plan<T, E, M>,
+    initialize: EnterFn<A>,
+  ): Plan<unknown, unknown, unknown> {
+    return onEnterPlan(source.rewrite<T, E, M>(this), initialize);
+  }
+
+  exit<T, E, A, M>(
+    source: Plan<T, E, M>,
+    finalize: ExitFn<T, E, A>,
+  ): Plan<unknown, unknown, unknown> {
+    return onExitPlan(source.rewrite<T, E, M>(this), finalize);
+  }
+
+  map<T, E, U, M>(
+    source: Plan<T, E, M>,
+    transform: (value: T) => U,
+  ): Plan<unknown, unknown, unknown> {
+    return mapPlan(source.rewrite<T, E, M>(this), transform);
+  }
+
+  tap<T, E, R, M>(
+    source: Plan<T, E, M>,
+    observe: (value: T) => R,
+  ): Plan<unknown, unknown, unknown> {
+    return tapPlan(source.rewrite<T, E, M>(this), observe);
+  }
+
+  mapErr<T, E, E2, M>(
+    source: Plan<T, E, M>,
+    transform: (error: TrackedErr<E>) => E2,
+  ): Plan<unknown, unknown, unknown> {
+    return mapErrPlan(source.rewrite<T, E, M>(this), transform);
+  }
+
+  tapErr<T, E, R, M>(
+    source: Plan<T, E, M>,
+    observe: (error: TrackedErr<E>) => R,
+  ): Plan<unknown, unknown, unknown> {
+    return tapErrPlan(source.rewrite<T, E, M>(this), observe);
+  }
+
+  recover<T, E, ECaught extends TrackedErr<E>, R, M>(
+    source: Plan<T, E, M>,
+    predicate: (error: TrackedErr<E>) => error is ECaught,
+    handler: (error: ECaught) => R,
+  ): Plan<unknown, unknown, unknown> {
+    return recoverPlan(source.rewrite<T, E, M>(this), predicate, handler);
+  }
+}
+
+function createDelegatingRewriter(apply: PlanRewriter["apply"]): PlanRewriter {
+  const rewriter = new DelegatingPlanRewriter();
+  rewriter.apply = apply;
+  return rewriter;
+}
+
 export function releasePlan<T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T>): Plan<T, E, M> {
   return createPlan(
     function* () {
@@ -118,99 +182,23 @@ export function cancelPlan<T, E, M>(
 
 export function retryRewriter(policy?: NormalizedRetryPolicy): PlanRewriter {
   const retryPolicy = policy ?? normalizeRetryPolicy();
-  const rewriter: PlanRewriter = {
-    apply: (source) => retryPlan(source, retryPolicy),
-    release: <T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T>) =>
-      releasePlan(source.rewrite<T, E, M>(rewriter), release),
-    enter: <T, E, A, M>(source: Plan<T, E, M>, initialize: EnterFn<A>) =>
-      onEnterPlan(source.rewrite<T, E, M>(rewriter), initialize),
-    exit: <T, E, A, M>(source: Plan<T, E, M>, finalize: ExitFn<T, E, A>) =>
-      onExitPlan(source.rewrite<T, E, M>(rewriter), finalize),
-    map: <T, E, U, M>(source: Plan<T, E, M>, transform: (value: T) => U) =>
-      mapPlan(source.rewrite<T, E, M>(rewriter), transform),
-    tap: <T, E, R, M>(source: Plan<T, E, M>, observe: (value: T) => R) =>
-      tapPlan(source.rewrite<T, E, M>(rewriter), observe),
-    mapErr: <T, E, E2, M>(source: Plan<T, E, M>, transform: (error: TrackedErr<E>) => E2) =>
-      mapErrPlan(source.rewrite<T, E, M>(rewriter), transform),
-    tapErr: <T, E, R, M>(source: Plan<T, E, M>, observe: (error: TrackedErr<E>) => R) =>
-      tapErrPlan(source.rewrite<T, E, M>(rewriter), observe),
-    recover: <T, E, ECaught extends TrackedErr<E>, R, M>(
-      source: Plan<T, E, M>,
-      predicate: (error: TrackedErr<E>) => error is ECaught,
-      handler: (error: ECaught) => R,
-    ) => recoverPlan(source.rewrite<T, E, M>(rewriter), predicate, handler),
-  };
-  return rewriter;
+  return createDelegatingRewriter((source) => retryPlan(source, retryPolicy));
 }
 
 export function timeoutRewriter(timeoutMs: number): PlanRewriter {
-  const rewriter: PlanRewriter = {
-    apply: (source) => timeoutPlan(source, timeoutMs),
-    release: <T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T>) =>
-      releasePlan(source.rewrite<T, E | TimeoutError, M>(rewriter), release),
-    enter: <T, E, A, M>(source: Plan<T, E, M>, initialize: EnterFn<A>) =>
-      onEnterPlan(source.rewrite<T, E | TimeoutError, M>(rewriter), initialize),
-    exit: <T, E, A, M>(source: Plan<T, E, M>, finalize: ExitFn<T, E, A>) =>
-      onExitPlan(
-        source.rewrite<T, E | TimeoutError, M>(rewriter),
-        finalize as unknown as ExitFn<T, E | TimeoutError, A>,
-      ),
-    map: <T, E, U, M>(source: Plan<T, E, M>, transform: (value: T) => U) =>
-      mapPlan(source.rewrite<T, E | TimeoutError, M>(rewriter), transform),
-    tap: <T, E, R, M>(source: Plan<T, E, M>, observe: (value: T) => R) =>
-      tapPlan(source.rewrite<T, E | TimeoutError, M>(rewriter), observe),
-    mapErr: <T, E, E2, M>(source: Plan<T, E, M>, transform: (error: TrackedErr<E>) => E2) =>
-      mapErrPlan<T, E | TimeoutError, E2, M>(
-        source.rewrite<T, E | TimeoutError, M>(rewriter),
-        transform,
-      ),
-    tapErr: <T, E, R, M>(source: Plan<T, E, M>, observe: (error: TrackedErr<E>) => R) =>
-      tapErrPlan<T, E | TimeoutError, R, M>(
-        source.rewrite<T, E | TimeoutError, M>(rewriter),
-        observe,
-      ),
-    recover: <T, E, ECaught extends TrackedErr<E>, R, M>(
-      source: Plan<T, E, M>,
-      predicate: (error: TrackedErr<E>) => error is ECaught,
-      handler: (error: ECaught) => R,
-    ) =>
-      recoverPlan<T, E | TimeoutError, ECaught, R, M>(
-        source.rewrite<T, E | TimeoutError, M>(rewriter),
-        predicate,
-        handler,
-      ),
-  };
-  return rewriter;
+  return createDelegatingRewriter((source) => timeoutPlan(source, timeoutMs));
 }
 
 export function cancelRewriter(abortSignal: AbortSignal): PlanRewriter {
-  const rewriter: PlanRewriter = {
-    apply: (source) => cancelPlan(source, abortSignal),
-    release: <T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T>) =>
-      releasePlan(source.rewrite<T, E, M>(rewriter), release),
-    enter: <T, E, A, M>(source: Plan<T, E, M>, initialize: EnterFn<A>) =>
-      onEnterPlan(source.rewrite<T, E, M>(rewriter), initialize),
-    exit: <T, E, A, M>(source: Plan<T, E, M>, finalize: ExitFn<T, E, A>) =>
-      onExitPlan(source.rewrite<T, E, M>(rewriter), finalize),
-    map: <T, E, U, M>(source: Plan<T, E, M>, transform: (value: T) => U) =>
-      mapPlan(source.rewrite<T, E, M>(rewriter), transform),
-    tap: <T, E, R, M>(source: Plan<T, E, M>, observe: (value: T) => R) =>
-      tapPlan(source.rewrite<T, E, M>(rewriter), observe),
-    mapErr: <T, E, E2, M>(source: Plan<T, E, M>, transform: (error: TrackedErr<E>) => E2) =>
-      mapErrPlan(source.rewrite<T, E, M>(rewriter), transform),
-    tapErr: <T, E, R, M>(source: Plan<T, E, M>, observe: (error: TrackedErr<E>) => R) =>
-      tapErrPlan(source.rewrite<T, E, M>(rewriter), observe),
-    recover: <T, E, ECaught extends TrackedErr<E>, R, M>(
-      source: Plan<T, E, M>,
-      predicate: (error: TrackedErr<E>) => error is ECaught,
-      handler: (error: ECaught) => R,
-    ) => recoverPlan(source.rewrite<T, E, M>(rewriter), predicate, handler),
-  };
-  return rewriter;
+  return createDelegatingRewriter((source) => cancelPlan(source, abortSignal));
 }
 
-function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
-  return sleepWithSignal(ms, signal).catch(() => {});
+async function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
+  try {
+    return await sleepWithSignal(ms, signal);
+  } catch {
+    // intentionally ignored
+  }
 }
 
 async function runWithBoundSignal<T, E>(

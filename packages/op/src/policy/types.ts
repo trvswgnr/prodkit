@@ -6,6 +6,7 @@ import type { Apply, HKT, HKTArg } from "../hkt.js";
 import type { Op } from "../index.js";
 import type { Plan, PlanRewriter } from "../core/plan/base.js";
 import type { Result } from "../result.js";
+import { unsafeCoerce } from "../shared.js";
 
 export const OP_POLICY = Symbol("prodkit.op.policy");
 export const OP_POLICY_INPUT = Symbol("prodkit.op.policy.input");
@@ -71,7 +72,9 @@ export function definePolicy<
     apply<T, E, A, M>(source: OpPolicySource<T, E, A, M>): OpPolicyResult<F, T, E, A, M>;
   },
 ): OpPolicy<Input, F> & Extras {
-  return Object.assign(definition, { [OP_POLICY]: undefined as unknown as F });
+  Object.defineProperty(definition, OP_POLICY, { value: undefined });
+  // SAFETY: we know the definition is a valid OpPolicy<Input, F> & Extras
+  return unsafeCoerce(definition);
 }
 
 export interface RetryPolicyType extends OpPolicyType {

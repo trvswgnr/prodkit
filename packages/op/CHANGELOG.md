@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Reduced per-`.with(...)` allocation overhead for the open policy protocol by sharing
+  `PolicySourceImpl` and `DelegatingPlanRewriter` prototype methods, hoisting built-in rewriter
+  construction to policy factory time, and assigning `OP_POLICY` directly in `definePolicy`.
 - Replaced `.withRetry(...)`, `.withTimeout(...)`, `.withSignal(...)`, and `.withRelease(...)`
   with `.with(Policy.retry(...))`, `.with(Policy.timeout(...))`, `.with(Policy.cancel(...))`,
   and `.with(Policy.release(...))`.
