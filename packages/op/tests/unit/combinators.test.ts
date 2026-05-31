@@ -12,6 +12,7 @@ import {
   TRUE,
 } from "../support/utils.js";
 import { Policy } from "../../src/policy/index.js";
+import { identity } from "../../src/shared.js";
 
 describe("Op.all", () => {
   test("tuple of successes in input order", async () => {
@@ -49,7 +50,7 @@ describe("Op.all", () => {
           });
         }),
     );
-    const fast = Op.fail("boom" as const);
+    const fast = Op.fail("boom");
 
     const r = await Op.all([slow, fast]).run();
     assert(r.isErr(), "should be Err");
@@ -87,7 +88,7 @@ describe("Op.all", () => {
           });
         }),
     );
-    const fast = Op.fail("boom" as const);
+    const fast = Op.fail("boom");
     await Op.all([slow, fast]).run();
     expect(slowObservedAbort).toBe(true);
   });
@@ -149,7 +150,7 @@ describe("Op.all", () => {
           });
         }),
     );
-    const fast = Op.fail("boom" as const);
+    const fast = Op.fail("boom");
     const queued = Op.try(() => {
       queuedStarted = true;
       return 3;
@@ -178,7 +179,7 @@ describe("Op.all", () => {
 
 describe("Op.allSettled", () => {
   test("returns tuple of Result in input order", async () => {
-    const r = await Op.allSettled([Op.of(1), Op.fail("no" as const), Op.of("ok")]).run();
+    const r = await Op.allSettled([Op.of(1), Op.fail("no"), Op.of("ok")]).run();
     assert(r.isOk(), "should be Ok");
     const [a, b, c] = r.value;
     assert(a.isOk() && b.isErr() && c.isOk(), "branches should be Ok, Err, Ok");
@@ -204,7 +205,7 @@ describe("Op.allSettled", () => {
   );
 
   test("never fails", async () => {
-    const combined = Op.allSettled([Op.fail(1), Op.fail("two" as const)]);
+    const combined = Op.allSettled([Op.fail(1), Op.fail("two")]);
     const r = await combined.run();
     assert(r.isOk(), "should be Ok");
     expect(r.value).toHaveLength(2);
@@ -235,14 +236,14 @@ describe("Op.allSettled", () => {
     const started: number[] = [];
     const first = Op(function* () {
       started.push(0);
-      return yield* Op.fail("boom" as const);
+      return yield* Op.fail("boom");
     });
     const second = Op(function* () {
       started.push(1);
-      return yield* Op.of("ok" as const);
+      return yield* Op.of("ok");
     });
 
-    const r = await Op.allSettled([first(), second()], 1).run();
+    const r = await Op.allSettled([first, second], 1).run();
 
     assert(r.isOk(), "should be Ok");
     expect(started).toEqual([0, 1]);
@@ -263,7 +264,7 @@ describe("Op.settle", () => {
   });
 
   test("wraps failure in a settled Result", async () => {
-    const r = await Op.settle(Op.fail("nope" as const)).run();
+    const r = await Op.settle(Op.fail("nope")).run();
     assert(r.isOk(), "should be Ok");
     const settled = r.value;
     assert(settled.isErr(), "should be Err");
@@ -305,11 +306,7 @@ describe("Op.any", () => {
   });
 
   test("all-fail surfaces ErrorGroup with errors in input order", async () => {
-    const r = await Op.any([
-      Op.fail("a" as const),
-      Op.fail("b" as const),
-      Op.fail("c" as const),
-    ]).run();
+    const r = await Op.any([Op.fail("a"), Op.fail("b"), Op.fail("c")]).run();
     assert(r.isErr(), "should be Err");
     assert(ErrorGroup.is(r.error), "should be ErrorGroup");
     expect(r.error.errors).toEqual(["a", "b", "c"]);
@@ -323,7 +320,7 @@ describe("Op.any", () => {
   });
 
   test("error type is ErrorGroup<union of child errors>", async () => {
-    const combined = Op.any([Op.fail(1), Op.fail("two" as const)]);
+    const combined = Op.any([Op.fail(1), Op.fail("two")]);
     const r = await combined.run();
     assert(r.isErr(), "should be Err");
     assert(ErrorGroup.is(r.error), "should be ErrorGroup");
@@ -357,9 +354,7 @@ describe("Op.any", () => {
 
     const run = Op.any([loser, Op.of(7)]).run();
     let settled = false;
-    run.then(() => {
-      settled = true;
-    });
+    run.then(() => (settled = true));
 
     await vi.waitFor(() => expect(loserCleanupStarted).toBe(true));
     expect(settled).toBe(false);
@@ -374,10 +369,10 @@ describe("Op.any", () => {
   test("winner success keeps precedence over loser abort-time failures", async () => {
     const loser = Op.try(
       (signal) =>
-        new Promise<number>((_resolve, reject) =>
-          signal.addEventListener("abort", () => reject("cleanup-failed" as const), { once: true }),
+        new Promise<number>((_, reject) =>
+          signal.addEventListener("abort", () => reject("cleanup-failed"), { once: true }),
         ),
-      (cause) => cause as "cleanup-failed",
+      identity,
     );
 
     const r = await Op.any([loser, Op.of(1)]).run();
@@ -417,7 +412,7 @@ describe("Op.race", () => {
 
   test("first settler wins (Err)", async () => {
     const slow = Op.try(() => resolveAfter(1, 20));
-    const fast = Op.fail("quick" as const);
+    const fast = Op.fail("quick");
     const r = await Op.race([slow, fast]).run();
     assert(r.isErr(), "should be Err");
     expect(r.error).toBe("quick");
@@ -477,7 +472,7 @@ describe("Op.race", () => {
   });
 
   test("union type across children", async () => {
-    const combined = Op.race([Op.of(1), Op.fail("two" as const)]);
+    const combined = Op.race([Op.of(1), Op.fail("two")]);
     const r = await combined.run();
     expect(r.isOk() || r.isErr()).toBe(true);
   });
@@ -511,19 +506,13 @@ describe("Op.race", () => {
   test("winner error keeps precedence over loser abort-time failures", async () => {
     const loser = Op.try(
       (signal) =>
-        new Promise<number>((_resolve, reject) => {
-          signal.addEventListener(
-            "abort",
-            () => {
-              reject("cleanup-failed");
-            },
-            { once: true },
-          );
-        }),
-      (cause) => cause as "cleanup-failed",
+        new Promise<number>((_, reject) =>
+          signal.addEventListener("abort", () => reject("cleanup-failed"), { once: true }),
+        ),
+      identity,
     );
 
-    const r = await Op.race([loser, Op.fail("quick" as const)]).run();
+    const r = await Op.race([loser, Op.fail("quick")]).run();
     assert(r.isErr(), "should be Err");
     expect(r.error).toBe("quick");
   });
@@ -632,12 +621,12 @@ describe("combinator abort listener cleanup", () => {
     const tracked = trackAbortListeners(outer.signal);
     try {
       const run = Op.any([
-        Op.fail("fast-fail" as const),
+        Op.fail("fast-fail"),
         Op.try(
           (signal) =>
-            new Promise<never>((_resolve, reject) => {
-              signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
-            }),
+            new Promise<never>((_, reject) =>
+              signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true }),
+            ),
         ),
       ])
         .with(Policy.cancel(outer.signal))

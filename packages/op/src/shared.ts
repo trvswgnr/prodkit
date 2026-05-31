@@ -121,3 +121,7 @@ export function sleepWithSignal(ms: number, signal: AbortSignalLike): Promise<vo
     signal.addEventListener("abort", onAbort, { once: true });
   });
 }
+
+export function identity<T>(value: T): T {
+  return value;
+}
