@@ -1,8 +1,7 @@
 import type { RetryPolicy } from "./retry-policy.js";
 import type { ReleaseFn, RunContext } from "../core/types.js";
 import type { TimeoutError, UnhandledException } from "../errors.js";
-import { HKT_RESULT } from "../hkt.js";
-import type { Apply, HKT, HKTArg } from "../hkt.js";
+import type { HKT } from "../hkt.js";
 import type { Op } from "../index.js";
 import type { Plan, PlanRewriter } from "../core/plan/base.js";
 import type { Result } from "../result.js";
@@ -11,27 +10,18 @@ import { unsafeCoerce } from "../shared.js";
 export const OP_POLICY = Symbol("prodkit.op.policy");
 export const OP_POLICY_INPUT = Symbol("prodkit.op.policy.input");
 
-export type OpPolicyArgs<T = unknown, E = unknown, A = unknown, M = unknown> = [
-  ok: T,
-  err: E,
-  args: A,
-  meta: M,
-];
-
 export interface OpPolicyType extends HKT {
-  readonly [HKT_RESULT]: OpPolicyArgs;
+  readonly [HKT.TYPE]: Op<
+    HKT.Param<this, 0>,
+    HKT.Param<this, 1>,
+    HKT.Param<this, 2>,
+    HKT.Param<this, 3>
+  >;
 }
 
-export type OpPolicyArg<Self, Index extends keyof OpPolicyArgs> = HKTArg<Self, Index>;
+export type ApplyOpPolicy<F extends HKT, T, E, A, M> = HKT.Apply<F, readonly [T, E, A, M]>;
 
-export type ApplyOpPolicy<F extends OpPolicyType, T, E, A, M> = Apply<F, OpPolicyArgs<T, E, A, M>>;
-
-export type OpPolicyResult<F extends OpPolicyType, T, E, A, M> = Op<
-  ApplyOpPolicy<F, T, E, A, M>[0],
-  ApplyOpPolicy<F, T, E, A, M>[1],
-  ApplyOpPolicy<F, T, E, A, M>[2],
-  ApplyOpPolicy<F, T, E, A, M>[3]
->;
+export type OpPolicyResult<F extends HKT, T, E, A, M> = ApplyOpPolicy<F, T, E, A, M>;
 
 export interface OpPolicyInput<T = unknown, E = unknown, A = unknown, M = unknown> {
   readonly ok: T;
@@ -53,7 +43,7 @@ export interface OpPolicySource<T, E, A, M> {
   ): Op<TNext, ENext, A, MNext>;
 }
 
-export interface OpPolicy<Input = unknown, F extends OpPolicyType = OpPolicyType> {
+export interface OpPolicy<Input = unknown, F extends HKT = OpPolicyType> {
   readonly [OP_POLICY]: F;
   readonly [OP_POLICY_INPUT]?: (input: Input) => void;
   apply<T, E, A, M>(source: OpPolicySource<T, E, A, M>): OpPolicyResult<F, T, E, A, M>;
@@ -63,7 +53,7 @@ export interface OpPolicy<Input = unknown, F extends OpPolicyType = OpPolicyType
  * Builds a custom policy value for `op.with(...)`.
  * Use `source.wrap`, `source.rewrite`, or `source.around` inside `apply` to transform the wrapped op.
  */
-export function define<Input, F extends OpPolicyType, Extras extends object = Record<never, never>>(
+export function define<Input, F extends HKT, Extras extends object = Record<never, never>>(
   definition: Extras & {
     apply<T, E, A, M>(source: OpPolicySource<T, E, A, M>): OpPolicyResult<F, T, E, A, M>;
   },
@@ -73,43 +63,16 @@ export function define<Input, F extends OpPolicyType, Extras extends object = Re
   return unsafeCoerce(definition);
 }
 
-export interface RetryPolicyType extends OpPolicyType {
-  readonly [HKT_RESULT]: OpPolicyArgs<
-    OpPolicyArg<this, 0>,
-    OpPolicyArg<this, 1>,
-    OpPolicyArg<this, 2>,
-    OpPolicyArg<this, 3>
+export interface TimeoutPolicyType extends HKT {
+  readonly [HKT.TYPE]: Op<
+    HKT.Param<this, 0>,
+    HKT.Param<this, 1> | TimeoutError,
+    HKT.Param<this, 2>,
+    HKT.Param<this, 3>
   >;
 }
 
-export interface TimeoutPolicyType extends OpPolicyType {
-  readonly [HKT_RESULT]: OpPolicyArgs<
-    OpPolicyArg<this, 0>,
-    OpPolicyArg<this, 1> | TimeoutError,
-    OpPolicyArg<this, 2>,
-    OpPolicyArg<this, 3>
-  >;
-}
-
-export interface CancelPolicyType extends OpPolicyType {
-  readonly [HKT_RESULT]: OpPolicyArgs<
-    OpPolicyArg<this, 0>,
-    OpPolicyArg<this, 1>,
-    OpPolicyArg<this, 2>,
-    OpPolicyArg<this, 3>
-  >;
-}
-
-export interface ReleasePolicyType extends OpPolicyType {
-  readonly [HKT_RESULT]: OpPolicyArgs<
-    OpPolicyArg<this, 0>,
-    OpPolicyArg<this, 1>,
-    OpPolicyArg<this, 2>,
-    OpPolicyArg<this, 3>
-  >;
-}
-
-export type RetryPolicyAttachment = OpPolicy<unknown, RetryPolicyType> & {
+export type RetryPolicyAttachment = OpPolicy<unknown, OpPolicyType> & {
   readonly policy: RetryPolicy | undefined;
 };
 
@@ -117,11 +80,11 @@ export type TimeoutPolicyAttachment = OpPolicy<unknown, TimeoutPolicyType> & {
   readonly timeoutMs: number;
 };
 
-export type CancelPolicyAttachment = OpPolicy<unknown, CancelPolicyType> & {
+export type CancelPolicyAttachment = OpPolicy<unknown, OpPolicyType> & {
   readonly abortSignal: AbortSignal;
 };
 
-export type ReleasePolicyAttachment<T> = OpPolicy<OpPolicyInput<T>, ReleasePolicyType> & {
+export type ReleasePolicyAttachment<T> = OpPolicy<OpPolicyInput<T>, OpPolicyType> & {
   readonly release: ReleaseFn<T>;
 };
 

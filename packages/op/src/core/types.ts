@@ -1,7 +1,8 @@
 // oxlint-disable typescript/no-explicit-any
 import type { TimeoutError, UnhandledException } from "../errors.js";
 import type { Err, Result } from "../result.js";
-import type { OpPolicy, OpPolicyInput, OpPolicyResult, OpPolicyType } from "../policy/types.js";
+import type { OpPolicy, OpPolicyInput, OpPolicyResult } from "../policy/types.js";
+import type { HKT } from "../hkt.js";
 import type { RegisterExitFinalizerInstruction, SuspendInstruction } from "./instructions.js";
 import type { Op } from "../index.js";
 
@@ -280,7 +281,7 @@ export interface FluentOp<T, E, A, M = EmptyMeta> {
    * import * as Policy from "@prodkit/op/policy";
    * const resilient = Op.try(() => fetch("/ping")).with(Policy.retry());
    */
-  with<F extends OpPolicyType>(
+  with<F extends HKT>(
     policy: OpPolicy<OpPolicyInput<T, E, AsArgs<A>, M>, F>,
   ): OpPolicyResult<F, T, E, AsArgs<A>, M>;
 

@@ -4,7 +4,8 @@ import { createRunContext } from "../runtime.js";
 import { SuspendInstruction } from "../instructions.js";
 import type { UnhandledException } from "../../errors.js";
 import type { Op } from "../../index.js";
-import type { OpPolicy, OpPolicyInput, OpPolicySource, OpPolicyType } from "../../policy/types.js";
+import type { OpPolicy, OpPolicyInput, OpPolicySource } from "../../policy/types.js";
+import type { HKT } from "../../hkt.js";
 import type {
   AnyNullaryOp,
   AsArgs,
@@ -116,7 +117,7 @@ function fluentMethodsForContext<T, E, A, M, Yieldable extends boolean>(
   const policySource = new PolicySourceImpl(wrap) as OpPolicySource<T, E, AsArgs<A>, M>;
 
   return {
-    with: <F extends OpPolicyType>(policy: OpPolicy<OpPolicyInput<T, E, AsArgs<A>, M>, F>) =>
+    with: <F extends HKT>(policy: OpPolicy<OpPolicyInput<T, E, AsArgs<A>, M>, F>) =>
       policy.apply(policySource),
     on: (event: OpLifecycleHook, handler: unknown) => {
       if (event === "enter") {

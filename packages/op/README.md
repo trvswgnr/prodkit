@@ -148,12 +148,10 @@ Public exports:
 - Values: `retry`, `timeout`, `cancel`, `release`, `Delay`, `define`
 - Types: `RetryPolicy`, `RetryDelay`, `ExponentialDelayOptions`, `RetryPolicyAttachment`,
   `TimeoutPolicyAttachment`, `CancelPolicyAttachment`, `ReleasePolicyAttachment`, `BuiltInPolicy`,
-  `OpPolicy`, `OpPolicyInput`, `OpPolicySource`, `OpPolicyType`, `OpPolicyArg`, `OpPolicyArgs`,
-  `OpPolicyResult`, `ApplyOpPolicy`
+  `OpPolicy`, `OpPolicyInput`, `OpPolicySource`, `OpPolicyType`, `OpPolicyResult`, `ApplyOpPolicy`
 
 Custom policies that transform `Op<T, E, A, M>` at the type level use the HKT protocol; import
-`HKT`, `HKTArg`, `Apply`, `HKT_ARGS`, and `HKT_RESULT` from `@prodkit/op/hkt` (see below), not from
-this subpath.
+`HKT` from `@prodkit/op/hkt` (see below), not from this subpath.
 
 Policy ordering semantics are summarized under [`.with(policy)`](#withpolicy) below and in
 [`DESIGN.md`](DESIGN.md#policy-ordering-retry-and-timeout).
@@ -165,21 +163,38 @@ Policy uses it to let custom `.with(...)` attachments describe how they transfor
 without adding overloads to core.
 
 ```ts
-import { HKT_RESULT, type Apply, type HKT, type HKTArg } from "@prodkit/op/hkt";
+import { HKT } from "@prodkit/op/hkt";
 
-type ToRecordResult<Self> = {
-  readonly value: HKTArg<Self, 0>;
-};
+type Maybe<A> =
+  | { readonly _tag: "Some"; readonly value: A }
+  | { readonly _tag: "None" };
 
-interface ToRecord extends HKT {
-  readonly [HKT_RESULT]: ToRecordResult<this>;
+interface MaybeF extends HKT {
+  readonly [HKT.TYPE]: Maybe<HKT.Param<this, 0>>;
 }
 
-type Applied = Apply<ToRecord, readonly [number]>;
-//   ^? { readonly value: number }
+type Name = HKT.Apply<MaybeF, readonly [string]>;
+//   ^? Maybe<string>
+
+type Either<E, A> =
+  | { readonly _tag: "Left"; readonly error: E }
+  | { readonly _tag: "Right"; readonly value: A };
+
+interface EitherF extends HKT {
+  readonly [HKT.TYPE]: Either<HKT.Param<this, 0>, HKT.Param<this, 1>>;
+}
+
+// Fix1<EitherF, E> is the usual "Either with E fixed" view before you supply A.
+type HttpResult<A> = HKT.Apply<HKT.Fix1<EitherF, { status: number }>, readonly [A]>;
+//   ^? Either<{ status: number }, A>
 ```
 
-Public exports: `HKT_ARGS`, `HKT_RESULT`, `HKT`, `HKTArg`, `Apply` (types and symbol constants).
+Policy uses the same encoding: `[HKT.TYPE]` is `Op<...>`, args are `[T, E, A, M]`, and
+`Policy.timeout(...)` widens `E` with `TimeoutError` without a core `.with` overload.
+
+Public export: `HKT` (interface, namespace, and frozen `{ PARAMS, TYPE }` symbol constants).
+Namespace members: `HKT.Param`, `HKT.Apply`, `HKT.Compose`, `HKT.Flip`, `HKT.Fix1`, `HKT.Fix2`, and
+`HKT.Fix12`.
 Import from here for custom `Policy.define(...)` attachments and other op extensions; the policy
 subpath does not re-export these symbols.
 

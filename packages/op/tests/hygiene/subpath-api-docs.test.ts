@@ -68,7 +68,7 @@ describe("@prodkit/op/hkt JSDoc coverage", () => {
   const exports = moduleExports(program, packageRoot, "src/hkt.ts");
 
   test("HKT symbols and types are documented", () => {
-    expectDocumented(checker, exports, ["HKT_ARGS", "HKT_RESULT", "HKT", "HKTArg", "Apply"]);
+    expectDocumented(checker, exports, ["HKT"]);
   });
 });
 

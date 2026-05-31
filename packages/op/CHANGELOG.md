@@ -12,8 +12,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Restored `@prodkit/op/internal` for extension and maintainer helpers (`Blocking`, `withBlocking`,
   `CustomInstruction`, metadata inference types, `AbortSignalLike`, `unsafeCoerce`, `NEVER`, and
   related symbols).
+- Added compositional HKT helpers on `@prodkit/op/hkt`: `HKT.Compose`, `HKT.Flip`, `HKT.Fix1`,
+  `HKT.Fix2`, and `HKT.Fix12`.
+- Added `HKT.Applied` for value-level witnesses of an already-applied constructor (use with
+  `Fix12<F, ...>`, not `Fix12<Applied<F, Args>, ...>`).
 
 ### Changed
+
+- Consolidated `@prodkit/op/hkt` under a single `HKT` export (interface, namespace, and
+  `HKT.PARAMS` / `HKT.TYPE` symbol constants). Use `HKT.Param`, `HKT.Apply`, and the compositional
+  helpers on the namespace instead of former top-level exports.
+- Policy HKT encoding now uses `[HKT.TYPE]: Op<...>` instead of tuple `[HKT_RESULT]`;
+  `OpPolicyType` is the identity transform, and widening policies extend `HKT` directly.
 
 - Invalid `Policy.timeout(timeoutMs)` values (negative or non-finite) now fail at run time as
   `Err(UnhandledException)` instead of being clamped to zero.
@@ -26,8 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- Removed `HKT`, `HKTArg`, `Apply`, `HKT_ARGS`, and `HKT_RESULT` re-exports from
-  `@prodkit/op/policy`; import them from `@prodkit/op/hkt` only.
+- Removed `HKT` re-exports from `@prodkit/op/policy`; import from `@prodkit/op/hkt` only.
+- Removed top-level `HKTArg`, `HKT_ARGS`, `HKT_TYPE`, `Apply`, `Compose`, `Flip`, `Fix1`,
+  `Fix2`, and `Fix12` exports from `@prodkit/op/hkt`; use the `HKT` namespace instead.
+- Removed `OpPolicyArg`, `OpPolicyArgs`, `RetryPolicyType`, `CancelPolicyType`, and
+  `ReleasePolicyType` from `@prodkit/op/policy`; identity policies use `OpPolicyType`, and only
+  `TimeoutPolicyType` remains as a distinct HKT for error widening.
 - Removed `definePolicy` from `@prodkit/op/policy`; use `define` only.
 - Removed extension-only exports from the main `@prodkit/op` entry (`Blocking`, `withBlocking`,
   `BlockingOp`, `EmptyMeta`, `CustomInstruction`, `MergeMeta`, `InferOpMeta`, `InferInstructionMeta`,
