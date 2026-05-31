@@ -6,8 +6,12 @@ import {
   assertFiniteNumber,
 } from "./validate.js";
 
-/** Delay in milliseconds, or `(retry, cause) => ms` before an upcoming retry. `retry` is 0-based. */
-export type RetryDelay = number | ((retry: number, cause: unknown) => number);
+/**
+ * Retry delay configuration for `RetryPolicy.delay`: fixed milliseconds or
+ * `(retry, cause) => ms` before an upcoming retry (`retry` is 0-based). For built-in delay
+ * functions, use the `Delay` helper namespace (`Delay.fixed`, `Delay.exponential`, and so on).
+ */
+export type Delay = number | ((retry: number, cause: unknown) => number);
 
 /** Configuration for `Policy.retry(policy)`. `retries` is the post-failure budget; `delay(retry, cause)` uses a 0-based retry index. */
 export interface RetryPolicy {
@@ -16,7 +20,7 @@ export interface RetryPolicy {
   /** Whether to retry after a failure. Receives the root cause. */
   when?: (cause: unknown) => boolean;
   /** Delay before the next retry: fixed milliseconds or `(retry, cause) => ms`. */
-  delay?: RetryDelay;
+  delay?: Delay;
 }
 
 /** Options for `Delay.exponential(options)`. */
@@ -80,7 +84,7 @@ function isValidatedDelay(
   return DELAY_VALIDATE in delay;
 }
 
-function validateDelay(delay: RetryDelay): void {
+function validateDelay(delay: Delay): void {
   if (typeof delay === "number") {
     assertNonNegativeNumber(delay, "delay");
     return;
@@ -111,7 +115,7 @@ const exponential = (options?: ExponentialDelayOptions) => {
   }, validate);
 };
 
-/** Built-in retry delay helpers for `RetryPolicy.delay`. */
+/** Built-in retry delay helpers for `RetryPolicy.delay`. See also the `Delay` type alias. */
 export const Delay = Object.freeze({
   /** Constant delay in milliseconds before each retry attempt. */
   fixed,
@@ -143,7 +147,7 @@ function validateRetryPolicy(policy: Required<RetryPolicy>): void {
   validateDelay(policy.delay);
 }
 
-function normalizeDelay(delay: RetryDelay): (retry: number, cause: unknown) => number {
+function normalizeDelay(delay: Delay): (retry: number, cause: unknown) => number {
   if (typeof delay === "number") return () => delay;
   return delay;
 }

@@ -1,7 +1,7 @@
 // oxlint-disable typescript/no-explicit-any
 import type { TimeoutError, UnhandledException } from "../errors.js";
 import type { Err, Result } from "../result.js";
-import type { OpPolicy, OpPolicyInput, OpPolicyResult } from "../policy/types.js";
+import type { OpPolicy, OpPolicyInput } from "../policy/types.js";
 import type { HKT } from "../hkt.js";
 import type { RegisterExitFinalizerInstruction, SuspendInstruction } from "./instructions.js";
 import type { Op } from "../index.js";
@@ -283,7 +283,7 @@ export interface FluentOp<T, E, A, M = EmptyMeta> {
    */
   with<F extends HKT>(
     policy: OpPolicy<OpPolicyInput<T, E, AsArgs<A>, M>, F>,
-  ): OpPolicyResult<F, T, E, AsArgs<A>, M>;
+  ): HKT.Apply<F, [T, E, AsArgs<A>, M]>;
 
   /**
    * Register a handler that runs before the operation body starts.

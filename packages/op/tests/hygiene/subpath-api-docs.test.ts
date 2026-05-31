@@ -72,7 +72,16 @@ describe("@prodkit/op/policy JSDoc coverage", () => {
   });
 
   test("retry policy types are documented", () => {
-    expectDocumented(checker, exports, ["RetryPolicy", "RetryDelay", "ExponentialDelayOptions"]);
+    expectDocumented(checker, exports, ["RetryPolicy", "Delay", "ExponentialDelayOptions"]);
+  });
+
+  test("Policy type alias and namespace helpers are documented", () => {
+    expectDocumented(checker, exports, ["Policy"]);
+
+    const policySymbol = exports.find((symbol) => symbol.name === "Policy");
+    assert(policySymbol, "Expected Policy export");
+    const namespaceExports = checker.getExportsOfModule(policySymbol);
+    expectDocumented(checker, namespaceExports, ["Input", "Source", "Type", "BuiltIn"]);
   });
 });
 

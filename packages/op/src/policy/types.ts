@@ -19,10 +19,6 @@ export interface OpPolicyType extends HKT {
   >;
 }
 
-export type ApplyOpPolicy<F extends HKT, T, E, A, M> = HKT.Apply<F, readonly [T, E, A, M]>;
-
-export type OpPolicyResult<F extends HKT, T, E, A, M> = ApplyOpPolicy<F, T, E, A, M>;
-
 export interface OpPolicyInput<T = unknown, E = unknown, A = unknown, M = unknown> {
   readonly ok: T;
   readonly err: E;
@@ -46,7 +42,7 @@ export interface OpPolicySource<T, E, A, M> {
 export interface OpPolicy<Input = unknown, F extends HKT = OpPolicyType> {
   readonly [OP_POLICY]: F;
   readonly [OP_POLICY_INPUT]?: (input: Input) => void;
-  apply<T, E, A, M>(source: OpPolicySource<T, E, A, M>): OpPolicyResult<F, T, E, A, M>;
+  apply<T, E, A, M>(source: OpPolicySource<T, E, A, M>): HKT.Apply<F, [T, E, A, M]>;
 }
 
 /**
@@ -55,7 +51,7 @@ export interface OpPolicy<Input = unknown, F extends HKT = OpPolicyType> {
  */
 export function define<Input, F extends HKT, Extras extends object = Record<never, never>>(
   definition: Extras & {
-    apply<T, E, A, M>(source: OpPolicySource<T, E, A, M>): OpPolicyResult<F, T, E, A, M>;
+    apply<T, E, A, M>(source: OpPolicySource<T, E, A, M>): HKT.Apply<F, [T, E, A, M]>;
   },
 ): OpPolicy<Input, F> & Extras {
   Object.defineProperty(definition, OP_POLICY, { value: undefined });

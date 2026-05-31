@@ -2,12 +2,10 @@ import { define } from "./types.js";
 import { cancelRewriter, releasePlan, retryRewriter, timeoutRewriter } from "./plan.js";
 import { Delay, normalizeRetryPolicy } from "./retry-policy.js";
 import type {
-  ApplyOpPolicy,
   BuiltInPolicy,
   CancelPolicyAttachment,
   OpPolicy,
   OpPolicyInput,
-  OpPolicyResult,
   OpPolicySource,
   OpPolicyType,
   ReleasePolicyAttachment,
@@ -15,8 +13,9 @@ import type {
   TimeoutPolicyAttachment,
   TimeoutPolicyType,
 } from "./types.js";
-import type { ExponentialDelayOptions, RetryDelay, RetryPolicy } from "./retry-policy.js";
+import type { ExponentialDelayOptions, RetryPolicy } from "./retry-policy.js";
 import type { ReleaseFn } from "../core/types.js";
+import type { HKT } from "../hkt.js";
 
 function retry(policy?: RetryPolicy): RetryPolicyAttachment {
   const rewriter = retryRewriter(normalizeRetryPolicy(policy));
@@ -63,19 +62,26 @@ export const Policy = {
   define,
 } as const;
 
+/** Policy attachment for `.with(...)`. Custom factories return `Policy<Input, YourPolicyHKT>`. */
+export type Policy<Input = unknown, F extends HKT = OpPolicyType> = OpPolicy<Input, F>;
+
+/** Nested type helpers for custom `Policy.define(...)` authors. */
+export namespace Policy {
+  /** Contravariant input phantom; enables contextual typing for `Policy.release((value) => ...)`. */
+  export type Input<T = unknown, E = unknown, A = unknown, M = unknown> = OpPolicyInput<T, E, A, M>;
+  /** Plan surface passed to `apply(source)` inside `Policy.define(...)`. */
+  export type Source<T, E, A, M> = OpPolicySource<T, E, A, M>;
+  /** Identity policy HKT; built-in policies extend this or `TimeoutPolicyType`. */
+  export type Type = OpPolicyType;
+  /** Union of built-in policy attachment types. */
+  export type BuiltIn<T = unknown> = BuiltInPolicy<T>;
+}
+
 export { Delay };
 export type {
-  ApplyOpPolicy,
-  BuiltInPolicy,
   CancelPolicyAttachment,
-  OpPolicy,
-  OpPolicyInput,
-  OpPolicyResult,
-  OpPolicySource,
-  OpPolicyType,
   ExponentialDelayOptions,
   ReleasePolicyAttachment,
-  RetryDelay,
   RetryPolicy,
   RetryPolicyAttachment,
   TimeoutPolicyAttachment,

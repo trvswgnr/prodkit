@@ -1,19 +1,19 @@
 import { Op, type Op as OpType } from "@prodkit/op";
 import type { HKT } from "@prodkit/op/hkt";
-import { Policy, type OpPolicy } from "@prodkit/op/policy";
+import { Policy } from "@prodkit/op/policy";
 import { Result } from "better-result";
 
 export type MaintenanceMode = "scheduled" | "emergency";
 
-export type MaintenanceBlocked = {
+export type MaintenanceBlocked<Mode extends MaintenanceMode = MaintenanceMode> = {
   readonly _tag: "MaintenanceBlocked";
-  readonly mode: MaintenanceMode;
+  readonly mode: Mode;
 };
 
 interface MaintenanceGatePolicyType<Mode extends MaintenanceMode> extends HKT {
   readonly [HKT.TYPE]: OpType<
     HKT.Param<this, 0>,
-    HKT.Param<this, 1> | MaintenanceBlocked,
+    HKT.Param<this, 1> | MaintenanceBlocked<Mode>,
     HKT.Param<this, 2>,
     HKT.Param<this, 3>
   >;
@@ -22,7 +22,7 @@ interface MaintenanceGatePolicyType<Mode extends MaintenanceMode> extends HKT {
 export function maintenanceGate<Mode extends MaintenanceMode>(
   active: boolean,
   mode: Mode,
-): OpPolicy<unknown, MaintenanceGatePolicyType<Mode>> {
+): Policy<unknown, MaintenanceGatePolicyType<Mode>> {
   return Policy.define<unknown, MaintenanceGatePolicyType<Mode>>({
     apply: (source) => {
       if (active) {
