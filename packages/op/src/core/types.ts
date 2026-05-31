@@ -278,7 +278,7 @@ export interface FluentOp<T, E, A, M = EmptyMeta> {
    * Attaches an execution policy to the operation.
    *
    * @example
-   * import * as Policy from "@prodkit/op/policy";
+   * import { Policy } from "@prodkit/op/policy";
    * const resilient = Op.try(() => fetch("/ping")).with(Policy.retry());
    */
   with<F extends HKT>(

@@ -18,8 +18,7 @@ import type {
 import type { ExponentialDelayOptions, RetryDelay, RetryPolicy } from "./retry-policy.js";
 import type { ReleaseFn } from "../core/types.js";
 
-/** Creates a retry policy attachment for `op.with(...)`. Uses default `retries: 2` when omitted. */
-export function retry(policy?: RetryPolicy): RetryPolicyAttachment {
+function retry(policy?: RetryPolicy): RetryPolicyAttachment {
   const rewriter = retryRewriter(normalizeRetryPolicy(policy));
   return define<unknown, OpPolicyType, { readonly policy: RetryPolicy | undefined }>({
     policy,
@@ -27,8 +26,7 @@ export function retry(policy?: RetryPolicy): RetryPolicyAttachment {
   });
 }
 
-/** Creates a timeout policy attachment for `op.with(...)`. */
-export function timeout(timeoutMs: number): TimeoutPolicyAttachment {
+function timeout(timeoutMs: number): TimeoutPolicyAttachment {
   const rewriter = timeoutRewriter(timeoutMs);
   return define<unknown, TimeoutPolicyType, { readonly timeoutMs: number }>({
     timeoutMs,
@@ -36,8 +34,7 @@ export function timeout(timeoutMs: number): TimeoutPolicyAttachment {
   });
 }
 
-/** Creates a cancellation policy attachment for `op.with(...)`. */
-export function cancel(abortSignal: AbortSignal): CancelPolicyAttachment {
+function cancel(abortSignal: AbortSignal): CancelPolicyAttachment {
   const rewriter = cancelRewriter(abortSignal);
   return define<unknown, OpPolicyType, { readonly abortSignal: AbortSignal }>({
     abortSignal,
@@ -45,15 +42,28 @@ export function cancel(abortSignal: AbortSignal): CancelPolicyAttachment {
   });
 }
 
-/** Creates a release policy attachment for `op.with(...)`. */
-export function release<T>(releaseFn: ReleaseFn<T>): ReleasePolicyAttachment<T> {
+function release<T>(releaseFn: ReleaseFn<T>): ReleasePolicyAttachment<T> {
   return define<OpPolicyInput<T>, OpPolicyType, { readonly release: ReleaseFn<T> }>({
     release: releaseFn,
     apply: (source) => source.wrap((plan) => releasePlan(plan, releaseFn as ReleaseFn<unknown>)),
   });
 }
 
-export { Delay, define };
+/** Built-in and custom policy constructors for `.with(...)`. */
+export const Policy = {
+  /** Creates a retry policy attachment for `.with(Policy.retry(...))`. Uses default `retries: 2` when omitted. */
+  retry,
+  /** Creates a timeout policy attachment for `.with(Policy.timeout(...))`. */
+  timeout,
+  /** Creates a cancellation policy attachment for `.with(Policy.cancel(...))`. */
+  cancel,
+  /** Creates a release policy attachment for `.with(Policy.release(...))`. */
+  release,
+  /** Builds a custom policy value for `.with(Policy.define(...))`. */
+  define,
+} as const;
+
+export { Delay };
 export type {
   ApplyOpPolicy,
   BuiltInPolicy,

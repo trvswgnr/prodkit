@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `Policy` namespace export on `@prodkit/op/policy` with `retry`, `timeout`, `cancel`,
+  `release`, and `define`.
 - Restored `@prodkit/op/internal` for extension and maintainer helpers (`Blocking`, `withBlocking`,
   `CustomInstruction`, metadata inference types, `AbortSignalLike`, `unsafeCoerce`, `NEVER`, and
   related symbols).
@@ -39,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- Removed top-level `retry`, `timeout`, `cancel`, `release`, and `define` exports from
+  `@prodkit/op/policy`; use `Policy.retry`, `Policy.timeout`, `Policy.cancel`, `Policy.release`, and
+  `Policy.define` instead.
 - Removed `HKT` re-exports from `@prodkit/op/policy`; import from `@prodkit/op/hkt` only.
 - Removed top-level `HKTArg`, `HKT_ARGS`, `HKT_TYPE`, `Apply`, `Compose`, `Flip`, `Fix1`,
   `Fix2`, and `Fix12` exports from `@prodkit/op/hkt`; use the `HKT` namespace instead.

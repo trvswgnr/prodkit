@@ -50,7 +50,7 @@ export interface OpPolicy<Input = unknown, F extends HKT = OpPolicyType> {
 }
 
 /**
- * Builds a custom policy value for `op.with(...)`.
+ * Builds a custom policy value for `.with(Policy.define(...))`.
  * Use `source.wrap`, `source.rewrite`, or `source.around` inside `apply` to transform the wrapped op.
  */
 export function define<Input, F extends HKT, Extras extends object = Record<never, never>>(
