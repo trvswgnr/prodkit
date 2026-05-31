@@ -4,6 +4,7 @@ import { sleepWithSignal } from "../shared.js";
 import { RegisterExitFinalizerInstruction, SuspendInstruction } from "../core/instructions.js";
 import { createRunContext } from "../core/runtime.js";
 import { normalizeRetryPolicy, type NormalizedRetryPolicy } from "./retry-policy.js";
+import { validateTimeoutMs } from "./validate.js";
 import type { EnterFn, ExitFn, ReleaseFn, RunContext, TrackedErr } from "../core/types.js";
 import {
   createPlan,
@@ -104,7 +105,11 @@ export function retryPlan<T, E, M>(
   policy: NormalizedRetryPolicy = normalizeRetryPolicy(),
 ): Plan<T, E, M> {
   return createPlan(function* () {
-    policy.validate();
+    try {
+      policy.validate();
+    } catch (cause) {
+      return yield* Result.err(new UnhandledException({ cause }));
+    }
 
     let attempt = 1;
 
@@ -126,7 +131,13 @@ export function retryPlan<T, E, M>(
 
       if (!canRetry) return yield* Result.err(error);
 
-      const delayMs = Math.max(0, policy.getDelay(attempt, retryCause));
+      let delayMs: number;
+      try {
+        delayMs = policy.getDelay(attempt, retryCause);
+      } catch (cause) {
+        return yield* Result.err(new UnhandledException({ cause }));
+      }
+
       if (delayMs > 0) {
         const delayAborted: boolean = yield* new SuspendInstruction((context) =>
           abortableDelay(delayMs, context.signal).then(() => context.signal.aborted),
@@ -144,14 +155,18 @@ export function timeoutPlan<T, E, M>(
   source: Plan<T, E, M>,
   timeoutMs: number,
 ): Plan<T, E | TimeoutError, M> {
-  const clampedTimeoutMs = Math.max(0, timeoutMs);
-
   return createPlan(function* () {
+    try {
+      validateTimeoutMs(timeoutMs);
+    } catch (cause) {
+      return yield* Result.err(new UnhandledException({ cause }));
+    }
+
     const result: Result<T, E | UnhandledException | TimeoutError> = yield* new SuspendInstruction(
       (outerContext) =>
         raceTimeout(
           (context) => executePlanInterruptOnAbort(source, context),
-          clampedTimeoutMs,
+          timeoutMs,
           outerContext,
         ),
     );

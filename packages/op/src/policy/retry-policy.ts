@@ -1,3 +1,11 @@
+import {
+  assertJitter,
+  assertNonNegativeNumber,
+  assertPositiveInteger,
+  assertPositiveNumber,
+  assertFiniteNumber,
+} from "./validate.js";
+
 /** Delay in milliseconds, or a function that returns one for a retry attempt. */
 export type RetryDelay = number | ((attempt: number, cause: unknown) => number);
 
@@ -35,40 +43,6 @@ const DEFAULT_EXPONENTIAL_DELAY_OPTIONS = Object.freeze({
   maxMs: 30_000,
   jitter: 1,
 }) satisfies Required<ExponentialDelayOptions>;
-
-function assertFiniteNumber(value: number, name: string): void {
-  if (!Number.isFinite(value)) {
-    throw new RangeError(`${name} must be a finite number`);
-  }
-}
-
-function assertNonNegativeNumber(value: number, name: string): void {
-  assertFiniteNumber(value, name);
-  if (value < 0) {
-    throw new RangeError(`${name} must be greater than or equal to 0`);
-  }
-}
-
-function assertPositiveNumber(value: number, name: string): void {
-  assertFiniteNumber(value, name);
-  if (value <= 0) {
-    throw new RangeError(`${name} must be greater than 0`);
-  }
-}
-
-function assertPositiveInteger(value: number, name: string): void {
-  assertPositiveNumber(value, name);
-  if (!Number.isInteger(value)) {
-    throw new RangeError(`${name} must be an integer`);
-  }
-}
-
-function assertJitter(value: number): void {
-  assertFiniteNumber(value, "jitter");
-  if (value < 0 || value > 1) {
-    throw new RangeError("jitter must be between 0 and 1");
-  }
-}
 
 function normalizeExponentialDelayOptions(
   options?: ExponentialDelayOptions,
@@ -128,8 +102,6 @@ const exponential = (options?: ExponentialDelayOptions) => {
   const validate = () => validateExponentialDelayOptions(normalized);
 
   return withDelayValidation((attempt) => {
-    validate();
-
     const exp = Math.min(
       normalized.baseMs * Math.pow(2, Math.max(0, attempt - 1)),
       normalized.maxMs,

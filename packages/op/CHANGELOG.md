@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Invalid `Policy.timeout(timeoutMs)` values (negative or non-finite) now fail at run time as
+  `Err(UnhandledException)` instead of being clamped to zero.
+- Retry and timeout policy plans return `Err(UnhandledException)` explicitly for configuration
+  validation failures; `Delay.exponential` options are validated once per run, not on every retry
+  attempt. Non-integer `attempts` surfaces `TypeError` as `cause`; out-of-range numerics use
+  `RangeError`.
 - Renamed policy-related test suites to `Policy.retry` / `Policy.timeout` vocabulary and documented
   pre-ADR 0009 policy method names in superseded ADRs 0002 and 0007.
 

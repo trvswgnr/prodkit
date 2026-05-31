@@ -127,6 +127,16 @@ describe("Policy.retry", () => {
     }
   });
 
+  test("non-integer attempts fail at run time", async () => {
+    const result = await createFetchProgram(vi.fn(createFetcher()), { attempts: 1.5 }).run("123");
+
+    assert(result.isErr(), "result should be Err");
+    expect(result.error).toBeInstanceOf(UnhandledException);
+    if (result.error instanceof UnhandledException) {
+      expect(result.error.cause).toBeInstanceOf(TypeError);
+    }
+  });
+
   test("invalid custom delay output fails at run time", async () => {
     const result = await createFetchProgram(vi.fn(createFetcher()), {
       attempts: 2,
@@ -137,6 +147,20 @@ describe("Policy.retry", () => {
     expect(result.error).toBeInstanceOf(UnhandledException);
     if (result.error instanceof UnhandledException) {
       expect(result.error.cause).toBeInstanceOf(RangeError);
+    }
+  });
+
+  test("invalid when fails at run time", async () => {
+    const result = await createFetchProgram(vi.fn(createFetcher()), {
+      attempts: 2,
+      when: "not a function",
+      delay: () => 0,
+    } as unknown as RetryPolicy).run("123");
+
+    assert(result.isErr(), "result should be Err");
+    expect(result.error).toBeInstanceOf(UnhandledException);
+    if (result.error instanceof UnhandledException) {
+      expect(result.error.cause).toBeInstanceOf(TypeError);
     }
   });
 
@@ -272,6 +296,30 @@ describe("Policy.timeout", () => {
     const result = await program.run();
     assert(result.isOk(), "result should be Ok");
     expect(result.value).toBe(69);
+  });
+
+  test("invalid negative timeout fails at run time", async () => {
+    const result = await _try(() => Promise.resolve(69))
+      .with(Policy.timeout(-1))
+      .run();
+
+    assert(result.isErr(), "result should be Err");
+    expect(result.error).toBeInstanceOf(UnhandledException);
+    if (result.error instanceof UnhandledException) {
+      expect(result.error.cause).toBeInstanceOf(RangeError);
+    }
+  });
+
+  test("invalid non-finite timeout fails at run time", async () => {
+    const result = await _try(() => Promise.resolve(69))
+      .with(Policy.timeout(Number.NaN))
+      .run();
+
+    assert(result.isErr(), "result should be Err");
+    expect(result.error).toBeInstanceOf(UnhandledException);
+    if (result.error instanceof UnhandledException) {
+      expect(result.error.cause).toBeInstanceOf(RangeError);
+    }
   });
 
   test("fails with TimeoutError when operation exceeds timeout", async () => {

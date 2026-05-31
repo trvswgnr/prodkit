@@ -173,6 +173,35 @@ everyone else, with the same promise that losers finish teardown before `.run()`
 for loser finalization before returning winner result"). The losing branch still can't override the
 chosen error ("winner error keeps precedence over loser abort-time failures").
 
+## Invariant: input normalization and validation at run time
+
+Built-in policy and sleep inputs are validated when the wrapped operation first runs, not when
+`Policy.retry(...)` or `Policy.timeout(...)` is attached. Invalid configuration does not throw out of
+`.run()`; it settles to `Err(UnhandledException)` with the validation error as `cause`.
+`TypeError` means the wrong runtime shape (for example `when` is not a function, or `attempts` is
+not an integer). `RangeError` means a numeric value is out of the allowed interval (for example
+negative `timeoutMs`, or `attempts` less than 1).
+
+| Input | Treatment |
+| --- | --- |
+| `Op.sleep(ms)` negative | Normalize to `0` |
+| `Op.sleep(ms)` non-finite | `Err(UnhandledException)` at run time |
+| `Policy.timeout(timeoutMs)` negative or non-finite | `Err(UnhandledException)` at run time |
+| `Policy.retry` invalid `attempts`, `when`, `delay`, or delay output | `Err(UnhandledException)` at run time |
+| `Delay.exponential` invalid options | Validated once per run when the retry policy executes |
+
+Enforced by:
+
+- `packages/op/src/policy/plan.ts` (`retryPlan`, `timeoutPlan`)
+- `packages/op/src/policy/retry-policy.ts` and `packages/op/src/policy/validate.ts`
+- `packages/op/src/shared.ts` (`sleepWithSignal`) via `Op.sleep`
+
+Representative tests:
+
+- `packages/op/tests/unit/policies.test.ts` (invalid attempts, delay, when, timeout)
+- `packages/op/tests/property/retry-policy.test.ts` (invalid exponential delay options)
+- `packages/op/tests/unit/builders.test.ts` (sleep normalization and non-finite rejection)
+
 ## Policy ordering (retry and timeout)
 
 `.with(...)` order chooses what's inside which wrapper. Putting `Policy.retry(...)` first and

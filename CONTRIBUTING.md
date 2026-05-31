@@ -204,9 +204,10 @@ Built-in policies attach through `.with(Policy.*)` on the op value (`packages/op
 - **Retry** (`retryPlan`): loops inner execution inside a `SuspendInstruction`, applies
   `RetryPolicy` delay via abortable sleep, and stops on success, non-retryable `Err`, or abort.
 - **Timeout** (`timeoutPlan`): races inner `executePlanInterruptOnAbort` against a timer;
-  surfaces `TimeoutError` on the typed channel. Error-channel transforms compose through plan
-  rewriters ([ADR 0007](docs/adr/0007-timeout-widening-at-composition-boundary.md); historical
-  hook detail in superseded [ADR 0002](docs/adr/0002-ophooks-rebuild-and-timeout-asymmetry.md)).
+  surfaces `TimeoutError` on the typed channel. Invalid `timeoutMs` (negative or non-finite) fails
+  at run time as `Err(UnhandledException)`. Error-channel transforms compose through plan rewriters
+  ([ADR 0007](docs/adr/0007-timeout-widening-at-composition-boundary.md); historical hook detail in
+  superseded [ADR 0002](docs/adr/0002-ophooks-rebuild-and-timeout-asymmetry.md)).
 - **Cancel** (`cancelPlan`): merges a caller-supplied `AbortSignal` with the run context signal
   through a composed `AbortController` so either parent or bound signal can cancel the inner run.
 

@@ -494,7 +494,9 @@ const fetchWithRetry = Op.try(() => fetch("https://example.com")).with(Policy.re
 
 `Policy.retry(policy?)` wraps an operation with retries. `Policy.timeout(timeoutMs)` wraps an
 operation with a timeout and fails with `TimeoutError` when the wrapped operation does not finish
-before `timeoutMs`. `Policy.cancel(signal)` binds an operation to an external `AbortSignal` so you
+before `timeoutMs`. Invalid retry policy shapes and invalid timeout values (negative or non-finite
+`timeoutMs`) fail at run time as `Err(UnhandledException)` with the validation error as `cause`, not
+as thrown exceptions from `.run()`. `Policy.cancel(signal)` binds an operation to an external `AbortSignal` so you
 can cancel in-flight work, for example when an HTTP request is aborted or a job is shut down.
 `Policy.release(release)` registers success-gated release logic for the wrapped operation's
 successful value. Library authors can also pass custom policies built with `Policy.define(...)`
