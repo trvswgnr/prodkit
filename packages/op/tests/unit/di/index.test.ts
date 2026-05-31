@@ -35,7 +35,7 @@ function getUnhandledCause(result: Awaited<ReturnType<Op<unknown, unknown, []>["
   return result.error.cause;
 }
 
-describe("DI cutover runtime", () => {
+describe("DI", () => {
   test("plain Op can require and run with provided singleton dependencies", async () => {
     const calls: string[] = [];
     const op = Op(function* (id: string) {

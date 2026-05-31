@@ -94,7 +94,8 @@ Published baseline interpretation lives in [`packages/op/PERFORMANCE.md`](packag
 
 If a behavior is an internal invariant of one module, keep it in unit; if it is a public composition/API contract, keep it in integration. Avoid duplicate assertions across tiers unless each tier validates meaningfully different risk.
 
-**`@prodkit/op/di`** tests live under `packages/op/tests/di/` (for example `index.test.ts`). Run
+**`@prodkit/op/di`** runtime tests live under `packages/op/tests/unit/di/` (for example
+`index.test.ts`); compile-time DI contracts live in `packages/op/tests/types/di.test.ts`. Run
 `pnpm --filter @prodkit/op run coverage` locally to reproduce CI coverage for DI and the core runtime.
 
 ## Source Layout (`@prodkit/op`)
@@ -118,8 +119,10 @@ If a behavior is an internal invariant of one module, keep it in unit; if it is 
   - `unit/core.test.ts` for core execution invariants
   - `unit/lifecycle.test.ts` for lifecycle/finalizer behavior
   - `unit/fluent.test.ts` for fluent operator semantics
+  - `unit/di/index.test.ts` for DI runtime behavior
   - `property/monad-laws.test.ts` for algebraic contract checks
   - `types/op.test.ts` for compile-time type contracts
+  - `types/di.test.ts` for DI compile-time type contracts
 - Runtime invariants and execution semantics are documented in `packages/op/DESIGN.md`.
 - Structural rationale for core/fluent choices (why separate paths exist) lives in `docs/adr/`.
   Each ADR declares `title`, `status`, and `packages` in YAML frontmatter; run
