@@ -10,27 +10,20 @@
     },
     "test": {
       "dependsOn": ["^build", "build"],
-      "inputs": [
-        "src/**/*.ts",
-        "tests/**/*.ts",
-        "**/*.ts",
-        "vitest.config.ts",
-        "tsconfig.json",
-        "package.json"
-      ]
+      "inputs": ["**/*.ts", "vitest.config.ts", "tsconfig.json", "package.json"]
     },
     "typecheck": {
       "dependsOn": ["^build"],
-      "inputs": ["src/**/*.ts", "**/*.ts", "tsconfig.json"]
+      "inputs": ["**/*.ts", "tsconfig.json"]
     },
     "lint": {
-      "inputs": ["src/**/*.ts", "*.ts", "tsconfig.json", "package.json"]
+      "inputs": ["**/*.ts", "tsconfig.json", "package.json"]
     },
     "fmt": {
       "cache": false
     },
     "fmt:check": {
-      "inputs": ["src/**/*.ts", "**/*.ts"]
+      "inputs": ["**/*.ts"]
     },
     "smoke": {
       "dependsOn": ["build", "^build"],
