@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Op.race` and `Op.any` no longer hang when a losing branch ignores abort: fan-out children
   now run through the interrupting drive path so aborted losers unwind even when they never
   observe the abort signal.
+- DI dependency slots now match by token class at runtime, not by diagnostic `key` string. Two
+  token classes with the same `DI.Dependency("...")` label are distinct slots; providing one no
+  longer satisfies `DI.inject` on the other or rejects the second binding as a duplicate.
 
 ### Changed
 

@@ -64,6 +64,33 @@ describe("DI", () => {
     expect(cause.key).toBe("DatabaseDependency");
   });
 
+  test("distinct token classes with the same diagnostic key do not alias", async () => {
+    class ConfigA extends DI.Dependency("Config")<string> {}
+    class ConfigB extends DI.Dependency("Config")<string> {}
+
+    const needsB = Op(function* () {
+      return yield* DI.inject(ConfigB);
+    });
+
+    const missing = getUnhandledCause(
+      await DI.provide(needsB, DI.singleton(ConfigA, "from-a")).run(),
+    );
+    assert(DI.MissingDependencyError.is(missing));
+    expect(missing.key).toBe("Config");
+
+    const needsBoth = Op(function* () {
+      return [yield* DI.inject(ConfigA), yield* DI.inject(ConfigB)];
+    });
+
+    const result = await DI.provide(
+      needsBoth,
+      DI.singleton(ConfigA, "a"),
+      DI.singleton(ConfigB, "b"),
+    ).run();
+
+    expect(result.unwrap()).toEqual(["a", "b"]);
+  });
+
   test("scoped dependencies resolve once per run and again on the next run", async () => {
     let resolves = 0;
     const op = Op(function* (id: string) {

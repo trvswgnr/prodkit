@@ -179,8 +179,9 @@ function isLazyBinding(value: unknown): value is AnyLazyBinding {
   return hasBrand(value, DI_LAZY_BINDING);
 }
 
+/** Slot identity is token class reference; `key` is diagnostic only (ADR 0010). */
 function isMatchingDependency(a: AnyDependency, b: AnyDependency): boolean {
-  return a === b || a.key === b.key;
+  return a === b;
 }
 
 type Env = Map<AnyDependency, DependencyValue<AnyDependency>>;

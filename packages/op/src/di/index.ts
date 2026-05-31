@@ -22,14 +22,22 @@ import {
   DuplicateDependencyError,
 } from "./internal.js";
 
-/** Phantom-typed dependency token created with {@link Dependency}. */
+/**
+ * Phantom-typed dependency token created with {@link Dependency}.
+ * Runtime slot identity is the token **class** passed to {@link inject} and bindings, not the
+ * `key` string (see ADR 0010).
+ */
 export interface Dependency<T, Name extends string> {
   readonly _tag: typeof DI_TAG;
   readonly key: Name;
   readonly [DI_TOKEN]: T;
 }
 
-/** Creates a dependency token class for `DI.inject` and bindings. */
+/**
+ * Creates a dependency token class for {@link inject} and bindings.
+ * `key` is used in binding failure messages; two classes may share a `key` and remain distinct
+ * slots.
+ */
 export const Dependency = <const Name extends string>(key: Name): DependencyCtor<Name> => {
   class DependencyToken<T> {
     readonly _tag = DI_TAG;
