@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- No entries yet.
+
+## [0.1.75] - 2026-05-31
+
+### Added
+
 - Documented `@prodkit/op/policy`, `@prodkit/op/hkt`, and subpath export surfaces in README;
   refreshed `PERFORMANCE.md` snapshot; ADR index now includes `status`; contributor docs and
   `changelog:api:check` cover policy and HKT entrypoints.
@@ -472,3 +478,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retry timing, and composed operation semantics).
 - Improved examples and parsing validation in places where earlier behavior
   could produce weaker diagnostics or drift from production expectations.
+
