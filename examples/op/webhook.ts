@@ -54,9 +54,9 @@ export type AppDeps = {
 };
 
 const retryTransient = {
-  attempts: 3,
+  retries: 2,
   when: (cause: unknown) => cause instanceof ServiceCallError && cause.retryable,
-  delay: (attempt: number) => Math.min(50 * 2 ** (attempt - 1), 200),
+  delay: (retry: number) => Math.min(50 * 2 ** retry, 200),
 };
 
 const BEST_EFFORT_SIDE_EFFECT_CONCURRENCY = 1;

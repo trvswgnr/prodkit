@@ -229,7 +229,7 @@ export const COMPARISON_SCENARIOS: readonly ComparisonScenario[] = [
         })
           .with(
             Policy.retry({
-              attempts: RETRY_ATTEMPTS,
+              retries: RETRY_ATTEMPTS - 1,
               when: () => true,
               delay: () => 0,
             }),

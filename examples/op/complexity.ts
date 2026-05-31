@@ -122,7 +122,7 @@ const getTodo = (id: number): Effect.Effect<unknown, HttpClientError> =>
   const result = await getTodo // same as before
     .with(
       Policy.retry({
-        attempts: 3,
+        retries: 2,
         when: RequestFailed.is,
         delay: Delay.defaultRetry,
       }),
@@ -226,7 +226,7 @@ const getTodo = (id: number): Effect.Effect<unknown, HttpClientError | TimeoutEx
       .with(Policy.timeout(1000))
       .with(
         Policy.retry({
-          attempts: 3,
+          retries: 2,
           when: RequestFailed.is,
           delay: Delay.defaultRetry,
         }),
@@ -399,7 +399,7 @@ const getTodo = (id: number): Effect.Effect<unknown, HttpClientError | TimeoutEx
     .with(Policy.timeout(1000))
     .with(
       Policy.retry({
-        attempts: 3,
+        retries: 2,
         when: RequestFailed.is,
         delay: Delay.defaultRetry,
       }),

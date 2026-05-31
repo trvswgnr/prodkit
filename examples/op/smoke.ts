@@ -98,7 +98,7 @@ async function runCoreApiSmoke() {
   const result = await compute
     .with(
       Policy.retry({
-        attempts: 2,
+        retries: 1,
         when: () => false,
         delay: () => 10,
       }),

@@ -32,7 +32,7 @@ export type ConsumerDeps = {
 export const BATCH_CONCURRENCY = 2;
 
 const retryTransient = {
-  attempts: 3,
+  retries: 2,
   when: (cause: unknown) => ServiceCallError.is(cause) && cause.retryable,
   delay: Delay.exponential({ baseMs: 25, maxMs: 200, jitter: 0 }),
 };
