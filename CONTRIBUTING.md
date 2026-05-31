@@ -232,6 +232,23 @@ DI-native abort handling, and memoizes only after successful settlement.
 Custom instructions are the supported extension point for other packages that need run-scoped
 state visible inside `SuspendInstruction` and `CustomInstruction.resolve` callbacks.
 
+### Runnable metadata (`Blocking`, `withBlocking`)
+
+Top-level `.run()` / `Op.run(...)` are typed only when operation metadata has no unsatisfied
+`Blocking<T>` entries (`IsRunnable<M>` in `packages/op/src/core/types.ts`).
+
+- **`Blocking<T>`** -- branded metadata value; merge at a key unions payloads with other
+  `Blocking` values at that key.
+- **`withBlocking(op, key)`** -- type-only helper on `@prodkit/op/internal`; runtime behavior of
+  the op is unchanged. Clears when your extension replaces or removes the blocking entry on `key`.
+- **DI** -- `DI.inject` accumulates `{ deps: Blocking<Dependency> }`; `DI.provide` clears satisfied
+  keys. Consumer-facing behavior is documented under `@prodkit/op/di` in `packages/op/README.md`.
+
+Import extension helpers from `@prodkit/op/internal` (for example `Blocking`, `withBlocking`,
+`EmptyMeta`, `MergeMeta`, `InferOpMeta`, `CustomInstruction`, `BlockingOp`, `AbortSignalLike`,
+`unsafeCoerce`, `NEVER`). The main `@prodkit/op` entry keeps consumer-facing lifecycle types
+(`EnterContext`, `ExitContext`) and errors only.
+
 ### Combinators and nested `drive`
 
 `packages/op/src/combinators.ts` runs multiple child `drive` calls (often with per-child

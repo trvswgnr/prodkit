@@ -1,21 +1,19 @@
 import { describe, expectTypeOf, test } from "vitest";
+import { Op } from "../../src/index.js";
 import {
+  CUSTOM_INSTRUCTION_META,
   withBlocking,
-  Op,
+  type Blocking,
+  type BlockingOp,
+  type CustomInstruction,
   type EmptyMeta,
   type InferInstructionMeta,
   type InferOpMeta,
-  type MergeMeta,
-  type Blocking,
-  type BlockingOp,
-} from "../../src/index.js";
-import {
-  CUSTOM_INSTRUCTION_META,
-  type CustomInstruction,
   type IsRunnable,
-  type NormalizeMeta,
+  type MergeMeta,
   type RunContext,
-} from "../../src/core/types.js";
+} from "../../src/internal/index.js";
+import { type NormalizeMeta } from "../../src/core/types.js";
 import type { IsEqual, Assert } from "../support/type-utils.js";
 import type { Result } from "../../src/result.js";
 import type { UnhandledException } from "../../src/errors.js";

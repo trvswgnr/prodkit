@@ -13,7 +13,8 @@ For runtime overhead ratios, throughput figures, and bundle size, see
 > This library is currently in alpha. The API will almost certainly change between releases while it stabilizes.
 
 > [!NOTE]
-> Subpath exports (`@prodkit/op/di`, `@prodkit/op/policy`, `@prodkit/op/hkt`) ship with the matching
+> Subpath exports (`@prodkit/op/di`, `@prodkit/op/policy`, `@prodkit/op/hkt`, `@prodkit/op/internal`)
+> ship with the matching
 > npm release. If your installed version predates a subpath, upgrade `@prodkit/op` or import only
 > what that version's `package.json` `exports` lists. This repo's `main` branch may document APIs
 > still under `## [Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md) until they are published.
@@ -112,6 +113,10 @@ const result = await runnable.run(1);
 Public exports: `DI`, `Dependency`, `inject`, `provide`, `scoped`, `singleton`, and `InferReqs` for
 unsatisfied dependency requirements on an op.
 
+An op that uses `DI.inject` cannot be `.run()` until you satisfy bindings with `DI.provide(...)` (or
+partial `provide` while requirements remain). TypeScript surfaces missing dependencies through
+`InferReqs` and by omitting `.run()` on the op type until they are provided.
+
 Runnable consumer examples live under
 [`examples/op/di/`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/di/) (onboarding,
 scoped cancellation, HTTP handler with pool checkout).
@@ -174,6 +179,12 @@ type Applied = Apply<ToRecord, readonly [number]>;
 Public exports: `HKT_ARGS`, `HKT_RESULT`, `HKT`, `HKTArg`, `Apply` (types and symbol constants).
 Used by `@prodkit/op/policy` for custom `.with(...)` attachments; import from here when building
 other op extensions.
+
+### `@prodkit/op/internal`
+
+Low-level exports for op extension authors (metadata, `Blocking`, `withBlocking`,
+`CustomInstruction`, `AbortSignalLike`, and related helpers). Not part of the default application
+import surface; see `CONTRIBUTING.md` for usage.
 
 ## Quick start
 

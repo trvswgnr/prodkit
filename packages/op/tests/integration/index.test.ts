@@ -38,6 +38,18 @@ describe("OpFactory", () => {
     expect(op.withCancel).toBeUndefined();
     expect(op.withRelease).toBeUndefined();
   });
+
+  test("extension-only exports are not on the main entry", async () => {
+    const main = (await import("../../src/index.js")) as Record<string, unknown>;
+
+    expect(main.withBlocking).toBeUndefined();
+    expect(main.Blocking).toBeUndefined();
+    expect(main.BlockingOp).toBeUndefined();
+    expect(main.CustomInstruction).toBeUndefined();
+    expect(main.MergeMeta).toBeUndefined();
+    expect(main.InferOpMeta).toBeUndefined();
+    expect(main.EmptyMeta).toBeUndefined();
+  });
 });
 
 describe("Delay", () => {

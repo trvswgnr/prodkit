@@ -2,22 +2,15 @@ import { defer, fail, fromGenFn, sleep, succeed, _try } from "./builders.js";
 import { allOp, allSettledOp, anyOp, raceOp, settleOp } from "./combinators.js";
 import { ErrorGroup, TimeoutError, type UnhandledException } from "./errors.js";
 import type {
-  Blocking,
   EmptyMeta,
   EnterContext,
   ExitContext,
-  CustomInstruction,
-  InferInstructionMeta,
-  InferOpMeta,
-  IsRunnable,
-  MergeMeta,
-  Meta,
   OpLifecycleHook,
   OpInterface,
   AsArgs,
+  IsRunnable,
 } from "./core/types.js";
 import { runOp } from "./core/run-op.js";
-import { withBlocking, type BlockingOp } from "./blocking.js";
 import { Tagged } from "./tagged.js";
 import { type Result } from "./result.js";
 
@@ -180,18 +173,6 @@ export const Op = Object.assign(fromGenFn, {
 
 export type Op<T, E, A, M = EmptyMeta> = OpInterface<T, E, A, M> & Tagged<"Op">;
 
-export type {
-  Blocking,
-  EmptyMeta,
-  CustomInstruction,
-  EnterContext,
-  ExitContext,
-  InferInstructionMeta,
-  InferOpMeta,
-  MergeMeta,
-  Meta,
-  OpLifecycleHook,
-};
-export { withBlocking, type BlockingOp };
+export type { EnterContext, ExitContext, OpLifecycleHook };
 
 export { TimeoutError, ErrorGroup };

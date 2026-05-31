@@ -42,6 +42,10 @@
       "types": "./dist/hkt.d.mts",
       "import": "./dist/hkt.mjs"
     },
+    "./internal": {
+      "types": "./dist/internal/index.d.mts",
+      "import": "./dist/internal/index.mjs"
+    },
     "./policy": {
       "types": "./dist/policy/index.d.mts",
       "import": "./dist/policy/index.mjs"

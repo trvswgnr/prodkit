@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- No entries yet.
+- Restored `@prodkit/op/internal` for extension and maintainer helpers (`Blocking`, `withBlocking`,
+  `CustomInstruction`, metadata inference types, `AbortSignalLike`, `unsafeCoerce`, `NEVER`, and
+  related symbols).
 
 ### Changed
 
@@ -18,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- Removed extension-only exports from the main `@prodkit/op` entry (`Blocking`, `withBlocking`,
+  `BlockingOp`, `EmptyMeta`, `CustomInstruction`, `MergeMeta`, `InferOpMeta`, `InferInstructionMeta`,
+  `Meta`); import them from `@prodkit/op/internal` instead. `EnterContext`, `ExitContext`, and
+  `OpLifecycleHook` remain on the main entry for lifecycle typing.
 - Removed unused `InferOk`, `InferErr`, and `InferArgs` type exports from `@prodkit/op/di`; use `Op`
   conditional types or `better-result`'s `InferErr` for result typing. `InferReqs` remains for
   dependency metadata.
