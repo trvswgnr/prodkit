@@ -9,7 +9,7 @@ import {
 import { TaggedError, UnhandledException, type TaggedErrorInstance } from "../../src/errors.js";
 import { Result } from "../../src/result.js";
 import { TRUE } from "../support/utils.js";
-import * as Policy from "../../src/policy/index.js";
+import { Policy } from "../../src/policy/index.js";
 
 describe("type inference contracts", () => {
   test("builders infer Op shape and run() output", () => {

@@ -1,7 +1,7 @@
 import { assert, describe, expect, test, vi } from "vitest";
 import { Op, TimeoutError, type ExitContext } from "../../src/index.js";
 import { UnhandledException } from "../../src/errors.js";
-import * as Policy from "../../src/policy/index.js";
+import { Policy } from "../../src/policy/index.js";
 
 const TIMEOUT_MS = 10;
 const GENEROUS_TIMEOUT_MS = 1000;

@@ -1,6 +1,6 @@
 import { Op } from "@prodkit/op";
 import { TaggedError } from "better-result";
-import * as Policy from "@prodkit/op/policy";
+import { Policy } from "@prodkit/op/policy";
 
 export type AuditSession = { sessionId: string };
 export type DbConnection = { connId: string };

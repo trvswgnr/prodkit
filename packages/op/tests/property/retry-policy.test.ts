@@ -2,7 +2,7 @@ import * as fc from "fast-check";
 import { assert, describe, expect, test } from "vitest";
 import { Op } from "../../src/index.js";
 import { UnhandledException } from "../../src/errors.js";
-import { Delay, retry, type ExponentialDelayOptions } from "../../src/policy/index.js";
+import { Delay, Policy, type ExponentialDelayOptions } from "../../src/policy/index.js";
 
 const invalidExponentialDelayOptionsArb: fc.Arbitrary<ExponentialDelayOptions> = fc.oneof(
   fc.record({ baseMs: fc.constant(0), maxMs: fc.constant(1000), jitter: fc.constant(0.5) }),
@@ -78,7 +78,7 @@ describe("Delay.exponential invariants (property-based)", () => {
       fc.asyncProperty(invalidExponentialDelayOptionsArb, async (options) => {
         const result = await Op.fail("retryable" as const)
           .with(
-            retry({
+            Policy.retry({
               retries: 1,
               when: () => true,
               delay: Delay.exponential(options),
@@ -107,7 +107,7 @@ describe("retry policy invariants (property-based)", () => {
           runAttempts += 1;
           return yield* Op.fail("always fails" as const);
         }).with(
-          retry({
+          Policy.retry({
             retries: policyRetries,
             when: () => true,
             delay: 0,
@@ -131,7 +131,7 @@ describe("retry policy invariants (property-based)", () => {
           runAttempts += 1;
           return yield* Op.fail("no retry" as const);
         }).with(
-          retry({
+          Policy.retry({
             retries: policyRetries,
             when: () => false,
             delay: 0,
@@ -155,7 +155,7 @@ describe("retry policy invariants (property-based)", () => {
           runAttempts += 1;
           return yield* Op.fail("retryable" as const);
         }).with(
-          retry({
+          Policy.retry({
             retries: policyRetries,
             when: () => true,
             delay: 0,
@@ -186,7 +186,7 @@ describe("retry policy invariants (property-based)", () => {
             }
             return yield* Op.of(runAttempts);
           }).with(
-            retry({
+            Policy.retry({
               retries: policyRetries,
               when: () => true,
               delay: 0,

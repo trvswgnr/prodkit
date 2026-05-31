@@ -3,7 +3,7 @@ import { Op, TimeoutError } from "../../src/index.js";
 import { UnhandledException } from "better-result";
 import { DI } from "../../src/di/index.js";
 import { AlreadyProvidedError, MissingDependencyError } from "../../src/di/internal.js";
-import * as Policy from "../../src/policy/index.js";
+import { Policy } from "../../src/policy/index.js";
 
 class DatabaseError extends Error {
   readonly _tag = "DatabaseError";

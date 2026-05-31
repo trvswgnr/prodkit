@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, test } from "vitest";
 import type { HKT } from "../../src/hkt.js";
 import { Op, type Op as OpType } from "../../src/index.js";
-import * as Policy from "../../src/policy/index.js";
+import { Policy, type OpPolicy } from "../../src/policy/index.js";
 import { Result } from "../../src/result.js";
 
 type PolicyRejected<Reason extends string> = {
@@ -21,7 +21,7 @@ interface RejectWhenPolicyType<Reason extends string> extends HKT {
 function rejectWhen<Reason extends string>(
   shouldReject: boolean,
   reason: Reason,
-): Policy.OpPolicy<unknown, RejectWhenPolicyType<Reason>> {
+): OpPolicy<unknown, RejectWhenPolicyType<Reason>> {
   return Policy.define<unknown, RejectWhenPolicyType<Reason>>({
     apply: (source) => {
       if (shouldReject) {

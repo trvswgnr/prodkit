@@ -4,7 +4,7 @@ import { UnhandledException } from "../../src/errors.js";
 import { Op } from "../../src/index.js";
 import { Result } from "../../src/result.js";
 import { rejectAfter, resolveAfter, trackAbortListeners } from "../support/utils.js";
-import * as Policy from "../../src/policy/index.js";
+import { Policy } from "../../src/policy/index.js";
 
 type RaceBranch =
   | { kind: "ok"; value: number; delay: number }

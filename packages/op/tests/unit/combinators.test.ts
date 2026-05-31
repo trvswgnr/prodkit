@@ -9,7 +9,7 @@ import {
   trackAbortListeners,
   TRUE,
 } from "../support/utils.js";
-import * as Policy from "../../src/policy/index.js";
+import { Policy } from "../../src/policy/index.js";
 
 describe("Op.all", () => {
   test("tuple of successes in input order", async () => {

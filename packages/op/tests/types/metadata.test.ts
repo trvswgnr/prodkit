@@ -17,7 +17,7 @@ import { type NormalizeMeta } from "../../src/core/types.js";
 import type { IsEqual, Assert } from "../support/type-utils.js";
 import type { Result } from "../../src/result.js";
 import type { UnhandledException } from "../../src/errors.js";
-import * as Policy from "../../src/policy/index.js";
+import { Policy } from "../../src/policy/index.js";
 
 type DatabaseReq = { deps: "database" };
 type LoggerReq = { deps: "logger" };

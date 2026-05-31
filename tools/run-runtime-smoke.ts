@@ -94,7 +94,7 @@ async function createPackTarball(): Promise<string> {
 
 function smokeSource(opImport: string, policyImport: string, resultImport: string): string {
   return `import { Op, TimeoutError } from ${JSON.stringify(opImport)};
-import * as Policy from ${JSON.stringify(policyImport)};
+import { Policy } from ${JSON.stringify(policyImport)};
 import { TaggedError, UnhandledException } from ${JSON.stringify(resultImport)};
 
 class AssertionError extends Error {

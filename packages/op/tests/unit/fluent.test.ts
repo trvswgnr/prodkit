@@ -2,7 +2,7 @@ import { describe, test, expect, assert, vi } from "vitest";
 import { Op } from "../../src/index.js";
 import { TaggedError, UnhandledException } from "../../src/errors.js";
 import { TRUE } from "../support/utils.js";
-import * as Policy from "../../src/policy/index.js";
+import { Policy } from "../../src/policy/index.js";
 
 describe("op.map", () => {
   test("map transforms success values and preserves arity", async () => {

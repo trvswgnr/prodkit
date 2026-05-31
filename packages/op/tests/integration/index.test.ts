@@ -1,6 +1,6 @@
 import { assert, describe, expect, test, vi } from "vitest";
 import { Op, TimeoutError } from "../../src/index.js";
-import { Delay, release, retry, timeout } from "../../src/policy/index.js";
+import { Delay, Policy } from "../../src/policy/index.js";
 import { TaggedError, UnhandledException } from "../../src/errors.js";
 import { Result } from "../../src/result.js";
 import { resolveAfter } from "../support/utils.js";
@@ -77,7 +77,7 @@ describe("Delay", () => {
   test("invalid exponential delay policy fails at run time", async () => {
     const result = await Op.of("ok")
       .with(
-        retry({
+        Policy.retry({
           delay: Delay.exponential({ baseMs: 0 }),
         }),
       )
@@ -90,8 +90,8 @@ describe("Delay", () => {
 });
 
 describe("Policy constructors", () => {
-  test("release is exported", () => {
-    expect(release).toBeInstanceOf(Function);
+  test("Policy.release is exported", () => {
+    expect(Policy.release).toBeInstanceOf(Function);
   });
 });
 
@@ -231,7 +231,7 @@ describe("Op combinators compose with Policy.timeout / Policy.retry", () => {
     vi.useFakeTimers();
     try {
       const slow = Op.try(() => resolveAfter(1000, 1000));
-      const promise = Op.all([slow, slow]).with(timeout(10)).run();
+      const promise = Op.all([slow, slow]).with(Policy.timeout(10)).run();
       await vi.advanceTimersByTimeAsync(15);
       const r = await promise;
       assert(r.isErr(), "should be Err");
@@ -249,7 +249,7 @@ describe("Op combinators compose with Policy.timeout / Policy.retry", () => {
       return yield* Op.of(11);
     });
     const r = await Op.any([flaky()])
-      .with(retry({ retries: 2, when: () => true, delay: () => 0 }))
+      .with(Policy.retry({ retries: 2, when: () => true, delay: () => 0 }))
       .run();
     assert(r.isOk(), "should be Ok");
     expect(r.value).toBe(11);

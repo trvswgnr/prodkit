@@ -128,8 +128,7 @@ the policy subpath only builds values passed to `.with(...)`.
 
 ```ts
 import { Op } from "@prodkit/op";
-import { Delay } from "@prodkit/op/policy";
-import * as Policy from "@prodkit/op/policy";
+import { Delay, Policy } from "@prodkit/op/policy";
 
 const policy = {
   retries: 2,
@@ -145,13 +144,15 @@ const result = await Op.try(() => fetch("https://example.com"))
 
 Public exports:
 
-- Values: `retry`, `timeout`, `cancel`, `release`, `Delay`, `define`
+- Values: `Policy`, `Delay`
 - Types: `RetryPolicy`, `RetryDelay`, `ExponentialDelayOptions`, `RetryPolicyAttachment`,
   `TimeoutPolicyAttachment`, `CancelPolicyAttachment`, `ReleasePolicyAttachment`, `BuiltInPolicy`,
   `OpPolicy`, `OpPolicyInput`, `OpPolicySource`, `OpPolicyType`, `OpPolicyResult`, `ApplyOpPolicy`
 
-Custom policies that transform `Op<T, E, A, M>` at the type level use the HKT protocol; import
-`HKT` from `@prodkit/op/hkt` (see below), not from this subpath.
+Built-in attachments use `Policy.retry`, `Policy.timeout`, `Policy.cancel`, and `Policy.release`.
+Custom policies use `Policy.define(...)`. Custom policies that transform `Op<T, E, A, M>` at the
+type level use the HKT protocol; import `HKT` from `@prodkit/op/hkt` (see below), not from this
+subpath.
 
 Policy ordering semantics are summarized under [`.with(policy)`](#withpolicy) and
 [Retry defaults](#retry-defaults) below, and in [`DESIGN.md`](DESIGN.md#policy-ordering-retry-and-timeout).
@@ -345,7 +346,7 @@ it.
 (e.g. `fetch`, DB queries) actually stops instead of leaking after a timeout.
 
 ```ts
-import * as Policy from "@prodkit/op/policy";
+import { Policy } from "@prodkit/op/policy";
 
 const fetchUser = Op.try((signal) => fetch("/api/users/1", { signal }));
 const result = await fetchUser.with(Policy.timeout(1000)).run();
@@ -499,7 +500,7 @@ Attaches retry, timeout, external cancellation, or success-value release policy 
 come from `@prodkit/op/policy`.
 
 ```ts
-import * as Policy from "@prodkit/op/policy";
+import { Policy } from "@prodkit/op/policy";
 
 const policy = {
   retries: 2,
@@ -576,7 +577,7 @@ Caller responsibilities:
 Recommended composed-run wiring:
 
 ```ts
-import * as Policy from "@prodkit/op/policy";
+import { Policy } from "@prodkit/op/policy";
 
 const controller = new AbortController();
 
@@ -607,7 +608,7 @@ const result = await runPromise;
 Registers resource release logic that runs after a successful resource-producing step settles.
 
 ```ts
-import * as Policy from "@prodkit/op/policy";
+import { Policy } from "@prodkit/op/policy";
 
 const runQuery = Op(function* () {
   const conn = yield* acquireDbConnection.with(Policy.release((conn) => conn.release()));

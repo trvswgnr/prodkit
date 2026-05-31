@@ -17,8 +17,7 @@ and delay helpers lived on the root `@prodkit/op` export.
 `.with(policy)` on the op value:
 
 ```ts
-import { Delay } from "@prodkit/op/policy";
-import * as Policy from "@prodkit/op/policy";
+import { Delay, Policy } from "@prodkit/op/policy";
 
 acquireConnection
   .with(Policy.timeout(1_000))

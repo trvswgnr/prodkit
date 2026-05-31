@@ -16,7 +16,7 @@ import { assert } from "../../assert.ts";
 import { Op } from "@prodkit/op";
 import { DI } from "@prodkit/op/di";
 import { UnhandledException } from "better-result";
-import * as Policy from "@prodkit/op/policy";
+import { Policy } from "@prodkit/op/policy";
 
 async function runSuccessfulRegistrationSmoke() {
   const { op, services } = runnableRegisterUser();

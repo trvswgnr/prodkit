@@ -1,7 +1,7 @@
 import { describe, expect, test, assert, vi } from "vitest";
 import { fail, fromGenFn, sleep, succeed, _try } from "../../src/builders.js";
 import { UnhandledException } from "../../src/errors.js";
-import * as Policy from "../../src/policy/index.js";
+import { Policy } from "../../src/policy/index.js";
 
 describe("succeed", () => {
   test("run returns Ok with value", async () => {

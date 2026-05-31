@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Op } from "@prodkit/op";
-import * as Policy from "@prodkit/op/policy";
+import { Policy } from "@prodkit/op/policy";
 import * as v from "valibot";
 import { TaggedError, matchErrorPartial } from "better-result";
 import {

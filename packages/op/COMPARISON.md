@@ -31,7 +31,7 @@ const result = await program.run();
 But inside the program, failure and execution policy are explicit:
 
 ```ts
-import * as Policy from "@prodkit/op/policy";
+import { Policy } from "@prodkit/op/policy";
 
 const program = Op.all([
   fetchJson("/api/user"),
@@ -65,7 +65,7 @@ the caller receives a result?", "what happens to the other requests when one bra
 operation runtime around it:
 
 ```ts
-import * as Policy from "@prodkit/op/policy";
+import { Policy } from "@prodkit/op/policy";
 
 const updateOrder = Op(function* (id: string) {
   const order = yield* loadOrder(id);

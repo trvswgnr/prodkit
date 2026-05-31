@@ -2,7 +2,7 @@ import { assert, describe, expect, test, vi } from "vitest";
 import { Op, TimeoutError, type EnterContext, type ExitContext } from "../../src/index.js";
 import { UnhandledException } from "../../src/errors.js";
 import { SuspendInstruction } from "../../src/core/instructions.js";
-import * as Policy from "../../src/policy/index.js";
+import { Policy } from "../../src/policy/index.js";
 
 // Scope: integration behavior for cleanup/finalization and lifecycle hooks
 describe("op.with(Policy.release(...))", () => {

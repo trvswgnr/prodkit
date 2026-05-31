@@ -1,8 +1,7 @@
 // oxlint-disable no-unused-vars
 import { Op } from "@prodkit/op";
-import { Delay } from "@prodkit/op/policy";
+import { Delay, Policy } from "@prodkit/op/policy";
 import { TaggedError } from "better-result";
-import * as Policy from "@prodkit/op/policy";
 
 {
   // plain TS - error handling

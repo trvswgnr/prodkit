@@ -1,7 +1,7 @@
 import { Op } from "@prodkit/op";
 import { TaggedError } from "better-result";
 import * as v from "valibot";
-import * as Policy from "@prodkit/op/policy";
+import { Policy } from "@prodkit/op/policy";
 
 type InventoryReservation = {
   reservationId: string;

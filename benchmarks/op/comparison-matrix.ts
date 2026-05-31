@@ -16,7 +16,7 @@ import {
   runOpYieldChain,
   TIMEOUT_BUDGET_MS,
 } from "./scenarios.ts";
-import * as Policy from "@prodkit/op/policy";
+import { Policy } from "@prodkit/op/policy";
 
 export { CONCURRENCY_CHILDREN, RETRY_ATTEMPTS, TIMEOUT_BUDGET_MS } from "./scenarios.ts";
 

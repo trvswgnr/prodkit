@@ -30,7 +30,7 @@ import {
   createConsumerApp,
 } from "./queue-consumer.ts";
 import { assert } from "../assert.ts";
-import * as Policy from "@prodkit/op/policy";
+import { Policy } from "@prodkit/op/policy";
 
 function isNamedUser(value: unknown): value is { name: string } {
   return (

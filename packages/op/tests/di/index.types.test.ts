@@ -12,7 +12,7 @@ import type {
   UseReq,
   WithDIMeta,
 } from "../../src/di/internal.js";
-import * as Policy from "../../src/policy/index.js";
+import { Policy } from "../../src/policy/index.js";
 
 type Assert<T extends true> = T;
 type IsEqual<X, Y> =

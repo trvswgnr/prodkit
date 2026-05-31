@@ -41,7 +41,18 @@ describe("@prodkit/op/policy JSDoc coverage", () => {
   const exports = moduleExports(program, packageRoot, "src/policy/index.ts");
 
   test("policy constructors are documented", () => {
-    expectDocumented(checker, exports, ["retry", "timeout", "cancel", "release", "define"]);
+    const policySymbol = exports.find((symbol) => symbol.name === "Policy");
+    assert(policySymbol, "Expected Policy export");
+    const policyDeclaration = policySymbol.valueDeclaration ?? policySymbol.declarations?.[0];
+    assert(policyDeclaration, "Expected Policy declaration");
+    const policyType = checker.getTypeOfSymbolAtLocation(policySymbol, policyDeclaration);
+    expectDocumented(checker, policyType.getProperties(), [
+      "retry",
+      "timeout",
+      "cancel",
+      "release",
+      "define",
+    ]);
   });
 
   test("Delay helpers are documented", () => {

@@ -1,7 +1,7 @@
 import { describe, expect, test, assert, vi } from "vitest";
 import { fail, fromGenFn, succeed, _try } from "../../src/builders.js";
 import { TimeoutError, UnhandledException } from "../../src/errors.js";
-import * as Policy from "../../src/policy/index.js";
+import { Policy } from "../../src/policy/index.js";
 import type { RetryPolicy } from "../../src/policy/index.js";
 
 describe("Policy.retry", () => {
