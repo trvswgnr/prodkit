@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `HKT.Fix2`, and `HKT.Fix12`.
 - Added `HKT.Applied` for value-level witnesses of an already-applied constructor (use with
   `Fix12<F, ...>`, not `Fix12<Applied<F, Args>, ...>`).
+- Added `DI.MissingDependencyError` and `DI.DuplicateDependencyError` on `@prodkit/op/di` for
+  inspecting binding failures on `UnhandledException.cause` after `.run()`.
 
 ### Changed
 
