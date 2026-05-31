@@ -25,8 +25,6 @@ export function mapPlan<T, E, U, M>(
   source: Plan<T, E, M>,
   transform: (value: T) => U,
 ): Plan<Awaited<U>, E, M> {
-  const build = (inner: Plan<T, E, M>) => mapPlan(inner, transform);
-
   return createPlan(
     function* () {
       const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
@@ -42,9 +40,7 @@ export function mapPlan<T, E, U, M>(
       return mapped;
     },
     {
-      withRetry: (policy) => build(source.withRetry(policy)),
-      withTimeout: (timeoutMs) => mapPlan(source.withTimeout(timeoutMs), transform),
-      withCancel: (abortSignal) => build(source.withCancel(abortSignal)),
+      rewrite: (self, rewriter) => rewriter.map?.(source, transform) ?? rewriter.apply(self),
     },
   );
 }
@@ -76,8 +72,6 @@ export function tapPlan<T, E, R, M>(
   source: Plan<T, E, M>,
   observe: (value: T) => R,
 ): Plan<T, E | InferOpErr<R>, MergeMeta<M, InferOpMeta<R>>> {
-  const build = (inner: Plan<T, E, M>) => tapPlan(inner, observe);
-
   return createPlan(
     function* () {
       const sourceResult: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
@@ -104,9 +98,7 @@ export function tapPlan<T, E, R, M>(
       return sourceResult.value;
     },
     {
-      withRetry: (policy) => build(source.withRetry(policy)),
-      withTimeout: (timeoutMs) => tapPlan(source.withTimeout(timeoutMs), observe),
-      withCancel: (abortSignal) => build(source.withCancel(abortSignal)),
+      rewrite: (self, rewriter) => rewriter.tap?.(source, observe) ?? rewriter.apply(self),
     },
   );
 }
@@ -115,8 +107,6 @@ export function mapErrPlan<T, E, E2, M>(
   source: Plan<T, E, M>,
   transform: (error: TrackedErr<E>) => E2,
 ): Plan<T, E2 | BypassedErr<E>, M> {
-  const build = (inner: Plan<T, E, M>) => mapErrPlan(inner, transform);
-
   return createPlan(
     function* () {
       const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
@@ -135,10 +125,7 @@ export function mapErrPlan<T, E, E2, M>(
       return yield* Result.err(mapped);
     },
     {
-      withRetry: (policy) => build(source.withRetry(policy)),
-      withTimeout: (timeoutMs) =>
-        mapErrPlan<T, E | TimeoutError, E2, M>(source.withTimeout(timeoutMs), transform),
-      withCancel: (abortSignal) => build(source.withCancel(abortSignal)),
+      rewrite: (self, rewriter) => rewriter.mapErr?.(source, transform) ?? rewriter.apply(self),
     },
   );
 }
@@ -147,8 +134,6 @@ export function tapErrPlan<T, E, R, M>(
   source: Plan<T, E, M>,
   observe: (error: TrackedErr<E>) => R,
 ): Plan<T, TrackedErr<E> | BypassedErr<E> | InferOpErr<R>, MergeMeta<M, InferOpMeta<R>>> {
-  const build = (inner: Plan<T, E, M>) => tapErrPlan(inner, observe);
-
   return createPlan(
     function* () {
       const sourceResult: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
@@ -178,10 +163,7 @@ export function tapErrPlan<T, E, R, M>(
       return yield* sourceResult;
     },
     {
-      withRetry: (policy) => build(source.withRetry(policy)),
-      withTimeout: (timeoutMs) =>
-        tapErrPlan<T, E | TimeoutError, R, M>(source.withTimeout(timeoutMs), observe),
-      withCancel: (abortSignal) => build(source.withCancel(abortSignal)),
+      rewrite: (self, rewriter) => rewriter.tapErr?.(source, observe) ?? rewriter.apply(self),
     },
   );
 }
@@ -195,8 +177,6 @@ export function recoverPlan<T, E, ECaught extends TrackedErr<E>, R, M>(
   TrackedErr<E, ECaught> | BypassedErr<E> | InferOpErr<R>,
   MergeMeta<M, InferOpMeta<R>>
 > {
-  const build = (inner: Plan<T, E, M>) => recoverPlan(inner, predicate, handler);
-
   return createPlan(
     function* () {
       const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
@@ -231,14 +211,8 @@ export function recoverPlan<T, E, ECaught extends TrackedErr<E>, R, M>(
       return recoveredResult.value;
     },
     {
-      withRetry: (policy) => build(source.withRetry(policy)),
-      withTimeout: (timeoutMs) =>
-        recoverPlan<T, E | TimeoutError, ECaught, R, M>(
-          source.withTimeout(timeoutMs),
-          predicate,
-          handler,
-        ),
-      withCancel: (abortSignal) => build(source.withCancel(abortSignal)),
+      rewrite: (self, rewriter) =>
+        rewriter.recover?.(source, predicate, handler) ?? rewriter.apply(self),
     },
   );
 }

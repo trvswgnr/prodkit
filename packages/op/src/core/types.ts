@@ -1,12 +1,7 @@
 // oxlint-disable typescript/no-explicit-any
 import type { TimeoutError, UnhandledException } from "../errors.js";
 import type { Err, Result } from "../result.js";
-import type {
-  ReleasePolicyAttachment,
-  RetryPolicyAttachment,
-  CancelPolicyAttachment,
-  TimeoutPolicyAttachment,
-} from "./policy.js";
+import type { OpPolicy, OpPolicyInput, OpPolicyResult, OpPolicyType } from "../policy/types.js";
 import type { RegisterExitFinalizerInstruction, SuspendInstruction } from "./instructions.js";
 import type { Op } from "../index.js";
 
@@ -279,17 +274,15 @@ export type RequireOne<T> = {
 
 export interface FluentOp<T, E, A, M = EmptyMeta> {
   /**
-   * Attaches a built-in execution policy to the operation.
+   * Attaches an execution policy to the operation.
    *
    * @example
    * import * as Policy from "@prodkit/op/policy";
    * const resilient = Op.try(() => fetch("/ping")).with(Policy.retry());
    */
-  // @note: keep release first so nested Policy.release(...) callbacks infer the success value type
-  with(policy: ReleasePolicyAttachment<T>): Op<T, E, A, M>;
-  with(policy: RetryPolicyAttachment): Op<T, E, A, M>;
-  with(policy: TimeoutPolicyAttachment): Op<T, E | TimeoutError, A, M>;
-  with(policy: CancelPolicyAttachment): Op<T, E, A, M>;
+  with<F extends OpPolicyType>(
+    policy: OpPolicy<OpPolicyInput<T, E, AsArgs<A>, M>, F>,
+  ): OpPolicyResult<F, T, E, AsArgs<A>, M>;
 
   /**
    * Register a handler that runs before the operation body starts.

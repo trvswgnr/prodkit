@@ -1,0 +1,285 @@
+import { TimeoutError, UnhandledException } from "../errors.js";
+import { Result } from "../result.js";
+import { sleepWithSignal } from "../shared.js";
+import { RegisterExitFinalizerInstruction, SuspendInstruction } from "../core/instructions.js";
+import { createRunContext } from "../core/runtime.js";
+import { normalizeRetryPolicy, type NormalizedRetryPolicy } from "./retry-policy.js";
+import type { EnterFn, ExitFn, ReleaseFn, RunContext, TrackedErr } from "../core/types.js";
+import {
+  createPlan,
+  executePlanInterruptOnAbort,
+  type Plan,
+  type PlanRewriter,
+} from "../core/plan/base.js";
+import { onEnterPlan, onExitPlan } from "../core/plan/lifecycle.js";
+import { mapErrPlan, mapPlan, recoverPlan, tapErrPlan, tapPlan } from "../core/plan/transforms.js";
+
+export function releasePlan<T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T>): Plan<T, E, M> {
+  return createPlan(
+    function* () {
+      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
+        source.execute(context),
+      );
+
+      if (result.isErr()) return yield* result;
+
+      yield new RegisterExitFinalizerInstruction(() =>
+        Promise.resolve(release(result.value)).then(() => {}),
+      );
+
+      return result.value;
+    },
+    {
+      rewrite: (self, rewriter) => rewriter.release?.(source, release) ?? rewriter.apply(self),
+    },
+  );
+}
+
+export function retryPlan<T, E, M>(
+  source: Plan<T, E, M>,
+  policy: NormalizedRetryPolicy = normalizeRetryPolicy(),
+): Plan<T, E, M> {
+  return createPlan(function* () {
+    policy.validate();
+
+    let attempt = 1;
+
+    while (true) {
+      type AttemptStep = { result: Result<T, E | UnhandledException>; aborted: boolean };
+      const attemptStep: AttemptStep = yield* new SuspendInstruction((context) =>
+        source.execute(context).then((result) => ({ result, aborted: context.signal.aborted })),
+      );
+
+      const result = attemptStep.result;
+
+      if (result.isOk()) return result.value;
+
+      const error = result.error;
+      const retryCause = UnhandledException.is(error) ? error.cause : error;
+
+      const canRetry =
+        !attemptStep.aborted && attempt < policy.maxAttempts && policy.shouldRetry(retryCause);
+
+      if (!canRetry) return yield* Result.err(error);
+
+      const delayMs = Math.max(0, policy.getDelay(attempt, retryCause));
+      if (delayMs > 0) {
+        const delayAborted: boolean = yield* new SuspendInstruction((context) =>
+          abortableDelay(delayMs, context.signal).then(() => context.signal.aborted),
+        );
+
+        if (delayAborted) return yield* result;
+      }
+
+      attempt += 1;
+    }
+  });
+}
+
+export function timeoutPlan<T, E, M>(
+  source: Plan<T, E, M>,
+  timeoutMs: number,
+): Plan<T, E | TimeoutError, M> {
+  const clampedTimeoutMs = Math.max(0, timeoutMs);
+
+  return createPlan(function* () {
+    const result: Result<T, E | UnhandledException | TimeoutError> = yield* new SuspendInstruction(
+      (outerContext) =>
+        raceTimeout(
+          (context) => executePlanInterruptOnAbort(source, context),
+          clampedTimeoutMs,
+          outerContext,
+        ),
+    );
+
+    if (result.isErr()) return yield* result;
+    return result.value;
+  });
+}
+
+export function cancelPlan<T, E, M>(
+  source: Plan<T, E, M>,
+  abortSignal: AbortSignal,
+): Plan<T, E, M> {
+  return createPlan(function* () {
+    const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
+      (outerContext) =>
+        runWithBoundSignal(
+          (mergedContext) => source.execute(mergedContext),
+          abortSignal,
+          outerContext,
+        ),
+    );
+
+    if (result.isErr()) return yield* result;
+    return result.value;
+  });
+}
+
+export function retryRewriter(policy?: NormalizedRetryPolicy): PlanRewriter {
+  const retryPolicy = policy ?? normalizeRetryPolicy();
+  const rewriter: PlanRewriter = {
+    apply: (source) => retryPlan(source, retryPolicy),
+    release: <T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T>) =>
+      releasePlan(source.rewrite<T, E, M>(rewriter), release),
+    enter: <T, E, A, M>(source: Plan<T, E, M>, initialize: EnterFn<A>) =>
+      onEnterPlan(source.rewrite<T, E, M>(rewriter), initialize),
+    exit: <T, E, A, M>(source: Plan<T, E, M>, finalize: ExitFn<T, E, A>) =>
+      onExitPlan(source.rewrite<T, E, M>(rewriter), finalize),
+    map: <T, E, U, M>(source: Plan<T, E, M>, transform: (value: T) => U) =>
+      mapPlan(source.rewrite<T, E, M>(rewriter), transform),
+    tap: <T, E, R, M>(source: Plan<T, E, M>, observe: (value: T) => R) =>
+      tapPlan(source.rewrite<T, E, M>(rewriter), observe),
+    mapErr: <T, E, E2, M>(source: Plan<T, E, M>, transform: (error: TrackedErr<E>) => E2) =>
+      mapErrPlan(source.rewrite<T, E, M>(rewriter), transform),
+    tapErr: <T, E, R, M>(source: Plan<T, E, M>, observe: (error: TrackedErr<E>) => R) =>
+      tapErrPlan(source.rewrite<T, E, M>(rewriter), observe),
+    recover: <T, E, ECaught extends TrackedErr<E>, R, M>(
+      source: Plan<T, E, M>,
+      predicate: (error: TrackedErr<E>) => error is ECaught,
+      handler: (error: ECaught) => R,
+    ) => recoverPlan(source.rewrite<T, E, M>(rewriter), predicate, handler),
+  };
+  return rewriter;
+}
+
+export function timeoutRewriter(timeoutMs: number): PlanRewriter {
+  const rewriter: PlanRewriter = {
+    apply: (source) => timeoutPlan(source, timeoutMs),
+    release: <T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T>) =>
+      releasePlan(source.rewrite<T, E | TimeoutError, M>(rewriter), release),
+    enter: <T, E, A, M>(source: Plan<T, E, M>, initialize: EnterFn<A>) =>
+      onEnterPlan(source.rewrite<T, E | TimeoutError, M>(rewriter), initialize),
+    exit: <T, E, A, M>(source: Plan<T, E, M>, finalize: ExitFn<T, E, A>) =>
+      onExitPlan(
+        source.rewrite<T, E | TimeoutError, M>(rewriter),
+        finalize as unknown as ExitFn<T, E | TimeoutError, A>,
+      ),
+    map: <T, E, U, M>(source: Plan<T, E, M>, transform: (value: T) => U) =>
+      mapPlan(source.rewrite<T, E | TimeoutError, M>(rewriter), transform),
+    tap: <T, E, R, M>(source: Plan<T, E, M>, observe: (value: T) => R) =>
+      tapPlan(source.rewrite<T, E | TimeoutError, M>(rewriter), observe),
+    mapErr: <T, E, E2, M>(source: Plan<T, E, M>, transform: (error: TrackedErr<E>) => E2) =>
+      mapErrPlan<T, E | TimeoutError, E2, M>(
+        source.rewrite<T, E | TimeoutError, M>(rewriter),
+        transform,
+      ),
+    tapErr: <T, E, R, M>(source: Plan<T, E, M>, observe: (error: TrackedErr<E>) => R) =>
+      tapErrPlan<T, E | TimeoutError, R, M>(
+        source.rewrite<T, E | TimeoutError, M>(rewriter),
+        observe,
+      ),
+    recover: <T, E, ECaught extends TrackedErr<E>, R, M>(
+      source: Plan<T, E, M>,
+      predicate: (error: TrackedErr<E>) => error is ECaught,
+      handler: (error: ECaught) => R,
+    ) =>
+      recoverPlan<T, E | TimeoutError, ECaught, R, M>(
+        source.rewrite<T, E | TimeoutError, M>(rewriter),
+        predicate,
+        handler,
+      ),
+  };
+  return rewriter;
+}
+
+export function cancelRewriter(abortSignal: AbortSignal): PlanRewriter {
+  const rewriter: PlanRewriter = {
+    apply: (source) => cancelPlan(source, abortSignal),
+    release: <T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T>) =>
+      releasePlan(source.rewrite<T, E, M>(rewriter), release),
+    enter: <T, E, A, M>(source: Plan<T, E, M>, initialize: EnterFn<A>) =>
+      onEnterPlan(source.rewrite<T, E, M>(rewriter), initialize),
+    exit: <T, E, A, M>(source: Plan<T, E, M>, finalize: ExitFn<T, E, A>) =>
+      onExitPlan(source.rewrite<T, E, M>(rewriter), finalize),
+    map: <T, E, U, M>(source: Plan<T, E, M>, transform: (value: T) => U) =>
+      mapPlan(source.rewrite<T, E, M>(rewriter), transform),
+    tap: <T, E, R, M>(source: Plan<T, E, M>, observe: (value: T) => R) =>
+      tapPlan(source.rewrite<T, E, M>(rewriter), observe),
+    mapErr: <T, E, E2, M>(source: Plan<T, E, M>, transform: (error: TrackedErr<E>) => E2) =>
+      mapErrPlan(source.rewrite<T, E, M>(rewriter), transform),
+    tapErr: <T, E, R, M>(source: Plan<T, E, M>, observe: (error: TrackedErr<E>) => R) =>
+      tapErrPlan(source.rewrite<T, E, M>(rewriter), observe),
+    recover: <T, E, ECaught extends TrackedErr<E>, R, M>(
+      source: Plan<T, E, M>,
+      predicate: (error: TrackedErr<E>) => error is ECaught,
+      handler: (error: ECaught) => R,
+    ) => recoverPlan(source.rewrite<T, E, M>(rewriter), predicate, handler),
+  };
+  return rewriter;
+}
+
+function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
+  return sleepWithSignal(ms, signal).catch(() => {});
+}
+
+async function runWithBoundSignal<T, E>(
+  run: (context: RunContext<readonly unknown[]>) => PromiseLike<Result<T, E>>,
+  boundSignal: AbortSignal,
+  outerContext: RunContext<readonly unknown[]>,
+): Promise<Result<T, E>> {
+  const controller = new AbortController();
+  const runContext = createRunContext(
+    controller.signal,
+    outerContext.args,
+    outerContext.extensions,
+  );
+
+  const forwardBoundAbort = () => controller.abort(boundSignal.reason);
+  if (boundSignal.aborted) forwardBoundAbort();
+  else boundSignal.addEventListener("abort", forwardBoundAbort, { once: true });
+
+  const forwardOuterAbort = () => controller.abort(outerContext.signal.reason);
+  if (outerContext.signal.aborted) forwardOuterAbort();
+  else outerContext.signal.addEventListener("abort", forwardOuterAbort, { once: true });
+
+  let result: Result<T, E> | undefined;
+  try {
+    result = await run(runContext);
+  } finally {
+    boundSignal.removeEventListener("abort", forwardBoundAbort);
+    outerContext.signal.removeEventListener("abort", forwardOuterAbort);
+  }
+
+  return result;
+}
+
+async function raceTimeout<T, E>(
+  run: (context: RunContext<readonly unknown[]>) => PromiseLike<Result<T, E>>,
+  timeoutMs: number,
+  outerContext: RunContext<readonly unknown[]>,
+): Promise<Result<T, E | TimeoutError>> {
+  const controller = new AbortController();
+  const runContext = createRunContext(
+    controller.signal,
+    outerContext.args,
+    outerContext.extensions,
+  );
+  const cascade = () => controller.abort(outerContext.signal.reason);
+
+  if (outerContext.signal.aborted) cascade();
+  else outerContext.signal.addEventListener("abort", cascade, { once: true });
+
+  const runPromise = run(runContext);
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  let timeoutError: TimeoutError | undefined;
+  const timeout = new Promise<Result<T, E | TimeoutError>>((resolve) => {
+    timeoutId = setTimeout(() => {
+      timeoutError = new TimeoutError({ timeoutMs });
+      controller.abort(timeoutError);
+      resolve(Result.err(timeoutError));
+    }, timeoutMs);
+  });
+
+  const firstResult = await Promise.race([runPromise, timeout]).finally(() => {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+    outerContext.signal.removeEventListener("abort", cascade);
+  });
+
+  if (timeoutError === undefined) {
+    return firstResult;
+  }
+
+  await runPromise;
+  return Result.err(timeoutError);
+}

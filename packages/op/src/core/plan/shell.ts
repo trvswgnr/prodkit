@@ -1,8 +1,10 @@
 import { Result } from "../../result.js";
 import { OP_BOUND_BRAND, OP_BRAND, unsafeCoerce } from "../../shared.js";
-import { OP_POLICY, type BuiltInPolicy } from "../policy.js";
 import { createRunContext } from "../runtime.js";
-import { normalizeRetryPolicy } from "../retry-policy.js";
+import { SuspendInstruction } from "../instructions.js";
+import type { UnhandledException } from "../../errors.js";
+import type { Op } from "../../index.js";
+import type { OpPolicy, OpPolicyInput, OpPolicySource, OpPolicyType } from "../../policy/types.js";
 import type {
   AnyNullaryOp,
   AsArgs,
@@ -11,10 +13,19 @@ import type {
   ExitFn,
   OpInterface,
   OpLifecycleHook,
+  RunContext,
   TrackedErr,
 } from "../types.js";
-import { OP_PLAN_BIND, genPlan, type Plan, type PlanBackedOp, type PlanBinder } from "./base.js";
-import { onEnterPlan, onExitPlan, withReleasePlan } from "./lifecycle.js";
+import {
+  OP_PLAN_BIND,
+  createPlan,
+  genPlan,
+  type Plan,
+  type PlanBackedOp,
+  type PlanBinder,
+  type PlanRewriter,
+} from "./base.js";
+import { onEnterPlan, onExitPlan } from "./lifecycle.js";
 import {
   flatMapPlan,
   mapErrPlan,
@@ -51,21 +62,46 @@ function fluentMethodsForContext<T, E, A, M, Yieldable extends boolean>(
   ) => wrapPlanTransform<T, E, A, M, Yieldable, TNext, ENext, MNext>(ctx, transform);
 
   return {
-    with: (policy: BuiltInPolicy<T>) => {
-      switch (policy[OP_POLICY]) {
-        case "retry": {
-          const retryPolicy = normalizeRetryPolicy(policy.policy);
-          return wrap((plan) => plan.withRetry(retryPolicy));
-        }
-        case "timeout":
-          return wrap((plan) => plan.withTimeout(policy.timeoutMs));
-        case "cancel":
-          return wrap((plan) => plan.withCancel(policy.abortSignal));
-        case "release":
-          return wrap((plan) => withReleasePlan(plan, policy.release));
-        default:
-          throw new TypeError("Invalid Op policy");
-      }
+    with: <F extends OpPolicyType>(policy: OpPolicy<OpPolicyInput<T, E, AsArgs<A>, M>, F>) => {
+      const source: OpPolicySource<T, E, AsArgs<A>, M> = {
+        wrap: <TNext, ENext, MNext>(
+          transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
+        ) =>
+          // SAFETY: wrapPlanTransform returns the same branded Op runtime shell; this narrows the
+          // public type to the policy source arity already supplied by the enclosing FluentOp.
+          unsafeCoerce<Op<TNext, ENext, AsArgs<A>, MNext>>(wrap(transform)),
+        rewrite: <TNext, ENext, MNext>(rewriter: PlanRewriter) =>
+          // SAFETY: Plan.rewrite returns a branded plan with the policy layer's selected type
+          // target; wrapPlanTransform preserves the enclosing Op arity.
+          unsafeCoerce<Op<TNext, ENext, AsArgs<A>, MNext>>(
+            wrap((plan) => plan.rewrite<TNext, ENext, MNext>(rewriter)),
+          ),
+        around: <TNext, ENext, MNext = M>(
+          run: (
+            next: (
+              context: RunContext<readonly unknown[]>,
+            ) => Promise<Result<T, E | UnhandledException>>,
+            context: RunContext<readonly unknown[]>,
+          ) => PromiseLike<Result<TNext, ENext | UnhandledException>>,
+        ) =>
+          // SAFETY: the generated plan preserves the enclosing policy source arity and returns
+          // the typed Result supplied by the policy around hook.
+          unsafeCoerce<Op<TNext, ENext, AsArgs<A>, MNext>>(
+            wrap((plan) =>
+              createPlan<TNext, ENext, MNext>(function* () {
+                const result: Result<TNext, ENext | UnhandledException> =
+                  yield* new SuspendInstruction((context) =>
+                    run((nextContext) => plan.execute(nextContext), context),
+                  );
+
+                if (result.isErr()) return yield* result;
+                return result.value;
+              }),
+            ),
+          ),
+      };
+
+      return policy.apply(source);
     },
     on: (event: OpLifecycleHook, handler: unknown) => {
       if (event === "enter") {
