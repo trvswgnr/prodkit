@@ -45,7 +45,13 @@ export function assertJitter(value: number): void {
   }
 }
 
+/** Maximum delay accepted by typical `setTimeout` implementations (2^31 - 1 ms). */
+export const MAX_TIMEOUT_MS = 2 ** 31 - 1;
+
 /** Validates `Policy.timeout(timeoutMs)` at run time. */
 export function validateTimeoutMs(timeoutMs: number): void {
   assertNonNegativeNumber(timeoutMs, "timeoutMs");
+  if (timeoutMs > MAX_TIMEOUT_MS) {
+    throw new RangeError(`timeoutMs must be less than or equal to ${MAX_TIMEOUT_MS}`);
+  }
 }

@@ -195,6 +195,23 @@ describe("Policy.retry", () => {
     }
   });
 
+  test("Policy.retry(null) fails at run time", async () => {
+    let attempts = 0;
+    const result = await _try(async () => {
+      attempts += 1;
+      throw new Error("fail");
+    })
+      .with(Policy.retry(null as unknown as RetryPolicy))
+      .run();
+
+    assert(result.isErr(), "result should be Err");
+    expect(result.error).toBeInstanceOf(UnhandledException);
+    if (result.error instanceof UnhandledException) {
+      expect(result.error.cause).toBeInstanceOf(TypeError);
+    }
+    expect(attempts).toBe(0);
+  });
+
   test("works when wrapping _try directly", async () => {
     let attempts = 0;
     const program = _try(async () => {
@@ -344,6 +361,18 @@ describe("Policy.timeout", () => {
   test("invalid non-finite timeout fails at run time", async () => {
     const result = await _try(() => Promise.resolve(69))
       .with(Policy.timeout(Number.NaN))
+      .run();
+
+    assert(result.isErr(), "result should be Err");
+    expect(result.error).toBeInstanceOf(UnhandledException);
+    if (result.error instanceof UnhandledException) {
+      expect(result.error.cause).toBeInstanceOf(RangeError);
+    }
+  });
+
+  test("invalid timeout above platform maximum fails at run time", async () => {
+    const result = await _try(() => Promise.resolve(69))
+      .with(Policy.timeout(2 ** 31))
       .run();
 
     assert(result.isErr(), "result should be Err");

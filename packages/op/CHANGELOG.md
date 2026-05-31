@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `Policy.timeout` now rejects timer values above the platform `setTimeout` maximum at run
+  time instead of scheduling an immediate timeout.
+- `Policy.retry(null)` now fails at run time with `UnhandledException` instead of falling back
+  to the default retry policy.
 - `Policy.cancel` now settles when the bound signal aborts while inner `Op.try` work
   ignores the signal, instead of hanging until that work completes (aligned with
   `Policy.timeout` fan-out behavior for non-cooperative children).

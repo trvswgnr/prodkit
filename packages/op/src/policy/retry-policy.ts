@@ -153,6 +153,17 @@ function normalizeDelay(delay: Delay): (retry: number, cause: unknown) => number
 }
 
 export function normalizeRetryPolicy(policy?: RetryPolicy): NormalizedRetryPolicy {
+  if (policy === null) {
+    return {
+      validate: () => {
+        throw new TypeError("retry policy must not be null");
+      },
+      maxAttempts: 1,
+      shouldRetry: () => false,
+      getDelay: () => 0,
+    };
+  }
+
   const normalized = {
     retries: policy?.retries ?? DEFAULT_RETRY_POLICY.retries,
     when: policy?.when ?? DEFAULT_RETRY_POLICY.when,
