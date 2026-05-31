@@ -11,12 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added `@prodkit/op/policy` with `retry`, `timeout`, `cancel`, `release`, `Delay`, and retry
   policy types for policy composition through `.with(Policy.*)`.
+- Added `@prodkit/op/hkt` with reusable `HKT`, `HKTArg`, and `Apply` helpers for open type-level
+  transforms.
+- Added the open `Policy.define(...)` protocol so library authors can build custom `.with(...)`
+  policies without adding core overloads.
 
 ### Changed
 
 - Replaced `.withRetry(...)`, `.withTimeout(...)`, `.withSignal(...)`, and `.withRelease(...)`
   with `.with(Policy.retry(...))`, `.with(Policy.timeout(...))`, `.with(Policy.cancel(...))`,
   and `.with(Policy.release(...))`.
+- Moved policy runtime wrappers and retry policy helpers out of core internals and under the
+  policy module.
 - Renamed `Policy.signal` to `Policy.cancel` and `SignalPolicyAttachment` to
   `CancelPolicyAttachment`.
 

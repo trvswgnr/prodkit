@@ -187,11 +187,33 @@ listener cleanup stay consistent. `Op.sleep` rejects on abort so cancellation fl
 normal runtime `UnhandledException` channel; retry delay catches that abort and preserves its
 existing "stop retrying and return the last result" behavior.
 
+## Open policy protocol
+
+`.with(...)` is a single generic hook over `OpPolicy<OpPolicyInput<T, E, A, M>, F>`.
+The policy protocol lives under `packages/op/src/policy/`, while the reusable HKT encoding lives in
+`packages/op/src/hkt.ts` and is exported as `@prodkit/op/hkt`. The `F` parameter is an HKT:
+`HKT_ARGS` receives `[T, E, A, M]`, and `HKT_RESULT` returns the next `[T, E, A, M]` tuple.
+Built-in policy types are just instances of that protocol, so
+`Policy.timeout(...)` widens `E` with `TimeoutError` without a dedicated `.with` overload.
+
+`OpPolicyInput` is carried in a contravariant phantom slot. That is what keeps
+`Policy.release((value) => ...)` contextually typed from the wrapped op's success value while still
+letting universal policies use `unknown` input.
+
+At runtime, `Policy.define(...)` builds policy values with `apply(source)`. `source.wrap(...)`
+exposes direct plan transforms, `source.rewrite(...)` lets built-in policies rebuild known plan
+nodes while preserving existing ordering semantics, and `source.around(...)` covers Result-level
+policies that need to run before, after, or instead of the wrapped operation. Core `Plan` only knows
+about the generic `PlanRewriter` protocol; retry, timeout, cancel, release, and retry delay code
+live under `packages/op/src/policy/`.
+
 ## Where else to read
 
 Cancellation and cooperative `AbortSignal` behavior show up wherever `SuspendInstruction` binds a
 signal, plus README's `Op.defer` / `.on("exit")` notes and checks in `packages/op/tests/unit/policies.test.ts` and
-`packages/op/tests/unit/lifecycle.test.ts`. Type-level contracts collected in `packages/op/tests/types/op.test.ts`.
+`packages/op/tests/unit/lifecycle.test.ts`. Type-level contracts collected in
+`packages/op/tests/types/op.test.ts`, with custom policy spike coverage in
+`packages/op/tests/unit/policy-hkt.test.ts`.
 
 For structural rationale that complements these invariants, see `docs/adr/`: nullary core vs lifted
 arity, `OpHooks` push-through and timeout rebuild asymmetry, three cleanup channels, combinator

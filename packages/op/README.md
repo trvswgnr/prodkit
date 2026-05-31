@@ -137,8 +137,32 @@ const result = await Op.try(() => fetch("https://example.com"))
   .run();
 ```
 
-Public exports: `retry`, `timeout`, `cancel`, `Delay`, `RetryPolicy`, `RetryDelay`, and
-`ExponentialDelayOptions`.
+Public exports: `retry`, `timeout`, `cancel`, `release`, `Delay`, `define`, `RetryPolicy`,
+`RetryDelay`, `ExponentialDelayOptions`, policy attachment types, and generic HKT helpers
+re-exported from `@prodkit/op/hkt`.
+
+### `@prodkit/op/hkt`
+
+Reusable higher-kinded type encoding for modules that need an open type-level transform.
+Policy uses it to let custom `.with(...)` attachments describe how they transform `Op<T, E, A, M>`
+without adding overloads to core.
+
+```ts
+import { HKT_RESULT, type Apply, type HKT, type HKTArg } from "@prodkit/op/hkt";
+
+type ToRecordResult<Self> = {
+  readonly value: HKTArg<Self, 0>;
+};
+
+interface ToRecord extends HKT {
+  readonly [HKT_RESULT]: ToRecordResult<this>;
+}
+
+type Applied = Apply<ToRecord, readonly [number]>;
+//   ^? { readonly value: number }
+```
+
+Public exports: `HKT_ARGS`, `HKT_RESULT`, `HKT`, `HKTArg`, and `Apply`.
 
 ## Quick start
 
@@ -451,7 +475,9 @@ operation with a timeout and fails with `TimeoutError` when the wrapped operatio
 before `timeoutMs`. `Policy.cancel(signal)` binds an operation to an external `AbortSignal` so you
 can cancel in-flight work, for example when an HTTP request is aborted or a job is shut down.
 `Policy.release(release)` registers success-gated release logic for the wrapped operation's
-successful value.
+successful value. Library authors can also pass custom policies built with `Policy.define(...)`
+when they need a reusable wrapper that preserves the operation API while adding behavior such as
+short-circuiting, metering, or domain-specific failure handling.
 
 Composition order determines semantics:
 
