@@ -22,14 +22,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Consolidated `@prodkit/op/hkt` under a single `HKT` export (interface, namespace, and
   `HKT.PARAMS` / `HKT.TYPE` symbol constants). Use `HKT.Param`, `HKT.Apply`, and the compositional
   helpers on the namespace instead of former top-level exports.
+- Renamed retry policy `attempts` to `retries`. The field now counts post-failure retries only
+  (`retries: 0` runs once; default `retries: 2` keeps the previous three-run budget). Custom
+  `delay(retry, cause)` callbacks now receive a 0-based retry index (`0` for the first retry after
+  initial failure); `Delay.exponential` uses `baseMs * 2 ** retry`.
 - Policy HKT encoding now uses `[HKT.TYPE]: Op<...>` instead of tuple `[HKT_RESULT]`;
   `OpPolicyType` is the identity transform, and widening policies extend `HKT` directly.
-
 - Invalid `Policy.timeout(timeoutMs)` values (negative or non-finite) now fail at run time as
   `Err(UnhandledException)` instead of being clamped to zero.
 - Retry and timeout policy plans return `Err(UnhandledException)` explicitly for configuration
   validation failures; `Delay.exponential` options are validated once per run, not on every retry
-  attempt. Non-integer `attempts` surfaces `TypeError` as `cause`; out-of-range numerics use
+  attempt. Non-integer `retries` surfaces `TypeError` as `cause`; negative `retries` use
   `RangeError`.
 - Renamed policy-related test suites to `Policy.retry` / `Policy.timeout` vocabulary and documented
   pre-ADR 0009 policy method names in superseded ADRs 0002 and 0007.

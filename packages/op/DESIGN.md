@@ -178,16 +178,16 @@ chosen error ("winner error keeps precedence over loser abort-time failures").
 Built-in policy and sleep inputs are validated when the wrapped operation first runs, not when
 `Policy.retry(...)` or `Policy.timeout(...)` is attached. Invalid configuration does not throw out of
 `.run()`; it settles to `Err(UnhandledException)` with the validation error as `cause`.
-`TypeError` means the wrong runtime shape (for example `when` is not a function, or `attempts` is
+`TypeError` means the wrong runtime shape (for example `when` is not a function, or `retries` is
 not an integer). `RangeError` means a numeric value is out of the allowed interval (for example
-negative `timeoutMs`, or `attempts` less than 1).
+negative `timeoutMs`, or negative `retries`).
 
 | Input | Treatment |
 | --- | --- |
 | `Op.sleep(ms)` negative | Normalize to `0` |
 | `Op.sleep(ms)` non-finite | `Err(UnhandledException)` at run time |
 | `Policy.timeout(timeoutMs)` negative or non-finite | `Err(UnhandledException)` at run time |
-| `Policy.retry` invalid `attempts`, `when`, `delay`, or delay output | `Err(UnhandledException)` at run time |
+| `Policy.retry` invalid `retries`, `when`, `delay`, or delay output | `Err(UnhandledException)` at run time |
 | `Delay.exponential` invalid options | Validated once per run when the retry policy executes |
 
 Enforced by:
@@ -198,16 +198,25 @@ Enforced by:
 
 Representative tests:
 
-- `packages/op/tests/unit/policies.test.ts` (invalid attempts, delay, when, timeout)
+- `packages/op/tests/unit/policies.test.ts` (invalid retries, delay, when, timeout)
 - `packages/op/tests/property/retry-policy.test.ts` (invalid exponential delay options)
 - `packages/op/tests/unit/builders.test.ts` (sleep normalization and non-finite rejection)
+
+## Retry policy shape
+
+- `retries`: post-failure retry budget (`retries: 0` runs once; default `retries: 2` allows three
+  total runs).
+- `when(cause)`: whether to retry after a failure; receives the unwrapped cause.
+- `delay`: fixed milliseconds or `(retry, cause) => ms`, where `retry` is the 0-based index of the
+  upcoming retry (`0` after initial failure).
+- `Delay.exponential` computes `baseMs * 2 ** retry`, capped at `maxMs`.
 
 ## Policy ordering (retry and timeout)
 
 `.with(...)` order chooses what's inside which wrapper. Putting `Policy.retry(...)` first and
 `Policy.timeout(...)` second means one overall clock around the retry loop ("timeout wraps the
 entire retried run when chained outside retry"). Putting timeout inside retry means timeout
-applies independently per retry attempt
+applies independently per run inside the retry loop
 (`packages/op/tests/unit/policies.test.ts`, "timeout applies per-attempt when chained inside retry", also the converse
 scenario in the sibling test quoted there).
 

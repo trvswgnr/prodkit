@@ -22,7 +22,7 @@ import * as Policy from "@prodkit/op/policy";
 
 acquireConnection
   .with(Policy.timeout(1_000))
-  .with(Policy.retry({ attempts: 3, delay: Delay.exponential({ baseMs: 100, maxMs: 1_000 }) }))
+  .with(Policy.retry({ retries: 2, delay: Delay.exponential({ baseMs: 100, maxMs: 1_000 }) }))
   .with(Policy.cancel(signal))
   .with(Policy.release((conn) => conn.close()));
 ```
@@ -67,7 +67,8 @@ known type transforms; higher-kinded typing becomes relevant only for third-part
 ## Consequences
 
 - Invalid retry and delay inputs continue to surface at run time as `Err(UnhandledException)` with
-  the validation error as `cause`.
+  the validation error as `cause`. `RetryPolicy.retries` counts post-failure retries; custom
+  `delay(retry, cause)` uses a 0-based retry index.
 - Retry defaults, policy ordering with `.with(...)`, and other behavioral contracts belong in
   `packages/op/DESIGN.md`.
 - Public docs use `@prodkit/op/policy` for constructors and `Delay`; core docs cover `.with(...)`.

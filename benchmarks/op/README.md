@@ -31,7 +31,7 @@ Runtime (comparison matrix / CodSpeed walltime):
 - Parallel aggregation (`Op.all` vs `Promise.all`, 8 children)
 - First success (`Op.any` vs hand-rolled first success)
 - First settler (`Op.race` vs hand-rolled first settler)
-- Retry overhead (`Policy.retry` vs hand-rolled retry loop, 3 attempts)
+- Retry overhead (`Policy.retry` vs hand-rolled retry loop, 3 runs with 2 retries)
 - Timeout overhead (`Policy.timeout` vs `Promise.race` + `setTimeout`)
 - Sequential composition (native async chain vs Op yield* chain)
 

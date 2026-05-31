@@ -132,7 +132,7 @@ import { Delay } from "@prodkit/op/policy";
 import * as Policy from "@prodkit/op/policy";
 
 const policy = {
-  attempts: 3,
+  retries: 2,
   when: (cause: unknown) => cause instanceof Error,
   delay: Delay.exponential({ baseMs: 100, maxMs: 1_000, jitter: 0.5 }),
 };
@@ -153,8 +153,8 @@ Public exports:
 Custom policies that transform `Op<T, E, A, M>` at the type level use the HKT protocol; import
 `HKT` from `@prodkit/op/hkt` (see below), not from this subpath.
 
-Policy ordering semantics are summarized under [`.with(policy)`](#withpolicy) below and in
-[`DESIGN.md`](DESIGN.md#policy-ordering-retry-and-timeout).
+Policy ordering semantics are summarized under [`.with(policy)`](#withpolicy) and
+[Retry defaults](#retry-defaults) below, and in [`DESIGN.md`](DESIGN.md#policy-ordering-retry-and-timeout).
 
 ### `@prodkit/op/hkt`
 
@@ -502,15 +502,17 @@ come from `@prodkit/op/policy`.
 import * as Policy from "@prodkit/op/policy";
 
 const policy = {
-  attempts: 3,
+  retries: 2,
   when: (cause: unknown) => cause instanceof Error,
-  delay: (attempt: number) => attempt * 100,
+  delay: (retry: number) => (retry + 1) * 100,
 };
 
 const fetchWithRetry = Op.try(() => fetch("https://example.com")).with(Policy.retry(policy));
 ```
 
-`Policy.retry(policy?)` wraps an operation with retries. `Policy.timeout(timeoutMs)` wraps an
+`Policy.retry(policy?)` wraps an operation with retries. `retries` counts post-failure retries only
+(`retries: 0` runs once). Custom `delay(retry, cause)` callbacks receive a 0-based retry index
+(`0` after the first failure). See [Retry defaults](#retry-defaults). `Policy.timeout(timeoutMs)` wraps an
 operation with a timeout and fails with `TimeoutError` when the wrapped operation does not finish
 before `timeoutMs`. Invalid retry policy shapes and invalid timeout values (negative or non-finite
 `timeoutMs`) fail at run time as `Err(UnhandledException)` with the validation error as `cause`, not
@@ -529,7 +531,7 @@ const totalBudget = Op.try(() => fetch("https://example.com"))
   .with(Policy.retry(policy))
   .with(Policy.timeout(5000));
 
-// timeout applies to EACH attempt
+// timeout applies to each run inside the retry loop
 const perAttempt = Op.try(() => fetch("https://example.com"))
   .with(Policy.timeout(5000))
   .with(Policy.retry(policy));
@@ -647,7 +649,7 @@ Ordering/composition rules:
 
 - Enter handlers run in wrapper order (last chained runs first).
 - Exit handlers keep the current unwind ordering.
-- Enter handlers run once per wrapper run; retry attempts happen inside that wrapper regardless
+- Enter handlers run once per wrapper run; retry runs happen inside that wrapper regardless
   of whether `.with(Policy.retry(...))` is chained before or after `.on("enter", fn)`.
 
 ## Typed errors
@@ -675,19 +677,21 @@ const validate = Op(function* (name: string) {
 
 `.with(Policy.retry())` with no policy uses:
 
-- `attempts: 3`
+- `retries: 2`
 - `when: () => true`
 - exponential backoff from `1000ms` up to `30000ms` with full jitter (`1.0`)
 
 You can also build your own delay function with `Delay.fixed(ms)` or
 `Delay.exponential({ baseMs, maxMs, jitter })`.
 `Delay.defaultRetry` is the pre-built delay function used by the default retry policy.
+Custom delay functions receive `(retry, cause)` where `retry` is the 0-based index of the upcoming
+retry (`0` after the first failure, `1` before the second retry, and so on).
 
 ```ts
 import { Delay } from "@prodkit/op/policy";
 
 const policy = {
-  attempts: 5,
+  retries: 4,
   when: (cause: unknown) => cause instanceof Error,
   delay: Delay.exponential({ baseMs: 200, maxMs: 2_000, jitter: 0.5 }),
 };

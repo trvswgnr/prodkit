@@ -38,7 +38,7 @@ const program = Op.all([
   fetchJson("/api/alerts"),
   fetchJson("/api/settings"),
 ])
-  .with(Policy.retry({ attempts: 2 }))
+  .with(Policy.retry({ retries: 1 }))
   .with(Policy.timeout(1_500))
   .with(Policy.cancel(request.signal));
 ```

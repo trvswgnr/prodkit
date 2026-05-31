@@ -202,7 +202,8 @@ Built-in policies attach through `.with(Policy.*)` on the op value (`packages/op
 `packages/op/src/policy/index.ts`) and compose as plan wrappers:
 
 - **Retry** (`retryPlan`): loops inner execution inside a `SuspendInstruction`, applies
-  `RetryPolicy` delay via abortable sleep, and stops on success, non-retryable `Err`, or abort.
+  `RetryPolicy` delay via abortable sleep (`retries` is the post-failure budget; `delay(retry, cause)`
+  uses a 0-based retry index), and stops on success, non-retryable `Err`, or abort.
 - **Timeout** (`timeoutPlan`): races inner `executePlanInterruptOnAbort` against a timer;
   surfaces `TimeoutError` on the typed channel. Invalid `timeoutMs` (negative or non-finite) fails
   at run time as `Err(UnhandledException)`. Error-channel transforms compose through plan rewriters
