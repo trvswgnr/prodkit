@@ -70,19 +70,20 @@ operation APIs from `@prodkit/op`.
 
 From **`better-result`** (recommended import path):
 
-- `Result` -- return type of `.run()` and `Op.run()`; also appears on `ExitContext.result`, `Op.settle`,
-  and `Op.allSettled`
-- `TaggedError` -- factory for typed domain errors (`yield* new MyError()`)
-- `UnhandledException` -- normalized failure channel; always included on `.run()` error unions
-- `TaggedErrorInstance` -- instance typing for tagged errors
-- `Err`, `Ok`, `InferErr` -- optional advanced result typing (not re-exported from `@prodkit/op`)
+- `Result` is the return type of `.run()` and `Op.run()`; also appears on `ExitContext.result`,
+  `Op.settle`, and `Op.allSettled`
+- `TaggedError` is a factory for typed domain errors (`yield* new MyError()`)
+- `UnhandledException` is the normalized failure channel; always included on `.run()` error unions
+- `TaggedErrorInstance` provides instance typing for tagged errors
+- `Err`, `Ok`, `InferErr` are optional advanced result typing helpers (not re-exported from
+  `@prodkit/op`)
 
 From **`@prodkit/op`**:
 
-- `TimeoutError` -- built-in timeout failure from `.with(Policy.timeout(...))`; uses the same
+- `TimeoutError` is the built-in timeout failure from `.with(Policy.timeout(...))`; uses the same
   `TaggedError` pattern as domain errors from `better-result`
-- `ErrorGroup` -- aggregate error from `Op.any` when every branch fails (prodkit-specific, not from
-  `better-result`)
+- `ErrorGroup` is an aggregate error from `Op.any` when every branch fails (prodkit-specific, not
+  from `better-result`)
 
 No other `better-result` exports are published from `@prodkit/op` today.
 

@@ -239,11 +239,11 @@ state visible inside `SuspendInstruction` and `CustomInstruction.resolve` callba
 Top-level `.run()` / `Op.run(...)` are typed only when operation metadata has no unsatisfied
 `Blocking<T>` entries (`IsRunnable<M>` in `packages/op/src/core/types.ts`).
 
-- **`Blocking<T>`** -- branded metadata value; merge at a key unions payloads with other
-  `Blocking` values at that key.
-- **`withBlocking(op, key)`** -- type-only helper on `@prodkit/op/internal`; runtime behavior of
+- **`Blocking<T>`** is branded metadata; merge at a key unions payloads with other `Blocking`
+  values at that key.
+- **`withBlocking(op, key)`** is a type-only helper on `@prodkit/op/internal`; runtime behavior of
   the op is unchanged. Clears when your extension replaces or removes the blocking entry on `key`.
-- **DI** -- `DI.inject` accumulates `{ deps: Blocking<Dependency> }`; `DI.provide` clears satisfied
+- **DI**: `DI.inject` accumulates `{ deps: Blocking<Dependency> }`; `DI.provide` clears satisfied
   keys. Consumer-facing behavior is documented under `@prodkit/op/di` in `packages/op/README.md`.
 
 Import extension helpers from `@prodkit/op/internal` (for example `Blocking`, `withBlocking`,

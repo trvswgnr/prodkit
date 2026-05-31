@@ -13,6 +13,7 @@
 - Prefers `.run(...args)` to stay args-only; cancellation/config should compose fluently (for example via `.with(Policy.cancel(...))`) rather than be passed to `run`.
 - Prefers user-facing docs and comments to emphasize outcomes and usage over internal implementation details.
 - Requires ASCII-only in repo text (comments, docs, changelogs): no Unicode symbols or typographic punctuation (arrows, em dashes, etc.).
+- Forbids `--` as a markdown list-item separator between a term and description; write full sentences or use a colon after the term instead (shell passthrough `--` in commands is fine).
 - When requesting commit message drafts, prefers why-focused messages grounded in the actual staged/unstaged diff.
 - Prefers commit message drafts to use the simplest fitting body shape (none, one sentence, or bullets) rather than forcing multiple bullets.
 - Prefers file relocations to be done with move operations first (for example `mv`) followed by minimal targeted edits, not full-file rewrites.
