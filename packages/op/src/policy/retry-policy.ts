@@ -142,10 +142,15 @@ const exponential = (options?: ExponentialDelayOptions) => {
   }, validate);
 };
 
+/** Built-in retry delay helpers for `RetryPolicy.delay`. */
 export const Delay = Object.freeze({
+  /** Constant delay in milliseconds before each retry attempt. */
   fixed,
+  /** Exponential backoff with optional jitter, capped at `maxMs`. */
   exponential,
+  /** Zero delay between attempts. */
   immediate: fixed(0),
+  /** Default exponential backoff used by `Policy.retry()` with no policy argument. */
   defaultRetry: exponential(DEFAULT_EXPONENTIAL_DELAY_OPTIONS),
 });
 

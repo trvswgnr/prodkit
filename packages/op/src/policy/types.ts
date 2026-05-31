@@ -58,6 +58,10 @@ export interface OpPolicy<Input = unknown, F extends OpPolicyType = OpPolicyType
   apply<T, E, A, M>(source: OpPolicySource<T, E, A, M>): OpPolicyResult<F, T, E, A, M>;
 }
 
+/**
+ * Builds a custom policy value for `op.with(...)`.
+ * Use `source.wrap`, `source.rewrite`, or `source.around` inside `apply` to transform the wrapped op.
+ */
 export function definePolicy<
   Input,
   F extends OpPolicyType,

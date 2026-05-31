@@ -145,11 +145,11 @@ function formatPackages(packages: string[]): string {
 
 function renderIndexTable(records: AdrRecord[]): string {
   const lines = [
-    "| ADR | Package | Title |",
-    "| --- | --- | --- |",
+    "| ADR | Status | Package | Title |",
+    "| --- | --- | --- | --- |",
     ...records.map(
       (record) =>
-        `| [${record.number}](${record.filename}) | ${formatPackages(record.packages)} | ${record.title} |`,
+        `| [${record.number}](${record.filename}) | ${record.status} | ${formatPackages(record.packages)} | ${record.title} |`,
     ),
   ];
   return lines.join("\n");

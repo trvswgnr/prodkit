@@ -18,12 +18,14 @@ import {
   ProvidedMeta,
 } from "./internal.js";
 
+/** Phantom-typed dependency token created with {@link Dependency}. */
 export interface Dependency<T, Name extends string> {
   readonly _tag: typeof DI_TAG;
   readonly key: Name;
   readonly [DI_TOKEN]: T;
 }
 
+/** Creates a dependency token class for `DI.inject` and bindings. */
 export const Dependency = <const Name extends string>(key: Name): DependencyCtor<Name> => {
   class DependencyToken<T> {
     readonly _tag = DI_TAG;
@@ -46,6 +48,7 @@ export const Dependency = <const Name extends string>(key: Name): DependencyCtor
   return DependencyToken;
 };
 
+/** Yields a bound dependency value from the current run context. */
 export const inject = function* <C extends AnyDependency>(
   dependency: C,
 ): Generator<
@@ -56,6 +59,7 @@ export const inject = function* <C extends AnyDependency>(
   return yield* new DependencyReqInstruction<DependencyValue<C>, DependencyReq<C>>(dependency);
 };
 
+/** Eager singleton binding for {@link provide}. */
 export const singleton = <C extends AnyDependency, V = unknown>(
   dependency: C,
   value: DependencyValue<C, V>,
@@ -65,6 +69,7 @@ export const singleton = <C extends AnyDependency, V = unknown>(
   value,
 });
 
+/** Per-run scoped binding resolved when first injected. */
 export const scoped = <C extends AnyDependency>(
   dependency: C,
   resolve: ScopedResolveFn<C>,
@@ -74,11 +79,13 @@ export const scoped = <C extends AnyDependency>(
   resolve,
 });
 
+/** Satisfies dependency requirements on an op before `.run()`. */
 export const provide = <T, E, A, M, const Entries extends readonly UseEntry[]>(
   op: Op<T, E, A, M>,
   ...entries: ValidUseEntries<Entries, InferMetaReqs<M>>
 ): Op<T, E, A, ProvidedMeta<M, Entries>> => provideOp(op, entries);
 
+/** Namespace object for dependency injection helpers. */
 export const DI = Object.freeze({
   Dependency,
   inject,

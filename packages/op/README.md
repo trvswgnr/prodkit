@@ -12,6 +12,12 @@ For runtime overhead ratios, throughput figures, and bundle size, see
 > [!WARNING]
 > This library is currently in alpha. The API will almost certainly change between releases while it stabilizes.
 
+> [!NOTE]
+> Subpath exports (`@prodkit/op/di`, `@prodkit/op/policy`, `@prodkit/op/hkt`) ship with the matching
+> npm release. If your installed version predates a subpath, upgrade `@prodkit/op` or import only
+> what that version's `package.json` `exports` lists. This repo's `main` branch may document APIs
+> still under `## [Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md) until they are published.
+
 Write code that stays readable as it grows and keep predictable
 behavior in production. Compose steps top-to-bottom, apply retry, timeout, and cancellation as
 policy, and run parallel work without scattering reliability logic across your app.
@@ -28,16 +34,11 @@ npm i @prodkit/op
 
 Runtime support for consumers: any JavaScript runtime with `Promise` and `AbortController`.
 For Node consumers specifically, this package is tested on Node `24.14.0` (24.x Active LTS, the
-current LTS line). CI also runs
-packed-package smoke checks on Bun `1.3.13`, Deno `2.7.14`, and a Cloudflare Workers-like
-Miniflare environment.
+current LTS line). No Node-specific APIs are required by the public operation model.
 
-This project is designed to be runtime-agnostic: no Node-specific APIs are required by the public
-operation model.
-
-CI publishes a Vitest coverage artifact for this package. The test suite includes unit,
-integration, type-level, and property-based law checks, plus separate packed-package smoke checks
-for Node, Bun, Deno, and a Cloudflare Workers-like runtime.
+CI publishes Vitest coverage for this package and runs unit, integration, type-level, and
+property-based law checks, plus packed-package smoke on Bun `1.3.13`, Deno `2.7.14`, and a
+Cloudflare Workers-like Miniflare environment.
 
 ## Dependencies (`better-result`)
 
@@ -137,9 +138,17 @@ const result = await Op.try(() => fetch("https://example.com"))
   .run();
 ```
 
-Public exports: `retry`, `timeout`, `cancel`, `release`, `Delay`, `define`, `RetryPolicy`,
-`RetryDelay`, `ExponentialDelayOptions`, policy attachment types, and generic HKT helpers
-re-exported from `@prodkit/op/hkt`.
+Public exports:
+
+- Values: `retry`, `timeout`, `cancel`, `release`, `Delay`, `define` (alias of `definePolicy`)
+- Types: `RetryPolicy`, `RetryDelay`, `ExponentialDelayOptions`, `RetryPolicyAttachment`,
+  `TimeoutPolicyAttachment`, `CancelPolicyAttachment`, `ReleasePolicyAttachment`, `BuiltInPolicy`,
+  `OpPolicy`, `OpPolicyInput`, `OpPolicySource`, `OpPolicyType`, `OpPolicyArg`, `OpPolicyArgs`,
+  `OpPolicyResult`, `ApplyOpPolicy`
+- Re-exported HKT symbols: `HKT`, `HKTArg`, `Apply`, `HKT_ARGS`, `HKT_RESULT`
+
+Policy ordering semantics are summarized under [`.with(policy)`](#withpolicy) below and in
+[`DESIGN.md`](DESIGN.md#policy-ordering-retry-and-timeout).
 
 ### `@prodkit/op/hkt`
 
@@ -162,7 +171,9 @@ type Applied = Apply<ToRecord, readonly [number]>;
 //   ^? { readonly value: number }
 ```
 
-Public exports: `HKT_ARGS`, `HKT_RESULT`, `HKT`, `HKTArg`, and `Apply`.
+Public exports: `HKT_ARGS`, `HKT_RESULT`, `HKT`, `HKTArg`, `Apply` (types and symbol constants).
+Used by `@prodkit/op/policy` for custom `.with(...)` attachments; import from here when building
+other op extensions.
 
 ## Quick start
 

@@ -215,7 +215,10 @@ signal, plus README's `Op.defer` / `.on("exit")` notes and checks in `packages/o
 `packages/op/tests/types/op.test.ts`, with custom policy spike coverage in
 `packages/op/tests/unit/policy-hkt.test.ts`.
 
-For structural rationale that complements these invariants, see `docs/adr/`: nullary core vs lifted
-arity, `OpHooks` push-through and timeout rebuild asymmetry, three cleanup channels, combinator
-loser finalization waits, the `UnhandledException` runtime channel, and args-only `.run()` with
-fluent policy composition.
+For structural rationale that complements these invariants, see [`docs/adr/`](../../docs/adr/):
+
+- [0001](../../docs/adr/0001-core-nullary-vs-lifted-arity.md): nullary core driver vs lifted public arity
+- [0007](../../docs/adr/0007-timeout-widening-at-composition-boundary.md): plan AST execution (supersedes hook-era timeout widening notes)
+- [0009](../../docs/adr/0009-policy-with-attachment.md): `.with(Policy.*)` attachment surface
+- [0003](../../docs/adr/0003-three-cleanup-channels.md), [0004](../../docs/adr/0004-combinators-wait-for-loser-finalization.md), [0005](../../docs/adr/0005-unhandled-exception-runtime-channel.md), [0006](../../docs/adr/0006-run-args-only-fluent-policy-composition.md): cleanup channels, combinator settlement, runtime errors, args-only `.run()`
+- [0002](../../docs/adr/0002-ophooks-rebuild-and-timeout-asymmetry.md) (superseded): historical `OpHooks` push-through detail
