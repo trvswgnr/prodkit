@@ -65,23 +65,6 @@ describe("DI", () => {
     expect(cause.key).toBe("DatabaseDependency");
   });
 
-  test("direct dependency implementation instances resolve correctly", async () => {
-    class InMemoryDatabase extends DatabaseDependency implements Database {
-      query = Op(function* (_sql: string, params: unknown[]) {
-        return { id: String(params[0]) };
-      }).mapErr((error): DatabaseError => error);
-    }
-
-    const op = Op(function* (id: string) {
-      const db = yield* DI.inject(DatabaseDependency);
-      return yield* db.query("user", [id]);
-    });
-
-    const result = await DI.provide(op, new InMemoryDatabase()).run("456");
-
-    expect(result.unwrap()).toEqual({ id: "456" });
-  });
-
   test("scoped dependencies resolve once per run and again on the next run", async () => {
     let resolves = 0;
     const op = Op(function* (id: string) {

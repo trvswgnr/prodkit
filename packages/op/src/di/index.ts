@@ -3,18 +3,20 @@ import type { Op } from "../index.js";
 import {
   DI_TAG,
   DI_TOKEN,
-  DependencyReqInstruction,
+  DI_SINGLETON_BINDING,
+  DI_LAZY_BINDING,
+  InjectInstruction,
   provideOp,
   type AnyDependency,
-  type Binding,
+  type SingletonBinding,
   type DependencyCtor,
-  type DependencyReq,
+  type Deps,
   type DependencyValue,
   type LazyBinding,
-  type ScopedResolveFn,
-  type UseEntry,
-  type ValidUseEntries,
-  type InferMetaReqs,
+  type LazyResolveFn,
+  type AnyBinding,
+  type ValidProvideEntries,
+  type RequiredDepsOfMeta,
   ProvidedMeta,
 } from "./internal.js";
 
@@ -32,8 +34,8 @@ export const Dependency = <const Name extends string>(key: Name): DependencyCtor
     readonly key = key;
     readonly [DI_TOKEN] = NEVER;
 
-    *[Symbol.iterator](): Generator<DependencyReqInstruction<T, this>, T, unknown> {
-      return yield* new DependencyReqInstruction<T, this>(DependencyToken);
+    *[Symbol.iterator](): Generator<InjectInstruction<T, this>, T, unknown> {
+      return yield* new InjectInstruction<T, this>(DependencyToken);
     }
 
     static readonly _tag = DI_TAG;
@@ -51,38 +53,34 @@ export const Dependency = <const Name extends string>(key: Name): DependencyCtor
 /** Yields a bound dependency value from the current run context. */
 export const inject = function* <C extends AnyDependency>(
   dependency: C,
-): Generator<
-  DependencyReqInstruction<DependencyValue<C>, DependencyReq<C>>,
-  DependencyValue<C>,
-  unknown
-> {
-  return yield* new DependencyReqInstruction<DependencyValue<C>, DependencyReq<C>>(dependency);
+): Generator<InjectInstruction<DependencyValue<C>, Deps<C>>, DependencyValue<C>, unknown> {
+  return yield* new InjectInstruction<DependencyValue<C>, Deps<C>>(dependency);
 };
 
 /** Eager singleton binding for {@link provide}. */
 export const singleton = <C extends AnyDependency, V = unknown>(
   dependency: C,
   value: DependencyValue<C, V>,
-): Binding<C, V> => ({
-  _tag: "DependencyBinding",
+): SingletonBinding<C, V> => ({
+  [DI_SINGLETON_BINDING]: true,
   dependency,
   value,
 });
 
-/** Per-run scoped binding resolved when first injected. */
+/** Per-run lazy binding resolved when first injected. */
 export const scoped = <C extends AnyDependency>(
   dependency: C,
-  resolve: ScopedResolveFn<C>,
+  resolve: LazyResolveFn<C>,
 ): LazyBinding<C> => ({
-  _tag: "DependencyLazyBinding",
+  [DI_LAZY_BINDING]: true,
   dependency,
   resolve,
 });
 
 /** Satisfies dependency requirements on an op before `.run()`. */
-export const provide = <T, E, A, M, const Entries extends readonly UseEntry[]>(
+export const provide = <T, E, A, M, const Entries extends readonly AnyBinding[]>(
   op: Op<T, E, A, M>,
-  ...entries: ValidUseEntries<Entries, InferMetaReqs<M>>
+  ...entries: ValidProvideEntries<Entries, RequiredDepsOfMeta<M>>
 ): Op<T, E, A, ProvidedMeta<M, Entries>> => provideOp(op, entries);
 
 /** Namespace object for dependency injection helpers. */
@@ -94,4 +92,4 @@ export const DI = Object.freeze({
   provide,
 });
 
-export type { InferReqs } from "./internal.js";
+export type { RequiredDeps } from "./internal.js";

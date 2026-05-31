@@ -4,12 +4,12 @@ import { type Blocking, type EmptyMeta, type InferOpMeta } from "../../src/inter
 import { type IsRunnable } from "../../src/core/types.js";
 import { DI, type Dependency } from "../../src/di/index.js";
 import type {
-  DependencyReq,
+  Deps,
   DependencyValue,
-  InferMetaReqs,
-  InferReqs,
-  ProvidedReq,
-  UseReq,
+  RequiredDepsOfMeta,
+  RequiredDeps,
+  RemainingRequiredDeps,
+  DepsOf,
   WithDIMeta,
 } from "../../src/di/internal.js";
 import { Policy } from "../../src/policy/index.js";
@@ -38,7 +38,7 @@ describe("DI type inference", () => {
       return 1;
     });
 
-    type _ = Assert<IsEqual<InferReqs<typeof op>, never>>;
+    type _ = Assert<IsEqual<RequiredDeps<typeof op>, never>>;
   });
 
   test("DI.inject contributes deps to plain Op", () => {
@@ -47,7 +47,7 @@ describe("DI type inference", () => {
       return yield* db.query("user", ["1"]);
     });
 
-    type _ = Assert<IsEqual<InferReqs<typeof op>, DatabaseDependency>>;
+    type _ = Assert<IsEqual<RequiredDeps<typeof op>, DatabaseDependency>>;
     type Meta = InferOpMeta<typeof op>;
     type _Req = Assert<IsEqual<Meta["deps"], Blocking<DatabaseDependency>>>;
     type _Annotated =
@@ -63,7 +63,7 @@ describe("DI type inference", () => {
       return yield* db.query("user", [id]);
     });
 
-    type _Reqs = Assert<IsEqual<InferReqs<typeof findUser>, DatabaseDependency>>;
+    type _Reqs = Assert<IsEqual<RequiredDeps<typeof findUser>, DatabaseDependency>>;
     type Meta = InferOpMeta<typeof findUser>;
     type _Req = Assert<IsEqual<Meta["deps"], Blocking<DatabaseDependency>>>;
   });
@@ -80,7 +80,9 @@ describe("DI type inference", () => {
       return user.id;
     });
 
-    expectTypeOf<InferReqs<typeof greet>>().toEqualTypeOf<DatabaseDependency | LoggerDependency>();
+    expectTypeOf<RequiredDeps<typeof greet>>().toEqualTypeOf<
+      DatabaseDependency | LoggerDependency
+    >();
   });
 
   test("provisioning removes only satisfied deps", () => {
@@ -100,29 +102,19 @@ describe("DI type inference", () => {
       DI.scoped(LoggerDependency, (_signal) => ({ log: () => {} })),
     );
 
-    type _PartialReqs = Assert<IsEqual<InferReqs<typeof partial>, LoggerDependency>>;
+    type _PartialReqs = Assert<IsEqual<RequiredDeps<typeof partial>, LoggerDependency>>;
     type _PartialMeta = Assert<
       IsEqual<InferOpMeta<typeof partial>["deps"], Blocking<LoggerDependency>>
     >;
-    type _FullReqs = Assert<IsEqual<InferReqs<typeof full>, never>>;
+    type _FullReqs = Assert<IsEqual<RequiredDeps<typeof full>, never>>;
   });
 
-  test("direct implementations satisfy matching dependency tokens only", () => {
-    class InMemoryDatabase extends DatabaseDependency implements Database {
-      query = Op(function* (_sql: string, params: unknown[]) {
-        return { id: String(params[0]) };
-      }).mapErr((error): DatabaseError => error);
-    }
-
+  test("provide rejects non-binding entries", () => {
     const op = Op(function* () {
       yield* DI.inject(DatabaseDependency);
-      yield* DI.inject(LoggerDependency);
     });
 
-    const partial = DI.provide(op, new InMemoryDatabase());
-    type _ = Assert<IsEqual<InferReqs<typeof partial>, LoggerDependency>>;
-
-    // @ts-expect-error - unrelated dependency implementation cannot satisfy DatabaseDependency
+    // @ts-expect-error - provision entries must be DI.singleton or DI.scoped bindings
     DI.provide(op, { log: () => {} });
   });
 
@@ -143,7 +135,7 @@ describe("DI type inference", () => {
     );
 
     const satisfied = DI.provide(dbOnly, DI.singleton(DatabaseDependency, db));
-    type _Satisfied = Assert<IsEqual<InferReqs<typeof satisfied>, never>>;
+    type _Satisfied = Assert<IsEqual<RequiredDeps<typeof satisfied>, never>>;
 
     DI.provide(
       satisfied,
@@ -160,15 +152,15 @@ describe("DI type inference", () => {
     });
 
     type Req = DatabaseDependency | LoggerDependency;
-    type _EntryReq = Assert<IsEqual<UseReq<typeof dbBinding, Req>, DatabaseDependency>>;
+    type _EntryReq = Assert<IsEqual<DepsOf<typeof dbBinding>, DatabaseDependency>>;
     type _Remaining = Assert<
-      IsEqual<ProvidedReq<readonly [typeof dbBinding], Req>, LoggerDependency>
+      IsEqual<RemainingRequiredDeps<readonly [typeof dbBinding], Req>, LoggerDependency>
     >;
     type _MetaReq = Assert<
-      IsEqual<InferMetaReqs<WithDIMeta<never, DatabaseDependency>>, DatabaseDependency>
+      IsEqual<RequiredDepsOfMeta<WithDIMeta<never, DatabaseDependency>>, DatabaseDependency>
     >;
     type _Value = Assert<IsEqual<DependencyValue<typeof DatabaseDependency>, Database>>;
-    type _Token = Assert<IsEqual<DependencyReq<typeof DatabaseDependency>, DatabaseDependency>>;
+    type _Token = Assert<IsEqual<Deps<typeof DatabaseDependency>, DatabaseDependency>>;
 
     expectTypeOf(DatabaseDependency).toExtend<Dependency<Database, "DatabaseDependency">>();
   });
@@ -188,12 +180,14 @@ describe("DI type inference", () => {
     const tapped = findUser("1").tap(() => log);
     const flatMapped = findUser("1").flatMap(() => log);
 
-    expectTypeOf<InferReqs<typeof mapped>>().toEqualTypeOf<DatabaseDependency>();
-    expectTypeOf<InferReqs<typeof timed>>().toEqualTypeOf<DatabaseDependency>();
-    type _TappedReqs = InferReqs<typeof tapped>;
-    type _Tapped = Assert<IsEqual<InferReqs<typeof tapped>, DatabaseDependency | LoggerDependency>>;
+    expectTypeOf<RequiredDeps<typeof mapped>>().toEqualTypeOf<DatabaseDependency>();
+    expectTypeOf<RequiredDeps<typeof timed>>().toEqualTypeOf<DatabaseDependency>();
+    type _TappedReqs = RequiredDeps<typeof tapped>;
+    type _Tapped = Assert<
+      IsEqual<RequiredDeps<typeof tapped>, DatabaseDependency | LoggerDependency>
+    >;
     type _FlatMapped = Assert<
-      IsEqual<InferReqs<typeof flatMapped>, DatabaseDependency | LoggerDependency>
+      IsEqual<RequiredDeps<typeof flatMapped>, DatabaseDependency | LoggerDependency>
     >;
   });
 
@@ -236,7 +230,7 @@ describe("DI type inference", () => {
     const runnable = DI.provide(op, DI.singleton(DatabaseDependency, db));
 
     expectTypeOf(runnable.run).toBeFunction();
-    type _ = Assert<IsEqual<InferReqs<typeof runnable>, never>>;
+    type _ = Assert<IsEqual<RequiredDeps<typeof runnable>, never>>;
   });
 
   test("Op.all child dependency requirements bubble to parent provision sites", () => {
@@ -257,10 +251,10 @@ describe("DI type inference", () => {
       ]);
     });
 
-    type _Reqs = Assert<IsEqual<InferReqs<typeof op>, DatabaseDependency>>;
+    type _Reqs = Assert<IsEqual<RequiredDeps<typeof op>, DatabaseDependency>>;
 
     const runnable = DI.provide(op, DI.singleton(DatabaseDependency, db));
-    type _ = Assert<IsEqual<InferReqs<typeof runnable>, never>>;
+    type _ = Assert<IsEqual<RequiredDeps<typeof runnable>, never>>;
   });
 
   test("full DI provision clears deps while other blocking keys remain", () => {

@@ -12,7 +12,7 @@ import {
   type Simplify,
   type StripEmpty,
 } from "../core/types.js";
-import { NEVER, hasOwn, isPromiseLike, unsafeCoerce } from "../shared.js";
+import { NEVER, hasBrand, isPromiseLike, unsafeCoerce } from "../shared.js";
 import type { Op } from "../index.js";
 import type { Dependency } from "./index.js";
 export class MissingDependencyError extends Error {
@@ -47,6 +47,8 @@ export class AlreadyProvidedError extends Error {
 
 export const DI_TOKEN = Symbol("prodkit.op.di.dependency");
 export const DI_TAG = "DI";
+export const DI_SINGLETON_BINDING: unique symbol = Symbol("prodkit.op.di.singleton-binding");
+export const DI_LAZY_BINDING: unique symbol = Symbol("prodkit.op.di.lazy-binding");
 
 const DI_ENV_EXTENSION = Symbol("prodkit.op.di.env");
 const MISSING_DEPENDENCY = Symbol("prodkit.op.di.missing-dependency");
@@ -69,21 +71,21 @@ export type DependencyValue<C, V = unknown> = C extends abstract new (
     ? T & V
     : never;
 
-export type Binding<C extends AnyDependency, V = unknown> = {
-  readonly _tag: "DependencyBinding";
+export type SingletonBinding<C extends AnyDependency, V = unknown> = {
+  readonly [DI_SINGLETON_BINDING]: true;
   readonly dependency: C;
   readonly value: DependencyValue<C, V>;
 };
-export type AnyBinding = Binding<AnyDependency>;
+export type AnySingletonBinding = SingletonBinding<AnyDependency>;
 
-export type ScopedResolveFn<C extends AnyDependency> = (
+export type LazyResolveFn<C extends AnyDependency> = (
   signal: AbortSignal,
 ) => DependencyValue<C> | PromiseLike<DependencyValue<C>>;
 
 export type LazyBinding<C extends AnyDependency> = {
-  readonly _tag: "DependencyLazyBinding";
+  readonly [DI_LAZY_BINDING]: true;
   readonly dependency: C;
-  readonly resolve: ScopedResolveFn<C>;
+  readonly resolve: LazyResolveFn<C>;
 };
 export type AnyLazyBinding = LazyBinding<AnyDependency>;
 
@@ -91,35 +93,31 @@ export type WithDIMeta<M, R> = [R] extends [never]
   ? NormalizeMeta<Omit<StripEmpty<M>, "deps">>
   : Simplify<Omit<StripEmpty<M>, "deps"> & { deps: Blocking<R> }>;
 
-export type InferMetaReqs<M> = M extends { deps: Blocking<infer R> } ? R : never;
+export type RequiredDepsOfMeta<M> = M extends { deps: Blocking<infer Required> } ? Required : never;
 
-export type InferReqs<C> =
-  C extends Op<unknown, unknown, infer _A, infer M> ? InferMetaReqs<M> : never;
+/** Unsatisfied dependency tokens blocking `.run()` on an op. */
+export type RequiredDeps<C> =
+  C extends Op<unknown, unknown, infer _A, infer M> ? RequiredDepsOfMeta<M> : never;
 
-export type DependencyReq<C> = C extends { readonly prototype: infer I } ? I : C;
+export type Deps<C> = C extends abstract new (...args: never[]) => infer I ? I : C;
 
-type SatisfiedDirectReq<P, R> = R extends unknown ? (P extends R ? R : never) : never;
+export type AnyBinding = AnySingletonBinding | AnyLazyBinding;
 
-export type UseEntry = AnyBinding | AnyLazyBinding | AnyDependency;
+export type DepsOf<P extends AnyBinding> =
+  P extends SingletonBinding<infer C> ? Deps<C> : P extends LazyBinding<infer C> ? Deps<C> : never;
 
-export type UseReq<P, R = unknown> =
-  P extends Binding<infer C>
-    ? DependencyReq<C>
-    : P extends LazyBinding<infer C>
-      ? DependencyReq<C>
-      : P extends AnyDependency
-        ? SatisfiedDirectReq<P, R>
-        : never;
-
-export type ProvidedReq<Entries extends readonly UseEntry[], R> = Exclude<
+export type RemainingRequiredDeps<Entries extends readonly AnyBinding[], R> = Exclude<
   R,
-  UseReq<Entries[number], R>
+  DepsOf<Entries[number]>
 >;
 
-type InvalidUseReq<Entries extends readonly UseEntry[], R> = Exclude<UseReq<Entries[number], R>, R>;
+type ExcessProvidedDeps<Entries extends readonly AnyBinding[], R> = Exclude<
+  DepsOf<Entries[number]>,
+  R
+>;
 
-export type ValidUseEntries<Entries extends readonly UseEntry[], R> = [
-  InvalidUseReq<Entries, R>,
+export type ValidProvideEntries<Entries extends readonly AnyBinding[], R> = [
+  ExcessProvidedDeps<Entries, R>,
 ] extends [never]
   ? Entries
   : never;
@@ -128,17 +126,14 @@ type UpdateProvidedMeta<M, R> = [R] extends [never]
   ? NormalizeMeta<Omit<StripEmpty<M>, "deps">>
   : Simplify<Omit<StripEmpty<M>, "deps"> & { deps: Blocking<R> }>;
 
-export type ProvidedMeta<M, Entries extends readonly UseEntry[]> = UpdateProvidedMeta<
+export type ProvidedMeta<M, Entries extends readonly AnyBinding[]> = UpdateProvidedMeta<
   M,
-  ProvidedReq<Entries, InferMetaReqs<M>>
+  RemainingRequiredDeps<Entries, RequiredDepsOfMeta<M>>
 >;
 
-export class DependencyReqInstruction<T, R> implements CustomInstruction<
-  T,
-  WithDIMeta<EmptyMeta, R>
-> {
-  readonly _tag = "DependencyReqInstruction";
-  readonly [CUSTOM_INSTRUCTION_META]: WithDIMeta<EmptyMeta, R> = NEVER;
+export class InjectInstruction<T, D> implements CustomInstruction<T, WithDIMeta<EmptyMeta, D>> {
+  readonly _tag = "InjectInstruction";
+  readonly [CUSTOM_INSTRUCTION_META]: WithDIMeta<EmptyMeta, D> = NEVER;
   readonly dependency: AnyDependency;
 
   constructor(dependency: AnyDependency) {
@@ -146,118 +141,72 @@ export class DependencyReqInstruction<T, R> implements CustomInstruction<
   }
 
   resolve(context: RunContext<readonly unknown[]>): T | PromiseLike<T> {
-    assertNotAborted(context.signal);
+    if (context.signal.aborted) {
+      throw abortReason(context.signal);
+    }
+
     const env = readEnv(context);
-    const value = resolveDependencyValue(env, this.dependency, context.signal);
+    const value = resolveInjectedValue(env, this.dependency, context.signal);
+
     if (value === MISSING_DEPENDENCY) {
       throw new MissingDependencyError(this.dependency.key);
     }
+
     if (isPromiseLike(value)) {
       return value.then((resolved) =>
-        // SAFETY: lazy binding resolution is checked before coercion.
+        // SAFETY: lazy binding resolution is checked before coercion
         unsafeCoerce(resolved),
       );
     }
-    // SAFETY: resolved dependency values are typed at the instruction boundary.
+
+    // SAFETY: resolved dependency values are typed at the instruction boundary
     return unsafeCoerce(value);
   }
 
   *[Symbol.iterator](): Generator<this, T, unknown> {
-    return (yield this) as T;
+    // SAFETY: InjectInstruction is a CustomInstruction and its yield type is the same as its resolve type
+    return unsafeCoerce(yield this);
   }
 
-  static is(value: unknown): value is DependencyReqInstruction<unknown, AnyDependency> {
-    return value instanceof DependencyReqInstruction;
+  static is(value: unknown): value is InjectInstruction<unknown, AnyDependency> {
+    return value instanceof InjectInstruction;
   }
 }
 
-type Env = Map<AnyDependency, unknown>;
-
-function isDependencyBinding(value: unknown): value is AnyBinding {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    hasOwn(value, "_tag") &&
-    value._tag === "DependencyBinding"
-  );
+function isLazyBinding(value: unknown): value is AnyLazyBinding {
+  return hasBrand(value, DI_LAZY_BINDING);
 }
 
-function isDependencyLazyBinding(value: unknown): value is AnyLazyBinding {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    hasOwn(value, "_tag") &&
-    value._tag === "DependencyLazyBinding"
-  );
-}
-
-function dependencyTokenFromEntry(entry: AnyDependency): AnyDependency {
-  const ctor = entry.constructor;
-  if (typeof ctor !== "function") return entry;
-
-  let current: unknown = ctor;
-  while (typeof current === "function") {
-    if (
-      hasOwn(current, "_tag") &&
-      current._tag === DI_TAG &&
-      hasOwn(current, "key") &&
-      hasOwn(current, DI_TOKEN)
-    ) {
-      // SAFETY: prototype walk finds the DI token constructor when present.
-      return unsafeCoerce(current);
-    }
-    current = Object.getPrototypeOf(current);
-  }
-
-  return entry;
-}
-
-function sameDependencyKey(a: AnyDependency, b: AnyDependency): boolean {
+function isMatchingDependency(a: AnyDependency, b: AnyDependency): boolean {
   return a === b || a.key === b.key;
 }
 
+type Env = Map<AnyDependency, DependencyValue<AnyDependency>>;
+
 function findProvidedToken(env: Env, dependency: AnyDependency): AnyDependency | undefined {
   for (const token of env.keys()) {
-    if (sameDependencyKey(token, dependency)) return token;
+    if (isMatchingDependency(token, dependency)) return token;
   }
   return undefined;
 }
 
-function withDependencyBinding(env: Env, dependency: AnyDependency, value: unknown): Env {
-  if (findProvidedToken(env, dependency) !== undefined) {
-    throw new AlreadyProvidedError(dependency.key);
+function withProvisionEntry(env: Env, entry: AnyBinding): Env {
+  if (findProvidedToken(env, entry.dependency) !== undefined) {
+    throw new AlreadyProvidedError(entry.dependency.key);
   }
-  env.set(dependency, value);
+  const value = hasBrand(entry, DI_SINGLETON_BINDING) ? entry.value : entry;
+  env.set(entry.dependency, value);
   return env;
-}
-
-function withDependencyEntry(env: Env, entry: UseEntry): Env {
-  if (isDependencyBinding(entry)) {
-    return withDependencyBinding(env, entry.dependency, entry.value);
-  }
-  if (isDependencyLazyBinding(entry)) {
-    return withDependencyBinding(env, entry.dependency, entry);
-  }
-  return withDependencyBinding(env, dependencyTokenFromEntry(entry), entry);
 }
 
 function readEnv(context: RunContext<readonly unknown[]>): Env {
   const env = context.extensions.get(DI_ENV_EXTENSION);
-  // SAFETY: RunContext.extensions stores the DI env map under an internal key.
-  if (env instanceof Map) return unsafeCoerce(env);
+  if (env instanceof Map) return env;
   return new Map();
 }
 
 function abortReason(signal: AbortSignal): unknown {
   return signal.reason ?? new Error("Aborted");
-}
-
-function assertNotAborted(
-  signal: AbortSignal,
-): asserts signal is AbortSignal & { readonly aborted: false } {
-  if (signal.aborted) {
-    throw abortReason(signal);
-  }
 }
 
 function awaitWithSignalAbort<T>(suspended: PromiseLike<T>, signal: AbortSignal): Promise<T> {
@@ -292,7 +241,7 @@ function awaitWithSignalAbort<T>(suspended: PromiseLike<T>, signal: AbortSignal)
   });
 }
 
-function resolveDependencyValue(
+function resolveInjectedValue(
   env: Env,
   dependency: AnyDependency,
   signal: AbortSignal,
@@ -301,38 +250,37 @@ function resolveDependencyValue(
   if (matchedToken === undefined) return MISSING_DEPENDENCY;
 
   const matchedValue = env.get(matchedToken);
+  if (!isLazyBinding(matchedValue)) return matchedValue;
 
-  if (isDependencyLazyBinding(matchedValue)) {
-    const lazyBinding = matchedValue;
-    const produced = lazyBinding.resolve(signal);
-    if (isPromiseLike(produced)) {
-      const inflight = awaitWithSignalAbort(produced, signal).then(
-        (resolved) => {
-          env.set(matchedToken, resolved);
-          return resolved;
-        },
-        (error) => {
-          env.set(matchedToken, lazyBinding);
-          return Promise.reject(error);
-        },
-      );
-      env.set(matchedToken, inflight);
-      return inflight;
-    }
+  const produced = matchedValue.resolve(signal);
+
+  if (!isPromiseLike(produced)) {
     env.set(matchedToken, produced);
     return produced;
   }
 
-  return matchedValue;
+  const inflight = awaitWithSignalAbort(produced, signal).then(
+    (resolved) => {
+      env.set(matchedToken, resolved);
+      return resolved;
+    },
+    (error) => {
+      env.set(matchedToken, matchedValue);
+      return Promise.reject(error);
+    },
+  );
+
+  env.set(matchedToken, inflight);
+  return inflight;
 }
 
 function extendContext(
   context: RunContext<readonly unknown[]>,
-  entries: readonly UseEntry[],
+  entries: readonly AnyBinding[],
 ): RunContext<readonly unknown[]> {
   const parentEnv = readEnv(context);
   const env = entries.reduce(
-    (current, entry) => withDependencyEntry(current, entry),
+    (current, entry) => withProvisionEntry(current, entry),
     new Map(parentEnv),
   );
   const extensions = new Map(context.extensions);
@@ -340,7 +288,7 @@ function extendContext(
   return createRunContext(context.signal, context.args, extensions);
 }
 
-export function provideOp<T, E, A, M, const Entries extends readonly UseEntry[]>(
+export function provideOp<T, E, A, M, const Entries extends readonly AnyBinding[]>(
   op: Op<T, E, A, M>,
   entries: Entries,
 ): Op<T, E, A, ProvidedMeta<M, Entries>> {
