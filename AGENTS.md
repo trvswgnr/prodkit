@@ -26,7 +26,7 @@
 ## Learned Workspace Facts
 
 - `pnpm install` must be run outside the sandbox (request full permissions / non-sandbox); it hangs or fails reliably in the default sandbox.
-- Run `pnpm run gate` outside the sandbox by default; its smoke step builds a temporary mini-pnpm workspace (reuses the repo `catalog:` block), runs `pnpm install` there, then `pnpm --filter @prodkit/examples run smoke`, which reliably times out or hangs in restricted/no-network sandboxes.
+- Run `pnpm run gate` outside the sandbox by default; the final `@prodkit/tools` pack smoke step needs network and a temp `pnpm install`, which reliably times out or hangs in restricted/no-network sandboxes.
 - Node 24.x is Active LTS (current LTS line; Node 22.x is maintenance LTS only). Contributors need Node >=24.14.0. Do not suggest Node 22 or 20 for this workspace.
 - Contributors should use `pnpm@10` locally (CI/release stays pinned to `10.11.0`).
 - Shared workspace dev-tool versions (`typescript`, `vitest`, `oxfmt`, `oxlint`, `tsdown`, `@vitest/coverage-v8`) are declared once under `catalog:` in `pnpm-workspace.yaml`; workspace packages (including `packages/*`, repo root, `examples`, `tools`, `benchmarks`) reference them as `"catalog:"`. Pack/runtime smoke harnesses also use `pnpm` so those manifests stay valid outside the main workspace checkout.
@@ -39,5 +39,5 @@
 - `@prodkit/std` is a general runtime-agnostic utility layer (typed helpers for platform gaps, prefer-native, zero runtime deps, tree-shakeable subpaths such as `@prodkit/std/array`); it is not the home for op-specific features. DI lives on `@prodkit/op/di`.
 - `@prodkit/op/hkt` owns the reusable HKT primitives (`HKT`, `HKTArg`, `Apply`, `HKT_ARGS`, `HKT_RESULT`); policy consumes those primitives instead of carrying policy-specific HKT machinery.
 - `@prodkit/op/policy` owns retry, timeout, cancel, release, Delay, retry policy types, runtime policy wrappers, and the open `Policy.define(...)` protocol; core plan internals should not grow retry/timeout/cancel-specific methods. `Policy.release((value) => ...)` keeps success-value contextual typing through the contravariant `OpPolicyInput` phantom, not a release-specific `.with(...)` overload.
-- Root `pnpm run gate` runs Turborepo in two phases: `build`, `typecheck`, `test`, `lint`, and `fmt:check` first (upstream `build` before downstream `typecheck`), then `@prodkit/tools` pack smoke only; do not run `examples#smoke` in gate -- it races workspace `dist/` with tools smoke rebuilds and is already covered by the tools pack harness.
+- Root `pnpm run gate` (`package.json`): turbo `build`, `typecheck`, `test`, `lint`, `fmt:check` (upstream `build` before downstream `typecheck`), then `@prodkit/tools` `adr:check`, `changelog:api:check`, and `smoke` (`tools/run-examples-smoke.ts` pack harness: temp workspace with repo `catalog:`, `pnpm install`, then `pnpm --filter @prodkit/examples run smoke`). Do not add turbo `examples#smoke` to gate; it races workspace `dist/` with the pack harness rebuild.
 - GitHub repository canonical path is `trvswgnr/prodkit` (renamed from `trvswgnr/op`).
