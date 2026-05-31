@@ -150,7 +150,10 @@ Public exports:
   `TimeoutPolicyAttachment`, `CancelPolicyAttachment`, `ReleasePolicyAttachment`, `BuiltInPolicy`,
   `OpPolicy`, `OpPolicyInput`, `OpPolicySource`, `OpPolicyType`, `OpPolicyArg`, `OpPolicyArgs`,
   `OpPolicyResult`, `ApplyOpPolicy`
-- Re-exported HKT symbols: `HKT`, `HKTArg`, `Apply`, `HKT_ARGS`, `HKT_RESULT`
+
+Custom policies that transform `Op<T, E, A, M>` at the type level use the HKT protocol; import
+`HKT`, `HKTArg`, `Apply`, `HKT_ARGS`, and `HKT_RESULT` from `@prodkit/op/hkt` (see below), not from
+this subpath.
 
 Policy ordering semantics are summarized under [`.with(policy)`](#withpolicy) below and in
 [`DESIGN.md`](DESIGN.md#policy-ordering-retry-and-timeout).
@@ -177,8 +180,8 @@ type Applied = Apply<ToRecord, readonly [number]>;
 ```
 
 Public exports: `HKT_ARGS`, `HKT_RESULT`, `HKT`, `HKTArg`, `Apply` (types and symbol constants).
-Used by `@prodkit/op/policy` for custom `.with(...)` attachments; import from here when building
-other op extensions.
+Import from here for custom `Policy.define(...)` attachments and other op extensions; the policy
+subpath does not re-export these symbols.
 
 ### `@prodkit/op/internal`
 

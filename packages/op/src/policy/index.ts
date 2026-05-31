@@ -1,8 +1,6 @@
-import { HKT_ARGS, HKT_RESULT } from "../hkt.js";
 import { definePolicy } from "./types.js";
 import { cancelRewriter, releasePlan, retryRewriter, timeoutRewriter } from "./plan.js";
 import { Delay, normalizeRetryPolicy } from "./retry-policy.js";
-import type { Apply, HKT, HKTArg } from "../hkt.js";
 import type {
   ApplyOpPolicy,
   BuiltInPolicy,
@@ -60,15 +58,12 @@ export function release<T>(releaseFn: ReleaseFn<T>): ReleasePolicyAttachment<T> 
   });
 }
 
-export { Delay, HKT_ARGS, HKT_RESULT, definePolicy, definePolicy as define };
+export { Delay, definePolicy, definePolicy as define };
 export type {
-  Apply,
   ApplyOpPolicy,
   BuiltInPolicy,
   CancelPolicyAttachment,
   CancelPolicyType,
-  HKT,
-  HKTArg,
   OpPolicy,
   OpPolicyArg,
   OpPolicyArgs,

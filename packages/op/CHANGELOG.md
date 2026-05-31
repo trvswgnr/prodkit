@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- Removed `HKT`, `HKTArg`, `Apply`, `HKT_ARGS`, and `HKT_RESULT` re-exports from
+  `@prodkit/op/policy`; import them from `@prodkit/op/hkt` only.
 - Removed extension-only exports from the main `@prodkit/op` entry (`Blocking`, `withBlocking`,
   `BlockingOp`, `EmptyMeta`, `CustomInstruction`, `MergeMeta`, `InferOpMeta`, `InferInstructionMeta`,
   `Meta`); import them from `@prodkit/op/internal` instead. `EnterContext`, `ExitContext`, and

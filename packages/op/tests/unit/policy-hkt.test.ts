@@ -1,4 +1,5 @@
 import { describe, expect, expectTypeOf, test } from "vitest";
+import { HKT_RESULT } from "../../src/hkt.js";
 import { Op, type Op as OpType } from "../../src/index.js";
 import * as Policy from "../../src/policy/index.js";
 import { Result } from "../../src/result.js";
@@ -9,7 +10,7 @@ type PolicyRejected<Reason extends string> = {
 };
 
 interface RejectWhenPolicyType<Reason extends string> extends Policy.OpPolicyType {
-  readonly [Policy.HKT_RESULT]: Policy.OpPolicyArgs<
+  readonly [HKT_RESULT]: Policy.OpPolicyArgs<
     Policy.OpPolicyArg<this, 0>,
     Policy.OpPolicyArg<this, 1> | PolicyRejected<Reason>,
     Policy.OpPolicyArg<this, 2>,
