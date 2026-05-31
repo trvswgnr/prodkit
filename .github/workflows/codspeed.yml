@@ -71,6 +71,9 @@ jobs:
       - name: Build @prodkit/op
         run: pnpm --filter @prodkit/op run build
 
+      - name: Install libc debug symbols
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libc6-dbg
+
       - name: Run benchmarks (walltime)
         uses: CodSpeedHQ/action@9d332c4d90b43981c3e55ae8e38e68709996240f # v4.17.0
         with:
