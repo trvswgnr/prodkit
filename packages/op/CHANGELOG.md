@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `Policy.cancel` now settles when the bound signal aborts while inner `Op.try` work
+  ignores the signal, instead of hanging until that work completes (aligned with
+  `Policy.timeout` fan-out behavior for non-cooperative children).
 - `Op.race` and `Op.any` no longer hang when a losing branch ignores abort: fan-out children
   now run through the interrupting drive path so aborted losers unwind even when they never
   observe the abort signal.

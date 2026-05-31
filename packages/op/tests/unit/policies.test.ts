@@ -3,6 +3,7 @@ import { fail, fromGenFn, succeed, _try } from "../../src/builders.js";
 import { TimeoutError, UnhandledException } from "../../src/errors.js";
 import { Policy } from "../../src/policy/index.js";
 import type { RetryPolicy } from "../../src/policy/index.js";
+import { neverSettlingTry, settleOutcome } from "../support/utils.js";
 
 describe("Policy.retry", () => {
   class FetchError extends Error {
@@ -494,6 +495,21 @@ describe("Policy.cancel", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  test("Policy.cancel settles when inner Op.try ignores abort", async () => {
+    const controller = new AbortController();
+    const abortReason = new Error("request cancelled");
+    const program = neverSettlingTry().with(Policy.cancel(controller.signal));
+
+    const runPromise = program.run();
+    controller.abort(abortReason);
+
+    expect(await settleOutcome(runPromise)).toBe("settled");
+    const result = await runPromise;
+    assert(result.isErr(), "result should be Err");
+    assert(result.error instanceof UnhandledException);
+    expect(result.error.cause).toBe(abortReason);
   });
 });
 

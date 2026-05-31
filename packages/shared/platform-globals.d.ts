@@ -38,6 +38,7 @@ declare global {
     ...args: unknown[]
   ): number;
   function clearTimeout(id: ReturnType<typeof setTimeout> | undefined): void;
+  function queueMicrotask(callback: () => void): void;
 }
 
 export {};

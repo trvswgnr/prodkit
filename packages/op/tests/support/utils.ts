@@ -1,5 +1,11 @@
+import { _try } from "../../src/builders.js";
+
 export function neverSettling(): Promise<never> {
   return new Promise<never>(() => {});
+}
+
+export function neverSettlingTry() {
+  return _try(() => neverSettling());
 }
 
 export async function settleOutcome(
