@@ -94,7 +94,4 @@ export const DI = Object.freeze({
   provide,
 });
 
-export type InferErr<X> = X extends Op<infer _T, infer E, infer _A> ? E : never;
-export type InferOk<X> = X extends Op<infer T, infer _E, infer _A> ? T : never;
-export type InferArgs<X> = X extends Op<infer _T, infer _E, infer A> ? A : never;
 export type { InferReqs } from "./internal.js";

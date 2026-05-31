@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - No entries yet.
 
+### Removed
+
+- Removed unused `InferOk`, `InferErr`, and `InferArgs` type exports from `@prodkit/op/di`; use `Op`
+  conditional types or `better-result`'s `InferErr` for result typing. `InferReqs` remains for
+  dependency metadata.
+
 ## [0.1.75] - 2026-05-31
 
 ### Added

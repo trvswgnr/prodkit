@@ -109,8 +109,8 @@ const runnable = DI.provide(getUser, DI.singleton(DatabaseDependency, db));
 const result = await runnable.run(1);
 ```
 
-Public exports: `DI`, `Dependency`, `inject`, `provide`, `scoped`, `singleton`, and helper types
-(`InferArgs`, `InferErr`, `InferOk`, `InferReqs`).
+Public exports: `DI`, `Dependency`, `inject`, `provide`, `scoped`, `singleton`, and `InferReqs` for
+unsatisfied dependency requirements on an op.
 
 Runnable consumer examples live under
 [`examples/op/di/`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/di/) (onboarding,
