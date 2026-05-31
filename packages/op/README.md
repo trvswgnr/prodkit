@@ -23,6 +23,49 @@ Write code that stays readable as it grows and keep predictable
 behavior in production. Compose steps top-to-bottom, apply retry, timeout, and cancellation as
 policy, and run parallel work without scattering reliability logic across your app.
 
+## Contents
+
+- [Why this exists](#why-this-exists)
+- [Installation](#installation)
+- [Dependencies (`better-result`)](#dependencies-better-result)
+- [Subpath exports](#subpath-exports)
+  - [`@prodkit/op/di`](#prodkitopdi)
+  - [`@prodkit/op/policy`](#prodkitoppolicy)
+  - [`@prodkit/op/hkt`](#prodkitophkt)
+  - [`@prodkit/op/internal`](#prodkitopinternal)
+- [Quick start](#quick-start)
+- [Core API](#core-api)
+  - [`Op(fn)`](#opfn)
+  - [`Op.of(value)`](#opofvalue)
+  - [`Op.fail(error)`](#opfailerror)
+  - [`Op.defer(finalize)`](#opdeferfinalize)
+  - [`Op.sleep(ms)`](#opsleepms)
+  - [Sleep vs timeout input validation](#sleep-vs-timeout-input-validation)
+  - [`Op.try(f, onError?)`](#optryf-onerror)
+  - [`Op.run(op, ...args)`](#oprunop-args)
+  - [`Op.empty`](#opempty)
+  - [`.run(...args)`](#runargs)
+  - [`.map(f)`](#mapf)
+  - [`.flatMap(f)`](#flatmapf)
+  - [`.tap(f)`](#tapf)
+  - [`.tapErr(f)`](#taperrf)
+  - [`.mapErr(f)`](#maperrf)
+  - [`.recover(predicate, handler)`](#recoverpredicate-handler)
+  - [`.with(policy)`](#withpolicy)
+  - [Cooperative cancellation contract](#cooperative-cancellation-contract)
+  - [`.with(Policy.release(release))`](#withpolicyrelease)
+  - [`.on("exit", finalize)`](#onexit-finalize)
+  - [`.on("enter", initialize)`](#onenter-initialize)
+- [Typed errors](#typed-errors)
+- [Retry defaults](#retry-defaults)
+- [Built-in errors](#built-in-errors)
+- [Concurrent combinators](#concurrent-combinators)
+- [Webhook consumer example](#webhook-consumer-example)
+- [More examples](#more-examples)
+- [Performance](#performance)
+- [Contributing](#contributing)
+- [Publishing](#publishing)
+
 ## Why this exists
 
 Async TypeScript has two huge flaws: you can't see from a function's type what it might fail with, and the standard concurrency helpers happily let sibling tasks keep running after one of them blows up. `@prodkit/op` fixes both. It builds on `better-result`'s `Result` model, generator composition, and typed error inference, then adds an async runtime with suspend/resume semantics, structured resource cleanup, cancellation-aware concurrency, and composable retry/timeout policies on top. Concurrency combinators thread cancellation through every child, so when one fails the rest actually stop instead of burning quota in the background. Retry, timeout, and external cancellation attach through `.with(Policy.*)` before `.run()`. Minimal runtime dependencies, a small footprint, and an API that's easy to learn and use.
@@ -374,6 +417,20 @@ const poll = Op(function* () {
   }
 });
 ```
+
+### Sleep vs timeout input validation
+
+Both validate at run time (when the wrapped operation first runs), not at attach time. Invalid
+values settle to `Err(UnhandledException)` with the validation error as `cause`; they do not throw
+out of `.run()`.
+
+| Input | Negative | Non-finite |
+| --- | --- | --- |
+| `Op.sleep(ms)` | Normalized to `0` | `Err(UnhandledException)` |
+| `Policy.timeout(timeoutMs)` | `Err(UnhandledException)` (not clamped) | `Err(UnhandledException)` |
+
+See [`DESIGN.md`](DESIGN.md#invariant-input-normalization-and-validation-at-run-time) for the full
+invariant table, including retry policy validation.
 
 ### `Op.try(f, onError?)`
 

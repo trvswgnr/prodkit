@@ -33,7 +33,11 @@ pnpm run gate
 ```
 
 The quality gate includes a consumer-level smoke test that installs `@prodkit/op` and `@prodkit/std`
-from `npm pack` tarballs via `examples/` in an isolated temp workspace.
+from `npm pack` tarballs via `examples/` in an isolated temp workspace. That harness still builds
+and packs `@prodkit/std` even though `packages/std/src/` is effectively empty today: it verifies
+tarball layout, `exports` wiring, and publish plumbing for the second npm package, not utility
+module coverage. When `@prodkit/std` subpaths ship real code, the same pack path exercises them
+without changing the gate shape.
 
 Pull requests and pushes to `main` run the same gate in `.github/workflows/ci.yml`.
 CI also publishes a Vitest coverage report as a workflow artifact (`op-coverage`) so reviewers can
