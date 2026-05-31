@@ -10,7 +10,7 @@ import {
 } from "./core/types.js";
 import type { Op } from "./index.js";
 import { SuspendInstruction } from "./core/instructions.js";
-import { createRunContext, drive } from "./core/runtime.js";
+import { createRunContext, drive, driveInterruptOnAbort } from "./core/runtime.js";
 import { Result, type Err } from "./result.js";
 import { makeCoreOp } from "./core/fluent.js";
 import type { AnyNullaryOp } from "./core/types.js";
@@ -38,16 +38,24 @@ type FanOut<T, E> = {
   detach: () => void;
 };
 
+type DriveChild = <T, E, M>(
+  op: Op<T, E, [], M>,
+  context: RunContext<readonly unknown[]>,
+) => Promise<Result<T, E | UnhandledException>>;
+
 /**
  * Fan-out contract:
  * - Every child gets its own AbortController so winner/loser cancellation can be isolated
  * - We check `outerSignal.aborted` before adding a listener so already-cancelled parents
  *   synchronously cascade into children instead of missing the abort edge
  * - Callers must invoke `detach()` once the combinator settles to avoid retaining listeners
+ * - Pass `drive` for cooperative child cancel; pass `driveInterruptOnAbort` when aborted
+ *   branches must unwind even if they never observe the signal (`Op.race`, `Op.any`)
  */
 function fanOut<T, E>(
   ops: readonly Op<T, E, []>[],
   outerContext: RunContext<readonly unknown[]>,
+  driveChild: DriveChild,
 ): FanOut<T, E> {
   const entries = ops.map((op) => ({ op, controller: new AbortController() }));
   const cascade = () => entries.forEach((e) => e.controller.abort(outerContext.signal.reason));
@@ -58,7 +66,10 @@ function fanOut<T, E>(
   const detach = () => outerContext.signal.removeEventListener("abort", cascade);
   const controllers = entries.map((e) => e.controller);
   const runs = entries.map((e) =>
-    drive(e.op, createRunContext(e.controller.signal, outerContext.args, outerContext.extensions)),
+    driveChild(
+      e.op,
+      createRunContext(e.controller.signal, outerContext.args, outerContext.extensions),
+    ),
   );
 
   return { runs, controllers, detach };
@@ -210,7 +221,7 @@ async function driveAllUnbounded<T, E>(
   ops: readonly Op<T, E, []>[],
   outerContext: RunContext<readonly unknown[]>,
 ): Promise<Result<T[], E | UnhandledException>> {
-  const fan = fanOut(ops, outerContext);
+  const fan = fanOut(ops, outerContext, drive);
 
   let firstErr: Err<T[], E | UnhandledException> | undefined;
   const observed = fan.runs.map((p, i) =>
@@ -324,7 +335,7 @@ async function driveAllSettledUnbounded<T, E>(
   ops: readonly Op<T, E, []>[],
   outerContext: RunContext<readonly unknown[]>,
 ): Promise<Result<T, E | UnhandledException>[]> {
-  const fan = fanOut(ops, outerContext);
+  const fan = fanOut(ops, outerContext, drive);
   const results = await Promise.all(fan.runs);
   fan.detach();
   return results;
@@ -368,6 +379,7 @@ export function anyOp<const Ops extends readonly AnyNullaryOp[]>(
  * - All children run concurrently
  * - First successful child becomes the winner and aborts remaining siblings
  * - The combinator still waits for aborted losers to settle so cleanup/finalizers complete
+ * - Fan-out uses `driveInterruptOnAbort` so losers unwind even when they ignore abort
  * - If no success exists, returns ErrorGroup with errors in input order
  *
  * `Op.any` waits for aborted losers to settle so cleanup/finalizers finish
@@ -382,7 +394,7 @@ async function driveAny<T, E>(
     return Promise.resolve(e);
   }
 
-  const fan = fanOut(ops, outerContext);
+  const fan = fanOut(ops, outerContext, driveInterruptOnAbort);
 
   let winner: { value: T } | undefined;
   const results = await Promise.all(
@@ -431,6 +443,7 @@ export function raceOp<const Ops extends readonly AnyNullaryOp[]>(
  * - First settler (Ok or Err) wins and aborts the rest
  * - The combinator waits for aborted losers to settle so cleanup/finalizers complete
  *   before returning the winner's outcome
+ * - Fan-out uses `driveInterruptOnAbort` so losers unwind even when they ignore abort
  *
  * `Op.race` returns the first settler's outcome, but waits for aborted
  * losers to settle so cleanup/finalizers complete before run() returns
@@ -444,7 +457,7 @@ async function driveRace<T, E>(
     return Promise.resolve(Result.err(new UnhandledException({ cause })));
   }
 
-  const fan = fanOut(ops, outerContext);
+  const fan = fanOut(ops, outerContext, driveInterruptOnAbort);
 
   let winner: Result<T, E | UnhandledException> | undefined;
   await Promise.all(

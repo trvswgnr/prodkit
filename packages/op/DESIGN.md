@@ -75,7 +75,7 @@ Why this matters:
 Enforced by code paths:
 
 - `packages/op/src/combinators.ts` (`driveAll`, `driveAllSettled`, `driveAny`, `driveRace`)
-- `packages/op/src/combinators.ts` (`fanOut`): isolates child cancellation and detaches parent abort listeners on settle
+- `packages/op/src/combinators.ts` (`fanOut`): isolates child cancellation and detaches parent abort listeners on settle; `Op.any` / `Op.race` fan-out through `driveInterruptOnAbort` so aborted losers unwind even when they ignore the signal
 
 Representative tests:
 
@@ -84,6 +84,8 @@ Representative tests:
 - `packages/op/tests/unit/combinators.test.ts` (`preserves index order when failures settle out of order`)
 - `packages/op/tests/unit/combinators.test.ts` (`waits for loser finalization before returning the winner`)
 - `packages/op/tests/unit/combinators.test.ts` (`waits for loser finalization before returning winner result`)
+- `packages/op/tests/unit/combinators.test.ts` (`settles when a winner succeeds and a loser ignores abort`)
+- `packages/op/tests/unit/combinators.test.ts` (`settles when the winner succeeds and a loser ignores abort`)
 
 ## Guardrails for future changes
 
@@ -163,15 +165,18 @@ Combinator contracts live in `packages/op/src/combinators.ts` alongside the full
 
 `Op.any` runs children together under one outer abort umbrella. First success picks the winner and
 abort-signals the losers, but `.run()` still waits until those aborted branches finish so cleanup
-sticks ("waits for loser finalization before returning the winner"). If everyone fails you get an
+sticks ("waits for loser finalization before returning the winner"). Fan-out children use
+`driveInterruptOnAbort` so losers that never observe `AbortSignal` still unwind. If everyone fails you get an
 `ErrorGroup` listing errors in declaration order regardless of settle order ("preserves index order
 when failures settle out of order"). A loser failing while reacting to abort does not trump the
 winner's success ("winner success keeps precedence over loser abort-time failures").
 
 `Op.race` is simpler: whoever settles first, ok or err, picks the outcome and triggers abort for
 everyone else, with the same promise that losers finish teardown before `.run()` returns ("waits
-for loser finalization before returning winner result"). The losing branch still can't override the
-chosen error ("winner error keeps precedence over loser abort-time failures").
+for loser finalization before returning winner result"). Fan-out children use `driveInterruptOnAbort`
+so losers that never observe `AbortSignal` still reject in-flight suspends and unwind. The losing
+branch still can't override the chosen error ("winner error keeps precedence over loser abort-time
+failures").
 
 ## Invariant: input normalization and validation at run time
 

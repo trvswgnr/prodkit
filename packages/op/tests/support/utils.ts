@@ -1,3 +1,17 @@
+export function neverSettling(): Promise<never> {
+  return new Promise<never>(() => {});
+}
+
+export async function settleOutcome(
+  run: Promise<unknown>,
+  withinMs = 50,
+): Promise<"settled" | "timeout"> {
+  return Promise.race([
+    run.then(() => "settled" as const),
+    new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), withinMs)),
+  ]);
+}
+
 export function resolveAfter<T>(value: T, ms: number) {
   return new Promise<T>((resolve) => setTimeout(() => resolve(value), ms));
 }

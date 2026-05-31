@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `Op.race` and `Op.any` no longer hang when a losing branch ignores abort: fan-out children
+  now run through the interrupting drive path so aborted losers unwind even when they never
+  observe the abort signal.
+
 ### Changed
 
 - Upgraded the monorepo toolchain to pnpm 11 and enabled an explicit 24-hour dependency

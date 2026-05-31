@@ -4,8 +4,10 @@ import { TaggedError, UnhandledException } from "../../src/errors.js";
 import {
   deferredPromise,
   invalidConcurrencies,
+  neverSettling,
   rejectAfter,
   resolveAfter,
+  settleOutcome,
   trackAbortListeners,
   TRUE,
 } from "../support/utils.js";
@@ -344,20 +346,14 @@ describe("Op.any", () => {
 
   test("waits for loser finalization before returning the winner", async () => {
     const loserCleanupGate = deferredPromise<void>();
-    let loserSawAbort = false;
-    const loser = Op.try(
-      (signal) =>
-        new Promise<number>((resolve) => {
-          signal.addEventListener(
-            "abort",
-            () => {
-              loserSawAbort = true;
-              loserCleanupGate.promise.then(() => resolve(-1));
-            },
-            { once: true },
-          );
-        }),
-    );
+    let loserCleanupStarted = false;
+    const loser = Op(function* () {
+      yield* Op.defer(async () => {
+        loserCleanupStarted = true;
+        await loserCleanupGate.promise;
+      });
+      yield* Op.try(neverSettling);
+    });
 
     const run = Op.any([loser, Op.of(7)]).run();
     let settled = false;
@@ -365,7 +361,7 @@ describe("Op.any", () => {
       settled = true;
     });
 
-    await vi.waitFor(() => expect(loserSawAbort).toBe(true));
+    await vi.waitFor(() => expect(loserCleanupStarted).toBe(true));
     expect(settled).toBe(false);
 
     loserCleanupGate.resolve();
@@ -378,21 +374,23 @@ describe("Op.any", () => {
   test("winner success keeps precedence over loser abort-time failures", async () => {
     const loser = Op.try(
       (signal) =>
-        new Promise<number>((_resolve, reject) => {
-          signal.addEventListener(
-            "abort",
-            () => {
-              reject("cleanup-failed" as const);
-            },
-            { once: true },
-          );
-        }),
+        new Promise<number>((_resolve, reject) =>
+          signal.addEventListener("abort", () => reject("cleanup-failed" as const), { once: true }),
+        ),
       (cause) => cause as "cleanup-failed",
     );
 
     const r = await Op.any([loser, Op.of(1)]).run();
     assert(r.isOk(), "should be Ok");
     expect(r.value).toBe(1);
+  });
+
+  test("settles when a winner succeeds and a loser ignores abort", async () => {
+    const run = Op.any([Op.try(neverSettling), Op.of(7)]).run();
+    expect(await settleOutcome(run)).toBe("settled");
+    const r = await run;
+    assert(r.isOk(), "should be Ok");
+    expect(r.value).toBe(7);
   });
 });
 
@@ -486,20 +484,14 @@ describe("Op.race", () => {
 
   test("waits for loser finalization before returning winner result", async () => {
     const loserCleanupGate = deferredPromise<void>();
-    let loserSawAbort = false;
-    const loser = Op.try(
-      (signal) =>
-        new Promise<number>((resolve) => {
-          signal.addEventListener(
-            "abort",
-            () => {
-              loserSawAbort = true;
-              loserCleanupGate.promise.then(() => resolve(-1));
-            },
-            { once: true },
-          );
-        }),
-    );
+    let loserCleanupStarted = false;
+    const loser = Op(function* () {
+      yield* Op.defer(async () => {
+        loserCleanupStarted = true;
+        await loserCleanupGate.promise;
+      });
+      yield* Op.try(neverSettling);
+    });
 
     const run = Op.race([loser, Op.of(99)]).run();
     let settled = false;
@@ -507,7 +499,7 @@ describe("Op.race", () => {
       settled = true;
     });
 
-    await vi.waitFor(() => expect(loserSawAbort).toBe(true));
+    await vi.waitFor(() => expect(loserCleanupStarted).toBe(true));
     expect(settled).toBe(false);
 
     loserCleanupGate.resolve();
@@ -534,6 +526,14 @@ describe("Op.race", () => {
     const r = await Op.race([loser, Op.fail("quick" as const)]).run();
     assert(r.isErr(), "should be Err");
     expect(r.error).toBe("quick");
+  });
+
+  test("settles when the winner succeeds and a loser ignores abort", async () => {
+    const run = Op.race([Op.of("winner"), Op.try(neverSettling)]).run();
+    expect(await settleOutcome(run)).toBe("settled");
+    const r = await run;
+    assert(r.isOk(), "should be Ok");
+    expect(r.value).toBe("winner");
   });
 });
 

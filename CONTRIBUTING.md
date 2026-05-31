@@ -264,7 +264,8 @@ Import extension helpers from `@prodkit/op/internal` (for example `Blocking`, `w
 `packages/op/src/combinators.ts` runs multiple child `drive` calls (often with per-child
 `AbortController` signals) and enforces ordering contracts documented in `DESIGN.md`.
 `Op.any` and `Op.race` wait for loser finalization before the parent `run()` settles
-([ADR 0004](docs/adr/0004-combinators-wait-for-loser-finalization.md)).
+([ADR 0004](docs/adr/0004-combinators-wait-for-loser-finalization.md)) and fan out children through
+`driveInterruptOnAbort` so aborted losers still unwind when they never observe the signal.
 
 ### Driver loop (call flow)
 
