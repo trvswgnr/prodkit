@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- No entries yet.
+
+## [0.1.4] - 2026-06-01
+
 ### Fixed
 
 - Published tarball now includes `LICENSE`; `homepage` points at the package README.
@@ -67,6 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added the initial `@prodkit/std` package with `@prodkit/std/di` helpers for yieldable dependency tokens.
+
 
 
 
