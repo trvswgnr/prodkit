@@ -5,7 +5,7 @@ import { Op } from "@prodkit/op";
 import { TaggedError } from "better-result";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import * as v from "valibot";
-export { color, createLogger } from "./logger.ts";
+export { createLogger } from "./logger.ts";
 
 type OwnPropertyValue<T, K extends PropertyKey> =
   // if it's not an object, we don't know anything about the type

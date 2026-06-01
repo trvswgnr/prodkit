@@ -4,7 +4,7 @@ export interface Tagged<Tag extends string> {
 
 type AbstractCtor = abstract new (...args: readonly never[]) => object;
 
-export type TaggedConstructor<
+type TaggedConstructor<
   Tag extends string,
   Base extends AbstractCtor | undefined,
 > = Base extends undefined

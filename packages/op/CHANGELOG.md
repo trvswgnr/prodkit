@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- Removed unused internal helpers and exports: `hasTag`, `hasOwn`, `Meta`, `Identity`,
+  `DeepIdentity`, `RequireOne`, `assertPositiveInteger`, module exports for `retryPlan`,
+  `timeoutPlan`, and `cancelPlan`, and `OP_POLICY` / `OP_POLICY_INPUT` symbols from
+  `@prodkit/op/policy` types.
+
 ### Fixed
 
 - CI and release maintainer checks now fail closed: changelog API compare requires an explicit base

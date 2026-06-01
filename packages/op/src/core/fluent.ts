@@ -14,8 +14,6 @@ import type {
 import type { Op } from "../index.js";
 import { coerceToNullaryOp, unsafeCoerce } from "../shared.js";
 
-export { makePlanOp, makeSyncValueOp } from "./plan/shell.js";
-
 /** Builds a nullary generator leaf op backed by the internal plan model. */
 export function makeCoreOp<T, E, M = EmptyMeta>(
   gen: () => Generator<Instruction<E, M>, T, unknown>,

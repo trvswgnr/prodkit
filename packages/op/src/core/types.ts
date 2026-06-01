@@ -146,9 +146,6 @@ export type EmptyMeta = {
  */
 export type Blocking<T> = { readonly [BLOCKING]: T };
 
-/** Metadata shapes accepted on {@link Op}'s `M` parameter (writable object literals are fine). */
-export type Meta<M = EmptyMeta> = M;
-
 type IsAny<T> = 0 extends 1 & T ? true : false;
 export type NormalizeMeta<M> = [M] extends [never]
   ? EmptyMeta
@@ -259,19 +256,6 @@ export interface BaseOp<T, E, A, M = EmptyMeta> {
     ? never
     : (...args: AsArgs<A>) => Promise<Result<T, E | UnhandledException>>;
 }
-
-type ObjectNotFunction<T> = T extends object
-  ? T extends (...args: never[]) => unknown
-    ? never
-    : T
-  : never;
-
-export type Identity<T> = T extends ObjectNotFunction<T> ? { [K in keyof T]: T[K] } & {} : T;
-export type DeepIdentity<T> =
-  T extends ObjectNotFunction<T> ? { [K in keyof T]: DeepIdentity<T[K]> } & {} : T;
-export type RequireOne<T> = {
-  [K in keyof T]: Identity<Required<Pick<T, K>> & Partial<Omit<T, K>>>;
-}[keyof T];
 
 export interface FluentOp<T, E, A, M = EmptyMeta> {
   /**

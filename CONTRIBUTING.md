@@ -158,8 +158,8 @@ packages/op/src/index.ts          (Op factory, Op.run, re-exports)
   |-- policy/                     (Policy.* constructors, retry-policy, plan rewriters)
   |-- hkt.ts                      (@prodkit/op/hkt entry)
   |-- core/run-op.ts              (runOp -> drive)
-  |-- core/fluent.ts              (makeCoreOp, makePlanOp shell, fluent transforms)
-  |-- core/plan/                  (Plan AST, lifecycle, shell)
+  |-- core/fluent.ts              (makeCoreOp, fluent transforms)
+  |-- core/plan/                  (Plan AST, lifecycle, makePlanOp shell)
   |-- core/runtime.ts             (createRunContext, drive)  <-- single execution engine
   |-- core/instructions.ts        (Suspend, RegisterExitFinalizer, Err yields)
 

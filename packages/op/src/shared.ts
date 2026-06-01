@@ -5,13 +5,6 @@ export const EMPTY_TUPLE: [] = [];
 export const OP_BRAND: unique symbol = Symbol("prodkit.op");
 export const OP_BOUND_BRAND: unique symbol = Symbol("prodkit.op.bound");
 
-export function hasOwn<T extends object, K extends PropertyKey>(
-  object: T,
-  key: K,
-): object is T & Record<K, unknown> {
-  return Object.hasOwn(object, key);
-}
-
 /**
  * Narrow `AbortSignal` / userland stand-ins across runtimes without depending on DOM `lib`s.
  *
@@ -36,10 +29,6 @@ export function isRecordLike(value: unknown): value is Record<PropertyKey, unkno
 /** True when `value` is a function that carries `key -> true` (internal brand pattern). */
 export function hasBrand<K extends PropertyKey>(value: unknown, key: K): value is Record<K, true> {
   return isRecordLike(value) && value[key] === true;
-}
-
-export function hasTag<T extends string>(value: unknown, tag: T): value is { readonly _tag: T } {
-  return isRecordLike(value) && value._tag === tag;
 }
 
 /**

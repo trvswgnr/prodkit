@@ -17,15 +17,7 @@ export {
   type Instruction,
   type IsRunnable,
   type MergeMeta,
-  type Meta,
   type RunContext,
   type SetBlockingMeta,
 } from "../core/types.js";
-export {
-  type AbortSignalLike,
-  NEVER,
-  hasBrand,
-  hasOwn,
-  sleepWithSignal,
-  unsafeCoerce,
-} from "../shared.js";
+export { type AbortSignalLike, NEVER, hasBrand, sleepWithSignal, unsafeCoerce } from "../shared.js";

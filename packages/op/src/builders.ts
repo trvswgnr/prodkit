@@ -1,5 +1,5 @@
 import { UnhandledException } from "./errors.js";
-import { makePlanOp } from "./core/fluent.js";
+import { makePlanOp, makeSyncValueOp } from "./core/plan/shell.js";
 import { genPlan } from "./core/plan/base.js";
 import type {
   AnyExitFn,
@@ -14,7 +14,7 @@ import type {
 import type { Op } from "./index.js";
 import { RegisterExitFinalizerInstruction, SuspendInstruction } from "./core/instructions.js";
 import { Result } from "./result.js";
-import { makeCoreOp, makeSyncValueOp } from "./core/fluent.js";
+import { makeCoreOp } from "./core/fluent.js";
 import { unsafeCoerce, isAwaited, sleepWithSignal } from "./shared.js";
 
 export function succeed<T>(value: T | PromiseLike<T>): Op<Awaited<T>, never, [], EmptyMeta> {

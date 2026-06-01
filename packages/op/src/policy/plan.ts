@@ -100,7 +100,7 @@ export function releasePlan<T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T
   );
 }
 
-export function retryPlan<T, E, M>(
+function retryPlan<T, E, M>(
   source: Plan<T, E, M>,
   policy: NormalizedRetryPolicy = normalizeRetryPolicy(),
 ): Plan<T, E, M> {
@@ -151,7 +151,7 @@ export function retryPlan<T, E, M>(
   });
 }
 
-export function timeoutPlan<T, E, M>(
+function timeoutPlan<T, E, M>(
   source: Plan<T, E, M>,
   timeoutMs: number,
 ): Plan<T, E | TimeoutError, M> {
@@ -176,10 +176,7 @@ export function timeoutPlan<T, E, M>(
   });
 }
 
-export function cancelPlan<T, E, M>(
-  source: Plan<T, E, M>,
-  abortSignal: AbortSignal,
-): Plan<T, E, M> {
+function cancelPlan<T, E, M>(source: Plan<T, E, M>, abortSignal: AbortSignal): Plan<T, E, M> {
   return createPlan(function* () {
     const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
       (outerContext) => raceBoundCancel(source, abortSignal, outerContext),

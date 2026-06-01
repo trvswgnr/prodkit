@@ -7,8 +7,8 @@ import type { Plan, PlanRewriter } from "../core/plan/base.js";
 import type { Result } from "../result.js";
 import { unsafeCoerce } from "../shared.js";
 
-export const OP_POLICY = Symbol("prodkit.op.policy");
-export const OP_POLICY_INPUT = Symbol("prodkit.op.policy.input");
+const OP_POLICY = Symbol("prodkit.op.policy");
+const OP_POLICY_INPUT = Symbol("prodkit.op.policy.input");
 
 export interface OpPolicyType extends HKT {
   readonly [HKT.TYPE]: Op<
