@@ -1,15 +1,18 @@
 import { describe, test, expect, assert } from "vitest";
 import ts from "typescript";
+import {
+  createPackageProgram,
+  getPackageRoot,
+  getPackageSourceFiles,
+  symbolHasDocs,
+  symbolHasExample,
+} from "./support.js";
 
 describe("Op API JSDoc coverage", () => {
-  const packageRoot = ts.sys.getCurrentDirectory();
-  const tsconfigPath = `${packageRoot}/tsconfig.json`;
-  const tsconfig = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
-  const parsed = ts.parseJsonConfigFileContent(tsconfig.config, ts.sys, packageRoot);
-  const program = ts.createProgram(parsed.fileNames, parsed.options);
+  const packageRoot = getPackageRoot();
+  const program = createPackageProgram(packageRoot);
   const checker = program.getTypeChecker();
-  const indexPath = `${packageRoot}/src/index.ts`;
-  const indexSource = program.getSourceFile(indexPath);
+  const indexSource = program.getSourceFile(`${packageRoot}/src/index.ts`);
   assert(indexSource, "Expected src/index.ts in TypeScript program");
   const indexModule = checker.getSymbolAtLocation(indexSource);
   assert(indexModule, "Expected module symbol for src/index.ts");
@@ -17,63 +20,14 @@ describe("Op API JSDoc coverage", () => {
   assert(opExport, "Expected Op export in src/index.ts");
   const opValueDeclaration = opExport.valueDeclaration ?? opExport.declarations?.[0];
 
-  const symbolSatisfies = (
-    symbol: ts.Symbol | undefined,
-    predicate: (resolved: ts.Symbol) => boolean,
-  ): boolean => {
-    if (!symbol) return false;
-    const visited = new Set<ts.Symbol>();
-
-    const inspect = (current: ts.Symbol | undefined): boolean => {
-      if (!current) return false;
-      if (visited.has(current)) return false;
-      visited.add(current);
-
-      const resolved =
-        current.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(current) : current;
-
-      if (predicate(resolved)) {
-        return true;
-      }
-
-      for (const declaration of resolved.declarations ?? []) {
-        if (ts.isPropertyAssignment(declaration)) {
-          const initializerSymbol = checker.getSymbolAtLocation(declaration.initializer);
-          if (inspect(initializerSymbol)) return true;
-          continue;
-        }
-
-        if (ts.isShorthandPropertyAssignment(declaration)) {
-          const shorthandSymbol = checker.getShorthandAssignmentValueSymbol(declaration);
-          if (inspect(shorthandSymbol)) return true;
-        }
-      }
-
-      return false;
-    };
-
-    return inspect(symbol);
-  };
-
-  const hasDocs = (symbol: ts.Symbol | undefined): boolean =>
-    symbolSatisfies(
-      symbol,
-      (resolved) =>
-        resolved.getDocumentationComment(checker).length > 0 ||
-        resolved.getJsDocTags(checker).length > 0,
-    );
-
-  const hasExample = (symbol: ts.Symbol | undefined): boolean =>
-    symbolSatisfies(symbol, (resolved) =>
-      resolved.getJsDocTags(checker).some((tag) => tag.name.toLowerCase() === "example"),
-    );
-
   test("all static methods are documented with JSDoc", () => {
     assert(opValueDeclaration, "Expected Op declaration in src/index.ts");
     const opFactoryType = checker.getTypeOfSymbolAtLocation(opExport, opValueDeclaration);
 
     const propertyNames = opFactoryType.getProperties().map((p) => p.name);
-    const documented = propertyNames.filter((name) => hasDocs(opFactoryType.getProperty(name)));
+    const documented = propertyNames.filter((name) =>
+      symbolHasDocs(checker, opFactoryType.getProperty(name)),
+    );
     expect(documented).toEqual(propertyNames);
   });
 
@@ -89,7 +43,7 @@ describe("Op API JSDoc coverage", () => {
       })
       .map((property) => property.name);
     const withExamples = staticMethodNames.filter((name) =>
-      hasExample(opFactoryType.getProperty(name)),
+      symbolHasExample(checker, opFactoryType.getProperty(name)),
     );
 
     expect(withExamples).toEqual(staticMethodNames);
@@ -115,7 +69,7 @@ describe("Op API JSDoc coverage", () => {
       })
       .map((property) => property.name);
     const documented = instanceMethodNames.filter((name) =>
-      hasDocs(opInstanceType.getProperty(name)),
+      symbolHasDocs(checker, opInstanceType.getProperty(name)),
     );
 
     expect(documented).toEqual(instanceMethodNames);
@@ -141,7 +95,7 @@ describe("Op API JSDoc coverage", () => {
       })
       .map((property) => property.name);
     const withExamples = instanceMethodNames.filter((name) =>
-      hasExample(opInstanceType.getProperty(name)),
+      symbolHasExample(checker, opInstanceType.getProperty(name)),
     );
 
     expect(withExamples).toEqual(instanceMethodNames);
@@ -149,19 +103,9 @@ describe("Op API JSDoc coverage", () => {
 });
 
 describe("unsafeCoerce documentation", () => {
-  const packageRoot = ts.sys.getCurrentDirectory();
-  const tsconfigPath = `${packageRoot}/tsconfig.json`;
-  const tsconfig = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
-  const parsed = ts.parseJsonConfigFileContent(tsconfig.config, ts.sys, packageRoot);
-  const program = ts.createProgram(parsed.fileNames, parsed.options);
-  const sourceFiles = program
-    .getSourceFiles()
-    .filter(
-      (sourceFile) =>
-        sourceFile.fileName.startsWith(`${packageRoot}/src/`) &&
-        !sourceFile.fileName.endsWith(".d.ts") &&
-        !sourceFile.fileName.endsWith(".test.ts"),
-    );
+  const packageRoot = getPackageRoot();
+  const program = createPackageProgram(packageRoot);
+  const sourceFiles = getPackageSourceFiles(program, packageRoot);
 
   test("all unsafeCoerce calls are preceded by a SAFETY comment", () => {
     type Violation = {
