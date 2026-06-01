@@ -7,7 +7,7 @@ packages:
 
 # Op type alias stays on main entry for declaration emit
 
-Internal `@prodkit/op` modules (for example `core/types.ts`) reference the branded `Op` type in
+Internal `@prodkit/op` modules (for example `core/plan/surface.ts`) reference the branded `Op` type in
 fluent interfaces and inference helpers. A natural refactor is to extract `Op` into a dedicated
 module so core stops importing from the package entry. Issue [#155](https://github.com/trvswgnr/prodkit/issues/155)
 proposed that shape and was closed wontfix after review.
@@ -51,8 +51,9 @@ contract tests and IDE experience to match runtime values.
 ## Consequences
 
 - Refactors may keep `import type { Op } from "../index.js"` in core modules; that is intentional.
-- Splitting `core/types.ts` (#158) should not extract the `Op` alias; split metadata, fluent, and
-  inference modules around the single entry-owned alias.
+- Splitting former `core/types.ts` (#158) should not extract the `Op` alias; colocate metadata,
+  instruction protocol, run contexts, and plan surface types with their owning modules using direct
+  imports (no re-export barrel).
 - Subpath exports must not re-declare `Op`; they import the type from the main entry or from shared
   internal shapes (`OpInterface`) when the branded alias is not required.
 

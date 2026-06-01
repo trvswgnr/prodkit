@@ -158,14 +158,14 @@ packages/op/src/index.ts          (Op factory, Op.run, re-exports)
   |-- combinators.ts              (Op.all, Op.any, Op.race, ...)
   |-- policy/                     (Policy.* constructors, retry-policy, plan rewriters)
   |-- hkt.ts                      (@prodkit/op/hkt entry)
-  |-- core/run-op.ts              (runOp -> drive)
+  |-- core/runtime.ts             (createRunContext, drive, runOp, RunContext, ExitContext)
+  |-- core/meta.ts                (EmptyMeta, Blocking, MergeMeta, IsRunnable)
   |-- core/fluent.ts              (makeCoreOp, fluent transforms)
-  |-- core/plan/                  (Plan AST, lifecycle, makePlanOp shell)
-  |-- core/runtime.ts             (createRunContext, drive)  <-- single execution engine
-  |-- core/instructions.ts        (Suspend, RegisterExitFinalizer, Err yields)
+  |-- core/plan/                  (Plan AST, context/surface types, lifecycle, makePlanOp shell)
+  |-- core/instructions.ts        (Suspend, RegisterExitFinalizer, CustomInstruction protocol)
 
 packages/op/src/di/                 (DI.provide, DI.inject via CustomInstruction + extensions)
-  '-- imports core/runtime, core/instructions, core/types, builders directly
+  '-- imports core/runtime, core/instructions, core/meta, core/plan/surface, builders directly
 
 packages/std/src/                   (future runtime-agnostic utility subpaths)
 ```
@@ -173,7 +173,7 @@ packages/std/src/                   (future runtime-agnostic utility subpaths)
 ### From `Op.run()` to `drive()`
 
 1. **Call site.** `await op.run(...args)` or `await Op.run(op, ...args)` both end in
-   `runOp` (`packages/op/src/core/run-op.ts`), which calls
+   `runOp` (`packages/op/src/core/runtime.ts`), which calls
    `drive(op, createRunContext(signal, args))`. Tuple args flow into `RunContext.args` for
    enter/exit hooks; they are not an options bag ([ADR 0006](docs/adr/0006-run-args-only-fluent-policy-composition.md)).
 2. **Arity binding.** For generator-defined ops, `fromGenFn` in `builders.ts` wraps the user
@@ -251,7 +251,7 @@ state visible inside `SuspendInstruction` and `CustomInstruction.resolve` callba
 ### Runnable metadata (`Blocking`, `withBlocking`)
 
 Top-level `.run()` / `Op.run(...)` are typed only when operation metadata has no unsatisfied
-`Blocking<T>` entries (`IsRunnable<M>` in `packages/op/src/core/types.ts`).
+`Blocking<T>` entries (`IsRunnable<M>` in `packages/op/src/core/meta.ts`).
 
 - **`Blocking<T>`** is branded metadata; merge at a key unions payloads with other `Blocking`
   values at that key.
