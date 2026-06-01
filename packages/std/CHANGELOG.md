@@ -5,6 +5,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Published tarball now includes `LICENSE`; `homepage` points at the package README.
+
 ### Changed
 
 - Trimmed package README to a reserved placeholder; removed `@prodkit/std` from the examples

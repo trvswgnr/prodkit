@@ -133,7 +133,7 @@ No other `better-result` exports are published from `@prodkit/op` today.
 ## Subpath exports
 
 Op-native extensions ship as separate subpath exports on `@prodkit/op`. Import them explicitly; the
-main `@prodkit/op` entry does not re-export them ([ADR 0008](https://github.com/trvswgnr/prodkit/blob/main/docs/adr/0008-op-subpath-exports.md)).
+main `@prodkit/op` entry does not re-export them ([ADR 0008](https://github.com/trvswgnr/prodkit/blob/main/docs/adr/0008-op-subpath-exports.md) in the monorepo; not shipped in the npm tarball).
 
 ### `@prodkit/op/di`
 
@@ -143,11 +143,19 @@ Dependency injection for composed ops: tokens, `inject`, `provide`, and scoped/s
 import { Op } from "@prodkit/op";
 import { DI } from "@prodkit/op/di";
 
+interface Database {
+  findById(id: number): Promise<{ id: number } | null>;
+}
+
 class DatabaseDependency extends DI.Dependency("Database")<Database> {}
 
+const db: Database = {
+  findById: async (id) => ({ id }),
+};
+
 const getUser = Op(function* (id: number) {
-  const db = yield* DI.inject(DatabaseDependency);
-  return yield* db.findById(id);
+  const database = yield* DI.inject(DatabaseDependency);
+  return yield* database.findById(id);
 });
 
 const runnable = DI.provide(getUser, DI.singleton(DatabaseDependency, db));
@@ -164,7 +172,7 @@ dependencies through `RequiredDeps` and by omitting `.run()` on the op type unti
 **Token identity:** Each dependency slot is the token **class** you declare and pass to
 `DI.inject` / `DI.singleton` / `DI.scoped`. The string passed to `DI.Dependency("...")` is a
 diagnostic label for errors only; two classes may share the same label and remain separate slots
-([ADR 0010](https://github.com/trvswgnr/prodkit/blob/main/docs/adr/0010-di-token-class-identity.md)).
+([ADR 0010](https://github.com/trvswgnr/prodkit/blob/main/docs/adr/0010-di-token-class-identity.md) in the monorepo; not shipped in the npm tarball).
 
 **Run time:** If you call `.run()` without a required binding, or provide the same token class
 twice, the run fails with `Err(UnhandledException)` from `better-result`. The DI-specific fault is
@@ -174,6 +182,8 @@ on `error.cause`, not on the op's typed error channel `E`:
 import { UnhandledException } from "better-result";
 import { Op } from "@prodkit/op";
 import { DI } from "@prodkit/op/di";
+
+class DatabaseDependency extends DI.Dependency("Database")<unknown> {}
 
 const op = Op(function* () {
   yield* DI.inject(DatabaseDependency);

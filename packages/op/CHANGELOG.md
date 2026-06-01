@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- CI and release maintainer checks now fail closed: changelog API compare requires an explicit base
+  ref, release publish verifies tag version matches `package.json`, dependency signature audit runs
+  across all workspace packages, and examples smoke temp workspaces inherit pnpm safety policy from
+  the repository root.
+- Package metadata and docs: `@prodkit/std` ships `LICENSE`, package `homepage` fields point at
+  package READMEs, README DI examples typecheck, and monorepo ADR links are qualified as absent from
+  npm tarballs.
 - `.tap`, `.tapErr`, and `.recover` no longer drive returned ops implicitly. Callback return
   values are ignored for `tap` and `tapErr`, while `recover` treats the handler return as fallback
   data. Use `flatMap` or `yield*` for explicit operation sequencing.

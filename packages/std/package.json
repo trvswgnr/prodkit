@@ -7,7 +7,7 @@
     "typescript",
     "utilities"
   ],
-  "homepage": "https://github.com/trvswgnr/prodkit#readme",
+  "homepage": "https://github.com/trvswgnr/prodkit/tree/main/packages/std#readme",
   "bugs": {
     "url": "https://github.com/trvswgnr/prodkit/issues"
   },
@@ -19,7 +19,8 @@
   "files": [
     "dist",
     "CHANGELOG.md",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "type": "module",
   "main": "./dist/index.mjs",

@@ -10,7 +10,7 @@
     "runtime-agnostic",
     "typescript"
   ],
-  "homepage": "https://github.com/trvswgnr/prodkit#readme",
+  "homepage": "https://github.com/trvswgnr/prodkit/tree/main/packages/op#readme",
   "bugs": {
     "url": "https://github.com/trvswgnr/prodkit/issues"
   },
@@ -24,7 +24,8 @@
     "COMPARISON.md",
     "DESIGN.md",
     "CHANGELOG.md",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "type": "module",
   "main": "./dist/index.mjs",
