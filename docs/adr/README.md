@@ -70,5 +70,6 @@ not add ad hoc plan docs under `docs/` for issue checklists.
 | [0010](0010-di-token-class-identity.md) | accepted | `@prodkit/op` | DI dependency tokens match by class reference at runtime |
 | [0011](0011-fluent-callbacks-do-not-sequence-returned-ops.md) | accepted | `@prodkit/op` | Fluent callbacks do not sequence returned ops |
 | [0012](0012-op-type-alias-on-main-entry.md) | accepted | `@prodkit/op` | Op type alias stays on main entry for declaration emit |
+| [0013](0013-combinator-plan-nodes.md) | accepted | `@prodkit/op` | Combinator concurrent composition as plan nodes |
 
 <!-- adr-index:end -->
