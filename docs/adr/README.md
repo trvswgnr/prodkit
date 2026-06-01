@@ -68,5 +68,6 @@ not add ad hoc plan docs under `docs/` for issue checklists.
 | [0008](0008-op-subpath-exports.md) | accepted | `@prodkit/op`, `@prodkit/std` | Op-native modules ship as @prodkit/op subpath exports |
 | [0009](0009-policy-with-attachment.md) | accepted | `@prodkit/op` | Policy attaches via .with(Policy.*) |
 | [0010](0010-di-token-class-identity.md) | accepted | `@prodkit/op` | DI dependency tokens match by class reference at runtime |
+| [0011](0011-fluent-callbacks-do-not-sequence-returned-ops.md) | accepted | `@prodkit/op` | Fluent callbacks do not sequence returned ops |
 
 <!-- adr-index:end -->
