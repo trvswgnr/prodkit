@@ -5,10 +5,13 @@ import { Err } from "../result.js";
 type SuspendFn = (ctx: RunContext<readonly unknown[]>) => PromiseLike<unknown>;
 export class SuspendInstruction extends Tagged("SuspendInstruction") {
   readonly suspend: SuspendFn;
+  /** When true, interrupt-on-abort waits for this suspend to settle so fan-out/provision teardown can finish. */
+  readonly drainOnAbort: boolean;
 
-  constructor(suspend: SuspendFn) {
+  constructor(suspend: SuspendFn, drainOnAbort = false) {
     super();
     this.suspend = suspend;
+    this.drainOnAbort = drainOnAbort;
   }
 
   // SAFETY: TS doesn't know the type of the yielded value, so it's always `unknown`

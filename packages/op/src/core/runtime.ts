@@ -89,9 +89,27 @@ export async function driveIterator<T, E, M>(
       let settled = false;
       const onAbort = () => {
         if (settled) return;
-        settled = true;
-        signal.removeEventListener("abort", onAbort);
-        reject(signal.reason);
+        // Defer one microtask, prefer cooperative suspend settlement, then fall back to abort reason.
+        queueMicrotask(() => {
+          if (settled) return;
+          const abortOnLaterMacrotask = new Promise<never>((_, abort) => {
+            setTimeout(() => abort(signal.reason), 0);
+          });
+          void Promise.race([suspended, abortOnLaterMacrotask]).then(
+            (value) => {
+              if (settled) return;
+              settled = true;
+              signal.removeEventListener("abort", onAbort);
+              resolve(value);
+            },
+            (error) => {
+              if (settled) return;
+              settled = true;
+              signal.removeEventListener("abort", onAbort);
+              reject(error);
+            },
+          );
+        });
       };
 
       signal.addEventListener("abort", onAbort, { once: true });
@@ -111,10 +129,25 @@ export async function driveIterator<T, E, M>(
       );
     });
   };
+  const drainSuspended = async (suspended: PromiseLike<unknown>) => {
+    try {
+      await suspended;
+    } catch {
+      // ignore: abort rejection or child settlement errors while draining fan-out/provision work
+    }
+  };
   const resumeSuspended = async (
     instruction: SuspendInstruction,
     iterator: Iterator<Instruction<E, M>, T, unknown>,
-  ) => iterator.next(await awaitWithAbortInterrupt(instruction.suspend(context)));
+  ) => {
+    const suspended = instruction.suspend(context);
+    try {
+      return iterator.next(await awaitWithAbortInterrupt(suspended));
+    } catch (cause) {
+      if (interruptOnAbort && instruction.drainOnAbort) await drainSuspended(suspended);
+      throw cause;
+    }
+  };
   const resumeCustom = async (
     instruction: CustomInstruction<unknown, unknown>,
     iterator: Iterator<Instruction<E, M>, T, unknown>,

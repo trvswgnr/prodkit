@@ -3,6 +3,7 @@ import { Op, TimeoutError, type EnterContext, type ExitContext } from "../../src
 import { UnhandledException } from "../../src/errors.js";
 import { SuspendInstruction } from "../../src/core/instructions.js";
 import { Policy } from "../../src/policy/index.js";
+import { neverSettling } from "../support/utils.js";
 
 // Scope: integration behavior for cleanup/finalization and lifecycle hooks
 describe("op.with(Policy.release(...))", () => {
@@ -61,6 +62,7 @@ describe("op.with(Policy.release(...))", () => {
 
       const runPromise = op.run();
       await vi.advanceTimersByTimeAsync(10);
+      await vi.runOnlyPendingTimersAsync();
       const result = await runPromise;
       assert(result.isErr(), "should be Err");
       expect(result.error).toBeInstanceOf(TimeoutError);
@@ -105,6 +107,8 @@ describe("op.with(Policy.release(...))", () => {
       });
 
       await vi.advanceTimersByTimeAsync(10);
+      // Yield one microtask so timeout teardown can start without assuming .run() is still
+      // synchronous after advanceTimersByTimeAsync; release cleanup is on a later timer.
       await Promise.resolve();
 
       expect(settled).toBe(false);
@@ -272,6 +276,7 @@ describe('op.on("enter")', () => {
         .with(Policy.timeout(10))
         .run();
       await vi.advanceTimersByTimeAsync(10);
+      await vi.runOnlyPendingTimersAsync();
       const result = await runPromise;
 
       assert(result.isErr(), "should be Err");
@@ -405,6 +410,7 @@ describe('op.on("exit")', () => {
         })
         .run();
       await vi.advanceTimersByTimeAsync(10);
+      await vi.runOnlyPendingTimersAsync();
       const timed = await runPromise;
 
       assert(timed.isErr());
@@ -457,6 +463,8 @@ describe('op.on("exit")', () => {
       });
 
       await vi.advanceTimersByTimeAsync(10);
+      await vi.runOnlyPendingTimersAsync();
+      // Same observation checkpoint as release cleanup: after timeout, before exit timer fires.
       await Promise.resolve();
 
       expect(settled).toBe(false);
@@ -557,6 +565,7 @@ describe("generator finalization on early exit", () => {
 
       const runPromise = program.run();
       await vi.advanceTimersByTimeAsync(10);
+      await vi.runOnlyPendingTimersAsync();
       const result = await runPromise;
 
       assert(result.isErr(), "should be Err");
@@ -852,7 +861,30 @@ describe("Op.defer ordering and policies", () => {
 
       const runPromise = op.run();
       await vi.advanceTimersByTimeAsync(10);
+      await vi.runOnlyPendingTimersAsync();
       const result = await runPromise;
+      assert(result.isErr(), "should be Err");
+      expect(result.error).toBeInstanceOf(TimeoutError);
+      expect(cleanup).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("Op.all([child]).with(Policy.timeout(...)) runs child Op.defer cleanup when child Op.try ignores abort", async () => {
+    vi.useFakeTimers();
+    try {
+      const cleanup = vi.fn();
+      const child = Op(function* () {
+        yield* Op.defer(() => cleanup());
+        yield* Op.try(neverSettling);
+      });
+
+      const runPromise = Op.all([child]).with(Policy.timeout(10)).run();
+      await vi.advanceTimersByTimeAsync(10);
+      await vi.runOnlyPendingTimersAsync();
+      const result = await runPromise;
+
       assert(result.isErr(), "should be Err");
       expect(result.error).toBeInstanceOf(TimeoutError);
       expect(cleanup).toHaveBeenCalledTimes(1);

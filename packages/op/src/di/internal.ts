@@ -1,6 +1,6 @@
 import { fromGenFn } from "../builders.js";
 import { SuspendInstruction } from "../core/instructions.js";
-import { createRunContext, drive } from "../core/runtime.js";
+import { createRunContext, driveInterruptOnAbort } from "../core/runtime.js";
 import {
   CUSTOM_INSTRUCTION_META,
   type AsArgs,
@@ -296,8 +296,9 @@ export function provideOp<T, E, A, M, const Entries extends readonly AnyBinding[
   entries: Entries,
 ): Op<T, E, A, ProvidedMeta<M, Entries>> {
   const provided = fromGenFn(function* (...args: AsArgs<A>) {
-    const result = yield* new SuspendInstruction((context) =>
-      drive(op(...args), extendContext(context, entries)),
+    const result = yield* new SuspendInstruction(
+      (context) => driveInterruptOnAbort(op(...args), extendContext(context, entries)),
+      true,
     );
     if (result.isErr()) return yield* result;
     return result.value;

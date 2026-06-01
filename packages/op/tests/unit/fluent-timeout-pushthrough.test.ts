@@ -13,6 +13,7 @@ async function runWithFakeTimeout<T, E, M>(program: Op<T, E, [], M>) {
   try {
     const runPromise = program.run();
     await vi.advanceTimersByTimeAsync(TIMEOUT_MS);
+    await vi.runOnlyPendingTimersAsync();
     return await runPromise;
   } finally {
     vi.useRealTimers();

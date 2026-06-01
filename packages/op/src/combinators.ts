@@ -49,8 +49,9 @@ type DriveChild = <T, E, M>(
  * - We check `outerSignal.aborted` before adding a listener so already-cancelled parents
  *   synchronously cascade into children instead of missing the abort edge
  * - Callers must invoke `detach()` once the combinator settles to avoid retaining listeners
- * - Pass `drive` for cooperative child cancel; pass `driveInterruptOnAbort` when aborted
- *   branches must unwind even if they never observe the signal (`Op.race`, `Op.any`)
+ * - Pass `driveInterruptOnAbort` when aborted branches must unwind even if they never observe
+ *   the signal (`Op.all`, `Op.race`, `Op.any`); pass `drive` for cooperative-only fan-out
+ *   (`Op.allSettled`)
  */
 function fanOut<T, E>(
   ops: readonly Op<T, E, []>[],
@@ -138,6 +139,7 @@ export function allOp<const Ops extends readonly AnyNullaryOp[]>(
   return makeCombinatorOp(function* () {
     const result: Result<AllOpOk<Ops>, AllOpErr<Ops>> = yield* new SuspendInstruction(
       (outerContext) => driveAll(snapshot, outerContext, concurrency),
+      true,
     );
 
     if (result.isErr()) return yield* result;
@@ -186,7 +188,7 @@ async function driveAll<T, E>(
       const controller = new AbortController();
       controllers.add(controller);
       if (outerContext.signal.aborted) controller.abort(outerContext.signal.reason);
-      const res = await drive(
+      const res = await driveInterruptOnAbort(
         op,
         createRunContext(controller.signal, outerContext.args, outerContext.extensions),
       );
@@ -221,7 +223,7 @@ async function driveAllUnbounded<T, E>(
   ops: readonly Op<T, E, []>[],
   outerContext: RunContext<readonly unknown[]>,
 ): Promise<Result<T[], E | UnhandledException>> {
-  const fan = fanOut(ops, outerContext, drive);
+  const fan = fanOut(ops, outerContext, driveInterruptOnAbort);
 
   let firstErr: Err<T[], E | UnhandledException> | undefined;
   const observed = fan.runs.map((p, i) =>

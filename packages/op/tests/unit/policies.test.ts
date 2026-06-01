@@ -393,6 +393,7 @@ describe("Policy.timeout", () => {
       ).with(Policy.timeout(100));
       const runPromise = program.run();
       await vi.advanceTimersByTimeAsync(100);
+      await vi.runOnlyPendingTimersAsync();
 
       const result = await runPromise;
       assert(result.isErr(), "result should be Err");
@@ -434,6 +435,7 @@ describe("Policy.timeout", () => {
 
       const runPromise = program.run();
       await vi.advanceTimersByTimeAsync(100);
+      await vi.runOnlyPendingTimersAsync();
 
       const result = await runPromise;
       assert(result.isErr(), "result should be Err");
@@ -467,6 +469,7 @@ describe("Policy.timeout", () => {
 
       const runPromise = program.run();
       await vi.advanceTimersByTimeAsync(150);
+      await vi.runOnlyPendingTimersAsync();
 
       const result = await runPromise;
       assert(result.isOk(), "result should be Ok");
@@ -573,6 +576,7 @@ describe("AbortSignal", () => {
 
       const runPromise = program.run();
       await vi.advanceTimersByTimeAsync(100);
+      await vi.runOnlyPendingTimersAsync();
       const result = await runPromise;
 
       assert(result.isErr(), "result should be Err");
@@ -613,6 +617,7 @@ describe("AbortSignal", () => {
 
       const runPromise = program.run();
       await vi.advanceTimersByTimeAsync(200);
+      await vi.runOnlyPendingTimersAsync();
 
       const result = await runPromise;
       assert(result.isErr(), "result should be Err");
@@ -644,6 +649,7 @@ describe("AbortSignal", () => {
 
       const runPromise = program.run();
       await vi.advanceTimersByTimeAsync(200);
+      await vi.runOnlyPendingTimersAsync();
 
       const result = await runPromise;
       assert(result.isErr(), "result should be Err");

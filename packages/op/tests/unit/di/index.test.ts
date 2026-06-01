@@ -1,8 +1,9 @@
-import { assert, describe, expect, test } from "vitest";
+import { assert, describe, expect, test, vi } from "vitest";
 import { Op, TimeoutError } from "../../../src/index.js";
 import { UnhandledException } from "better-result";
 import { DI } from "../../../src/di/index.js";
 import { Policy } from "../../../src/policy/index.js";
+import { neverSettling } from "../../support/utils.js";
 
 class DatabaseError extends Error {
   readonly _tag = "DatabaseError";
@@ -242,6 +243,28 @@ describe("DI", () => {
         )
         .run(),
     ).toEqual(expect.objectContaining({ value: recoveredFallback }));
+  });
+
+  test("DI.provide(inner).with(Policy.timeout(...)) runs inner Op.defer cleanup when inner Op.try ignores abort", async () => {
+    vi.useFakeTimers();
+    try {
+      const cleanup = vi.fn();
+      const inner = Op(function* () {
+        yield* Op.defer(() => cleanup());
+        yield* Op.try(neverSettling);
+      });
+
+      const runPromise = DI.provide(inner).with(Policy.timeout(10)).run();
+      await vi.advanceTimersByTimeAsync(10);
+      await vi.runOnlyPendingTimersAsync();
+      const result = await runPromise;
+
+      assert(result.isErr(), "should be Err");
+      expect(result.error).toBeInstanceOf(TimeoutError);
+      expect(cleanup).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test("timeout typing remains available around provisioned ops", () => {
