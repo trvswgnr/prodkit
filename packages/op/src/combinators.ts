@@ -32,6 +32,42 @@ type FanOut<T, E> = {
   detach: () => void;
 };
 
+type FirstSettlerClaim<T, E> = (
+  result: Result<T, E | UnhandledException>,
+  hasWinner: boolean,
+) => boolean;
+
+/**
+ * Unbounded fan-out shared by `Op.all`, `Op.any`, and `Op.race`:
+ * start all children, claim on first matching result, abort siblings, wait for every branch,
+ * then detach the parent abort listener.
+ */
+async function driveFirstSettlerFanOut<T, E>(
+  ops: readonly Op<T, E, []>[],
+  outerContext: RunContext<readonly unknown[]>,
+  shouldClaim: FirstSettlerClaim<T, E>,
+): Promise<Result<T, E | UnhandledException>[]> {
+  const fan = fanOut(ops, outerContext, driveInterruptOnAbort);
+  let winnerClaimed = false;
+
+  const results = await Promise.all(
+    fan.runs.map((run, index) =>
+      run.then((result) => {
+        if (!winnerClaimed && shouldClaim(result, winnerClaimed)) {
+          winnerClaimed = true;
+          fan.controllers.forEach((controller, controllerIndex) => {
+            if (controllerIndex !== index) controller.abort();
+          });
+        }
+        return result;
+      }),
+    ),
+  );
+
+  fan.detach();
+  return results;
+}
+
 type DriveChild = <T, E, M>(
   op: Op<T, E, [], M>,
   context: RunContext<readonly unknown[]>,
@@ -245,24 +281,14 @@ async function driveAllUnbounded<T, E>(
   ops: readonly Op<T, E, []>[],
   outerContext: RunContext<readonly unknown[]>,
 ): Promise<Result<T[], E | UnhandledException>> {
-  const fan = fanOut(ops, outerContext, driveInterruptOnAbort);
-
   let firstErr: Err<T[], E | UnhandledException> | undefined;
-  const observed = fan.runs.map((p, i) =>
-    p.then((result) => {
-      if (result.isErr() && firstErr === undefined) {
-        firstErr = result;
-        fan.controllers.forEach((c, j) => {
-          if (j !== i) c.abort();
-        });
-      }
-      return result;
-    }),
-  );
-
-  const results = await Promise.all(observed);
-
-  fan.detach();
+  const results = await driveFirstSettlerFanOut(ops, outerContext, (result) => {
+    if (result.isErr() && firstErr === undefined) {
+      firstErr = result;
+      return true;
+    }
+    return false;
+  });
 
   if (firstErr !== undefined) return firstErr;
 
@@ -391,24 +417,14 @@ async function driveAny<T, E>(
     return Promise.resolve(e);
   }
 
-  const fan = fanOut(ops, outerContext, driveInterruptOnAbort);
-
   let winner: { value: T } | undefined;
-  const results = await Promise.all(
-    fan.runs.map((p, i) =>
-      p.then((res) => {
-        if (res.isOk() && winner === undefined) {
-          winner = { value: res.value };
-          fan.controllers.forEach((c, j) => {
-            if (j !== i) c.abort();
-          });
-        }
-        return res;
-      }),
-    ),
-  );
-
-  fan.detach();
+  const results = await driveFirstSettlerFanOut(ops, outerContext, (result) => {
+    if (result.isOk() && winner === undefined) {
+      winner = { value: result.value };
+      return true;
+    }
+    return false;
+  });
 
   if (winner !== undefined) return Result.ok(winner.value);
 
@@ -454,24 +470,14 @@ async function driveRace<T, E>(
     return Promise.resolve(Result.err(new UnhandledException({ cause })));
   }
 
-  const fan = fanOut(ops, outerContext, driveInterruptOnAbort);
-
   let winner: Result<T, E | UnhandledException> | undefined;
-  await Promise.all(
-    fan.runs.map((p, i) =>
-      p.then((res) => {
-        if (winner === undefined) {
-          winner = res;
-          fan.controllers.forEach((c, j) => {
-            if (j !== i) c.abort();
-          });
-        }
-        return res;
-      }),
-    ),
-  );
-
-  fan.detach();
+  await driveFirstSettlerFanOut(ops, outerContext, (_result, hasWinner) => {
+    if (!hasWinner) {
+      winner = _result;
+      return true;
+    }
+    return false;
+  });
 
   if (winner !== undefined) return winner;
 
