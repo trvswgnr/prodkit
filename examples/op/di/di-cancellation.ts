@@ -58,10 +58,9 @@ export function createAccountSnapshotApp(deps: LedgerDeps) {
     return { accountId, balanceCents, connId: conn.connId };
   });
 
-  const runnable = DI.provide(
-    loadAccountSnapshot,
+  const runnable = DI.provide(loadAccountSnapshot, [
     DI.scoped(LedgerConnectionService, (signal) => deps.connectLedger(signal)),
-  );
+  ]);
 
   return { loadAccountSnapshot: runnable };
 }

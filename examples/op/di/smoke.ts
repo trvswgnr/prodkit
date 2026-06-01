@@ -35,13 +35,12 @@ async function runSuccessfulRegistrationSmoke() {
 
 async function runDuplicateRegistrationSmoke() {
   const services = createExampleDependencies();
-  const op = DI.provide(
-    registerUser,
+  const op = DI.provide(registerUser, [
     services.db,
     services.hasher,
     services.mailer,
     services.clock,
-  );
+  ]);
 
   const first = await op.run("existing@example.test", "first");
   assert(first.isOk(), "first registration should succeed");

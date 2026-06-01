@@ -158,7 +158,7 @@ const getUser = Op(function* (id: number) {
   return yield* database.findById(id);
 });
 
-const runnable = DI.provide(getUser, DI.singleton(DatabaseDependency, db));
+const runnable = DI.provide(getUser, [DI.singleton(DatabaseDependency, db)]);
 const result = await runnable.run(1);
 ```
 

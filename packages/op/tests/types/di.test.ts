@@ -96,11 +96,10 @@ describe("DI type inference", () => {
       }).mapErr((error): DatabaseError => error),
     } satisfies Database;
 
-    const partial = DI.provide(op, DI.singleton(DatabaseDependency, db));
-    const full = DI.provide(
-      partial,
+    const partial = DI.provide(op, [DI.singleton(DatabaseDependency, db)]);
+    const full = DI.provide(partial, [
       DI.scoped(LoggerDependency, (_signal) => ({ log: () => {} })),
-    );
+    ]);
 
     type _PartialReqs = Assert<IsEqual<RequiredDeps<typeof partial>, LoggerDependency>>;
     type _PartialMeta = Assert<
@@ -114,8 +113,8 @@ describe("DI type inference", () => {
       yield* DI.inject(DatabaseDependency);
     });
 
-    // @ts-expect-error - provision entries must be DI.singleton or DI.scoped bindings
-    DI.provide(op, { log: () => {} });
+    // @ts-expect-error - bindings tuple must contain DI.singleton or DI.scoped bindings
+    DI.provide(op, [{ log: () => {} }]);
   });
 
   test("provide rejects bindings for dependencies the op does not require", () => {
@@ -131,16 +130,16 @@ describe("DI type inference", () => {
     DI.provide(
       dbOnly,
       // @ts-expect-error - LoggerDependency is not required by this op
-      DI.scoped(LoggerDependency, (_signal) => ({ log: () => {} })),
+      [DI.scoped(LoggerDependency, (_signal) => ({ log: () => {} }))],
     );
 
-    const satisfied = DI.provide(dbOnly, DI.singleton(DatabaseDependency, db));
+    const satisfied = DI.provide(dbOnly, [DI.singleton(DatabaseDependency, db)]);
     type _Satisfied = Assert<IsEqual<RequiredDeps<typeof satisfied>, never>>;
 
     DI.provide(
       satisfied,
       // @ts-expect-error - op has no remaining deps
-      DI.scoped(LoggerDependency, (_signal) => ({ log: () => {} })),
+      [DI.scoped(LoggerDependency, (_signal) => ({ log: () => {} }))],
     );
   });
 
@@ -209,7 +208,7 @@ describe("DI type inference", () => {
       }).mapErr((error): DatabaseError => error),
     } satisfies Database;
 
-    const partial = DI.provide(op, DI.singleton(DatabaseDependency, db));
+    const partial = DI.provide(op, [DI.singleton(DatabaseDependency, db)]);
 
     // @ts-expect-error - deps remain
     partial.run();
@@ -225,7 +224,7 @@ describe("DI type inference", () => {
       }).mapErr((error): DatabaseError => error),
     } satisfies Database;
 
-    const runnable = DI.provide(op, DI.singleton(DatabaseDependency, db));
+    const runnable = DI.provide(op, [DI.singleton(DatabaseDependency, db)]);
 
     expectTypeOf(runnable.run).toBeFunction();
     type _ = Assert<IsEqual<RequiredDeps<typeof runnable>, never>>;
@@ -251,7 +250,7 @@ describe("DI type inference", () => {
 
     type _Reqs = Assert<IsEqual<RequiredDeps<typeof op>, DatabaseDependency>>;
 
-    const runnable = DI.provide(op, DI.singleton(DatabaseDependency, db));
+    const runnable = DI.provide(op, [DI.singleton(DatabaseDependency, db)]);
     type _ = Assert<IsEqual<RequiredDeps<typeof runnable>, never>>;
   });
 

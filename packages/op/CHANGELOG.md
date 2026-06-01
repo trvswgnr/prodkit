@@ -45,6 +45,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `DI.provide` now takes a tuple of bindings (`DI.provide(op, [a, b])`) instead of a spread of
+  separate binding arguments. Internal validation type `ValidProvideEntries` is renamed to
+  `ValidProvideBindings` to match the public parameter name.
+
 - Upgraded the monorepo toolchain to pnpm 11 and enabled an explicit 24-hour dependency
   release-age gate in `pnpm-workspace.yaml` so freshly published package versions are not
   installed immediately.

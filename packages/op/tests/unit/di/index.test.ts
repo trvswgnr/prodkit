@@ -43,9 +43,9 @@ describe("DI", () => {
       return yield* db.query("user", [id]);
     });
 
-    const result = await DI.provide(op, DI.singleton(DatabaseDependency, makeDatabase(calls))).run(
-      "123",
-    );
+    const result = await DI.provide(op, [
+      DI.singleton(DatabaseDependency, makeDatabase(calls)),
+    ]).run("123");
 
     expect(result.unwrap()).toEqual({ id: "123" });
     expect(calls).toEqual(["user:123"]);
@@ -74,7 +74,7 @@ describe("DI", () => {
     });
 
     const missing = getUnhandledCause(
-      await DI.provide(needsB, DI.singleton(ConfigA, "from-a")).run(),
+      await DI.provide(needsB, [DI.singleton(ConfigA, "from-a")]).run(),
     );
     assert(DI.MissingDependencyError.is(missing));
     expect(missing.key).toBe("Config");
@@ -83,11 +83,10 @@ describe("DI", () => {
       return [yield* DI.inject(ConfigA), yield* DI.inject(ConfigB)];
     });
 
-    const result = await DI.provide(
-      needsBoth,
+    const result = await DI.provide(needsBoth, [
       DI.singleton(ConfigA, "a"),
       DI.singleton(ConfigB, "b"),
-    ).run();
+    ]).run();
 
     expect(result.unwrap()).toEqual(["a", "b"]);
   });
@@ -100,13 +99,12 @@ describe("DI", () => {
       expect(db1).toBe(db2);
       return yield* db1.query("user", [id]);
     });
-    const runnable = DI.provide(
-      op,
+    const runnable = DI.provide(op, [
       DI.scoped(DatabaseDependency, () => {
         resolves += 1;
         return makeDatabase();
       }),
-    );
+    ]);
 
     expect((await runnable.run("a")).unwrap()).toEqual({ id: "a" });
     expect((await runnable.run("b")).unwrap()).toEqual({ id: "b" });
@@ -124,8 +122,8 @@ describe("DI", () => {
     });
 
     const runnable = DI.provide(
-      DI.provide(op, DI.singleton(DatabaseDependency, makeDatabase())),
-      DI.singleton(LoggerDependency, { log: (message) => seen.push(message) }),
+      DI.provide(op, [DI.singleton(DatabaseDependency, makeDatabase())]),
+      [DI.singleton(LoggerDependency, { log: (message) => seen.push(message) })],
     );
 
     const result = await runnable.run("abc");
@@ -140,11 +138,11 @@ describe("DI", () => {
       return yield* db.query("user", ["1"]);
     });
 
-    const partiallyProvided = DI.provide(op, DI.singleton(DatabaseDependency, makeDatabase()));
+    const partiallyProvided = DI.provide(op, [DI.singleton(DatabaseDependency, makeDatabase())]);
     const result = await DI.provide(
       partiallyProvided,
       // @ts-expect-error - op has no remaining deps, specifically testing the runtime guard
-      DI.singleton(DatabaseDependency, makeDatabase()),
+      [DI.singleton(DatabaseDependency, makeDatabase())],
     ).run();
     const cause = getUnhandledCause(result);
 
@@ -160,12 +158,12 @@ describe("DI", () => {
             yield* DI.inject(DatabaseDependency);
             return "inner";
           }),
-          DI.singleton(DatabaseDependency, makeDatabase()),
+          [DI.singleton(DatabaseDependency, makeDatabase())],
         );
         return yield* inner;
       }),
       // @ts-expect-error - outer op does not declare deps; runtime overlap is under test
-      DI.singleton(DatabaseDependency, makeDatabase()),
+      [DI.singleton(DatabaseDependency, makeDatabase())],
     );
 
     const cause = getUnhandledCause(await op.run());
@@ -188,33 +186,32 @@ describe("DI", () => {
       removeEventListener: () => {},
     };
     const cases = [
-      DI.provide(
-        findUser.with(Policy.retry({ retries: 0, when: () => true, delay: () => 0 })),
+      DI.provide(findUser.with(Policy.retry({ retries: 0, when: () => true, delay: () => 0 })), [
         DI.singleton(DatabaseDependency, db),
-      ),
-      DI.provide(findUser.with(Policy.timeout(1_000)), DI.singleton(DatabaseDependency, db)),
-      DI.provide(findUser.with(Policy.cancel(signal)), DI.singleton(DatabaseDependency, db)),
-      DI.provide(findUser.with(Policy.release(() => {})), DI.singleton(DatabaseDependency, db)),
+      ]),
+      DI.provide(findUser.with(Policy.timeout(1_000)), [DI.singleton(DatabaseDependency, db)]),
+      DI.provide(findUser.with(Policy.cancel(signal)), [DI.singleton(DatabaseDependency, db)]),
+      DI.provide(findUser.with(Policy.release(() => {})), [DI.singleton(DatabaseDependency, db)]),
       DI.provide(
         findUser.on("enter", () => {}),
-        DI.singleton(DatabaseDependency, db),
+        [DI.singleton(DatabaseDependency, db)],
       ),
       DI.provide(
         findUser.on("exit", () => {}),
-        DI.singleton(DatabaseDependency, db),
+        [DI.singleton(DatabaseDependency, db)],
       ),
-      DI.provide(findUser, DI.singleton(DatabaseDependency, db)).with(
+      DI.provide(findUser, [DI.singleton(DatabaseDependency, db)]).with(
         Policy.retry({
           retries: 0,
           when: () => true,
           delay: () => 0,
         }),
       ),
-      DI.provide(findUser, DI.singleton(DatabaseDependency, db)).with(Policy.timeout(1_000)),
-      DI.provide(findUser, DI.singleton(DatabaseDependency, db)).with(Policy.cancel(signal)),
-      DI.provide(findUser, DI.singleton(DatabaseDependency, db)).with(Policy.release(() => {})),
-      DI.provide(findUser, DI.singleton(DatabaseDependency, db)).on("enter", () => {}),
-      DI.provide(findUser, DI.singleton(DatabaseDependency, db)).on("exit", () => {}),
+      DI.provide(findUser, [DI.singleton(DatabaseDependency, db)]).with(Policy.timeout(1_000)),
+      DI.provide(findUser, [DI.singleton(DatabaseDependency, db)]).with(Policy.cancel(signal)),
+      DI.provide(findUser, [DI.singleton(DatabaseDependency, db)]).with(Policy.release(() => {})),
+      DI.provide(findUser, [DI.singleton(DatabaseDependency, db)]).on("enter", () => {}),
+      DI.provide(findUser, [DI.singleton(DatabaseDependency, db)]).on("exit", () => {}),
     ];
 
     for (const [index, candidate] of cases.entries()) {
@@ -225,13 +222,13 @@ describe("DI", () => {
     expect(
       await DI.provide(
         findUser("flat").flatMap(() => findUser("next")),
-        DI.singleton(DatabaseDependency, db),
+        [DI.singleton(DatabaseDependency, db)],
       ).run(),
     ).toEqual(expect.objectContaining({ value: { id: "next" } }));
     expect(
       await DI.provide(
         findUser("tap").tap(() => findUser("observed")),
-        DI.singleton(DatabaseDependency, db),
+        [DI.singleton(DatabaseDependency, db)],
       ).run(),
     ).toEqual(expect.objectContaining({ value: { id: "tap" } }));
     const recoveredFallback = findUser("recovered");
@@ -254,7 +251,7 @@ describe("DI", () => {
         yield* Op.try(neverSettling);
       });
 
-      const runPromise = DI.provide(inner).with(Policy.timeout(10)).run();
+      const runPromise = DI.provide(inner, []).with(Policy.timeout(10)).run();
       await vi.advanceTimersByTimeAsync(10);
       await vi.runOnlyPendingTimersAsync();
       const result = await runPromise;
@@ -272,7 +269,7 @@ describe("DI", () => {
       Op(function* () {
         yield* DI.inject(DatabaseDependency);
       }),
-      DI.singleton(DatabaseDependency, makeDatabase()),
+      [DI.singleton(DatabaseDependency, makeDatabase())],
     ).with(Policy.timeout(1));
 
     const _timeout: Op<void, TimeoutError, []> = op;
@@ -289,10 +286,12 @@ describe("DI", () => {
         yield* DI.inject(DatabaseDependency);
         return "unreachable";
       }),
-      DI.scoped(DatabaseDependency, () => {
-        factoryCalls += 1;
-        return makeDatabase();
-      }),
+      [
+        DI.scoped(DatabaseDependency, () => {
+          factoryCalls += 1;
+          return makeDatabase();
+        }),
+      ],
     ).with(Policy.cancel(controller.signal));
 
     const result = await op.run();
@@ -310,20 +309,22 @@ describe("DI", () => {
         yield* DI.inject(DatabaseDependency);
         return "unreachable";
       }),
-      DI.scoped(DatabaseDependency, (signal) => {
-        factoryCalls += 1;
-        return new Promise<Database>((resolve, reject) => {
-          const id = setTimeout(() => resolve(makeDatabase()), 50);
-          signal.addEventListener(
-            "abort",
-            () => {
-              clearTimeout(id);
-              reject(signal.reason);
-            },
-            { once: true },
-          );
-        });
-      }),
+      [
+        DI.scoped(DatabaseDependency, (signal) => {
+          factoryCalls += 1;
+          return new Promise<Database>((resolve, reject) => {
+            const id = setTimeout(() => resolve(makeDatabase()), 50);
+            signal.addEventListener(
+              "abort",
+              () => {
+                clearTimeout(id);
+                reject(signal.reason);
+              },
+              { once: true },
+            );
+          });
+        }),
+      ],
     ).with(Policy.cancel(controller.signal));
 
     const runPromise = op.run();
@@ -340,10 +341,12 @@ describe("DI", () => {
         yield* DI.inject(DatabaseDependency);
         return "ok";
       }),
-      DI.scoped(DatabaseDependency, () => {
-        factoryCalls += 1;
-        return makeDatabase();
-      }),
+      [
+        DI.scoped(DatabaseDependency, () => {
+          factoryCalls += 1;
+          return makeDatabase();
+        }),
+      ],
     ).run();
 
     expect(retry.unwrap()).toBe("ok");
@@ -375,10 +378,12 @@ describe("DI", () => {
         );
         return "unreachable";
       }),
-      DI.scoped(DatabaseDependency, () => {
-        factoryCalls += 1;
-        return Promise.resolve(makeDatabase());
-      }),
+      [
+        DI.scoped(DatabaseDependency, () => {
+          factoryCalls += 1;
+          return Promise.resolve(makeDatabase());
+        }),
+      ],
     ).with(Policy.cancel(controller.signal));
 
     const runPromise = op.run();
@@ -397,10 +402,12 @@ describe("DI", () => {
         yield* DI.inject(DatabaseDependency);
         return "unreachable";
       }),
-      DI.scoped(DatabaseDependency, () => {
-        factoryCalls += 1;
-        return new Promise<Database>(() => {});
-      }),
+      [
+        DI.scoped(DatabaseDependency, () => {
+          factoryCalls += 1;
+          return new Promise<Database>(() => {});
+        }),
+      ],
     ).with(Policy.cancel(controller.signal));
 
     const runPromise = op.run();
@@ -419,10 +426,12 @@ describe("DI", () => {
         yield* DI.inject(DatabaseDependency);
         return "unreachable";
       }),
-      DI.scoped(DatabaseDependency, () => {
-        factoryCalls += 1;
-        throw new Error("factory failed");
-      }),
+      [
+        DI.scoped(DatabaseDependency, () => {
+          factoryCalls += 1;
+          throw new Error("factory failed");
+        }),
+      ],
     );
 
     const failed = await op.run();
@@ -435,10 +444,12 @@ describe("DI", () => {
         yield* DI.inject(DatabaseDependency);
         return "ok";
       }),
-      DI.scoped(DatabaseDependency, () => {
-        factoryCalls += 1;
-        return makeDatabase();
-      }),
+      [
+        DI.scoped(DatabaseDependency, () => {
+          factoryCalls += 1;
+          return makeDatabase();
+        }),
+      ],
     ).run();
 
     expect(recovered.unwrap()).toBe("ok");
@@ -452,10 +463,12 @@ describe("DI", () => {
         yield* DI.inject(DatabaseDependency);
         return "unreachable";
       }),
-      DI.scoped(DatabaseDependency, () => {
-        factoryCalls += 1;
-        return Promise.reject(new Error("async factory failed"));
-      }),
+      [
+        DI.scoped(DatabaseDependency, () => {
+          factoryCalls += 1;
+          return Promise.reject(new Error("async factory failed"));
+        }),
+      ],
     );
 
     const failed = await runnable.run();
@@ -467,10 +480,12 @@ describe("DI", () => {
         yield* DI.inject(DatabaseDependency);
         return "ok";
       }),
-      DI.scoped(DatabaseDependency, () => {
-        factoryCalls += 1;
-        return Promise.resolve(makeDatabase());
-      }),
+      [
+        DI.scoped(DatabaseDependency, () => {
+          factoryCalls += 1;
+          return Promise.resolve(makeDatabase());
+        }),
+      ],
     ).run();
 
     expect(recovered.unwrap()).toBe("ok");
@@ -487,12 +502,14 @@ describe("DI", () => {
         logger.log("ok");
         return yield* db.query("user", ["1"]);
       }),
-      DI.singleton(LoggerDependency, { log: (message) => logs.push(message) }),
-      DI.scoped(DatabaseDependency, () => {
-        factoryCalls += 1;
-        if (factoryCalls === 1) throw new Error("factory failed");
-        return makeDatabase();
-      }),
+      [
+        DI.singleton(LoggerDependency, { log: (message) => logs.push(message) }),
+        DI.scoped(DatabaseDependency, () => {
+          factoryCalls += 1;
+          if (factoryCalls === 1) throw new Error("factory failed");
+          return makeDatabase();
+        }),
+      ],
     );
 
     const failed = await runnable.run();
@@ -525,11 +542,13 @@ describe("DI", () => {
         expect(db1).toBe(db2);
         return db1;
       }),
-      DI.scoped(DatabaseDependency, async () => {
-        factoryCalls += 1;
-        await factoryGate;
-        return makeDatabase();
-      }),
+      [
+        DI.scoped(DatabaseDependency, async () => {
+          factoryCalls += 1;
+          await factoryGate;
+          return makeDatabase();
+        }),
+      ],
     );
 
     const runPromise = op.run();
@@ -557,10 +576,12 @@ describe("DI", () => {
         expect(db1).toBe(db2);
         return db1;
       }),
-      DI.scoped(DatabaseDependency, () => {
-        scopedCalls += 1;
-        return makeDatabase();
-      }),
+      [
+        DI.scoped(DatabaseDependency, () => {
+          scopedCalls += 1;
+          return makeDatabase();
+        }),
+      ],
     );
 
     const result = await op.run();
@@ -591,10 +612,12 @@ describe("DI", () => {
         expect(winner).toBe(again);
         return winner;
       }),
-      DI.scoped(DatabaseDependency, () => {
-        scopedCalls += 1;
-        return makeDatabase();
-      }),
+      [
+        DI.scoped(DatabaseDependency, () => {
+          scopedCalls += 1;
+          return makeDatabase();
+        }),
+      ],
     );
 
     const result = await op.run();

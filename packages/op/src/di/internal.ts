@@ -118,10 +118,10 @@ type ExcessProvidedDeps<Entries extends readonly AnyBinding[], R> = Exclude<
   R
 >;
 
-export type ValidProvideEntries<Entries extends readonly AnyBinding[], R> = [
-  ExcessProvidedDeps<Entries, R>,
+export type ValidProvideBindings<Bindings extends readonly AnyBinding[], R> = [
+  ExcessProvidedDeps<Bindings, R>,
 ] extends [never]
-  ? Entries
+  ? Bindings
   : never;
 
 type UpdateProvidedMeta<M, R> = [R] extends [never]
@@ -279,10 +279,10 @@ function resolveInjectedValue(
 
 function extendContext(
   context: RunContext<readonly unknown[]>,
-  entries: readonly AnyBinding[],
+  bindings: readonly AnyBinding[],
 ): RunContext<readonly unknown[]> {
   const parentEnv = readEnv(context);
-  const env = entries.reduce(
+  const env = bindings.reduce(
     (current, entry) => withProvisionEntry(current, entry),
     new Map(parentEnv),
   );
@@ -291,13 +291,13 @@ function extendContext(
   return createRunContext(context.signal, context.args, extensions);
 }
 
-export function provideOp<T, E, A, M, const Entries extends readonly AnyBinding[]>(
+export function provideOp<T, E, A, M, const Bindings extends readonly AnyBinding[]>(
   op: Op<T, E, A, M>,
-  entries: Entries,
-): Op<T, E, A, ProvidedMeta<M, Entries>> {
+  bindings: Bindings,
+): Op<T, E, A, ProvidedMeta<M, Bindings>> {
   const provided = fromGenFn(function* (...args: AsArgs<A>) {
     const result = yield* new SuspendInstruction(
-      (context) => driveInterruptOnAbort(op(...args), extendContext(context, entries)),
+      (context) => driveInterruptOnAbort(op(...args), extendContext(context, bindings)),
       true,
     );
     if (result.isErr()) return yield* result;

@@ -233,9 +233,9 @@ the chain). See policy ordering notes in `packages/op/DESIGN.md`.
 
 1. **`DI.inject(dependency)`** yields an `InjectInstruction`, a `CustomInstruction` whose
    `resolve(context)` reads bindings from `context.extensions`.
-2. **`DI.provide(op, entries)`** (`provideOp` in `packages/op/src/di/internal.ts`) wraps the
+2. **`DI.provide(op, bindings)`** (`provideOp` in `packages/op/src/di/internal.ts`) wraps the
    user op in a `SuspendInstruction` with `drainOnAbort: true` that calls
-   `driveInterruptOnAbort(inner, extendContext(context, entries))`, cloning `extensions` and
+   `driveInterruptOnAbort(inner, extendContext(context, bindings))`, cloning `extensions` and
    storing the binding `Map` under an internal extension key.
 3. **Metadata.** Provided dependencies block bare `.run()` until satisfied via `ProvidedMeta`
    / `withBlocking` on the op type surface.

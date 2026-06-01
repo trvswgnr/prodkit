@@ -92,12 +92,11 @@ export const handleGetUser = Op(function* (request: HttpRequest) {
 });
 
 export function runnableHandleGetUser(pool: ConnectionPool, users: UserRepository) {
-  const op = DI.provide(
-    handleGetUser,
+  const op = DI.provide(handleGetUser, [
     DI.singleton(ConnectionPoolService, pool),
     DI.singleton(UserRepositoryService, users),
     DI.scoped(PoolConnectionService, (signal) => pool.checkout(signal)),
-  );
+  ]);
 
   return { op };
 }

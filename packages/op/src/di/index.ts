@@ -15,7 +15,7 @@ import {
   type LazyBinding,
   type LazyResolveFn,
   type AnyBinding,
-  type ValidProvideEntries,
+  type ValidProvideBindings,
   type RequiredDepsOfMeta,
   ProvidedMeta,
   MissingDependencyError,
@@ -87,11 +87,14 @@ export const scoped = <C extends AnyDependency>(
   resolve,
 });
 
-/** Satisfies dependency requirements on an op before `.run()`. */
-export const provide = <T, E, A, M, const Entries extends readonly AnyBinding[]>(
+/**
+ * Satisfies dependency requirements on an op before `.run()`.
+ * Pass a readonly tuple of `DI.singleton` / `DI.scoped` bindings
+ */
+export const provide = <T, E, A, M, const Bindings extends readonly AnyBinding[]>(
   op: Op<T, E, A, M>,
-  ...entries: ValidProvideEntries<Entries, RequiredDepsOfMeta<M>>
-): Op<T, E, A, ProvidedMeta<M, Entries>> => provideOp(op, entries);
+  bindings: ValidProvideBindings<Bindings, RequiredDepsOfMeta<M>>,
+): Op<T, E, A, ProvidedMeta<M, Bindings>> => provideOp(op, bindings);
 
 /** Namespace object for dependency injection helpers. */
 export const DI = {

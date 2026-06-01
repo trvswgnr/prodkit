@@ -133,13 +133,12 @@ export function createExampleDependencies() {
 
 export function runnableRegisterUser() {
   const services = createExampleDependencies();
-  const op = DI.provide(
-    registerUser,
+  const op = DI.provide(registerUser, [
     services.db,
     services.hasher,
     services.mailer,
     services.clock,
-  );
+  ]);
 
   return { op, services };
 }
