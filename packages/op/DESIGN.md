@@ -75,7 +75,7 @@ Why this matters:
 Enforced by code paths:
 
 - `packages/op/src/combinators.ts` (`driveAll`, `driveAllSettled`, `driveAny`, `driveRace`)
-- `packages/op/src/combinators.ts` (`fanOut`): isolates child cancellation and detaches parent abort listeners on settle; `Op.any` / `Op.race` fan-out through `driveInterruptOnAbort` so aborted losers unwind even when they ignore the signal
+- `packages/op/src/combinators.ts` (`fanOut`): isolates child cancellation and detaches parent abort listeners on settle; `Op.all`, `Op.any`, and `Op.race` fan-out through `driveInterruptOnAbort` so aborted losers unwind even when they ignore the signal
 
 Representative tests:
 
@@ -85,6 +85,8 @@ Representative tests:
 - `packages/op/tests/unit/combinators.test.ts` (`waits for loser finalization before returning the winner`)
 - `packages/op/tests/unit/combinators.test.ts` (`waits for loser finalization before returning winner result`)
 - `packages/op/tests/unit/combinators.test.ts` (`settles when a winner succeeds and a loser ignores abort`)
+- `packages/op/tests/unit/lifecycle.test.ts` (`Op.all([child]).with(Policy.timeout(...)) runs child Op.defer cleanup when child Op.try ignores abort`)
+- `packages/op/tests/unit/di/index.test.ts` (`DI.provide(inner).with(Policy.timeout(...)) runs inner Op.defer cleanup when inner Op.try ignores abort`)
 - `packages/op/tests/unit/combinators.test.ts` (`settles when the winner succeeds and a loser ignores abort`)
 
 ## Guardrails for future changes
@@ -159,9 +161,14 @@ cleanup path: yielded or async work inside a `finally` block is not driven after
 complete before `.run()` settles. Throws from `return` are swallowed on purpose
 (`packages/op/tests/unit/lifecycle.test.ts`, "preserves original Err result when cleanup throws during `iter.return()`").
 
-## Concurrency (`Op.any`, `Op.race`)
+## Concurrency (`Op.all`, `Op.any`, `Op.race`)
 
 Combinator contracts live in `packages/op/src/combinators.ts` alongside the fuller comment block.
+
+`Op.all` fails fast on the first child error, aborts siblings, and waits for every active branch
+to settle before returning. Fan-out children use `driveInterruptOnAbort` so aborted losers unwind
+even when they ignore `AbortSignal`. The outer `SuspendInstruction` sets `drainOnAbort` so an
+enclosing `Policy.timeout` can drain in-flight fan-out work before the timeout result settles.
 
 `Op.any` runs children together under one outer abort umbrella. First success picks the winner and
 abort-signals the losers, but `.run()` still waits until those aborted branches finish so cleanup

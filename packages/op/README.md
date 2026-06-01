@@ -811,9 +811,9 @@ const policy = {
 
 Run multiple ops concurrently and compose them back into one `Op`.
 When a result is decided early (`all` after a failure, `any` after a success, `race` on first
-settle), remaining work is cancelled through `AbortSignal`. `Op.any` and `Op.race` also interrupt
-aborted losers at suspend boundaries so the combinator still settles when a branch never observes
-the signal; `Op.all` and `Op.allSettled` rely on cooperative cancel only.
+settle), remaining work is cancelled through `AbortSignal`. `Op.all`, `Op.any`, and `Op.race`
+interrupt aborted losers at suspend boundaries so the combinator still settles when a branch never
+observes the signal; `Op.allSettled` relies on cooperative cancel only.
 
 ### `Op.all(ops, concurrency?)`
 

@@ -56,5 +56,8 @@ loser drive to finish.
   wait is part of the combinator contract (Invariant 3 in `DESIGN.md`).
 - New concurrent combinators that abort siblings should follow `fanOut` plus full sibling
   settlement unless there is a documented, narrower leak contract.
+- `Op.all` uses the same `driveInterruptOnAbort` fan-out path as `Op.any` and `Op.race`. Outer
+  `Policy.timeout` on fan-out or `DI.provide` suspends sets `SuspendInstruction.drainOnAbort` so
+  in-flight child drives finish teardown before the timeout result settles.
 - `DESIGN.md` states the wait-for-loser-finalization invariant and tests; this ADR records the
   latency/correctness trade-off behind it.
