@@ -2,7 +2,11 @@ import { UnhandledException } from "../../errors.js";
 import type { Op } from "../../index.js";
 import { Result } from "../../result.js";
 import { isIterableOp, unsafeCoerce } from "../../shared.js";
-import { CancelSettlement } from "../cancel-session.js";
+import {
+  CancelSettlement,
+  signalAbortReason,
+  type CancelSettlement as PlanExecutionMode,
+} from "../cancel-session.js";
 import { driveIterator } from "../runtime.js";
 import type { EnterFn, ExitFn, ReleaseFn } from "./context.js";
 import type { AsArgs, OpInterface, TrackedErr } from "./surface.js";
@@ -15,9 +19,12 @@ export const OP_PLAN_BIND: unique symbol = Symbol("prodkit.op.plan-bind");
 type PlanInstruction<_E, M> = Instruction<unknown, M>;
 type PlanIterator<T, E, M> = Generator<PlanInstruction<E, M>, T, unknown>;
 
+export type { PlanExecutionMode };
+
 export interface Plan<T, E, M = EmptyMeta> {
   readonly execute: (
     context: RunContext<readonly unknown[]>,
+    mode?: PlanExecutionMode,
   ) => Promise<Result<T, E | UnhandledException>>;
   readonly iterate: () => PlanIterator<T, E, M>;
   readonly rewrite: <TNext, ENext, MNext>(rewriter: PlanRewriter) => Plan<TNext, ENext, MNext>;
@@ -94,7 +101,7 @@ export function createPlan<T, E, M>(
   overrides: PlanRewriteOverrides<T, E, M> = {},
 ): Plan<T, E, M> {
   const plan: Plan<T, E, M> = {
-    execute: (context) => executePlan(plan, context),
+    execute: (context, mode) => executePlan(plan, context, mode),
     iterate,
     rewrite: (rewriter) => {
       const rewritten = overrides.rewrite?.(plan, rewriter) ?? rewriter.apply(plan);
@@ -106,27 +113,18 @@ export function createPlan<T, E, M>(
   return plan;
 }
 
+export function interruptOnAbortMode(context: RunContext<readonly unknown[]>): PlanExecutionMode {
+  return CancelSettlement.interruptOnAbort(() => signalAbortReason(context.signal));
+}
+
 export function executePlan<T, E, M>(
   plan: Plan<T, E, M>,
   context: RunContext<readonly unknown[]>,
+  mode: PlanExecutionMode = CancelSettlement.passThrough,
 ): Promise<Result<T, E | UnhandledException>> {
   // SAFETY: plan constructors type their public error channel on Plan<T, E>; the shared
   // generator driver also appends UnhandledException for runtime faults.
-  return unsafeCoerce(driveIterator(plan.iterate(), context));
-}
-
-export function executePlanInterruptOnAbort<T, E, M>(
-  plan: Plan<T, E, M>,
-  context: RunContext<readonly unknown[]>,
-): Promise<Result<T, E | UnhandledException>> {
-  // SAFETY: interrupt mode changes cancellation behavior, not the plan's typed error channel.
-  return unsafeCoerce(
-    driveIterator(
-      plan.iterate(),
-      context,
-      CancelSettlement.interruptOnAbort(() => context.signal.reason),
-    ),
-  );
+  return unsafeCoerce(driveIterator(plan.iterate(), context, mode));
 }
 
 export function genPlan<T, E, M>(

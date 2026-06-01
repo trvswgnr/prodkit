@@ -89,17 +89,6 @@ export async function drive<T, E, M>(
   return driveInternal(op, context, CancelSettlement.passThrough);
 }
 
-export async function driveInterruptOnAbort<T, E, M>(
-  op: Op<T, E, [], M>,
-  context: RunContext<readonly unknown[]>,
-): Promise<Result<T, E | UnhandledException>> {
-  return driveInternal(
-    op,
-    context,
-    CancelSettlement.interruptOnAbort(() => context.signal.reason),
-  );
-}
-
 type ExitFinalizer = (ctx: ExitContext<unknown, unknown, readonly unknown[]>) => PromiseLike<void>;
 
 function awaitSuspended<TValue>(

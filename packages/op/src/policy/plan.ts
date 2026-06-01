@@ -15,7 +15,8 @@ import type { TrackedErr } from "../core/plan/surface.js";
 import type { RunContext } from "../core/runtime.js";
 import {
   createPlan,
-  executePlanInterruptOnAbort,
+  executePlan,
+  interruptOnAbortMode,
   type Plan,
   type PlanRewriter,
 } from "../core/plan/base.js";
@@ -205,7 +206,7 @@ function timeoutPlan<T, E, M>(
     const result: Result<T, E | UnhandledException | TimeoutError> = yield* new SuspendInstruction(
       (outerContext) =>
         raceTimeout(
-          (context) => executePlanInterruptOnAbort(source, context),
+          (context) => executePlan(source, context, interruptOnAbortMode(context)),
           timeoutMs,
           outerContext,
         ),

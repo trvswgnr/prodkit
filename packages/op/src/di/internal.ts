@@ -1,8 +1,9 @@
 import { fromGenFn } from "../builders.js";
 import { awaitWithSettlement, rejectOnAbortSettlement } from "../core/cancel-session.js";
 import { SuspendInstruction, SuspendResume } from "../core/instructions.js";
-import { createRunContext, driveInterruptOnAbort } from "../core/runtime.js";
+import { createRunContext } from "../core/runtime.js";
 import type { AsArgs } from "../core/plan/surface.js";
+import { executePlan, getPlan, interruptOnAbortMode } from "../core/plan/base.js";
 import { CUSTOM_INSTRUCTION_META, type CustomInstruction } from "../core/instructions.js";
 import {
   type Blocking,
@@ -264,8 +265,10 @@ export function provideOp<T, E, A, M, const Bindings extends readonly AnyBinding
   bindings: Bindings,
 ): Op<T, E, A, ProvidedMeta<M, Bindings>> {
   const provided = fromGenFn(function* (...args: AsArgs<A>) {
+    const plan = getPlan(op, args);
     const result = yield* new SuspendInstruction(
-      (context) => driveInterruptOnAbort(op(...args), extendContext(context, bindings)),
+      (context) =>
+        executePlan(plan, extendContext(context, bindings), interruptOnAbortMode(context)),
       SuspendResume.drainAfterAbort,
     );
     if (result.isErr()) return yield* result;

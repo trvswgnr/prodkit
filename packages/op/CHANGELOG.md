@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Nested execution routes through `executePlan` with a `PlanExecutionMode` (`CancelSettlement`)
+  instead of parallel `driveInterruptOnAbort` / `executePlanInterruptOnAbort` ports. Combinator
+  fan-out, DI provision suspend, and timeout inner runs share the plan port. No published API
+  changes.
+
 - Consolidated cancellation settlement into `core/cancel-session.ts`. Suspend resume, Policy.cancel,
   DI lazy resolve, and combinator drain paths declare settlement intent through `CancelSettlement`
   instead of threading booleans through the driver. No published API changes.

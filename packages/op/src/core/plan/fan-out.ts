@@ -2,7 +2,7 @@ import { ErrorGroup, UnhandledException } from "../../errors.js";
 import { Result, type Err } from "../../result.js";
 import { createRunContext } from "../runtime.js";
 import type { RunContext } from "../runtime.js";
-import { executePlan, executePlanInterruptOnAbort, type Plan } from "./base.js";
+import { executePlan, interruptOnAbortMode, type Plan } from "./base.js";
 
 type FanOut<T, E> = {
   runs: readonly PromiseLike<Result<T, E | UnhandledException>>[];
@@ -155,7 +155,7 @@ export function collectAllOk<T, E>(
 }
 
 const executeInterruptingPlan: ExecuteChildPlan = (plan, context) =>
-  executePlanInterruptOnAbort(plan, context);
+  executePlan(plan, context, interruptOnAbortMode(context));
 
 async function driveAllUnboundedPlans<T, E>(
   plans: readonly Plan<T, E, unknown>[],
