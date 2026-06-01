@@ -104,7 +104,7 @@ function defineScenario(
   return { key, label, group: key, overheadBench, implementations };
 }
 
-/** Primary comparison rows shown in PERFORMANCE.md and CodSpeed overhead tracking. */
+/** Primary comparison rows shown in packages/op/docs/performance.md and CodSpeed overhead tracking. */
 export const COMPARISON_SCENARIOS: readonly ComparisonScenario[] = [
   defineScenario("singleValue", "Single value", "overhead.singleValue.ratio", {
     native: {

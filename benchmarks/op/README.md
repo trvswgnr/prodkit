@@ -1,13 +1,13 @@
 # Benchmarks
 
 This workspace measures `@prodkit/op` runtime overhead and bundle size. Public numbers and
-interpretation live in [`packages/op/PERFORMANCE.md`](../../packages/op/PERFORMANCE.md).
+interpretation live in [`packages/op/docs/performance.md`](../../packages/op/docs/performance.md).
 
 Performance work uses four layers:
 
 1. **CodSpeed** (CI): automated runtime regression detection on every push and pull request.
 2. **compressed-size-action** (CI): automated bundle-size comparison on pull requests.
-3. **`compare.ts` + `performance:sync`** (local / CI artifact): column-driven native baseline plus library ops/sec and vs-native ratios for the public table in `PERFORMANCE.md`.
+3. **`compare.ts` + `performance:sync`** (local / CI artifact): column-driven native baseline plus library ops/sec and vs-native ratios for the public table in `packages/op/docs/performance.md`.
 4. **`profile.ts`** (local): V8 CPU/heap profiling and overhead breakdown when you need to investigate a regression.
 
 ## Comparison matrix
@@ -89,7 +89,7 @@ Walltime benches track Op absolute timings plus `overhead.*.ratio` benches that 
 
 ### Public comparison table
 
-`compare.ts` runs the same scenario matrix with `tinybench`, writes `op/.artifacts/comparison-report.json`, and `performance:sync` renders the snapshot block in `packages/op/PERFORMANCE.md`.
+`compare.ts` runs the same scenario matrix with `tinybench`, writes `op/.artifacts/comparison-report.json`, and `performance:sync` renders the snapshot block in `packages/op/docs/performance.md`.
 
 To add another competitor column, extend `IMPLEMENTATION_COLUMNS` and each scenario's `implementations` in `comparison-matrix.ts` (see `effect-scenarios.ts` for the Effect column). `compare.ts` and `tools/update-op-performance-doc.ts` read column ids from the report automatically. CodSpeed walltime benches stay Op-only.
 
@@ -162,6 +162,6 @@ pnpm --filter @prodkit/benchmarks run test
 ## Contributor guidance
 
 - Trust CodSpeed PR comments and the dashboard for regression signals, not local wall-clock numbers.
-- Refresh `PERFORMANCE.md` with `compare` + `performance:sync --write` when the public snapshot should change.
+- Refresh `packages/op/docs/performance.md` with `compare` + `performance:sync --write` when the public snapshot should change.
 - Use `profile.ts` after a CodSpeed regression to isolate overhead sources.
 - Keep scenario semantics aligned between `comparison-matrix.ts`, `scenarios.ts`, CodSpeed benches, and `profile.ts` when adding or changing workloads.

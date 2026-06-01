@@ -21,7 +21,7 @@
   },
   "files": [
     "dist",
-    "COMPARISON.md",
+    "docs",
     "DESIGN.md",
     "CHANGELOG.md",
     "README.md",

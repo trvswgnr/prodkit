@@ -355,7 +355,7 @@ async function main(): Promise<void> {
   logger.info("");
   logger.info(`Wrote comparison report: ${path.resolve(reportPath)}`);
   logger.info(
-    "Refresh PERFORMANCE.md with: pnpm --filter @prodkit/tools run performance:sync -- --write",
+    "Refresh packages/op/docs/performance.md with: pnpm --filter @prodkit/tools run performance:sync -- --write",
   );
 }
 
