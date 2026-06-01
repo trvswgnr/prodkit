@@ -114,7 +114,7 @@ describe("metadata type contracts", () => {
     });
     const recovered = Op.fail("bad" as const).recover(
       (error): error is "bad" => error === "bad",
-      () => observed,
+      () => observed(),
     );
 
     const mapped = source.map((value) => value + 1);
@@ -126,8 +126,8 @@ describe("metadata type contracts", () => {
     const entered = source.on("enter", () => {});
     const exited = source.on("exit", () => {});
     const flatMapped = source.flatMap(() => observed);
-    const tapped = source.tap(() => observed);
-    const tappedErr = source.tapErr(() => observed);
+    const tapped = source.tap(() => observed());
+    const tappedErr = source.tapErr(() => observed());
 
     type _Mapped = Assert<IsEqual<InferOpMeta<typeof mapped>, DatabaseReq>>;
     type _MappedErr = Assert<IsEqual<InferOpMeta<typeof mappedErr>, DatabaseReq>>;
@@ -140,11 +140,9 @@ describe("metadata type contracts", () => {
     type _FlatMapped = Assert<
       IsEqual<InferOpMeta<typeof flatMapped>, { deps: "database" | "logger" }>
     >;
-    type _Tapped = Assert<IsEqual<InferOpMeta<typeof tapped>, { deps: "database" | "logger" }>>;
-    type _TappedErr = Assert<
-      IsEqual<InferOpMeta<typeof tappedErr>, { deps: "database" | "logger" }>
-    >;
-    type _Recovered = Assert<IsEqual<InferOpMeta<typeof recovered>, LoggerReq>>;
+    type _Tapped = Assert<IsEqual<InferOpMeta<typeof tapped>, DatabaseReq>>;
+    type _TappedErr = Assert<IsEqual<InferOpMeta<typeof tappedErr>, DatabaseReq>>;
+    type _Recovered = Assert<IsEqual<InferOpMeta<typeof recovered>, EmptyMeta>>;
 
     type _ = Assert<IsEqual<MergeMeta<DatabaseReq, CacheReq>, { deps: "database" | "cache" }>>;
   });

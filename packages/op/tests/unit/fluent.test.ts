@@ -189,7 +189,7 @@ describe("op.tap", () => {
     expect(seen).toEqual([3]);
   });
 
-  test("tap sequences an Op-returning observer and discards observer output", async () => {
+  test("tap ignores returned Op values", async () => {
     const seen: string[] = [];
     const op = Op.of(4).tap((value) =>
       Op.of(`observed:${value}`).map((payload) => {
@@ -201,15 +201,15 @@ describe("op.tap", () => {
     const result = await op.run();
     assert(result.isOk(), "should be Ok");
     expect(result.value).toBe(4);
-    expect(seen).toEqual(["observed:4"]);
+    expect(seen).toEqual([]);
   });
 
-  test("tap propagates observer Op failures", async () => {
+  test("tap ignores returned Op failures", async () => {
     const result = await Op.of(4)
       .tap(() => Op.fail("tap-failed" as const))
       .run();
-    assert(result.isErr(), "should be Err");
-    expect(result.error).toBe("tap-failed");
+    assert(result.isOk(), "should be Ok");
+    expect(result.value).toBe(4);
   });
 
   test("tap ignores fake Op-shaped functions", async () => {
@@ -260,7 +260,7 @@ describe("op.tap", () => {
     expect(seen).toEqual([]);
   });
 
-  test("tap drives invoked Op(function*) observers that succeed", async () => {
+  test("tap ignores invoked Op(function*) observer returns", async () => {
     const seen: string[] = [];
     const op = Op(function* (value: number) {
       seen.push(`observed:${value}`);
@@ -273,10 +273,10 @@ describe("op.tap", () => {
 
     assert(result.isOk(), "should be Ok");
     expect(result.value).toBe(4);
-    expect(seen).toEqual(["observed:4"]);
+    expect(seen).toEqual([]);
   });
 
-  test("tap propagates failures from invoked Op(function*) observers", async () => {
+  test("tap ignores failures from invoked Op(function*) observer returns", async () => {
     const result = await Op.of(4)
       .tap(() =>
         Op(function* () {
@@ -285,8 +285,8 @@ describe("op.tap", () => {
       )
       .run();
 
-    assert(result.isErr(), "should be Err");
-    expect(result.error).toBe("tap-gen-failed");
+    assert(result.isOk(), "should be Ok");
+    expect(result.value).toBe(4);
   });
 
   test("tap turns thrown observer errors into UnhandledException", async () => {
@@ -337,7 +337,7 @@ describe("op.tapErr", () => {
     expect(seen).toEqual(["bad-input"]);
   });
 
-  test("tapErr sequences an Op-returning observer and discards observer output", async () => {
+  test("tapErr ignores returned Op values", async () => {
     const seen: string[] = [];
     const result = await Op.fail("bad-input" as const)
       .tapErr((error) =>
@@ -350,15 +350,15 @@ describe("op.tapErr", () => {
 
     assert(result.isErr(), "should be Err");
     expect(result.error).toBe("bad-input");
-    expect(seen).toEqual(["BAD-INPUT"]);
+    expect(seen).toEqual([]);
   });
 
-  test("tapErr propagates observer Op failures", async () => {
+  test("tapErr ignores returned Op failures", async () => {
     const result = await Op.fail("bad-input" as const)
       .tapErr(() => Op.fail("observer-failed" as const))
       .run();
     assert(result.isErr(), "should be Err");
-    expect(result.error).toBe("observer-failed");
+    expect(result.error).toBe("bad-input");
   });
 
   test("tapErr treats generator factory observer returns as plain ignored values", async () => {
@@ -377,7 +377,7 @@ describe("op.tapErr", () => {
     expect(seen).toEqual([]);
   });
 
-  test("tapErr drives invoked Op(function*) observers that succeed", async () => {
+  test("tapErr ignores invoked Op(function*) observer returns", async () => {
     const seen: string[] = [];
     const result = await Op.fail("bad-input" as const)
       .tapErr((error) =>
@@ -390,10 +390,10 @@ describe("op.tapErr", () => {
 
     assert(result.isErr(), "should be Err");
     expect(result.error).toBe("bad-input");
-    expect(seen).toEqual(["BAD-INPUT"]);
+    expect(seen).toEqual([]);
   });
 
-  test("tapErr propagates failures from invoked Op(function*) observers", async () => {
+  test("tapErr ignores failures from invoked Op(function*) observer returns", async () => {
     const result = await Op.fail("bad-input" as const)
       .tapErr(() =>
         Op(function* () {
@@ -403,7 +403,7 @@ describe("op.tapErr", () => {
       .run();
 
     assert(result.isErr(), "should be Err");
-    expect(result.error).toBe("tap-err-gen-failed");
+    expect(result.error).toBe("bad-input");
   });
 
   test("tapErr turns thrown observer errors into UnhandledException", async () => {
@@ -448,16 +448,17 @@ describe("op.recover", () => {
     class BErr extends TaggedError("BErr")() {}
     class RecoveryErr extends TaggedError("RecoveryErr")() {}
 
+    const fallback = Op.fail(new RecoveryErr());
     const op = Op(function* (kind: "a" | "b") {
       if (kind === "a") {
         return yield* new AErr();
       }
       return yield* new BErr();
-    }).recover(AErr.is, () => Op.fail(new RecoveryErr()));
+    }).recover(AErr.is, () => fallback);
 
     const recovered = await op.run("a");
-    assert(recovered.isErr(), "should be Err");
-    expect(recovered.error).toBeInstanceOf(RecoveryErr);
+    assert(recovered.isOk(), "should be Ok");
+    expect(recovered.value).toBe(fallback);
 
     const passthrough = await op.run("b");
     assert(passthrough.isErr(), "should be Err");
@@ -476,16 +477,17 @@ describe("op.recover", () => {
     expect(result.value).toBe("fallback");
   });
 
-  test("recover can sequence a recovery op", async () => {
+  test("recover treats returned Op values as plain fallback data", async () => {
     class MissingConfigError extends TaggedError("MissingConfigError")() {}
+    const fallback = Op.of(69);
 
     const recovered = Op(function* () {
       return yield* new MissingConfigError();
-    }).recover(MissingConfigError.is, () => Op.of(69));
+    }).recover(MissingConfigError.is, () => fallback);
 
     const result = await recovered.run();
     assert(result.isOk(), "should be Ok");
-    expect(result.value).toBe(69);
+    expect(result.value).toBe(fallback);
   });
 
   test("recover treats generator factory handlers as plain fallback values", async () => {
@@ -503,37 +505,35 @@ describe("op.recover", () => {
     expect(result.value).toBe(fallback);
   });
 
-  test("recover drives invoked Op(function*) handlers that succeed", async () => {
+  test("recover treats invoked Op(function*) handlers as plain fallback data", async () => {
     class MissingConfigError extends TaggedError("MissingConfigError")() {}
+    const fallback = Op(function* () {
+      return 69;
+    })();
 
     const recovered = Op(function* () {
       return yield* new MissingConfigError();
-    }).recover(MissingConfigError.is, () =>
-      Op(function* () {
-        return 69;
-      })(),
-    );
+    }).recover(MissingConfigError.is, () => fallback);
 
     const result = await recovered.run();
     assert(result.isOk(), "should be Ok");
-    expect(result.value).toBe(69);
+    expect(result.value).toBe(fallback);
   });
 
-  test("recover propagates failures from invoked Op(function*) handlers", async () => {
+  test("recover does not drive failures from invoked Op(function*) handler returns", async () => {
     class MissingConfigError extends TaggedError("MissingConfigError")() {}
     class RecoveryErr extends TaggedError("RecoveryErr")() {}
+    const fallback = Op(function* () {
+      return yield* new RecoveryErr();
+    })();
 
     const recovered = Op(function* () {
       return yield* new MissingConfigError();
-    }).recover(MissingConfigError.is, () =>
-      Op(function* () {
-        return yield* new RecoveryErr();
-      })(),
-    );
+    }).recover(MissingConfigError.is, () => fallback);
 
     const result = await recovered.run();
-    assert(result.isErr(), "should be Err");
-    expect(result.error).toBeInstanceOf(RecoveryErr);
+    assert(result.isOk(), "should be Ok");
+    expect(result.value).toBe(fallback);
   });
 
   test("recover bypasses UnhandledException even when predicate matches", async () => {

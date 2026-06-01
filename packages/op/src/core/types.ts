@@ -195,7 +195,7 @@ type ExtractResultErr<Y> = Y extends Err<unknown, infer E> ? DropUnknown<E> : ne
 
 export type InferInstructionErr<Y> = ExtractResultErr<Y>;
 
-export type AnyNullaryOp = Op<unknown, unknown, [], any>;
+export type AnyNullaryOp = Op<any, any, [], any>;
 
 /**
  * Passed to {@link ExitFn} when the run unwinds.
@@ -322,7 +322,7 @@ export interface FluentOp<T, E, A, M = EmptyMeta> {
    * @example
    * const chained = Op.of(1).flatMap((n) => Op.of(n + 1));
    */
-  flatMap<R extends Op<any, any, [], any>>(
+  flatMap<R extends AnyNullaryOp>(
     bind: (value: T) => R,
   ): Op<InferOpOk<R>, E | InferOpErr<R>, A, MergeMeta<M, InferOpMeta<R>>>;
 
@@ -332,7 +332,7 @@ export interface FluentOp<T, E, A, M = EmptyMeta> {
    * @example
    * const observed = Op.of(1).tap((n) => console.log(n));
    */
-  tap<R>(observe: (value: T) => R): Op<T, E | InferOpErr<R>, A, MergeMeta<M, InferOpMeta<R>>>;
+  tap<R>(observe: (value: T) => R): Op<T, E, A, M>;
 
   /**
    * Observes tracked errors without changing the original success payload.
@@ -340,12 +340,10 @@ export interface FluentOp<T, E, A, M = EmptyMeta> {
    * @example
    * const observedError = Op.fail("x" as const).tapErr((e) => console.error(e));
    */
-  tapErr<R>(
-    observe: (error: TrackedErr<E>) => R,
-  ): Op<T, TrackedErr<E> | BypassedErr<E> | InferOpErr<R>, A, MergeMeta<M, InferOpMeta<R>>>;
+  tapErr<R>(observe: (error: TrackedErr<E>) => R): Op<T, TrackedErr<E> | BypassedErr<E>, A, M>;
 
   /**
-   * Recovers selected typed failures into a fallback value or operation.
+   * Recovers selected typed failures into a fallback value.
    * Pass a type predicate such as `MyError.is` or `(error): error is MyError => MyError.is(error)`.
    *
    * @example
@@ -355,12 +353,7 @@ export interface FluentOp<T, E, A, M = EmptyMeta> {
   recover<ECaught extends TrackedErr<E>, R>(
     predicate: (error: TrackedErr<E>) => error is ECaught,
     handler: (error: ECaught) => R,
-  ): Op<
-    T | InferOpOk<R>,
-    TrackedErr<E, ECaught> | BypassedErr<E> | InferOpErr<R>,
-    A,
-    MergeMeta<M, InferOpMeta<R>>
-  >;
+  ): Op<T | Awaited<R>, TrackedErr<E, ECaught> | BypassedErr<E>, A, M>;
 }
 
 export interface OpIterable<T, E, M = EmptyMeta> {

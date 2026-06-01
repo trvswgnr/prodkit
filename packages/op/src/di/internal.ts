@@ -99,7 +99,7 @@ export type RequiredDepsOfMeta<M> = M extends { deps: Blocking<infer Required> }
 
 /** Unsatisfied dependency tokens blocking `.run()` on an op. */
 export type RequiredDeps<C> =
-  C extends Op<unknown, unknown, infer _A, infer M> ? RequiredDepsOfMeta<M> : never;
+  C extends Op<infer _T, infer _E, infer _A, infer M> ? RequiredDepsOfMeta<M> : never;
 
 export type Deps<C> = C extends abstract new (...args: never[]) => infer I ? I : C;
 

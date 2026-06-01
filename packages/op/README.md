@@ -527,10 +527,9 @@ const result = await getUserTodos.run();
 Observes a successful value without changing it. This is useful for logging, metrics, tracing,
 or debugging in the middle of a pipeline without restructuring into a generator.
 
-If `f` returns a plain value, that value is ignored and the original success value passes through.
-If `f` returns a bound nullary `Op`, that op is sequenced and its result is discarded. Invoke
-generator-built ops before returning them from `f`. If `f` throws, or if the returned op fails, that
-failure propagates.
+Return values from `f` are always ignored; returned ops are not run. If observation needs to run
+another operation, use a generator and `yield*` that operation explicitly. If `f` throws, the
+failure surfaces as `UnhandledException`.
 
 ```ts
 const withLog = Op.try(() => fetch("https://example.com/user/69"))
@@ -545,10 +544,9 @@ const withLog = Op.try(() => fetch("https://example.com/user/69"))
 Observes typed failures without changing which error is returned. This is useful for error metrics,
 structured logging, and alert hooks while preserving existing control flow.
 
-If `f` returns a plain value, that value is ignored and the original typed error passes through.
-If `f` returns a bound nullary `Op`, that op is sequenced and its result is discarded. Invoke
-generator-built ops before returning them from `f`. If `f` throws, or if the returned op fails, that
-failure propagates. `UnhandledException` bypasses `tapErr`.
+Return values from `f` are always ignored; returned ops are not run. If error observation needs to
+run another operation, use a generator and `yield*` that operation explicitly. If `f` throws, the
+failure surfaces as `UnhandledException`. `UnhandledException` bypasses `tapErr`.
 
 ```ts
 const withErrorMetric = Op.try(
@@ -577,10 +575,10 @@ const normalizeFetchError = Op.try(
 
 ### `.recover(predicate, handler)`
 
-Recovers from selected typed failures while preserving the rest of the error channel.
-Pass a type predicate such as `MyError.is` or `(error): error is MyError => MyError.is(error)`.
-`handler` can return either a fallback value or another bound nullary `Op`. Invoke generator-built
-ops before returning them from `handler`.
+Recovers from selected typed failures while preserving the rest of the error channel. Pass a type
+predicate such as `MyError.is` or `(error): error is MyError => MyError.is(error)`. `handler`
+returns a fallback value; returned ops are treated as fallback data, not run. Use `flatMap` or a
+generator with `yield*` when recovery needs to run another operation.
 
 `UnhandledException` is intentionally not recoverable through this method; unexpected throws
 still surface so bugs are not silently converted into success paths.

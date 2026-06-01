@@ -29,16 +29,15 @@ export function getSourceFile(
   return sourceFile;
 }
 
-export function getPackageSourceFiles(
-  program: ts.Program,
-  packageRoot: string,
-): ts.SourceFile[] {
-  return program.getSourceFiles().filter(
-    (sourceFile) =>
-      sourceFile.fileName.startsWith(`${packageRoot}/src/`) &&
-      !sourceFile.fileName.endsWith(".d.ts") &&
-      !sourceFile.fileName.endsWith(".test.ts"),
-  );
+export function getPackageSourceFiles(program: ts.Program, packageRoot: string): ts.SourceFile[] {
+  return program
+    .getSourceFiles()
+    .filter(
+      (sourceFile) =>
+        sourceFile.fileName.startsWith(`${packageRoot}/src/`) &&
+        !sourceFile.fileName.endsWith(".d.ts") &&
+        !sourceFile.fileName.endsWith(".test.ts"),
+    );
 }
 
 export function moduleExports(
@@ -139,8 +138,7 @@ export function nodeLocation(
 export function formatHygieneViolations(violations: readonly HygieneViolation[]): string {
   return violations
     .map(
-      (violation) =>
-        `${violation.file}:${violation.line}:${violation.column} ${violation.message}`,
+      (violation) => `${violation.file}:${violation.line}:${violation.column} ${violation.message}`,
     )
     .join("\n");
 }

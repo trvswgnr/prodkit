@@ -52,7 +52,7 @@ describe("Policy.timeout push-through matrix", () => {
           hangingOp()
             .recover(
               (_e): _e is never => true,
-              () => Op.of(69),
+              () => 69,
             )
             .with(Policy.timeout(TIMEOUT_MS)),
         );
@@ -97,7 +97,7 @@ describe("Policy.timeout push-through matrix", () => {
         const result = await Op.fail("retryable" as const)
           .recover(
             (error): error is "retryable" => error === "retryable",
-            () => Op.of(69),
+            () => 69,
           )
           .with(Policy.timeout(GENEROUS_TIMEOUT_MS))
           .run();

@@ -1,6 +1,6 @@
 import { TimeoutError, UnhandledException } from "../../errors.js";
 import { Result } from "../../result.js";
-import { EMPTY_TUPLE, coerceToNullaryOp } from "../../shared.js";
+import { EMPTY_TUPLE } from "../../shared.js";
 import { SuspendInstruction } from "../instructions.js";
 import type {
   AnyNullaryOp,
@@ -12,10 +12,6 @@ import type {
   TrackedErr,
 } from "../types.js";
 import { createPlan, getPlan, type Plan } from "./base.js";
-
-function bindObservedOp(value: unknown): AnyNullaryOp | undefined {
-  return coerceToNullaryOp(value);
-}
 
 function isRuntimeBypass(error: unknown): error is UnhandledException | TimeoutError {
   return UnhandledException.is(error) || TimeoutError.is(error);
@@ -71,7 +67,7 @@ export function flatMapPlan<T, E, R extends AnyNullaryOp, M>(
 export function tapPlan<T, E, R, M>(
   source: Plan<T, E, M>,
   observe: (value: T) => R,
-): Plan<T, E | InferOpErr<R>, MergeMeta<M, InferOpMeta<R>>> {
+): Plan<T, E, M> {
   return createPlan(
     function* () {
       const sourceResult: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
@@ -80,21 +76,7 @@ export function tapPlan<T, E, R, M>(
 
       if (sourceResult.isErr()) return yield* sourceResult;
 
-      const observed: R = yield* new SuspendInstruction(() =>
-        Promise.resolve(observe(sourceResult.value)),
-      );
-      const observedOp: AnyNullaryOp | undefined = yield* new SuspendInstruction(() =>
-        Promise.resolve(bindObservedOp(observed)),
-      );
-
-      if (!observedOp) return sourceResult.value;
-
-      const observedResult: Result<unknown, InferOpErr<R> | UnhandledException> =
-        yield* new SuspendInstruction((context) =>
-          getPlan(observedOp, EMPTY_TUPLE).execute(context),
-        );
-
-      if (observedResult.isErr()) return yield* observedResult;
+      yield* new SuspendInstruction(() => Promise.resolve(observe(sourceResult.value)));
       return sourceResult.value;
     },
     {
@@ -133,7 +115,7 @@ export function mapErrPlan<T, E, E2, M>(
 export function tapErrPlan<T, E, R, M>(
   source: Plan<T, E, M>,
   observe: (error: TrackedErr<E>) => R,
-): Plan<T, TrackedErr<E> | BypassedErr<E> | InferOpErr<R>, MergeMeta<M, InferOpMeta<R>>> {
+): Plan<T, TrackedErr<E> | BypassedErr<E>, M> {
   return createPlan(
     function* () {
       const sourceResult: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
@@ -145,21 +127,7 @@ export function tapErrPlan<T, E, R, M>(
 
       if (isRuntimeBypass(sourceError)) return yield* sourceResult;
 
-      const observed: R = yield* new SuspendInstruction(() =>
-        Promise.resolve(observe(sourceError as TrackedErr<E>)),
-      );
-      const observedOp: AnyNullaryOp | undefined = yield* new SuspendInstruction(() =>
-        Promise.resolve(bindObservedOp(observed)),
-      );
-
-      if (!observedOp) return yield* sourceResult;
-
-      const observedResult: Result<T, InferOpErr<R> | UnhandledException> =
-        yield* new SuspendInstruction((context) =>
-          getPlan(observedOp, EMPTY_TUPLE).execute(context),
-        );
-
-      if (observedResult.isErr()) return yield* observedResult;
+      yield* new SuspendInstruction(() => Promise.resolve(observe(sourceError as TrackedErr<E>)));
       return yield* sourceResult;
     },
     {
@@ -172,11 +140,7 @@ export function recoverPlan<T, E, ECaught extends TrackedErr<E>, R, M>(
   source: Plan<T, E, M>,
   predicate: (error: TrackedErr<E>) => error is ECaught,
   handler: (error: ECaught) => R,
-): Plan<
-  T | InferOpOk<R>,
-  TrackedErr<E, ECaught> | BypassedErr<E> | InferOpErr<R>,
-  MergeMeta<M, InferOpMeta<R>>
-> {
+): Plan<T | Awaited<R>, TrackedErr<E, ECaught> | BypassedErr<E>, M> {
   return createPlan(
     function* () {
       const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
@@ -191,24 +155,10 @@ export function recoverPlan<T, E, ECaught extends TrackedErr<E>, R, M>(
 
       if (!predicate(error as TrackedErr<E>)) return yield* Result.err(error);
 
-      const recovered: InferOpOk<R> = yield* new SuspendInstruction(() =>
+      const recovered: Awaited<R> = yield* new SuspendInstruction(() =>
         Promise.resolve(handler(error as unknown as ECaught)),
       );
-      const recoveredOp: AnyNullaryOp | undefined = yield* new SuspendInstruction(() =>
-        Promise.resolve(bindObservedOp(recovered)),
-      );
-
-      if (!recoveredOp) return recovered;
-
-      const recoveredResult: Result<
-        InferOpOk<R>,
-        InferOpErr<R> | UnhandledException
-      > = yield* new SuspendInstruction((context) =>
-        getPlan(recoveredOp, EMPTY_TUPLE).execute(context),
-      );
-
-      if (recoveredResult.isErr()) return yield* recoveredResult;
-      return recoveredResult.value;
+      return recovered;
     },
     {
       rewrite: (self, rewriter) =>

@@ -159,6 +159,15 @@ describe("type inference contracts", () => {
     });
     const tapParameterized = Op.of(1).tap(() => parameterizedObserver);
     expectTypeOf(tapParameterized).toEqualTypeOf<Op<number, never, []>>();
+
+    const nullaryObserver = Op(function* () {
+      return yield* Op.fail("bad-nullary" as const);
+    });
+    const tapUnboundNullary = Op.of(1).tap(() => nullaryObserver);
+    expectTypeOf(tapUnboundNullary).toEqualTypeOf<Op<number, never, []>>();
+
+    const tapBoundNullary = Op.of(1).tap(() => nullaryObserver());
+    expectTypeOf(tapBoundNullary).toEqualTypeOf<Op<number, never, []>>();
   });
 
   test("mapErr, tapErr, and recover callbacks exclude UnhandledException", () => {
@@ -231,7 +240,7 @@ describe("type inference contracts", () => {
       (error): error is AErr => error instanceof AErr,
       () => Op.fail(new RecoveryErr()),
     );
-    expectTypeOf(op).toEqualTypeOf<Op<never, BErr | RecoveryErr, ["a" | "b"]>>();
+    expectTypeOf(op).toEqualTypeOf<Op<Op<never, RecoveryErr, []>, BErr, ["a" | "b"]>>();
 
     const base = Op(function* () {
       if (TRUE) {

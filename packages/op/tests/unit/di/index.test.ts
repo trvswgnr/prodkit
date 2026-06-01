@@ -233,15 +233,15 @@ describe("DI", () => {
         DI.singleton(DatabaseDependency, db),
       ).run(),
     ).toEqual(expect.objectContaining({ value: { id: "tap" } }));
+    const recoveredFallback = findUser("recovered");
     expect(
-      await DI.provide(
-        Op.fail("recover" as const).recover(
+      await Op.fail("recover" as const)
+        .recover(
           (error): error is "recover" => error === "recover",
-          () => findUser("recovered"),
-        ),
-        DI.singleton(DatabaseDependency, db),
-      ).run(),
-    ).toEqual(expect.objectContaining({ value: { id: "recovered" } }));
+          () => recoveredFallback,
+        )
+        .run(),
+    ).toEqual(expect.objectContaining({ value: recoveredFallback }));
   });
 
   test("timeout typing remains available around provisioned ops", () => {

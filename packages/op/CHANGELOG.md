@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `.tap`, `.tapErr`, and `.recover` no longer drive returned ops implicitly. Callback return
+  values are ignored for `tap` and `tapErr`, while `recover` treats the handler return as fallback
+  data. Use `flatMap` or `yield*` for explicit operation sequencing.
 - `Policy.timeout` now rejects timer values above the platform `setTimeout` maximum at run
   time instead of scheduling an immediate timeout.
 - `Policy.retry(null)` now fails at run time with `UnhandledException` instead of falling back
@@ -571,5 +574,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retry timing, and composed operation semantics).
 - Improved examples and parsing validation in places where earlier behavior
   could produce weaker diagnostics or drift from production expectations.
-
-

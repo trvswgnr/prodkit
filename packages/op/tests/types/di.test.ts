@@ -177,15 +177,13 @@ describe("DI type inference", () => {
 
     const mapped = findUser.map((user) => user.id);
     const timed = findUser.with(Policy.timeout(1));
-    const tapped = findUser("1").tap(() => log);
+    const tapped = findUser("1").tap(() => log());
     const flatMapped = findUser("1").flatMap(() => log);
 
     expectTypeOf<RequiredDeps<typeof mapped>>().toEqualTypeOf<DatabaseDependency>();
     expectTypeOf<RequiredDeps<typeof timed>>().toEqualTypeOf<DatabaseDependency>();
     type _TappedReqs = RequiredDeps<typeof tapped>;
-    type _Tapped = Assert<
-      IsEqual<RequiredDeps<typeof tapped>, DatabaseDependency | LoggerDependency>
-    >;
+    type _Tapped = Assert<IsEqual<RequiredDeps<typeof tapped>, DatabaseDependency>>;
     type _FlatMapped = Assert<
       IsEqual<RequiredDeps<typeof flatMapped>, DatabaseDependency | LoggerDependency>
     >;
