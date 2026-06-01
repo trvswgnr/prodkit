@@ -1,5 +1,5 @@
 import { fromGenFn } from "../builders.js";
-import { raceAgainstAbortSignal } from "../core/abort-race.js";
+import { awaitWithSettlement, rejectOnAbortSettlement } from "../core/cancel-session.js";
 import { SuspendInstruction } from "../core/instructions.js";
 import { createRunContext, driveInterruptOnAbort } from "../core/runtime.js";
 import type { AsArgs } from "../core/plan/surface.js";
@@ -230,10 +230,7 @@ function resolveInjectedValue(
     return produced;
   }
 
-  const inflight = raceAgainstAbortSignal(produced, signal, {
-    mode: "rejectImmediately",
-    getAbortReason: () => abortReason(signal),
-  }).then(
+  const inflight = awaitWithSettlement(produced, signal, rejectOnAbortSettlement(signal)).then(
     (resolved) => {
       env.set(matchedToken, resolved);
       return resolved;

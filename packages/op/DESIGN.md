@@ -264,10 +264,11 @@ live under `packages/op/src/policy/`.
 
 Cancellation and cooperative `AbortSignal` behavior show up wherever `SuspendInstruction` binds a
 signal, plus README's `Op.defer` / `.on("exit")` notes and checks in `packages/op/tests/unit/policies.test.ts` and
-`packages/op/tests/unit/lifecycle-*.test.ts`. Shared abort-race mechanics live in
-`packages/op/src/core/abort-race.ts`: DI lazy-resolve uses `rejectImmediately`; Policy.cancel
-bound-abort settlement uses `raceCooperativelyAfterAbort`; driveIterator interrupt-on-abort suspend
-resume uses `cooperativeSettle`. Type-level contracts collected in
+`packages/op/tests/unit/lifecycle-*.test.ts`. Settlement intent lives in
+`packages/op/src/core/cancel-session.ts`: DI lazy-resolve uses `rejectOnAbort`; Policy.cancel
+uses bound-abort session composition and macrotimer fallback; driveIterator suspend resume uses
+`interruptOnAbort`; combinator and DI provision drain use `drainAfterAbort` on suspend resume.
+Type-level contracts collected in
 `packages/op/tests/types/op.test.ts`, with custom policy spike coverage in
 `packages/op/tests/unit/policy-hkt.test.ts`.
 

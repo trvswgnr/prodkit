@@ -1,5 +1,11 @@
 import { UnhandledException } from "../errors.js";
-import { raceAgainstAbortSignal } from "./abort-race.js";
+import {
+  CancelSettlement,
+  awaitWithSettlement,
+  drainInFlightWork,
+  settlementForSuspendResume,
+  type CancelSettlement as CancelSettlementType,
+} from "./cancel-session.js";
 import { Result } from "../result.js";
 import {
   CUSTOM_INSTRUCTION_META,
@@ -80,51 +86,44 @@ export async function drive<T, E, M>(
   op: Op<T, E, [], M>,
   context: RunContext<readonly unknown[]>,
 ): Promise<Result<T, E | UnhandledException>> {
-  return driveInternal(op, context, false);
+  return driveInternal(op, context, CancelSettlement.passThrough);
 }
 
 export async function driveInterruptOnAbort<T, E, M>(
   op: Op<T, E, [], M>,
   context: RunContext<readonly unknown[]>,
 ): Promise<Result<T, E | UnhandledException>> {
-  return driveInternal(op, context, true);
+  return driveInternal(
+    op,
+    context,
+    CancelSettlement.interruptOnAbort(() => context.signal.reason),
+  );
 }
 
 type ExitFinalizer = (ctx: ExitContext<unknown, unknown, readonly unknown[]>) => PromiseLike<void>;
 
-function awaitSuspendedWithOptionalInterrupt<TValue>(
+function awaitSuspended<TValue>(
   suspended: PromiseLike<TValue>,
   signal: AbortSignal,
-  interruptOnAbort: boolean,
+  settlement: CancelSettlementType,
 ): PromiseLike<TValue> {
-  if (!interruptOnAbort) return suspended;
-  return raceAgainstAbortSignal(suspended, signal, {
-    mode: "cooperativeSettle",
-    getAbortReason: () => signal.reason,
-  });
-}
-
-async function drainSuspended(suspended: PromiseLike<unknown>): Promise<void> {
-  try {
-    await suspended;
-  } catch {
-    // ignore: abort rejection or child settlement errors while draining fan-out/provision work
-  }
+  return awaitWithSettlement(suspended, signal, settlement);
 }
 
 async function resumeSuspendedInstruction<T, E, M>(
   instruction: SuspendInstruction,
   iterator: Iterator<Instruction<E, M>, T, unknown>,
   context: RunContext<readonly unknown[]>,
-  interruptOnAbort: boolean,
+  driveSettlement: CancelSettlementType,
 ): Promise<IteratorResult<Instruction<E, M>, T>> {
+  const settlement = settlementForSuspendResume(driveSettlement, instruction.drainOnAbort);
   const suspended = instruction.suspend(context);
   try {
-    return iterator.next(
-      await awaitSuspendedWithOptionalInterrupt(suspended, context.signal, interruptOnAbort),
-    );
+    return iterator.next(await awaitSuspended(suspended, context.signal, settlement));
   } catch (cause) {
-    if (interruptOnAbort && instruction.drainOnAbort) await drainSuspended(suspended);
+    if (settlement.kind === "interruptOnAbort" && settlement.drainAfterAbort) {
+      await drainInFlightWork(suspended);
+    }
     throw cause;
   }
 }
@@ -133,13 +132,13 @@ async function resumeCustomInstruction<T, E, M>(
   instruction: CustomInstruction<unknown, unknown>,
   iterator: Iterator<Instruction<E, M>, T, unknown>,
   context: RunContext<readonly unknown[]>,
-  interruptOnAbort: boolean,
+  driveSettlement: CancelSettlementType,
 ): Promise<IteratorResult<Instruction<E, M>, T>> {
   return iterator.next(
-    await awaitSuspendedWithOptionalInterrupt(
+    await awaitSuspended(
       Promise.resolve(instruction.resolve(context)),
       context.signal,
-      interruptOnAbort,
+      driveSettlement,
     ),
   );
 }
@@ -208,7 +207,7 @@ async function settleIteratorWithCleanup<T, E, M>(
 export async function driveIterator<T, E, M>(
   iter: Iterator<Instruction<E, M>, T, unknown>,
   context: RunContext<readonly unknown[]>,
-  interruptOnAbort = false,
+  settlement: CancelSettlementType = CancelSettlement.passThrough,
 ): Promise<Result<T, E | UnhandledException>> {
   const finalizers: ExitFinalizer[] = [];
   const settle = (result: Result<T, E | UnhandledException>) =>
@@ -219,7 +218,7 @@ export async function driveIterator<T, E, M>(
     while (!step.done) {
       try {
         if (step.value instanceof SuspendInstruction) {
-          step = await resumeSuspendedInstruction(step.value, iter, context, interruptOnAbort);
+          step = await resumeSuspendedInstruction(step.value, iter, context, settlement);
           continue;
         }
         const instr = step.value;
@@ -228,7 +227,7 @@ export async function driveIterator<T, E, M>(
           continue;
         }
         if (isCustomInstruction(instr)) {
-          step = await resumeCustomInstruction(instr, iter, context, interruptOnAbort);
+          step = await resumeCustomInstruction(instr, iter, context, settlement);
           continue;
         }
         if (isErrInstruction<E>(instr)) {
@@ -254,12 +253,12 @@ export async function driveIterator<T, E, M>(
 async function driveInternal<T, E, M>(
   op: Op<T, E, [], M>,
   context: RunContext<readonly unknown[]>,
-  interruptOnAbort: boolean,
+  settlement: CancelSettlementType,
 ): Promise<Result<T, E | UnhandledException>> {
   try {
     const ef = typeof op === "function" ? op() : op;
     const iter = ef[Symbol.iterator]();
-    return driveIterator(iter, context, interruptOnAbort);
+    return driveIterator(iter, context, settlement);
   } catch (cause) {
     const unhandled = new UnhandledException({ cause });
     return Result.err(unhandled);

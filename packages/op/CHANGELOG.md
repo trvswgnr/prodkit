@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Consolidated cancellation settlement into `core/cancel-session.ts`. Suspend resume, Policy.cancel,
+  DI lazy resolve, and combinator drain paths declare settlement intent through `CancelSettlement`
+  instead of threading booleans through the driver. No published API changes.
+
 - Colocated former `core/types.ts` with runtime owners: `core/meta.ts`, `core/instructions.ts`,
   `core/runtime.ts` (`RunContext`, `ExitContext`, `runOp`), and `core/plan/context.ts` /
   `core/plan/surface.ts`. Direct imports only; no re-export barrel. No published API changes.

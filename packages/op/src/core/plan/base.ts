@@ -2,6 +2,7 @@ import { UnhandledException } from "../../errors.js";
 import type { Op } from "../../index.js";
 import { Result } from "../../result.js";
 import { isIterableOp, unsafeCoerce } from "../../shared.js";
+import { CancelSettlement } from "../cancel-session.js";
 import { driveIterator } from "../runtime.js";
 import type { EnterFn, ExitFn, ReleaseFn } from "./context.js";
 import type { AsArgs, OpInterface, TrackedErr } from "./surface.js";
@@ -109,7 +110,13 @@ export function executePlanInterruptOnAbort<T, E, M>(
   context: RunContext<readonly unknown[]>,
 ): Promise<Result<T, E | UnhandledException>> {
   // SAFETY: interrupt mode changes cancellation behavior, not the plan's typed error channel.
-  return unsafeCoerce(driveIterator(plan.iterate(), context, true));
+  return unsafeCoerce(
+    driveIterator(
+      plan.iterate(),
+      context,
+      CancelSettlement.interruptOnAbort(() => context.signal.reason),
+    ),
+  );
 }
 
 export function genPlan<T, E, M>(

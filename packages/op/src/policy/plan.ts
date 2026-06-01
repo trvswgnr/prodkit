@@ -1,5 +1,5 @@
 import { TimeoutError, UnhandledException } from "../errors.js";
-import { raceCooperativelyAfterAbort } from "../core/abort-race.js";
+import { createBoundAbortSession, raceBoundCancelExecution } from "../core/cancel-session.js";
 import { Result } from "../result.js";
 import { sleepWithSignal } from "../shared.js";
 import { RegisterExitFinalizerInstruction, SuspendInstruction } from "../core/instructions.js";
@@ -211,56 +211,6 @@ async function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
   }
 }
 
-type BoundCancelSession = {
-  runContext: RunContext<readonly unknown[]>;
-  boundAbortPromise: Promise<void>;
-  isBoundAborted: () => boolean;
-  detach: () => void;
-};
-
-function createBoundCancelSession(
-  boundSignal: AbortSignal,
-  outerContext: RunContext<readonly unknown[]>,
-): BoundCancelSession {
-  const controller = new AbortController();
-  const runContext = createRunContext(
-    controller.signal,
-    outerContext.args,
-    outerContext.extensions,
-  );
-
-  let boundAborted = false;
-  let notifyBoundAbort!: () => void;
-  const boundAbortPromise = new Promise<void>((resolve) => {
-    notifyBoundAbort = resolve;
-  });
-
-  const onBoundAbort = () => {
-    if (boundAborted) return;
-    boundAborted = true;
-    controller.abort(boundSignal.reason);
-    notifyBoundAbort();
-  };
-
-  const onOuterAbort = () => controller.abort(outerContext.signal.reason);
-
-  if (boundSignal.aborted) onBoundAbort();
-  else boundSignal.addEventListener("abort", onBoundAbort);
-
-  if (outerContext.signal.aborted) onOuterAbort();
-  else outerContext.signal.addEventListener("abort", onOuterAbort, { once: true });
-
-  return {
-    runContext,
-    boundAbortPromise,
-    isBoundAborted: () => boundAborted,
-    detach: () => {
-      boundSignal.removeEventListener("abort", onBoundAbort);
-      outerContext.signal.removeEventListener("abort", onOuterAbort);
-    },
-  };
-}
-
 function nonCooperativeCancelFallback<T, E>(
   abortReason: unknown,
 ): Promise<Result<T, E | UnhandledException>> {
@@ -272,44 +222,22 @@ function nonCooperativeCancelFallback<T, E>(
   });
 }
 
-function settleAfterBoundAbort<T, E>(
-  runPromise: PromiseLike<Result<T, E | UnhandledException>>,
-  abortReason: unknown,
-  finish: (result: Result<T, E | UnhandledException>) => void,
-): void {
-  void raceCooperativelyAfterAbort(runPromise, () =>
-    nonCooperativeCancelFallback<T, E>(abortReason),
-  ).then(finish);
-}
-
-/**
- * Policy.cancel settlement:
- * - child finishes before bound abort: return child result
- * - bound abort with cooperative child: child wins after the microtask defer above
- * - bound abort with non-cooperative child: macrotimer fallback returns UnhandledException
- */
 function raceBoundCancel<T, E, M>(
   source: Plan<T, E, M>,
   boundSignal: AbortSignal,
   outerContext: RunContext<readonly unknown[]>,
 ): Promise<Result<T, E | UnhandledException>> {
-  const session = createBoundCancelSession(boundSignal, outerContext);
-  const runPromise = source.execute(session.runContext);
+  const session = createBoundAbortSession(boundSignal, outerContext.signal);
+  const runContext = createRunContext(
+    session.childSignal,
+    outerContext.args,
+    outerContext.extensions,
+  );
+  const runPromise = source.execute(runContext);
 
-  return new Promise((resolve) => {
-    const finish = (result: Result<T, E | UnhandledException>) => {
-      session.detach();
-      resolve(result);
-    };
-
-    void Promise.race([runPromise, session.boundAbortPromise]).then(() => {
-      if (!session.isBoundAborted()) {
-        void runPromise.then(finish);
-        return;
-      }
-      settleAfterBoundAbort(runPromise, boundSignal.reason, finish);
-    });
-  });
+  return raceBoundCancelExecution(runPromise, session, () =>
+    nonCooperativeCancelFallback(boundSignal.reason),
+  );
 }
 
 async function raceTimeout<T, E>(
