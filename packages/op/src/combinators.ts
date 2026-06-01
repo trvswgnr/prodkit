@@ -4,11 +4,14 @@ import type { AnyNullaryOp, InferOpMeta, InferOpOk, InferOpErr } from "./core/pl
 import type { Instruction } from "./core/instructions.js";
 import type { EmptyMeta, MergeMeta } from "./core/meta.js";
 import type { Op } from "./index.js";
+import { allPlan } from "./core/plan/combinators.js";
+import { getPlan } from "./core/plan/base.js";
+import { makePlanOp } from "./core/plan/shell.js";
+import { makeCoreOp } from "./core/fluent.js";
 import { SuspendInstruction } from "./core/instructions.js";
 import { createRunContext, drive, driveInterruptOnAbort } from "./core/runtime.js";
-import { Result, type Err } from "./result.js";
-import { makeCoreOp } from "./core/fluent.js";
-import { unsafeCoerce } from "./shared.js";
+import { Result } from "./result.js";
+import { EMPTY_TUPLE, unsafeCoerce } from "./shared.js";
 
 type MergeOpsMeta<Ops extends readonly AnyNullaryOp[]> = Ops extends readonly [
   infer Head extends AnyNullaryOp,
@@ -177,25 +180,6 @@ async function driveBoundedPool<T, E>(
 type AllOpOk<Ops extends readonly AnyNullaryOp[]> = { [K in keyof Ops]: InferOpOk<Ops[K]> };
 type AllOpErr<Ops extends readonly AnyNullaryOp[]> = InferOpErr<Ops[number]>;
 
-function collectAllOk<T, E>(
-  results: readonly (Result<T, E | UnhandledException> | undefined)[],
-): Result<T[], E | UnhandledException> {
-  const values: T[] = [];
-
-  for (const [index, result] of results.entries()) {
-    if (result === undefined)
-      return Result.err(
-        new UnhandledException({
-          cause: new Error(`Op combinator invariant violation: missing result at index ${index}`),
-        }),
-      );
-    if (result.isErr()) return result;
-    values.push(result.value);
-  }
-
-  return Result.ok(values);
-}
-
 function collectAllSettled<T, E>(
   results: ReadonlyArray<Result<T, E | UnhandledException> | undefined>,
 ): Result<Result<T, E | UnhandledException>[], UnhandledException> {
@@ -219,80 +203,14 @@ export function allOp<const Ops extends readonly AnyNullaryOp[]>(
   concurrency?: number,
 ): Op<AllOpOk<Ops>, AllOpErr<Ops>, [], MergeOpsMeta<Ops>> {
   const snapshot = ops.slice();
-
-  return makeCombinatorOp(function* () {
-    const result: Result<AllOpOk<Ops>, AllOpErr<Ops>> = yield* new SuspendInstruction(
-      (outerContext) => driveAll(snapshot, outerContext, concurrency),
-      true,
+  const bindAllPlan = () =>
+    allPlan(
+      snapshot.map((op) => getPlan(op, EMPTY_TUPLE)),
+      concurrency,
     );
 
-    if (result.isErr()) return yield* result;
-    return result.value;
-  });
-}
-
-/**
- * Drives the `Op.all` combinator
- *
- * Concurrency contract (`Op.all`, bounded mode):
- * - Up to `concurrency` children run at once
- * - First failure aborts in-flight siblings and prevents launching queued work
- * - The driver still waits for active siblings to settle so loser cleanup/finalizers run
- *   before returning the first observed error
- */
-async function driveAll<T, E>(
-  ops: readonly Op<T, E, []>[],
-  outerContext: RunContext<readonly unknown[]>,
-  concurrency: number | undefined,
-): Promise<Result<T[], E | UnhandledException>> {
-  const limit = concurrencyLimit(concurrency, ops.length);
-
-  if (limit.isErr()) return limit;
-
-  if (ops.length === 0) return Result.ok([]);
-
-  if (limit.value >= ops.length) return driveAllUnbounded(ops, outerContext);
-
-  let firstErr: Err<T, E | UnhandledException> | undefined;
-  const results = await driveBoundedPool(ops, outerContext, limit.value, {
-    continueScheduling: () => firstErr === undefined,
-    driveChild: driveInterruptOnAbort,
-    onResult: (res, activeControllers) => {
-      if (res.isErr() && firstErr === undefined) {
-        firstErr = res;
-        for (const c of activeControllers) c.abort();
-      }
-    },
-  });
-
-  if (firstErr !== undefined) return firstErr;
-
-  return collectAllOk(results);
-}
-
-/**
- * Concurrency contract (`Op.all`, unbounded mode):
- * - All children start immediately
- * - First failure aborts all other children
- * - Return waits for every branch to settle, so aborted losers finish cleanup before the
- *   combinator resolves with either the first error or ordered successful values
- */
-async function driveAllUnbounded<T, E>(
-  ops: readonly Op<T, E, []>[],
-  outerContext: RunContext<readonly unknown[]>,
-): Promise<Result<T[], E | UnhandledException>> {
-  let firstErr: Err<T[], E | UnhandledException> | undefined;
-  const results = await driveFirstSettlerFanOut(ops, outerContext, (result) => {
-    if (result.isErr() && firstErr === undefined) {
-      firstErr = result;
-      return true;
-    }
-    return false;
-  });
-
-  if (firstErr !== undefined) return firstErr;
-
-  return collectAllOk(results);
+  // SAFETY: plan-backed binder preserves combinator tuple inference from snapshot ops.
+  return unsafeCoerce(makePlanOp(bindAllPlan, bindAllPlan, true));
 }
 
 type AllSettledOpOk<Ops extends readonly AnyNullaryOp[]> = {

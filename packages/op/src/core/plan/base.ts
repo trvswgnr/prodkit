@@ -70,6 +70,10 @@ export interface PlanRewriter {
     predicate: (error: TrackedErr<E>) => error is ECaught,
     handler: (error: ECaught) => R,
   ) => Plan<unknown, unknown, unknown>;
+  readonly all?: <T, E, M>(
+    source: readonly Plan<T, E, M>[],
+    concurrency?: number,
+  ) => Plan<unknown, unknown, unknown>;
 }
 
 interface PlanRewriteOverrides<T, E, M> {

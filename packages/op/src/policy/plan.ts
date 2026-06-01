@@ -17,6 +17,7 @@ import {
 } from "../core/plan/base.js";
 import { onEnterPlan, onExitPlan } from "../core/plan/lifecycle.js";
 import { mapErrPlan, mapPlan, recoverPlan, tapErrPlan, tapPlan } from "../core/plan/transforms.js";
+import { allPlan } from "../core/plan/combinators.js";
 
 class DelegatingPlanRewriter implements PlanRewriter {
   apply!: PlanRewriter["apply"];
@@ -73,6 +74,16 @@ class DelegatingPlanRewriter implements PlanRewriter {
     handler: (error: ECaught) => R,
   ): Plan<unknown, unknown, unknown> {
     return recoverPlan(source.rewrite<T, E, M>(this), predicate, handler);
+  }
+
+  all<T, E, M>(
+    source: readonly Plan<T, E, M>[],
+    concurrency?: number,
+  ): Plan<unknown, unknown, unknown> {
+    return allPlan(
+      source.map((child) => child.rewrite<T, E, M>(this)),
+      concurrency,
+    );
   }
 }
 

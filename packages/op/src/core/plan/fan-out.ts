@@ -1,0 +1,216 @@
+import { UnhandledException } from "../../errors.js";
+import { Result, type Err } from "../../result.js";
+import { createRunContext } from "../runtime.js";
+import type { RunContext } from "../runtime.js";
+import { executePlan, executePlanInterruptOnAbort, type Plan } from "./base.js";
+
+type FanOut<T, E> = {
+  runs: readonly PromiseLike<Result<T, E | UnhandledException>>[];
+  controllers: readonly AbortController[];
+  detach: () => void;
+};
+
+type ExecuteChildPlan = (
+  plan: Plan<unknown, unknown, unknown>,
+  context: RunContext<readonly unknown[]>,
+) => Promise<Result<unknown, unknown | UnhandledException>>;
+
+type FirstSettlerClaim<T, E> = (
+  result: Result<T, E | UnhandledException>,
+  hasWinner: boolean,
+) => boolean;
+
+export function concurrencyLimit(
+  concurrency: number | undefined,
+  size: number,
+): Result<number, UnhandledException> {
+  if (concurrency === undefined) return Result.ok(size);
+
+  if (!Number.isInteger(concurrency) || concurrency < 1) {
+    const cause = new RangeError("concurrency must be a positive integer");
+    return Result.err(new UnhandledException({ cause }));
+  }
+
+  return Result.ok(Math.min(concurrency, size));
+}
+
+function fanOutPlans(
+  plans: readonly Plan<unknown, unknown, unknown>[],
+  outerContext: RunContext<readonly unknown[]>,
+  executeChild: ExecuteChildPlan,
+): FanOut<unknown, unknown> {
+  const entries = plans.map((plan) => ({ plan, controller: new AbortController() }));
+  const cascade = () => entries.forEach((e) => e.controller.abort(outerContext.signal.reason));
+
+  if (outerContext.signal.aborted) cascade();
+  else outerContext.signal.addEventListener("abort", cascade, { once: true });
+
+  const detach = () => outerContext.signal.removeEventListener("abort", cascade);
+  const controllers = entries.map((e) => e.controller);
+  const runs = entries.map((e) =>
+    executeChild(
+      e.plan,
+      createRunContext(e.controller.signal, outerContext.args, outerContext.extensions),
+    ),
+  );
+
+  return { runs, controllers, detach };
+}
+
+async function driveFirstSettlerFanOutPlans<T, E>(
+  plans: readonly Plan<T, E, unknown>[],
+  outerContext: RunContext<readonly unknown[]>,
+  executeChild: ExecuteChildPlan,
+  shouldClaim: FirstSettlerClaim<T, E>,
+): Promise<Result<T, E | UnhandledException>[]> {
+  const fan = fanOutPlans(plans, outerContext, executeChild);
+  let winnerClaimed = false;
+
+  const results = await Promise.all(
+    fan.runs.map((run, index) =>
+      run.then((result) => {
+        const typed = result as Result<T, E | UnhandledException>;
+        if (!winnerClaimed && shouldClaim(typed, winnerClaimed)) {
+          winnerClaimed = true;
+          fan.controllers.forEach((controller, controllerIndex) => {
+            if (controllerIndex !== index) controller.abort();
+          });
+        }
+        return typed;
+      }),
+    ),
+  );
+
+  fan.detach();
+  return results;
+}
+
+type BoundedPoolConfig<T, E> = {
+  continueScheduling: () => boolean;
+  executeChild: ExecuteChildPlan;
+  onResult?: (
+    result: Result<T, E | UnhandledException>,
+    activeControllers: ReadonlySet<AbortController>,
+  ) => void;
+};
+
+async function driveBoundedPoolPlans<T, E>(
+  plans: readonly Plan<T, E, unknown>[],
+  outerContext: RunContext<readonly unknown[]>,
+  poolSize: number,
+  config: BoundedPoolConfig<T, E>,
+): Promise<Array<Result<T, E | UnhandledException> | undefined>> {
+  const controllers = new Set<AbortController>();
+  const cascade = () => controllers.forEach((c) => c.abort(outerContext.signal.reason));
+
+  if (outerContext.signal.aborted) cascade();
+  else outerContext.signal.addEventListener("abort", cascade, { once: true });
+
+  const results = Array<Result<T, E | UnhandledException> | undefined>(plans.length);
+  let nextIndex = 0;
+
+  const worker = async () => {
+    while (config.continueScheduling()) {
+      const i = nextIndex;
+      nextIndex += 1;
+      const plan = plans[i];
+      if (plan === undefined) return;
+      const controller = new AbortController();
+      controllers.add(controller);
+      if (outerContext.signal.aborted) controller.abort(outerContext.signal.reason);
+      const res = (await config.executeChild(
+        plan,
+        createRunContext(controller.signal, outerContext.args, outerContext.extensions),
+      )) as Result<T, E | UnhandledException>;
+      controllers.delete(controller);
+      results[i] = res;
+      config.onResult?.(res, controllers);
+    }
+  };
+
+  const detach = () => outerContext.signal.removeEventListener("abort", cascade);
+
+  await Promise.all(Array(poolSize).fill(undefined).map(worker)).finally(detach);
+
+  return results;
+}
+
+export function collectAllOk<T, E>(
+  results: readonly (Result<T, E | UnhandledException> | undefined)[],
+): Result<T[], E | UnhandledException> {
+  const values: T[] = [];
+
+  for (const [index, result] of results.entries()) {
+    if (result === undefined)
+      return Result.err(
+        new UnhandledException({
+          cause: new Error(`Op combinator invariant violation: missing result at index ${index}`),
+        }),
+      );
+    if (result.isErr()) return result;
+    values.push(result.value);
+  }
+
+  return Result.ok(values);
+}
+
+const executeInterruptingPlan: ExecuteChildPlan = (plan, context) =>
+  executePlanInterruptOnAbort(plan, context);
+
+async function driveAllUnboundedPlans<T, E>(
+  plans: readonly Plan<T, E, unknown>[],
+  outerContext: RunContext<readonly unknown[]>,
+): Promise<Result<T[], E | UnhandledException>> {
+  let firstErr: Err<T[], E | UnhandledException> | undefined;
+  const results = await driveFirstSettlerFanOutPlans(
+    plans,
+    outerContext,
+    executeInterruptingPlan,
+    (result) => {
+      if (result.isErr() && firstErr === undefined) {
+        firstErr = result;
+        return true;
+      }
+      return false;
+    },
+  );
+
+  if (firstErr !== undefined) return firstErr;
+
+  return collectAllOk(results);
+}
+
+export async function driveAllPlans<T, E>(
+  plans: readonly Plan<T, E, unknown>[],
+  outerContext: RunContext<readonly unknown[]>,
+  concurrency: number | undefined,
+): Promise<Result<T[], E | UnhandledException>> {
+  const limit = concurrencyLimit(concurrency, plans.length);
+
+  if (limit.isErr()) return limit;
+
+  if (plans.length === 0) return Result.ok([]);
+
+  if (limit.value >= plans.length) return driveAllUnboundedPlans(plans, outerContext);
+
+  let firstErr: Err<T, E | UnhandledException> | undefined;
+  const results = await driveBoundedPoolPlans(plans, outerContext, limit.value, {
+    continueScheduling: () => firstErr === undefined,
+    executeChild: executeInterruptingPlan,
+    onResult: (res, activeControllers) => {
+      if (res.isErr() && firstErr === undefined) {
+        firstErr = res;
+        for (const c of activeControllers) c.abort();
+      }
+    },
+  });
+
+  if (firstErr !== undefined) return firstErr;
+
+  return collectAllOk(results);
+}
+
+export const executeCooperativePlan: ExecuteChildPlan = (plan, context) =>
+  executePlan(plan, context);
+
+export { fanOutPlans, driveFirstSettlerFanOutPlans, driveBoundedPoolPlans };
