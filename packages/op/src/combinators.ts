@@ -16,6 +16,14 @@ import { makeCoreOp } from "./core/fluent.js";
 import type { AnyNullaryOp } from "./core/types.js";
 import { unsafeCoerce } from "./shared.js";
 
+/**
+ * Combinator drivers (see DESIGN.md combinator invariants):
+ * - `fanOut`: shared abort-cascade fan-out for unbounded concurrent runs
+ * - `driveBoundedPool`: bounded worker pool for `Op.all` / `Op.allSettled`
+ * - `driveAllUnbounded` / `driveAllSettledUnbounded`: start-all paths when limit >= size
+ * - `driveAny` / `driveRace`: first-success / first-settler with loser finalization
+ */
+
 type MergeOpsMeta<Ops extends readonly AnyNullaryOp[]> = Ops extends readonly [
   infer Head extends AnyNullaryOp,
   ...infer Tail extends readonly AnyNullaryOp[],
@@ -88,6 +96,60 @@ function concurrencyLimit(
   }
 
   return Result.ok(Math.min(concurrency, size));
+}
+
+type BoundedPoolConfig<T, E> = {
+  continueScheduling: () => boolean;
+  driveChild: DriveChild;
+  onResult?: (
+    result: Result<T, E | UnhandledException>,
+    activeControllers: ReadonlySet<AbortController>,
+  ) => void;
+};
+
+/**
+ * Bounded worker pool shared by `Op.all` and `Op.allSettled`.
+ * Parameterize fail-fast scheduling, child driver, and per-result sibling abort.
+ */
+async function driveBoundedPool<T, E>(
+  ops: readonly Op<T, E, []>[],
+  outerContext: RunContext<readonly unknown[]>,
+  poolSize: number,
+  config: BoundedPoolConfig<T, E>,
+): Promise<Array<Result<T, E | UnhandledException> | undefined>> {
+  const controllers = new Set<AbortController>();
+  const cascade = () => controllers.forEach((c) => c.abort(outerContext.signal.reason));
+
+  if (outerContext.signal.aborted) cascade();
+  else outerContext.signal.addEventListener("abort", cascade, { once: true });
+
+  const results = Array<Result<T, E | UnhandledException> | undefined>(ops.length);
+  let nextIndex = 0;
+
+  const worker = async () => {
+    while (config.continueScheduling()) {
+      const i = nextIndex;
+      nextIndex += 1;
+      const op = ops[i];
+      if (op === undefined) return;
+      const controller = new AbortController();
+      controllers.add(controller);
+      if (outerContext.signal.aborted) controller.abort(outerContext.signal.reason);
+      const res = await config.driveChild(
+        op,
+        createRunContext(controller.signal, outerContext.args, outerContext.extensions),
+      );
+      controllers.delete(controller);
+      results[i] = res;
+      config.onResult?.(res, controllers);
+    }
+  };
+
+  const detach = () => outerContext.signal.removeEventListener("abort", cascade);
+
+  await Promise.all(Array(poolSize).fill(undefined).map(worker)).finally(detach);
+
+  return results;
 }
 
 type AllOpOk<Ops extends readonly AnyNullaryOp[]> = { [K in keyof Ops]: InferOpOk<Ops[K]> };
@@ -169,43 +231,17 @@ async function driveAll<T, E>(
 
   if (limit.value >= ops.length) return driveAllUnbounded(ops, outerContext);
 
-  const results = Array<Result<T, E | UnhandledException> | undefined>(ops.length);
-
-  const controllers = new Set<AbortController>();
-  const cascade = () => controllers.forEach((c) => c.abort(outerContext.signal.reason));
-
-  if (outerContext.signal.aborted) cascade();
-  else outerContext.signal.addEventListener("abort", cascade, { once: true });
-
-  let nextIndex = 0;
   let firstErr: Err<T, E | UnhandledException> | undefined;
-  const worker = async () => {
-    while (firstErr === undefined) {
-      const i = nextIndex;
-      nextIndex += 1;
-      const op = ops[i];
-      if (op === undefined) return;
-      const controller = new AbortController();
-      controllers.add(controller);
-      if (outerContext.signal.aborted) controller.abort(outerContext.signal.reason);
-      const res = await driveInterruptOnAbort(
-        op,
-        createRunContext(controller.signal, outerContext.args, outerContext.extensions),
-      );
-      controllers.delete(controller);
-      results[i] = res;
+  const results = await driveBoundedPool(ops, outerContext, limit.value, {
+    continueScheduling: () => firstErr === undefined,
+    driveChild: driveInterruptOnAbort,
+    onResult: (res, activeControllers) => {
       if (res.isErr() && firstErr === undefined) {
         firstErr = res;
-        for (const c of controllers) c.abort();
+        for (const c of activeControllers) c.abort();
       }
-    }
-  };
-
-  const promises = Array(limit.value).fill(undefined).map(worker);
-
-  const detach = () => outerContext.signal.removeEventListener("abort", cascade);
-
-  await Promise.all(promises).finally(detach);
+    },
+  });
 
   if (firstErr !== undefined) return firstErr;
 
@@ -298,37 +334,10 @@ async function driveAllSettled<T, E>(
     return Result.ok(results);
   }
 
-  const controllers = new Set<AbortController>();
-  const cascade = () => controllers.forEach((c) => c.abort(outerContext.signal.reason));
-
-  if (outerContext.signal.aborted) cascade();
-  else outerContext.signal.addEventListener("abort", cascade, { once: true });
-
-  const results = Array<Result<T, E | UnhandledException> | undefined>(ops.length);
-
-  let nextIndex = 0;
-  const worker = async () => {
-    while (true) {
-      const i = nextIndex;
-      nextIndex += 1;
-      const op = ops[i];
-      if (op === undefined) return;
-      const controller = new AbortController();
-      controllers.add(controller);
-      if (outerContext.signal.aborted) controller.abort(outerContext.signal.reason);
-      results[i] = await drive(
-        op,
-        createRunContext(controller.signal, outerContext.args, outerContext.extensions),
-      );
-      controllers.delete(controller);
-    }
-  };
-
-  const promises = Array(limit.value).fill(undefined).map(worker);
-
-  const detach = () => outerContext.signal.removeEventListener("abort", cascade);
-
-  await Promise.all(promises).finally(detach);
+  const results = await driveBoundedPool(ops, outerContext, limit.value, {
+    continueScheduling: () => true,
+    driveChild: drive,
+  });
 
   return collectAllSettled(results);
 }
