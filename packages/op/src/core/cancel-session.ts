@@ -4,6 +4,8 @@
  * Call sites declare settlement intent here instead of threading booleans through the driver.
  */
 
+import { SuspendResume } from "./instructions.js";
+
 export type CancelSettlement =
   | { readonly kind: "passThrough" }
   | { readonly kind: "rejectOnAbort"; readonly getAbortReason: () => unknown }
@@ -30,6 +32,16 @@ export const CancelSettlement = {
     return { kind: "interruptOnAbort", getAbortReason };
   },
 };
+
+export function settlementForSuspendResume(
+  driveSettlement: CancelSettlement,
+  resume: SuspendResume,
+): CancelSettlement {
+  if (driveSettlement.kind !== "interruptOnAbort" || resume !== SuspendResume.drainAfterAbort) {
+    return driveSettlement;
+  }
+  return { ...driveSettlement, drainAfterAbort: true };
+}
 
 export function signalAbortReason(signal: AbortSignal): unknown {
   return signal.reason ?? new Error("Aborted");
@@ -83,14 +95,6 @@ export function awaitWithSettlement<T>(
     signal.addEventListener("abort", onAbort, { once: true });
     Promise.resolve(suspended).then(settleResolve, settleReject);
   });
-}
-
-export function settlementForSuspendResume(
-  driveSettlement: CancelSettlement,
-  drainOnAbort: boolean,
-): CancelSettlement {
-  if (driveSettlement.kind !== "interruptOnAbort" || !drainOnAbort) return driveSettlement;
-  return { ...driveSettlement, drainAfterAbort: true };
 }
 
 export async function drainInFlightWork(suspended: PromiseLike<unknown>): Promise<void> {

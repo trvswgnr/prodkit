@@ -167,7 +167,7 @@ Combinator contracts live in `packages/op/src/combinators.ts` alongside the full
 
 `Op.all` fails fast on the first child error, aborts siblings, and waits for every active branch
 to settle before returning. Fan-out children use `driveInterruptOnAbort` so aborted losers unwind
-even when they ignore `AbortSignal`. The outer `SuspendInstruction` sets `drainOnAbort` so an
+even when they ignore `AbortSignal`. Combinator plans use `SuspendResume.drainAfterAbort` so an
 enclosing `Policy.timeout` can drain in-flight fan-out work before the timeout result settles.
 
 `Op.any` runs children together under one outer abort umbrella. First success picks the winner and

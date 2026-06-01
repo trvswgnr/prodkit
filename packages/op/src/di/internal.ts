@@ -1,6 +1,6 @@
 import { fromGenFn } from "../builders.js";
 import { awaitWithSettlement, rejectOnAbortSettlement } from "../core/cancel-session.js";
-import { SuspendInstruction } from "../core/instructions.js";
+import { SuspendInstruction, SuspendResume } from "../core/instructions.js";
 import { createRunContext, driveInterruptOnAbort } from "../core/runtime.js";
 import type { AsArgs } from "../core/plan/surface.js";
 import { CUSTOM_INSTRUCTION_META, type CustomInstruction } from "../core/instructions.js";
@@ -266,7 +266,7 @@ export function provideOp<T, E, A, M, const Bindings extends readonly AnyBinding
   const provided = fromGenFn(function* (...args: AsArgs<A>) {
     const result = yield* new SuspendInstruction(
       (context) => driveInterruptOnAbort(op(...args), extendContext(context, bindings)),
-      true,
+      SuspendResume.drainAfterAbort,
     );
     if (result.isErr()) return yield* result;
     return result.value;

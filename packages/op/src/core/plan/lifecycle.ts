@@ -1,7 +1,11 @@
 import { UnhandledException } from "../../errors.js";
 import { Result } from "../../result.js";
 import { unsafeCoerce } from "../../shared.js";
-import { RegisterExitFinalizerInstruction, SuspendInstruction } from "../instructions.js";
+import {
+  RegisterExitFinalizerInstruction,
+  SuspendInstruction,
+  SuspendResume,
+} from "../instructions.js";
 import type { EnterContext, EnterFn, ExitFn } from "./context.js";
 import type { ExitContext } from "../runtime.js";
 import { createPlan, type Plan } from "./base.js";
@@ -19,10 +23,11 @@ export function onEnterPlan<T, E, A, M>(
           args: unsafeCoerce(context.args),
         };
         await Promise.resolve(initialize(enterCtx));
-      });
+      }, SuspendResume.passThrough);
 
-      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
-        source.execute(context),
+      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
+        (context) => source.execute(context),
+        SuspendResume.passThrough,
       );
 
       if (result.isErr()) return yield* result;
@@ -51,8 +56,9 @@ export function onExitPlan<T, E, A, M>(
         await Promise.resolve(finalize(exitCtx));
       });
 
-      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
-        source.execute(context),
+      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
+        (context) => source.execute(context),
+        SuspendResume.passThrough,
       );
 
       if (result.isErr()) return yield* result;

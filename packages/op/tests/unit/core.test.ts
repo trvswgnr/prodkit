@@ -10,6 +10,7 @@ import {
   isErrInstruction,
   RegisterExitFinalizerInstruction,
   SuspendInstruction,
+  SuspendResume,
 } from "../../src/core/instructions.js";
 import type { RunContext } from "../../src/core/runtime.js";
 import {
@@ -83,7 +84,7 @@ describe("core/runtime helpers", () => {
   });
 
   test("instruction type guards correctly classify values", () => {
-    const suspended = new SuspendInstruction(async () => 1);
+    const suspended = new SuspendInstruction(async () => 1, SuspendResume.passThrough);
     const finalizer = new RegisterExitFinalizerInstruction(async () => {});
     const typedErr = Result.err("typed");
     const typedOk = Result.ok("value");
@@ -108,7 +109,7 @@ describe("drive runtime behavior", () => {
       const value = (yield new SuspendInstruction(async (context) => {
         seenSignal = context.signal;
         return 69;
-      })) as number;
+      }, SuspendResume.passThrough)) as number;
       return value + 1;
     });
 

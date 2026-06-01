@@ -1,6 +1,6 @@
 import { UnhandledException } from "../../errors.js";
 import { Result } from "../../result.js";
-import { SuspendInstruction } from "../instructions.js";
+import { SuspendInstruction, SuspendResume } from "../instructions.js";
 import type { RunContext } from "../runtime.js";
 import { createPlan, type Plan } from "./base.js";
 import { driveAllPlans } from "./fan-out.js";
@@ -16,7 +16,7 @@ export function allPlan<T, E, M>(
       const result: Result<T[], E | UnhandledException> = yield* new SuspendInstruction(
         (outerContext: RunContext<readonly unknown[]>) =>
           driveAllPlans(snapshot, outerContext, concurrency),
-        true,
+        SuspendResume.drainAfterAbort,
       );
 
       if (result.isErr()) return yield* result;

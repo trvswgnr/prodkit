@@ -35,16 +35,23 @@ type ExtractResultErr<Y> = Y extends Err<unknown, infer E> ? DropUnknown<E> : ne
 
 export type InferInstructionErr<Y> = ExtractResultErr<Y>;
 
-type SuspendFn = (ctx: RunContext<readonly unknown[]>) => PromiseLike<unknown>;
+export type SuspendFn = (ctx: RunContext<readonly unknown[]>) => PromiseLike<unknown>;
+
+export const SuspendResume = {
+  passThrough: "pass-through",
+  drainAfterAbort: "drain-after-abort",
+} as const;
+
+export type SuspendResume = (typeof SuspendResume)[keyof typeof SuspendResume];
+
 export class SuspendInstruction extends Tagged("SuspendInstruction") {
   readonly suspend: SuspendFn;
-  /** When true, interrupt-on-abort waits for this suspend to settle so fan-out/provision teardown can finish. */
-  readonly drainOnAbort: boolean;
+  readonly resume: SuspendResume;
 
-  constructor(suspend: SuspendFn, drainOnAbort = false) {
+  constructor(suspend: SuspendFn, resume: SuspendResume) {
     super();
     this.suspend = suspend;
-    this.drainOnAbort = drainOnAbort;
+    this.resume = resume;
   }
 
   // SAFETY: TS doesn't know the type of the yielded value, so it's always `unknown`

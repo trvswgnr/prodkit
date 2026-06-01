@@ -266,7 +266,7 @@ See also `Policy.release` in `packages/op/src/policy/plan.ts`, which follows the
 1. **`DI.inject(dependency)`** yields an `InjectInstruction`, a `CustomInstruction` whose
    `resolve(context)` reads bindings from `context.extensions`.
 2. **`DI.provide(op, bindings)`** (`provideOp` in `packages/op/src/di/internal.ts`) wraps the
-   user op in a `SuspendInstruction` with `drainOnAbort: true` that calls
+   user op in a `SuspendInstruction(..., SuspendResume.drainAfterAbort)` that calls
    `driveInterruptOnAbort(inner, extendContext(context, bindings))`, cloning `extensions` and
    storing the binding `Map` under an internal extension key.
 3. **Metadata.** Provided dependencies block bare `.run()` until satisfied via `ProvidedMeta`
@@ -303,7 +303,7 @@ Import extension helpers from `@prodkit/op/internal` (for example `Blocking`, `w
 `Op.all`, `Op.any`, and `Op.race` wait for aborted sibling finalization before the parent
 `run()` settles ([ADR 0004](docs/adr/0004-combinators-wait-for-loser-finalization.md)) and fan
 out children through `driveInterruptOnAbort` so aborted losers still unwind when they never observe
-the signal. Fan-out and provision suspends set `SuspendInstruction.drainOnAbort` so outer
+the signal. Fan-out and provision suspends pass `SuspendResume.drainAfterAbort` so outer
 `Policy.timeout` can drain in-flight nested work before returning `TimeoutError`.
 
 ### Driver loop (call flow)

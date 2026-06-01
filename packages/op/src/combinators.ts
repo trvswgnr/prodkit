@@ -8,7 +8,7 @@ import { allPlan } from "./core/plan/combinators.js";
 import { getPlan } from "./core/plan/base.js";
 import { makePlanOp } from "./core/plan/shell.js";
 import { makeCoreOp } from "./core/fluent.js";
-import { SuspendInstruction } from "./core/instructions.js";
+import { SuspendInstruction, SuspendResume } from "./core/instructions.js";
 import { createRunContext, drive, driveInterruptOnAbort } from "./core/runtime.js";
 import { Result } from "./result.js";
 import { EMPTY_TUPLE, unsafeCoerce } from "./shared.js";
@@ -225,6 +225,7 @@ export function allSettledOp<const Ops extends readonly AnyNullaryOp[]>(
   return makeCombinatorOp(function* () {
     const result: Result<AllSettledOpOk<Ops>, never> = yield* new SuspendInstruction(
       (outerContext) => driveAllSettled(snapshot, outerContext, concurrency),
+      SuspendResume.passThrough,
     );
 
     if (result.isErr()) return yield* result;
@@ -236,7 +237,10 @@ export function settleOp<T, E, M>(
   op: Op<T, E, [], M>,
 ): Op<Result<T, E | UnhandledException>, never, [], M> {
   return makeCombinatorOp(function* () {
-    return yield* new SuspendInstruction((outerContext) => drive(op, outerContext));
+    return yield* new SuspendInstruction(
+      (outerContext) => drive(op, outerContext),
+      SuspendResume.passThrough,
+    );
   });
 }
 
@@ -306,6 +310,7 @@ export function anyOp<const Ops extends readonly AnyNullaryOp[]>(
   return makeCombinatorOp(function* () {
     const result: Result<AnyOpOk<Ops>, AnyOpErr<Ops>> = yield* new SuspendInstruction(
       (outerContext) => driveAny(snapshot, outerContext),
+      SuspendResume.passThrough,
     );
 
     if (result.isErr()) return yield* result;
@@ -359,6 +364,7 @@ export function raceOp<const Ops extends readonly AnyNullaryOp[]>(
   return makeCombinatorOp(function* () {
     const result: Result<RaceOpOk<Ops>, RaceOpErr<Ops>> = yield* new SuspendInstruction(
       (outerContext) => driveRace(snapshot, outerContext),
+      SuspendResume.passThrough,
     );
 
     if (result.isErr()) return yield* result;

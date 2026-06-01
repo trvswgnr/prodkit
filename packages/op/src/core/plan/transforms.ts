@@ -1,7 +1,7 @@
 import { TimeoutError, UnhandledException } from "../../errors.js";
 import { Result } from "../../result.js";
 import { EMPTY_TUPLE } from "../../shared.js";
-import { SuspendInstruction } from "../instructions.js";
+import { SuspendInstruction, SuspendResume } from "../instructions.js";
 import type {
   AnyNullaryOp,
   BypassedErr,
@@ -23,14 +23,16 @@ export function mapPlan<T, E, U, M>(
 ): Plan<Awaited<U>, E, M> {
   return createPlan(
     function* () {
-      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
-        source.execute(context),
+      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
+        (context) => source.execute(context),
+        SuspendResume.passThrough,
       );
 
       if (result.isErr()) return yield* result;
 
-      const mapped: Awaited<U> = yield* new SuspendInstruction(() =>
-        Promise.resolve(transform(result.value)),
+      const mapped: Awaited<U> = yield* new SuspendInstruction(
+        () => Promise.resolve(transform(result.value)),
+        SuspendResume.passThrough,
       );
 
       return mapped;
@@ -46,8 +48,9 @@ export function flatMapPlan<T, E, R extends AnyNullaryOp, M>(
   bind: (value: T) => R,
 ): Plan<InferOpOk<R>, E | InferOpErr<R>, MergeMeta<M, InferOpMeta<R>>> {
   return createPlan(function* () {
-    const first: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
-      source.execute(context),
+    const first: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
+      (context) => source.execute(context),
+      SuspendResume.passThrough,
     );
 
     if (first.isErr()) return yield* first;
@@ -55,8 +58,9 @@ export function flatMapPlan<T, E, R extends AnyNullaryOp, M>(
     const second: Result<
       InferOpOk<R>,
       InferOpErr<R> | UnhandledException
-    > = yield* new SuspendInstruction((context) =>
-      getPlan(bind(first.value), EMPTY_TUPLE).execute(context),
+    > = yield* new SuspendInstruction(
+      (context) => getPlan(bind(first.value), EMPTY_TUPLE).execute(context),
+      SuspendResume.passThrough,
     );
 
     if (second.isErr()) return yield* second;
@@ -72,11 +76,15 @@ export function tapPlan<T, E, R, M>(
     function* () {
       const sourceResult: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
         (context) => source.execute(context),
+        SuspendResume.passThrough,
       );
 
       if (sourceResult.isErr()) return yield* sourceResult;
 
-      yield* new SuspendInstruction(() => Promise.resolve(observe(sourceResult.value)));
+      yield* new SuspendInstruction(
+        () => Promise.resolve(observe(sourceResult.value)),
+        SuspendResume.passThrough,
+      );
       return sourceResult.value;
     },
     {
@@ -91,8 +99,9 @@ export function mapErrPlan<T, E, E2, M>(
 ): Plan<T, E2 | BypassedErr<E>, M> {
   return createPlan(
     function* () {
-      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
-        source.execute(context),
+      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
+        (context) => source.execute(context),
+        SuspendResume.passThrough,
       );
 
       if (result.isOk()) return result.value;
@@ -100,8 +109,9 @@ export function mapErrPlan<T, E, E2, M>(
       const sourceError = result.error;
       if (isRuntimeBypass(sourceError)) return yield* result;
 
-      const mapped: E2 = yield* new SuspendInstruction(() =>
-        Promise.resolve(transform(sourceError as TrackedErr<E>)),
+      const mapped: E2 = yield* new SuspendInstruction(
+        () => Promise.resolve(transform(sourceError as TrackedErr<E>)),
+        SuspendResume.passThrough,
       );
 
       return yield* Result.err(mapped);
@@ -120,6 +130,7 @@ export function tapErrPlan<T, E, R, M>(
     function* () {
       const sourceResult: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
         (context) => source.execute(context),
+        SuspendResume.passThrough,
       );
 
       if (sourceResult.isOk()) return sourceResult.value;
@@ -127,7 +138,10 @@ export function tapErrPlan<T, E, R, M>(
 
       if (isRuntimeBypass(sourceError)) return yield* sourceResult;
 
-      yield* new SuspendInstruction(() => Promise.resolve(observe(sourceError as TrackedErr<E>)));
+      yield* new SuspendInstruction(
+        () => Promise.resolve(observe(sourceError as TrackedErr<E>)),
+        SuspendResume.passThrough,
+      );
       return yield* sourceResult;
     },
     {
@@ -143,8 +157,9 @@ export function recoverPlan<T, E, ECaught extends TrackedErr<E>, R, M>(
 ): Plan<T | Awaited<R>, TrackedErr<E, ECaught> | BypassedErr<E>, M> {
   return createPlan(
     function* () {
-      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
-        source.execute(context),
+      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
+        (context) => source.execute(context),
+        SuspendResume.passThrough,
       );
 
       if (result.isOk()) return result.value;
@@ -155,8 +170,9 @@ export function recoverPlan<T, E, ECaught extends TrackedErr<E>, R, M>(
 
       if (!predicate(error as TrackedErr<E>)) return yield* Result.err(error);
 
-      const recovered: Awaited<R> = yield* new SuspendInstruction(() =>
-        Promise.resolve(handler(error as unknown as ECaught)),
+      const recovered: Awaited<R> = yield* new SuspendInstruction(
+        () => Promise.resolve(handler(error as unknown as ECaught)),
+        SuspendResume.passThrough,
       );
       return recovered;
     },

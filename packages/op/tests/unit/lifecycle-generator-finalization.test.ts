@@ -1,7 +1,7 @@
 import { assert, describe, expect, test, vi } from "vitest";
 import { Op, TimeoutError } from "../../src/index.js";
 import { UnhandledException } from "../../src/errors.js";
-import { SuspendInstruction } from "../../src/core/instructions.js";
+import { SuspendInstruction, SuspendResume } from "../../src/core/instructions.js";
 import { Policy } from "../../src/policy/index.js";
 
 describe("generator finalization on early exit", () => {
@@ -32,7 +32,7 @@ describe("generator finalization on early exit", () => {
         events.push("start");
         yield new SuspendInstruction(async () => {
           throw cause;
-        });
+        }, SuspendResume.passThrough);
         return 1;
       } finally {
         events.push("finally");

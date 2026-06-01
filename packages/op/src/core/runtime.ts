@@ -116,7 +116,7 @@ async function resumeSuspendedInstruction<T, E, M>(
   context: RunContext<readonly unknown[]>,
   driveSettlement: CancelSettlementType,
 ): Promise<IteratorResult<Instruction<E, M>, T>> {
-  const settlement = settlementForSuspendResume(driveSettlement, instruction.drainOnAbort);
+  const settlement = settlementForSuspendResume(driveSettlement, instruction.resume);
   const suspended = instruction.suspend(context);
   try {
     return iterator.next(await awaitSuspended(suspended, context.signal, settlement));

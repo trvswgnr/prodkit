@@ -2,7 +2,7 @@ import { TimeoutError, UnhandledException } from "../errors.js";
 import { createBoundAbortSession, raceBoundCancelExecution } from "../core/cancel-session.js";
 import { Result } from "../result.js";
 import { sleepWithSignal } from "../shared.js";
-import { RegisterExitFinalizerInstruction, SuspendInstruction } from "../core/instructions.js";
+import { RegisterExitFinalizerInstruction, SuspendInstruction, SuspendResume } from "../core/instructions.js";
 import { createRunContext } from "../core/runtime.js";
 import { normalizeRetryPolicy, type NormalizedRetryPolicy } from "./retry-policy.js";
 import { validateTimeoutMs } from "./validate.js";
@@ -96,8 +96,9 @@ function createDelegatingRewriter(apply: PlanRewriter["apply"]): PlanRewriter {
 export function releasePlan<T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T>): Plan<T, E, M> {
   return createPlan(
     function* () {
-      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
-        source.execute(context),
+      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
+        (context) => source.execute(context),
+        SuspendResume.passThrough,
       );
 
       if (result.isErr()) return yield* result;
@@ -129,8 +130,10 @@ function retryPlan<T, E, M>(
 
     while (true) {
       type AttemptStep = { result: Result<T, E | UnhandledException>; aborted: boolean };
-      const attemptStep: AttemptStep = yield* new SuspendInstruction((context) =>
-        source.execute(context).then((result) => ({ result, aborted: context.signal.aborted })),
+      const attemptStep: AttemptStep = yield* new SuspendInstruction(
+        (context) =>
+          source.execute(context).then((result) => ({ result, aborted: context.signal.aborted })),
+        SuspendResume.passThrough,
       );
 
       const result = attemptStep.result;
@@ -153,8 +156,9 @@ function retryPlan<T, E, M>(
       }
 
       if (delayMs > 0) {
-        const delayAborted: boolean = yield* new SuspendInstruction((context) =>
-          abortableDelay(delayMs, context.signal).then(() => context.signal.aborted),
+        const delayAborted: boolean = yield* new SuspendInstruction(
+          (context) => abortableDelay(delayMs, context.signal).then(() => context.signal.aborted),
+          SuspendResume.passThrough,
         );
 
         if (delayAborted) return yield* result;
@@ -183,6 +187,7 @@ function timeoutPlan<T, E, M>(
           timeoutMs,
           outerContext,
         ),
+      SuspendResume.passThrough,
     );
 
     if (result.isErr()) return yield* result;
@@ -194,6 +199,7 @@ function cancelPlan<T, E, M>(source: Plan<T, E, M>, abortSignal: AbortSignal): P
   return createPlan(function* () {
     const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
       (outerContext) => raceBoundCancel(source, abortSignal, outerContext),
+      SuspendResume.passThrough,
     );
 
     if (result.isErr()) return yield* result;
