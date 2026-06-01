@@ -127,7 +127,7 @@ If a behavior is an internal invariant of one module, keep it in unit; if it is 
   - `unit/builders.test.ts` for operation builders, runtime composition, and builder type-inference contracts
   - `unit/policies.test.ts` for retry/timeout/signal behavior
   - `unit/core.test.ts` for core execution invariants
-  - `unit/lifecycle.test.ts` for lifecycle/finalizer behavior
+  - `unit/lifecycle-*.test.ts` for lifecycle/finalizer behavior (release, enter/exit hooks, defer, generator finalization)
   - `unit/fluent.test.ts` for fluent operator semantics
   - `unit/di/index.test.ts` for DI runtime behavior
   - `property/monad-laws.test.ts` for algebraic contract checks

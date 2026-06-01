@@ -27,8 +27,8 @@ Representative tests:
 
 - `packages/op/tests/unit/core.test.ts` (`registerExitFinalizer runs all handlers in LIFO order`)
 - `packages/op/tests/unit/core.test.ts` (`multiple throwing finalizers are folded into a cause chain`)
-- `packages/op/tests/unit/lifecycle.test.ts` (`runs multiple defers in LIFO order on success`)
-- `packages/op/tests/unit/lifecycle.test.ts` (`shares LIFO stack with release policy (release runs before defer registered earlier)`)
+- `packages/op/tests/unit/lifecycle-defer.test.ts` (`runs multiple defers in LIFO order on success`)
+- `packages/op/tests/unit/lifecycle-defer.test.ts` (`shares LIFO stack with release policy (release runs before defer registered earlier)`)
 
 ## Invariant 2: registered exit-finalizer faults take precedence at settlement
 
@@ -48,7 +48,7 @@ Representative tests:
 
 - `packages/op/tests/unit/core.test.ts` (`finalizer throw after successful body converts to UnhandledException`)
 - `packages/op/tests/unit/core.test.ts` (`cleanup fault takes precedence over typed body error`)
-- `packages/op/tests/unit/lifecycle.test.ts` (`when op fails, cleanup throws: UnhandledException with cleanup error as cause`)
+- `packages/op/tests/unit/lifecycle-defer.test.ts` (`when op fails, cleanup throws: UnhandledException with cleanup error as cause`)
 
 Important edge distinction:
 
@@ -57,7 +57,7 @@ Important edge distinction:
 
 Representative test:
 
-- `packages/op/tests/unit/lifecycle.test.ts` (`preserves original Err result when cleanup throws during iter.return()`)
+- `packages/op/tests/unit/lifecycle-generator-finalization.test.ts` (`preserves original Err result when cleanup throws during iter.return()`)
 
 ## Invariant 3: chain-order semantics in combinators are stable
 
@@ -85,7 +85,7 @@ Representative tests:
 - `packages/op/tests/unit/combinators.test.ts` (`waits for loser finalization before returning the winner`)
 - `packages/op/tests/unit/combinators.test.ts` (`waits for loser finalization before returning winner result`)
 - `packages/op/tests/unit/combinators.test.ts` (`settles when a winner succeeds and a loser ignores abort`)
-- `packages/op/tests/unit/lifecycle.test.ts` (`Op.all([child]).with(Policy.timeout(...)) runs child Op.defer cleanup when child Op.try ignores abort`)
+- `packages/op/tests/unit/lifecycle-defer.test.ts` (`Op.all([child]).with(Policy.timeout(...)) runs child Op.defer cleanup when child Op.try ignores abort`)
 - `packages/op/tests/unit/di/index.test.ts` (`DI.provide(inner).with(Policy.timeout(...)) runs inner Op.defer cleanup when inner Op.try ignores abort`)
 - `packages/op/tests/unit/combinators.test.ts` (`settles when the winner succeeds and a loser ignores abort`)
 
@@ -100,7 +100,7 @@ Before changing runtime/combinator internals, preserve these properties:
 
 Any intentional semantic change should include:
 
-- explicit test updates in `packages/op/tests/unit/core.test.ts`, `packages/op/tests/unit/lifecycle.test.ts`, and/or `packages/op/tests/unit/combinators.test.ts`
+- explicit test updates in `packages/op/tests/unit/core.test.ts`, `packages/op/tests/unit/lifecycle-*.test.ts`, and/or `packages/op/tests/unit/combinators.test.ts`
 - an accompanying update to this document explaining the new invariant
 
 ## Operational notes and references
@@ -133,7 +133,7 @@ tail (`packages/op/src/core/runtime.ts`). In one generator body, multiple defers
 
 Chained `.on("exit", ...)` builds plan wrappers where the hand you attach first behaves like the
 inner scope, so at exit time the inner-most handler runs
-before the outer ones (`packages/op/tests/unit/lifecycle.test.ts`, "chains `.on("exit")` in LIFO order with inner
+before the outer ones (`packages/op/tests/unit/lifecycle-exit.test.ts`, "chains `.on("exit")` in LIFO order with inner
 registration running first"). That matches how people think about stacking defer-like behavior.
 
 Every registered finalizer still runs after a sibling throws (`runFinalizersSafely`). Several throws
@@ -148,7 +148,7 @@ successful bodies where a finalizer throws ("finalizer throw after successful bo
 
 `.with(Policy.release(...))` is different (`packages/op/src/core/plan/lifecycle.ts`). The release hook
 arms only after a successful inner completion. Typed failure short-circuits without scheduling that
-release, so primary errors stay intact (`packages/op/tests/unit/lifecycle.test.ts`, "preserves primary error..." on
+release, so primary errors stay intact (`packages/op/tests/unit/lifecycle-release.test.ts`, "preserves primary error..." on
 `Op.fail` with release policy). That isn't swapping semantics with exit finalizers registered while
 the run is unwinding inside `drive`.
 
@@ -159,7 +159,7 @@ the run is unwinding inside `drive`.
 cleanup path: yielded or async work inside a `finally` block is not driven after early exit. Use
 `Op.defer`, `.with(Policy.release(...))`, or `.on("exit", ...)` for cleanup that must suspend, fail explicitly, or
 complete before `.run()` settles. Throws from `return` are swallowed on purpose
-(`packages/op/tests/unit/lifecycle.test.ts`, "preserves original Err result when cleanup throws during `iter.return()`").
+(`packages/op/tests/unit/lifecycle-generator-finalization.test.ts`, "preserves original Err result when cleanup throws during `iter.return()`").
 
 ## Concurrency (`Op.all`, `Op.any`, `Op.race`)
 
@@ -264,7 +264,7 @@ live under `packages/op/src/policy/`.
 
 Cancellation and cooperative `AbortSignal` behavior show up wherever `SuspendInstruction` binds a
 signal, plus README's `Op.defer` / `.on("exit")` notes and checks in `packages/op/tests/unit/policies.test.ts` and
-`packages/op/tests/unit/lifecycle.test.ts`. Type-level contracts collected in
+`packages/op/tests/unit/lifecycle-*.test.ts`. Type-level contracts collected in
 `packages/op/tests/types/op.test.ts`, with custom policy spike coverage in
 `packages/op/tests/unit/policy-hkt.test.ts`.
 
