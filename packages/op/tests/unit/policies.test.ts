@@ -3,7 +3,7 @@ import { fail, fromGenFn, succeed, _try } from "../../src/builders.js";
 import { TimeoutError, UnhandledException } from "../../src/errors.js";
 import { Policy } from "../../src/policy/index.js";
 import type { RetryPolicy } from "../../src/policy/index.js";
-import { neverSettlingTry, settleOutcome } from "../support/utils.js";
+import { neverSettling, settleOutcome } from "../support/utils.js";
 
 describe("Policy.retry", () => {
   class FetchError extends Error {
@@ -529,7 +529,7 @@ describe("Policy.cancel", () => {
   test("Policy.cancel settles when inner Op.try ignores abort", async () => {
     const controller = new AbortController();
     const abortReason = new Error("request cancelled");
-    const program = neverSettlingTry().with(Policy.cancel(controller.signal));
+    const program = _try(neverSettling).with(Policy.cancel(controller.signal));
 
     const runPromise = program.run();
     controller.abort(abortReason);
