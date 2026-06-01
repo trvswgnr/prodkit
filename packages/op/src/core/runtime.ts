@@ -1,4 +1,5 @@
 import { UnhandledException } from "../errors.js";
+import { raceAgainstAbortSignal } from "./abort-race.js";
 import { Result } from "../result.js";
 import {
   CUSTOM_INSTRUCTION_META,
@@ -89,169 +90,164 @@ export async function driveInterruptOnAbort<T, E, M>(
   return driveInternal(op, context, true);
 }
 
+type ExitFinalizer = (ctx: ExitContext<unknown, unknown, readonly unknown[]>) => PromiseLike<void>;
+
+function awaitSuspendedWithOptionalInterrupt<TValue>(
+  suspended: PromiseLike<TValue>,
+  signal: AbortSignal,
+  interruptOnAbort: boolean,
+): PromiseLike<TValue> {
+  if (!interruptOnAbort) return suspended;
+  return raceAgainstAbortSignal(suspended, signal, {
+    mode: "cooperativeSettle",
+    getAbortReason: () => signal.reason,
+  });
+}
+
+async function drainSuspended(suspended: PromiseLike<unknown>): Promise<void> {
+  try {
+    await suspended;
+  } catch {
+    // ignore: abort rejection or child settlement errors while draining fan-out/provision work
+  }
+}
+
+async function resumeSuspendedInstruction<T, E, M>(
+  instruction: SuspendInstruction,
+  iterator: Iterator<Instruction<E, M>, T, unknown>,
+  context: RunContext<readonly unknown[]>,
+  interruptOnAbort: boolean,
+): Promise<IteratorResult<Instruction<E, M>, T>> {
+  const suspended = instruction.suspend(context);
+  try {
+    return iterator.next(
+      await awaitSuspendedWithOptionalInterrupt(suspended, context.signal, interruptOnAbort),
+    );
+  } catch (cause) {
+    if (interruptOnAbort && instruction.drainOnAbort) await drainSuspended(suspended);
+    throw cause;
+  }
+}
+
+async function resumeCustomInstruction<T, E, M>(
+  instruction: CustomInstruction<unknown, unknown>,
+  iterator: Iterator<Instruction<E, M>, T, unknown>,
+  context: RunContext<readonly unknown[]>,
+  interruptOnAbort: boolean,
+): Promise<IteratorResult<Instruction<E, M>, T>> {
+  return iterator.next(
+    await awaitSuspendedWithOptionalInterrupt(
+      Promise.resolve(instruction.resolve(context)),
+      context.signal,
+      interruptOnAbort,
+    ),
+  );
+}
+
+function registerExitFinalizerInstruction<T, E, M>(
+  instruction: RegisterExitFinalizerInstruction,
+  iterator: Iterator<Instruction<E, M>, T, unknown>,
+  runArgs: readonly unknown[],
+  finalizers: ExitFinalizer[],
+): IteratorResult<Instruction<E, M>, T> {
+  const argsAtRegistration = instruction.args ?? runArgs;
+  finalizers.push((ctx) =>
+    instruction.finalize({
+      signal: ctx.signal,
+      result: ctx.result,
+      args: argsAtRegistration,
+    }),
+  );
+  return iterator.next(undefined);
+}
+
+/** Run every finalizer LIFO; collect faults from each (later-registered runs first; all still run even if one throws). */
+async function runFinalizersSafely(
+  finalizers: readonly ExitFinalizer[],
+  ctx: ExitContext<unknown, unknown, readonly unknown[]>,
+): Promise<unknown | void> {
+  const faults: unknown[] = [];
+  for (let index = finalizers.length - 1; index >= 0; index -= 1) {
+    const finalize = finalizers[index];
+    if (finalize !== undefined) {
+      try {
+        await finalize(ctx);
+      } catch (e) {
+        faults.push(e);
+      }
+    }
+  }
+  if (faults.length === 0) {
+    return undefined;
+  }
+  if (faults.length === 1) {
+    return faults[0];
+  }
+  return chainCleanupFaults(faults);
+}
+
+async function settleIteratorWithCleanup<T, E, M>(
+  iter: Iterator<Instruction<E, M>, T, unknown>,
+  context: RunContext<readonly unknown[]>,
+  finalizers: readonly ExitFinalizer[],
+  result: Result<T, E | UnhandledException>,
+): Promise<Result<T, E | UnhandledException>> {
+  closeGenerator(iter);
+  const exitCtx: ExitContext<T, E, readonly unknown[]> = {
+    signal: context.signal,
+    args: context.args,
+    result,
+  };
+  const cleanupFault = await runFinalizersSafely(finalizers, exitCtx);
+  if (cleanupFault !== undefined) {
+    return Result.err(new UnhandledException({ cause: cleanupFault }));
+  }
+  return result;
+}
+
 export async function driveIterator<T, E, M>(
   iter: Iterator<Instruction<E, M>, T, unknown>,
   context: RunContext<readonly unknown[]>,
   interruptOnAbort = false,
 ): Promise<Result<T, E | UnhandledException>> {
-  const { signal, args: runArgs } = context;
-  const finalizers: Array<
-    (ctx: ExitContext<unknown, unknown, readonly unknown[]>) => PromiseLike<void>
-  > = [];
-  const awaitWithAbortInterrupt = <TValue>(suspended: PromiseLike<TValue>) => {
-    if (!interruptOnAbort) return suspended;
-    if (signal.aborted) return Promise.reject(signal.reason);
-
-    return new Promise<TValue>((resolve, reject) => {
-      let settled = false;
-      const onAbort = () => {
-        if (settled) return;
-        // Defer one microtask, prefer cooperative suspend settlement, then fall back to abort reason.
-        queueMicrotask(() => {
-          if (settled) return;
-          const abortOnLaterMacrotask = new Promise<never>((_, abort) => {
-            setTimeout(() => abort(signal.reason), 0);
-          });
-          void Promise.race([suspended, abortOnLaterMacrotask]).then(
-            (value) => {
-              if (settled) return;
-              settled = true;
-              signal.removeEventListener("abort", onAbort);
-              resolve(value);
-            },
-            (error) => {
-              if (settled) return;
-              settled = true;
-              signal.removeEventListener("abort", onAbort);
-              reject(error);
-            },
-          );
-        });
-      };
-
-      signal.addEventListener("abort", onAbort, { once: true });
-      suspended.then(
-        (value) => {
-          if (settled) return;
-          settled = true;
-          signal.removeEventListener("abort", onAbort);
-          resolve(value);
-        },
-        (error) => {
-          if (settled) return;
-          settled = true;
-          signal.removeEventListener("abort", onAbort);
-          reject(error);
-        },
-      );
-    });
-  };
-  const drainSuspended = async (suspended: PromiseLike<unknown>) => {
-    try {
-      await suspended;
-    } catch {
-      // ignore: abort rejection or child settlement errors while draining fan-out/provision work
-    }
-  };
-  const resumeSuspended = async (
-    instruction: SuspendInstruction,
-    iterator: Iterator<Instruction<E, M>, T, unknown>,
-  ) => {
-    const suspended = instruction.suspend(context);
-    try {
-      return iterator.next(await awaitWithAbortInterrupt(suspended));
-    } catch (cause) {
-      if (interruptOnAbort && instruction.drainOnAbort) await drainSuspended(suspended);
-      throw cause;
-    }
-  };
-  const resumeCustom = async (
-    instruction: CustomInstruction<unknown, unknown>,
-    iterator: Iterator<Instruction<E, M>, T, unknown>,
-  ) => iterator.next(await awaitWithAbortInterrupt(Promise.resolve(instruction.resolve(context))));
-  const registerExitFinalizer = (
-    instruction: RegisterExitFinalizerInstruction,
-    iterator: Iterator<Instruction<E, M>, T, unknown>,
-  ) => {
-    const argsAtRegistration = instruction.args ?? runArgs;
-    finalizers.push((ctx) =>
-      instruction.finalize({
-        signal: ctx.signal,
-        result: ctx.result,
-        args: argsAtRegistration,
-      }),
-    );
-    return iterator.next(undefined);
-  };
-  /** Run every finalizer LIFO; collect faults from each (later-registered runs first; all still run even if one throws). */
-  const runFinalizersSafely = async (
-    ctx: ExitContext<unknown, unknown, readonly unknown[]>,
-  ): Promise<unknown | void> => {
-    const faults: unknown[] = [];
-    for (let index = finalizers.length - 1; index >= 0; index -= 1) {
-      const finalize = finalizers[index];
-      if (finalize !== undefined) {
-        try {
-          await finalize(ctx);
-        } catch (e) {
-          faults.push(e);
-        }
-      }
-    }
-    if (faults.length === 0) {
-      return undefined;
-    }
-    if (faults.length === 1) {
-      return faults[0];
-    }
-    return chainCleanupFaults(faults);
-  };
-  const settleWithCleanup = async (
-    result: Result<T, E | UnhandledException>,
-  ): Promise<Result<T, E | UnhandledException>> => {
-    closeGenerator(iter);
-    const exitCtx: ExitContext<T, E, readonly unknown[]> = { signal, args: runArgs, result };
-    const cleanupFault = await runFinalizersSafely(exitCtx);
-    if (cleanupFault !== undefined) {
-      return Result.err(new UnhandledException({ cause: cleanupFault }));
-    }
-    return result;
-  };
+  const finalizers: ExitFinalizer[] = [];
+  const settle = (result: Result<T, E | UnhandledException>) =>
+    settleIteratorWithCleanup(iter, context, finalizers, result);
 
   try {
     let step = iter.next();
     while (!step.done) {
       try {
         if (step.value instanceof SuspendInstruction) {
-          step = await resumeSuspended(step.value, iter);
+          step = await resumeSuspendedInstruction(step.value, iter, context, interruptOnAbort);
           continue;
         }
         const instr = step.value;
         if (instr instanceof RegisterExitFinalizerInstruction) {
-          step = registerExitFinalizer(instr, iter);
+          step = registerExitFinalizerInstruction(instr, iter, context.args, finalizers);
           continue;
         }
         if (isCustomInstruction(instr)) {
-          step = await resumeCustom(instr, iter);
+          step = await resumeCustomInstruction(instr, iter, context, interruptOnAbort);
           continue;
         }
         if (isErrInstruction<E>(instr)) {
-          return settleWithCleanup(Result.err(instr.error));
+          return settle(Result.err(instr.error));
         }
         const invalidErr = new UnhandledException({
           cause: new TypeError("Op generator yielded an invalid instruction"),
         });
-        return settleWithCleanup(Result.err(invalidErr));
+        return settle(Result.err(invalidErr));
       } catch (cause) {
         const unhandled = new UnhandledException({ cause });
-        return settleWithCleanup(Result.err(unhandled));
+        return settle(Result.err(unhandled));
       }
     }
     const value = await step.value;
-    return settleWithCleanup(Result.ok(value));
+    return settle(Result.ok(value));
   } catch (cause) {
     const unhandled = new UnhandledException({ cause });
-    return settleWithCleanup(Result.err(unhandled));
+    return settle(Result.err(unhandled));
   }
 }
 
