@@ -74,8 +74,9 @@ Why this matters:
 
 Enforced by code paths:
 
-- `packages/op/src/combinators.ts` (`driveAll`, `driveAllSettled`, `driveAny`, `driveRace`)
-- `packages/op/src/combinators.ts` (`fanOut`): isolates child cancellation and detaches parent abort listeners on settle; `Op.all`, `Op.any`, and `Op.race` fan-out through `driveInterruptOnAbort` so aborted losers unwind even when they ignore the signal
+- `packages/op/src/core/plan/fan-out.ts` (`fanOutPlans`): isolates child cancellation and detaches
+  parent abort listeners on settle; combinator child runs call `executePlan` with
+  `interruptOnAbortMode` so aborted losers unwind even when they ignore the signal
 
 Representative tests:
 
@@ -163,27 +164,30 @@ complete before `.run()` settles. Throws from `return` are swallowed on purpose
 
 ## Concurrency (`Op.all`, `Op.any`, `Op.race`)
 
-Combinator contracts live in `packages/op/src/combinators.ts` alongside the fuller comment block.
+Combinator contracts live in `packages/op/src/core/plan/combinators.ts` and
+`packages/op/src/core/plan/fan-out.ts` alongside the fuller comment block in `combinators.ts`.
 
 `Op.all` fails fast on the first child error, aborts siblings, and waits for every active branch
-to settle before returning. Fan-out children use `driveInterruptOnAbort` so aborted losers unwind
-even when they ignore `AbortSignal`. Combinator plans use `SuspendResume.drainAfterAbort` so an
-enclosing `Policy.timeout` can drain in-flight fan-out work before the timeout result settles.
+to settle before returning. Fan-out children run through `executePlan(..., interruptOnAbortMode)`
+so aborted losers unwind even when they ignore `AbortSignal`. Combinator plans use
+`SuspendResume.drainAfterAbort` so an enclosing `Policy.timeout` can drain in-flight fan-out work
+before the timeout result settles.
 
 `Op.any` runs children together under one outer abort umbrella. First success picks the winner and
 abort-signals the losers, but `.run()` still waits until those aborted branches finish so cleanup
-sticks ("waits for loser finalization before returning the winner"). Fan-out children use
-`driveInterruptOnAbort` so losers that never observe `AbortSignal` still unwind. If everyone fails you get an
-`ErrorGroup` listing errors in declaration order regardless of settle order ("preserves index order
-when failures settle out of order"). A loser failing while reacting to abort does not trump the
-winner's success ("winner success keeps precedence over loser abort-time failures").
+sticks ("waits for loser finalization before returning the winner"). Fan-out children use the same
+`executePlan` interrupt mode so losers that never observe `AbortSignal` still unwind. If everyone
+fails you get an `ErrorGroup` listing errors in declaration order regardless of settle order
+("preserves index order when failures settle out of order"). A loser failing while reacting to
+abort does not trump the winner's success ("winner success keeps precedence over loser abort-time
+failures").
 
 `Op.race` is simpler: whoever settles first, ok or err, picks the outcome and triggers abort for
 everyone else, with the same promise that losers finish teardown before `.run()` returns ("waits
-for loser finalization before returning winner result"). Fan-out children use `driveInterruptOnAbort`
-so losers that never observe `AbortSignal` still reject in-flight suspends and unwind. The losing
-branch still can't override the chosen error ("winner error keeps precedence over loser abort-time
-failures").
+for loser finalization before returning winner result"). Fan-out children use the same interrupt
+mode so losers that never observe `AbortSignal` still reject in-flight suspends and unwind. The
+losing branch still can't override the chosen error ("winner error keeps precedence over loser
+abort-time failures").
 
 ## Invariant: input normalization and validation at run time
 
@@ -280,3 +284,4 @@ For structural rationale that complements these invariants, see [`docs/adr/`](..
 - [0003](../../docs/adr/0003-three-cleanup-channels.md), [0004](../../docs/adr/0004-combinators-wait-for-loser-finalization.md), [0005](../../docs/adr/0005-unhandled-exception-runtime-channel.md), [0006](../../docs/adr/0006-run-args-only-fluent-policy-composition.md): cleanup channels, combinator settlement, runtime errors, args-only `.run()`
 - [0011](../../docs/adr/0011-fluent-callbacks-do-not-sequence-returned-ops.md): fluent callback return semantics
 - [0012](../../docs/adr/0012-op-type-alias-on-main-entry.md): canonical `Op` type alias on main entry (declaration emit)
+- [0013](../../docs/adr/0013-combinator-plan-nodes.md): combinator concurrent composition as plan nodes
