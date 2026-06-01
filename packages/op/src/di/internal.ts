@@ -1,9 +1,17 @@
-import { fromGenFn } from "../builders.js";
+import {
+  getPlan,
+  createPlan,
+  executePlan,
+  interruptOnAbortMode,
+  type Plan,
+} from "../core/plan/base.js";
+import type { AsArgs } from "../core/plan/surface.js";
+import { makePlanOp } from "../core/plan/shell.js";
 import { awaitWithSettlement, rejectOnAbortSettlement } from "../core/cancel-session.js";
 import { SuspendInstruction, SuspendResume } from "../core/instructions.js";
 import { createRunContext } from "../core/runtime.js";
-import type { AsArgs } from "../core/plan/surface.js";
-import { executePlan, getPlan, interruptOnAbortMode } from "../core/plan/base.js";
+import { UnhandledException } from "../errors.js";
+import { Result } from "../result.js";
 import { CUSTOM_INSTRUCTION_META, type CustomInstruction } from "../core/instructions.js";
 import {
   type Blocking,
@@ -246,7 +254,7 @@ function resolveInjectedValue(
   return inflight;
 }
 
-function extendContext(
+export function extendContextWithBindings(
   context: RunContext<readonly unknown[]>,
   bindings: readonly AnyBinding[],
 ): RunContext<readonly unknown[]> {
@@ -260,21 +268,46 @@ function extendContext(
   return createRunContext(context.signal, context.args, extensions);
 }
 
+export function providePlan<T, E, M>(
+  source: Plan<T, E, M>,
+  bindings: readonly AnyBinding[],
+): Plan<T, E, M> {
+  const snapshot = bindings.slice();
+
+  return createPlan(
+    function* () {
+      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
+        (context: RunContext<readonly unknown[]>) =>
+          executePlan(
+            source,
+            extendContextWithBindings(context, snapshot),
+            interruptOnAbortMode(context),
+          ),
+        SuspendResume.drainAfterAbort,
+      );
+
+      if (result.isErr()) return yield* result;
+      return result.value;
+    },
+    {
+      rewrite: (self, rewriter) => rewriter.provide?.(source, snapshot) ?? rewriter.apply(self),
+    },
+  );
+}
+
 export function provideOp<T, E, A, M, const Bindings extends readonly AnyBinding[]>(
   op: Op<T, E, A, M>,
   bindings: Bindings,
 ): Op<T, E, A, ProvidedMeta<M, Bindings>> {
-  const provided = fromGenFn(function* (...args: AsArgs<A>) {
-    const plan = getPlan(op, args);
-    const result = yield* new SuspendInstruction(
-      (context) =>
-        executePlan(plan, extendContext(context, bindings), interruptOnAbortMode(context)),
-      SuspendResume.drainAfterAbort,
-    );
-    if (result.isErr()) return yield* result;
-    return result.value;
-  });
+  const bindProvidePlan = (...args: AsArgs<A>) => providePlan(getPlan(op, args), bindings);
 
   // SAFETY: provideOp preserves the inner op type while updating dependency metadata.
-  return unsafeCoerce(provided);
+  return unsafeCoerce(
+    makePlanOp(bindProvidePlan, () =>
+      bindProvidePlan(
+        // SAFETY: direct iterator composition has no runtime args at the public yield* surface.
+        ...unsafeCoerce<AsArgs<A>>([]),
+      ),
+    ),
+  );
 }

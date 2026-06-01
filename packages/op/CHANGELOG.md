@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `DI.provide` is backed by the `providePlan` plan node with structural `PlanRewriter` hooks so
+  `.with(Policy.*)` pushes through to inner plans. No published API changes.
+
 - Nested execution routes through `executePlan` with a `PlanExecutionMode` (`CancelSettlement`)
   instead of parallel `driveInterruptOnAbort` / `executePlanInterruptOnAbort` ports. Combinator
   fan-out, DI provision suspend, and timeout inner runs share the plan port. No published API
