@@ -13,6 +13,20 @@ Use each publishable package README under `packages/*/README.md` as the source o
 
 Other workspace roots are maintainer- or CI-oriented: [`examples`](examples/) (`@prodkit/examples`, with Op samples under `examples/op/` and DI under `examples/op/di/`), [`tools`](tools/) (`@prodkit/tools`), and [`benchmarks`](benchmarks/) (`@prodkit/benchmarks`).
 
+## documentation map
+
+| Audience | Doc | Purpose |
+| --- | --- | --- |
+| npm consumers | [`packages/op/README.md`](packages/op/README.md) | Hub, quick start, core API |
+| npm consumers | [`packages/op/docs/`](packages/op/docs/README.md) | Comparison, performance, subpaths, lifecycle (ships on npm) |
+| npm consumers | [`packages/op/DESIGN.md`](packages/op/DESIGN.md) | Execution invariants (ships on npm) |
+| contributors | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Setup, gate, testing, release |
+| contributors | [`docs/CONTEXT.md`](docs/CONTEXT.md) | Domain vocabulary and doc roles |
+| contributors | [`docs/contributor/runtime-architecture.md`](docs/contributor/runtime-architecture.md) | Module graph and execution flow |
+| architects | [`docs/adr/`](docs/adr/) | Why decisions were made |
+
+Changelogs: [`packages/op/CHANGELOG.md`](packages/op/CHANGELOG.md), [`packages/std/CHANGELOG.md`](packages/std/CHANGELOG.md).
+
 ## workspace layout
 
 - `packages/*`: publishable library packages
@@ -26,11 +40,6 @@ Other workspace roots are maintainer- or CI-oriented: [`examples`](examples/) (`
 
 - Node: `>=24.14.0` on the 24.x Active LTS line (current LTS; see [nodejs/Release](https://github.com/nodejs/release)). `.nvmrc` pins `24.14.0`.
 - contributor guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- `@prodkit/op` performance baselines: [`packages/op/PERFORMANCE.md`](packages/op/PERFORMANCE.md)
-- `@prodkit/op` runtime/design notes: [`packages/op/DESIGN.md`](packages/op/DESIGN.md)
-- architectural decision records: [`docs/adr/`](docs/adr/)
-- `@prodkit/op` changelog: [`packages/op/CHANGELOG.md`](packages/op/CHANGELOG.md)
-- `@prodkit/std` changelog: [`packages/std/CHANGELOG.md`](packages/std/CHANGELOG.md)
 
 Primary quality gate:
 
