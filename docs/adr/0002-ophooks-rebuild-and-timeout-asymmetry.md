@@ -7,7 +7,7 @@ packages:
 
 # OpHooks push-through rebuild and timeout-specific rebuild hooks
 
-**Superseded by [ADR 0007](0007-timeout-widening-at-composition-boundary.md)** (plan AST). For
+**Superseded by [ADR 0007](0007-op-execution-plan-ast.md)** (plan AST). For
 current policy attachment, see [ADR 0009](0009-policy-with-attachment.md).
 
 This record documents the pre-plan hook model removed when `packages/op/src/core/plan/` became the

@@ -10,7 +10,7 @@ packages:
 Public combinators (`Op.all`, `Op.race`, `Op.any`, `Op.allSettled`) are plan-backed ops that
 delegate to combinator plan nodes in `packages/op/src/core/plan/combinators.ts`. Shared fan-out
 lives in `packages/op/src/core/plan/fan-out.ts`. `.with(Policy.*)` pushes through to child plans
-structurally via `PlanRewriter` hooks ([ADR 0007](0007-timeout-widening-at-composition-boundary.md)).
+structurally via `PlanRewriter` hooks ([ADR 0007](0007-op-execution-plan-ast.md)).
 
 ## Decision
 

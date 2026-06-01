@@ -279,7 +279,7 @@ Type-level contracts collected in
 For structural rationale that complements these invariants, see [`docs/adr/`](../../docs/adr/):
 
 - [0001](../../docs/adr/0001-core-nullary-vs-lifted-arity.md): nullary core driver vs lifted public arity
-- [0007](../../docs/adr/0007-timeout-widening-at-composition-boundary.md): plan AST execution (supersedes hook-era timeout widening notes)
+- [0007](../../docs/adr/0007-op-execution-plan-ast.md): plan AST execution (supersedes hook-era timeout widening notes)
 - [0009](../../docs/adr/0009-policy-with-attachment.md): `.with(Policy.*)` attachment surface
 - [0003](../../docs/adr/0003-three-cleanup-channels.md), [0004](../../docs/adr/0004-combinators-wait-for-loser-finalization.md), [0005](../../docs/adr/0005-unhandled-exception-runtime-channel.md), [0006](../../docs/adr/0006-run-args-only-fluent-policy-composition.md): cleanup channels, combinator settlement, runtime errors, args-only `.run()`
 - [0011](../../docs/adr/0011-fluent-callbacks-do-not-sequence-returned-ops.md): fluent callback return semantics
