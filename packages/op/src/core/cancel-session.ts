@@ -182,25 +182,20 @@ export function settleAfterBoundAbort<T>(
 }
 
 /** Race child execution against bound abort, then settle with cooperative or fallback semantics. */
-export function raceBoundCancelExecution<T>(
+export async function raceBoundCancelExecution<T>(
   runPromise: PromiseLike<T>,
   session: BoundAbortSession,
   fallback: () => PromiseLike<T>,
 ): Promise<T> {
-  return new Promise((resolve) => {
-    const finish = (result: T) => {
-      session.detach();
-      resolve(result);
-    };
-
-    void Promise.race([runPromise, session.boundAbortPromise]).then(() => {
-      if (!session.isBoundAborted()) {
-        void runPromise.then(finish);
-        return;
-      }
-      void settleAfterBoundAbort(runPromise, fallback).then(finish);
-    });
-  });
+  try {
+    await Promise.race([runPromise, session.boundAbortPromise]);
+    if (!session.isBoundAborted()) {
+      return await runPromise;
+    }
+    return await settleAfterBoundAbort(runPromise, fallback);
+  } finally {
+    session.detach();
+  }
 }
 
 export function interruptDriveSettlement(signal: AbortSignal): CancelSettlement {

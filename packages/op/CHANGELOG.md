@@ -13,8 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   DI lazy resolve, and combinator drain paths declare settlement intent through `CancelSettlement`
   instead of threading booleans through the driver. No published API changes.
 
+- `Policy.cancel` plan suspend now drains bound-cancel execution so combinator loser branches
+  finish teardown before interrupt-on-abort returns. No published API changes.
+
 - `Op.all` is backed by the `allPlan` plan node with structural `PlanRewriter` hooks so
   `.with(Policy.*)` pushes through to child plans. No published API changes.
+
+- `Op.race`, `Op.any`, and `Op.allSettled` are backed by `racePlan`, `anyPlan`, and
+  `allSettledPlan` with the same structural rewrite hooks. No published API changes.
 
 - Colocated former `core/types.ts` with runtime owners: `core/meta.ts`, `core/instructions.ts`,
   `core/runtime.ts` (`RunContext`, `ExitContext`, `runOp`), and `core/plan/context.ts` /

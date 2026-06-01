@@ -33,6 +33,16 @@ describe("Policy.timeout push-through matrix", () => {
       },
     },
     {
+      combinator: "race",
+      run: async () => {
+        const result = await runWithFakeTimeout(
+          Op.race([hangingOp()]).with(Policy.timeout(TIMEOUT_MS)),
+        );
+        assert(result.isErr(), "should be Err");
+        expect(result.error).toBeInstanceOf(TimeoutError);
+      },
+    },
+    {
       combinator: "mapErr",
       run: async () => {
         const result = await runWithFakeTimeout(

@@ -1,4 +1,4 @@
-import { UnhandledException } from "../../errors.js";
+import { ErrorGroup, UnhandledException } from "../../errors.js";
 import { Result, type Err } from "../../result.js";
 import { createRunContext } from "../runtime.js";
 import type { RunContext } from "../runtime.js";
@@ -212,5 +212,116 @@ export async function driveAllPlans<T, E>(
 
 export const executeCooperativePlan: ExecuteChildPlan = (plan, context) =>
   executePlan(plan, context);
+
+export function collectAllSettled<T, E>(
+  results: ReadonlyArray<Result<T, E | UnhandledException> | undefined>,
+): Result<Result<T, E | UnhandledException>[], UnhandledException> {
+  const settled: Result<T, E | UnhandledException>[] = [];
+
+  for (const [index, result] of results.entries()) {
+    if (result === undefined)
+      return Result.err(
+        new UnhandledException({
+          cause: new Error(`Op combinator invariant violation: missing result at index ${index}`),
+        }),
+      );
+    settled.push(result);
+  }
+
+  return Result.ok(settled);
+}
+
+async function driveAllSettledUnboundedPlans<T, E>(
+  plans: readonly Plan<T, E, unknown>[],
+  outerContext: RunContext<readonly unknown[]>,
+): Promise<Result<T, E | UnhandledException>[]> {
+  const fan = fanOutPlans(plans, outerContext, executeCooperativePlan);
+  const results = await Promise.all(fan.runs);
+  fan.detach();
+  return results as Result<T, E | UnhandledException>[];
+}
+
+export async function driveAllSettledPlans<T, E>(
+  plans: readonly Plan<T, E, unknown>[],
+  outerContext: RunContext<readonly unknown[]>,
+  concurrency: number | undefined,
+): Promise<Result<Result<T, E | UnhandledException>[], UnhandledException>> {
+  const limit = concurrencyLimit(concurrency, plans.length);
+
+  if (limit.isErr()) return limit;
+
+  if (plans.length === 0) return Result.ok([]);
+
+  if (limit.value >= plans.length) {
+    const results = await driveAllSettledUnboundedPlans(plans, outerContext);
+    return Result.ok(results);
+  }
+
+  const results = await driveBoundedPoolPlans(plans, outerContext, limit.value, {
+    continueScheduling: () => true,
+    executeChild: executeCooperativePlan,
+  });
+
+  return collectAllSettled(results);
+}
+
+export async function driveRacePlans<T, E>(
+  plans: readonly Plan<T, E, unknown>[],
+  outerContext: RunContext<readonly unknown[]>,
+): Promise<Result<T, E | UnhandledException>> {
+  if (plans.length === 0) {
+    const cause = new Error("Op.race requires at least one operation");
+    return Promise.resolve(Result.err(new UnhandledException({ cause })));
+  }
+
+  let winner: Result<T, E | UnhandledException> | undefined;
+  await driveFirstSettlerFanOutPlans(
+    plans,
+    outerContext,
+    executeInterruptingPlan,
+    (result, hasWinner) => {
+      if (!hasWinner) {
+        winner = result;
+        return true;
+      }
+      return false;
+    },
+  );
+
+  if (winner !== undefined) return winner;
+
+  const cause = new Error("Op.race failed to produce a winner");
+  return Result.err(new UnhandledException({ cause }));
+}
+
+export async function driveAnyPlans<T, E>(
+  plans: readonly Plan<T, E, unknown>[],
+  outerContext: RunContext<readonly unknown[]>,
+): Promise<Result<T, ErrorGroup<E | UnhandledException>>> {
+  if (plans.length === 0) {
+    return Promise.resolve(
+      Result.err(new ErrorGroup([], "Op.any requires at least one operation")),
+    );
+  }
+
+  let winner: { value: T } | undefined;
+  const results = await driveFirstSettlerFanOutPlans(
+    plans,
+    outerContext,
+    executeInterruptingPlan,
+    (result) => {
+      if (result.isOk() && winner === undefined) {
+        winner = { value: result.value };
+        return true;
+      }
+      return false;
+    },
+  );
+
+  if (winner !== undefined) return Result.ok(winner.value);
+
+  const errors = results.filter(Result.isError).map((r) => r.error);
+  return Result.err(new ErrorGroup(errors, "Op.any failed because all operations failed"));
+}
 
 export { fanOutPlans, driveFirstSettlerFanOutPlans, driveBoundedPoolPlans };

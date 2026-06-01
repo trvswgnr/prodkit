@@ -1,6 +1,6 @@
 import { assert, describe, expect, test } from "vitest";
 import { ErrorGroup, Op } from "../../src/index.js";
-import { deferredPromise, trackAbortListeners } from "../support/utils.js";
+import { deferredPromise, resolveAfter, trackAbortListeners } from "../support/utils.js";
 import { Policy } from "../../src/policy/index.js";
 
 describe("combinator abort listener cleanup", () => {
@@ -90,6 +90,23 @@ describe("combinator abort listener cleanup", () => {
     } finally {
       tracked.restore();
       secondGate.resolve(2);
+    }
+  });
+
+  test("race detaches abort listener after children settle", async () => {
+    const outer = new AbortController();
+    const tracked = trackAbortListeners(outer.signal);
+    try {
+      const r = await Op.race([Op.try(() => resolveAfter(0, 0)), Op.try(() => resolveAfter(1, 50))])
+        .with(Policy.cancel(outer.signal))
+        .run();
+      assert(r.isOk(), "should be Ok");
+      expect(tracked.activeAbortListeners).toBe(0);
+
+      outer.abort(new Error("too late"));
+      expect(tracked.activeAbortListeners).toBe(0);
+    } finally {
+      tracked.restore();
     }
   });
 

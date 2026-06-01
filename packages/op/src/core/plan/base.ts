@@ -74,6 +74,12 @@ export interface PlanRewriter {
     source: readonly Plan<T, E, M>[],
     concurrency?: number,
   ) => Plan<unknown, unknown, unknown>;
+  readonly race?: <T, E, M>(source: readonly Plan<T, E, M>[]) => Plan<unknown, unknown, unknown>;
+  readonly any?: <T, E, M>(source: readonly Plan<T, E, M>[]) => Plan<unknown, unknown, unknown>;
+  readonly allSettled?: <T, E, M>(
+    source: readonly Plan<T, E, M>[],
+    concurrency?: number,
+  ) => Plan<unknown, unknown, unknown>;
 }
 
 interface PlanRewriteOverrides<T, E, M> {

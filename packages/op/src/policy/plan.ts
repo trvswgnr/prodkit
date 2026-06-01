@@ -2,7 +2,11 @@ import { TimeoutError, UnhandledException } from "../errors.js";
 import { createBoundAbortSession, raceBoundCancelExecution } from "../core/cancel-session.js";
 import { Result } from "../result.js";
 import { sleepWithSignal } from "../shared.js";
-import { RegisterExitFinalizerInstruction, SuspendInstruction, SuspendResume } from "../core/instructions.js";
+import {
+  RegisterExitFinalizerInstruction,
+  SuspendInstruction,
+  SuspendResume,
+} from "../core/instructions.js";
 import { createRunContext } from "../core/runtime.js";
 import { normalizeRetryPolicy, type NormalizedRetryPolicy } from "./retry-policy.js";
 import { validateTimeoutMs } from "./validate.js";
@@ -17,7 +21,7 @@ import {
 } from "../core/plan/base.js";
 import { onEnterPlan, onExitPlan } from "../core/plan/lifecycle.js";
 import { mapErrPlan, mapPlan, recoverPlan, tapErrPlan, tapPlan } from "../core/plan/transforms.js";
-import { allPlan } from "../core/plan/combinators.js";
+import { allPlan, allSettledPlan, anyPlan, racePlan } from "../core/plan/combinators.js";
 
 class DelegatingPlanRewriter implements PlanRewriter {
   apply!: PlanRewriter["apply"];
@@ -81,6 +85,24 @@ class DelegatingPlanRewriter implements PlanRewriter {
     concurrency?: number,
   ): Plan<unknown, unknown, unknown> {
     return allPlan(
+      source.map((child) => child.rewrite<T, E, M>(this)),
+      concurrency,
+    );
+  }
+
+  race<T, E, M>(source: readonly Plan<T, E, M>[]): Plan<unknown, unknown, unknown> {
+    return racePlan(source.map((child) => child.rewrite<T, E, M>(this)));
+  }
+
+  any<T, E, M>(source: readonly Plan<T, E, M>[]): Plan<unknown, unknown, unknown> {
+    return anyPlan(source.map((child) => child.rewrite<T, E, M>(this)));
+  }
+
+  allSettled<T, E, M>(
+    source: readonly Plan<T, E, M>[],
+    concurrency?: number,
+  ): Plan<unknown, unknown, unknown> {
+    return allSettledPlan(
       source.map((child) => child.rewrite<T, E, M>(this)),
       concurrency,
     );
@@ -199,7 +221,7 @@ function cancelPlan<T, E, M>(source: Plan<T, E, M>, abortSignal: AbortSignal): P
   return createPlan(function* () {
     const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
       (outerContext) => raceBoundCancel(source, abortSignal, outerContext),
-      SuspendResume.passThrough,
+      SuspendResume.drainAfterAbort,
     );
 
     if (result.isErr()) return yield* result;
