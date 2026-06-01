@@ -595,6 +595,30 @@ describe("generator finalization on early exit", () => {
     assert(result.isErr(), "should be Err");
     expect(result.error).toBe("boom");
   });
+
+  test("does not drive yield* Op.defer registered in finally after early Err", async () => {
+    let deferRan = false;
+    const events: string[] = [];
+    const program = Op(function* () {
+      try {
+        events.push("start");
+        yield* Op.fail("boom");
+        return "unreachable";
+      } finally {
+        events.push("finally-sync");
+        yield* Op.defer(() => {
+          deferRan = true;
+        });
+      }
+    });
+
+    const result = await program.run();
+
+    assert(result.isErr(), "should be Err");
+    expect(result.error).toBe("boom");
+    expect(events).toEqual(["start", "finally-sync"]);
+    expect(deferRan).toBe(false);
+  });
 });
 
 describe("Op.defer error handling", () => {

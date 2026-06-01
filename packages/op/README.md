@@ -373,7 +373,24 @@ be sync or async.
 
 Use `Op.defer`/`.with(Policy.release(...))`/`.on("exit", ...)` for effectful cleanup. Native generator
 `finally` blocks are only best-effort synchronous finalization; yielded or async work inside
-`finally` is not driven during early exit.
+`finally` is not driven during early exit. Register defer **before** risky steps, not inside `finally`:
+
+```ts
+// Anti-pattern: yield* in finally is not driven on early exit.
+const leaky = Op(function* () {
+  try {
+    return yield* Op.fail("boom");
+  } finally {
+    yield* Op.defer(() => cleanup()); // does not run
+  }
+});
+
+// Preferred: register cleanup before the step that can fail.
+const scoped = Op(function* () {
+  yield* Op.defer(() => cleanup());
+  return yield* Op.fail("boom");
+});
+```
 
 `Policy.release` invokes only `release(successValue)` (no context parameter); its stack slot is invoked with the
 same **`ExitContext`** as other finalizers for this run, but the release function ignores it.
