@@ -37,9 +37,11 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Audit dependency signatures
-        run: npm audit signatures
+        run: pnpm -r exec npm audit signatures
 
       - name: Run project quality gate
+        env:
+          CHANGELOG_API_BASE_REF: ${{ github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000' && github.event.before || '' }}
         run: pnpm run gate
 
       - name: Publish op coverage report

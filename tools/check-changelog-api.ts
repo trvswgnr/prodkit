@@ -149,6 +149,10 @@ function readGitFile(ref: string, relativePath: string): string | null {
   }
 }
 
+class ChangelogApiBaseRefError extends Error {
+  override name = "ChangelogApiBaseRefError";
+}
+
 function resolveBaseRef(): string {
   const explicit = process.env.CHANGELOG_API_BASE_REF?.trim();
   if (explicit) return explicit;
@@ -168,7 +172,9 @@ function resolveBaseRef(): string {
         stdio: ["ignore", "pipe", "ignore"],
       }).trim();
     } catch {
-      return "HEAD";
+      throw new ChangelogApiBaseRefError(
+        "Unable to resolve changelog API base ref. Set CHANGELOG_API_BASE_REF, fetch origin/main, or run from a GitHub Actions pull_request event (GITHUB_BASE_SHA).",
+      );
     }
   }
 }
@@ -188,7 +194,13 @@ function pathChangedSinceBase(repoRoot: string, baseRef: string, relativePath: s
 
 function main(): number {
   const repoRoot = readRepoRoot();
-  const baseRef = resolveBaseRef();
+  let baseRef: string;
+  try {
+    baseRef = resolveBaseRef();
+  } catch (error) {
+    logger.error(error instanceof Error ? error.message : String(error));
+    return 1;
+  }
   const failures: string[] = [];
 
   for (const target of MONITORED) {

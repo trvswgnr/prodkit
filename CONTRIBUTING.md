@@ -43,10 +43,14 @@ Pull requests and pushes to `main` run the same gate in `.github/workflows/ci.ym
 CI also publishes a Vitest coverage report as a workflow artifact (`op-coverage`) so reviewers can
 audit unit, integration, type, and property-law coverage evidence from the run. `@prodkit/std`
 coverage is omitted until utility modules ship in `packages/std/src/`.
+CI runs `pnpm -r exec npm audit signatures` so dependency signature verification covers every
+workspace package, not just the private root manifest.
 A `changelog:api:check` gate step fails when `packages/op/src/index.ts`,
 `packages/op/src/di/index.ts`, `packages/op/src/policy/index.ts`, or `packages/op/src/hkt.ts`
 public export names change without an update to that package's `CHANGELOG.md` under
-`## [Unreleased]`. Internal re-export paths do not count as API changes.
+`## [Unreleased]`. The check compares against an explicit base ref (`GITHUB_BASE_SHA` on pull
+requests, the pre-push commit on pushes to `main`, or `CHANGELOG_API_BASE_REF` locally) and fails
+closed when no base ref can be resolved. Internal re-export paths do not count as API changes.
 A `bundle-size` job compares `@prodkit/op` minified + gzip bundle size on pull requests via
 `compressed-size-action`; runtime regressions are tracked separately by CodSpeed
 (see [`packages/op/PERFORMANCE.md`](packages/op/PERFORMANCE.md) and [`benchmarks/op/README.md`](benchmarks/op/README.md)).
@@ -313,7 +317,7 @@ combinator samples) and follow imports into `core/runtime.ts`.
   `@prodkit/std/array` are planned).
 - Package docs: [`packages/std/README.md`](packages/std/README.md). Ship changelog: [`packages/std/CHANGELOG.md`](packages/std/CHANGELOG.md).
 
-You can run consumer install path checks directly. Each mode builds a temporary mini-pnpm workspace (reusing the repo `catalog:` from `pnpm-workspace.yaml`), installs `@prodkit/op` and `@prodkit/std` from the chosen source, then runs `examples/` smoke:
+You can run consumer install path checks directly. Each mode builds a temporary mini-pnpm workspace (reusing `catalog:` and pnpm safety policy from `pnpm-workspace.yaml`), installs `@prodkit/op` and `@prodkit/std` from the chosen source, then runs `examples/` smoke:
 
 ```bash
 pnpm --filter @prodkit/tools run examples:smoke:pack

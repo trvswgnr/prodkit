@@ -130,29 +130,30 @@ function collectRuntimeEntryLeaves(value: unknown, target: Set<string>): void {
   }
 }
 
-function extractCatalogSection(workspaceYaml: string): string {
+function extractSmokePnpmWorkspaceTail(workspaceYaml: string): string {
   const lines = workspaceYaml.split(/\r?\n/);
-  const startIdx = lines.findIndex((line) => /^\s*catalog:\s*$/.test(line));
-  if (startIdx === -1) {
-    throw new Error(
-      'Repository pnpm-workspace.yaml must define a top-level "catalog:" block (required for isolated smoke workspaces).',
-    );
-  }
-  const block: string[] = [];
-  for (let i = startIdx; i < lines.length; i += 1) {
-    const line = lines[i];
-    if (line === undefined) break;
-    if (i === startIdx) {
-      block.push(line);
-      continue;
-    }
-    if (line === "" || /^  /.test(line)) {
-      block.push(line);
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index] ?? "";
+    if (/^packages:\s*$/.test(line)) {
+      index += 1;
+      while (index < lines.length && /^  /.test(lines[index] ?? "")) {
+        index += 1;
+      }
       continue;
     }
     break;
   }
-  return block.join("\n").trimEnd();
+  while (index < lines.length && (lines[index] ?? "").trim() === "") {
+    index += 1;
+  }
+  const tail = lines.slice(index).join("\n").trimEnd();
+  if (!/^\s*catalog:\s*$/m.test(tail)) {
+    throw new Error(
+      'Repository pnpm-workspace.yaml must define a top-level "catalog:" block (required for isolated smoke workspaces).',
+    );
+  }
+  return tail;
 }
 
 function parsePnpmPackFilename(packOutput: string): string | undefined {
@@ -397,9 +398,9 @@ const createTempExamplesWorkspace = Op(function* (
       }),
   );
 
-  let catalogSection: string;
+  let workspacePolicyTail: string;
   try {
-    catalogSection = extractCatalogSection(workspaceYamlRaw);
+    workspacePolicyTail = extractSmokePnpmWorkspaceTail(workspaceYamlRaw);
   } catch (cause) {
     return yield* new SmokeWorkspaceError({
       message: cause instanceof Error ? cause.message : String(cause),
@@ -407,7 +408,7 @@ const createTempExamplesWorkspace = Op(function* (
     });
   }
 
-  const workspaceYamlBody = `packages:\n  - ${JSON.stringify(EXAMPLES_CONSUMER_DIR)}\n\n${catalogSection}\n`;
+  const workspaceYamlBody = `packages:\n  - ${JSON.stringify(EXAMPLES_CONSUMER_DIR)}\n\n${workspacePolicyTail}\n`;
   yield* Op.try(
     () => writeFileFs(path.join(tempRoot, "pnpm-workspace.yaml"), workspaceYamlBody, "utf8"),
     (cause) =>

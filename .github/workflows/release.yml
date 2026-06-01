@@ -124,5 +124,17 @@ jobs:
       - name: Verify changelog includes current package version
         run: pnpm --filter "$NPM_FILTER" run changelog:check
 
+      - name: Verify tag version matches package.json
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          package_id="${tag%%-v*}"
+          tag_version="${tag#${package_id}-v}"
+          package_version="$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('packages/${package_id}/package.json','utf8')).version)")"
+          if [ "${tag_version}" != "${package_version}" ]; then
+            echo "Tag version ${tag_version} does not match packages/${package_id}/package.json version ${package_version}"
+            exit 1
+          fi
+
       - name: Publish to npm
         run: pnpm --filter "$NPM_FILTER" publish --access public --provenance --no-git-checks
