@@ -23,6 +23,7 @@
 - Wants issue-work flows to keep `packages/op/CHANGELOG.md` `Unreleased` updated, but prefers to handle version/tag/publish release steps personally unless explicitly delegated.
 - Prefers hard-cutover transitions, not gradual deprecations and migrations (this project is in alpha, so intentional breaking changes are acceptable)
 - Prefers normalization only when inputs have an obvious safe interpretation; invalid inputs should surface at run time as `Err(UnhandledException)` with the validation error as `cause`.
+- For GitHub issue triage, use `needs refinement` (not title prefixes) when maintainer judgment is required before agent work.
 
 ## Learned Workspace Facts
 
