@@ -1,5 +1,7 @@
 # Changelog
 
+All notable changes to this project will be documented in this file.
+
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
@@ -11,31 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Trimmed package README to a reserved placeholder; removed `@prodkit/std` from the examples
-  workspace until utility modules ship.
-- Dropped `@prodkit/std` coverage from the root quality gate and CI until `packages/std/src/` has
-  code to cover.
+- Trimmed package README to a reserved placeholder until utility modules ship.
 
 ## [0.1.3] - 2026-05-30
 
 ### Changed
 
-- Removed `@prodkit/std/di`; import DI from `@prodkit/op/di` instead. DI consumer examples moved
-  from `examples/std/` to `examples/op/di/`; `examples/std/` is reserved for future utility samples.
+- Removed `@prodkit/std/di`; import DI from `@prodkit/op/di` instead.
 - Repositioned `@prodkit/std` as a general runtime-agnostic utility layer with no `@prodkit/op` peer
   dependency.
 
 ## [0.1.2] - 2026-05-28
-
-### Added
-
-- Vitest coverage script with CI-published HTML/LCOV artifacts and enforced coverage floors for
-  the DI implementation.
-
-### Fixed
-
-- Concurrent `Op.all` / `Op.race` branches no longer invoke the same async `DI.scoped` factory
-  twice in one run; in-flight resolution is cached in the shared scope env immediately.
 
 ### Changed
 
@@ -44,12 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   aborted, awaits async factories with DI-native abort handling, and leaves the binding uncached
   when abort wins before settlement.
 
-### Added
+### Fixed
 
-- DI regression coverage for scoped resolution under pre-abort, in-flight async abort, post-cache
-  abort, and factory throw without env corruption.
-- DI interaction tests for runtime nested overlapping `provide`, async scoped factory rejection,
-  and parent binding sharing under `Op.all` / `Op.race`.
+- Concurrent `Op.all` / `Op.race` branches no longer invoke the same async `DI.scoped` factory
+  twice in one run; in-flight resolution is cached in the shared scope env immediately.
 
 ## [0.1.1] - 2026-05-27
 
@@ -69,7 +55,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed the local abort-signal stub; `.withSignal` uses `AbortSignalLike` from `@prodkit/op/internal`.
 - Replaced local `unsafeCoerce` usage with `@prodkit/op/internal` so helpers stay centralized.
 - Changed `@prodkit/op` to a peer dependency so consumers install a single compatible `@prodkit/op` alongside `@prodkit/std`.
-- Added DI regression coverage for defaulted and rest-parameter dependency operations.
 - Changed DI provisioning to use `DI.Dependency(...)`, `DI.singleton(Dependency, value)` binding values, direct dependency implementation instances, and variadic provisioning calls.
 - Added `DI.scoped(Dependency, resolve)` for scoped (per-run) dependency resolution with in-run memoization.
 - Changed DI operation construction to avoid inspecting generator `Function.length`.

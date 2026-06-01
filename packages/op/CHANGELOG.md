@@ -7,34 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.77] - 2026-06-01
+
 ### Changed
 
-- `DI.provide` is backed by the `providePlan` plan node so `.with(Policy.*)` pushes through to
-  inner plans via local `source.rewrite` re-wrap. No published API changes.
-
-- Nested execution routes through `executePlan` with a `PlanExecutionMode` (`CancelSettlement`)
-  instead of parallel `driveInterruptOnAbort` / `executePlanInterruptOnAbort` ports. Combinator
-  fan-out, DI provision suspend, and timeout inner runs share the plan port. No published API
-  changes.
-
-- Consolidated cancellation settlement into `core/cancel-session.ts`. Suspend resume, Policy.cancel,
-  DI lazy resolve, and combinator drain paths declare settlement intent through `CancelSettlement`
-  instead of threading booleans through the driver. No published API changes.
-
-- `Policy.cancel` plan suspend now drains bound-cancel execution so combinator loser branches
-  finish teardown before interrupt-on-abort returns. No published API changes.
-
-- `Op.all` is backed by the `allPlan` plan node with structural `PlanRewriter` hooks so
-  `.with(Policy.*)` pushes through to child plans. No published API changes.
-
-- `Op.race`, `Op.any`, and `Op.allSettled` are backed by `racePlan`, `anyPlan`, and
-  `allSettledPlan` with the same structural rewrite hooks. No published API changes.
-
-- Colocated former `core/types.ts` with runtime owners: `core/meta.ts`, `core/instructions.ts`,
-  `core/runtime.ts` (`RunContext`, `ExitContext`, `runOp`), and `core/plan/context.ts` /
-  `core/plan/surface.ts`. Direct imports only; no re-export barrel. No published API changes.
-
-## [0.1.77] - 2026-06-01
+- `DI.provide` now takes a tuple of bindings (`DI.provide(op, [a, b])`) instead of a spread of
+  separate binding arguments. Internal validation type `ValidProvideEntries` is renamed to
+  `ValidProvideBindings` to match the public parameter name.
 
 ### Removed
 
@@ -45,13 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- CI and release maintainer checks now fail closed: changelog API compare requires an explicit base
-  ref, release publish verifies tag version matches `package.json`, dependency signature audit runs
-  across all workspace packages, and examples smoke temp workspaces inherit pnpm safety policy from
-  the repository root.
-- Package metadata and docs: `@prodkit/std` ships `LICENSE`, package `homepage` fields point at
-  package READMEs, README DI examples typecheck, and monorepo ADR links are qualified as absent from
-  npm tarballs.
 - `.tap`, `.tapErr`, and `.recover` no longer drive returned ops implicitly. Callback return
   values are ignored for `tap` and `tapErr`, while `recover` treats the handler return as fallback
   data. Use `flatMap` or `yield*` for explicit operation sequencing.
@@ -72,16 +44,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   token classes with the same `DI.Dependency("...")` label are distinct slots; providing one no
   longer satisfies `DI.inject` on the other or rejects the second binding as a duplicate.
 
-### Changed
-
-- `DI.provide` now takes a tuple of bindings (`DI.provide(op, [a, b])`) instead of a spread of
-  separate binding arguments. Internal validation type `ValidProvideEntries` is renamed to
-  `ValidProvideBindings` to match the public parameter name.
-
-- Upgraded the monorepo toolchain to pnpm 11 and enabled an explicit 24-hour dependency
-  release-age gate in `pnpm-workspace.yaml` so freshly published package versions are not
-  installed immediately.
-
 ## [0.1.76] - 2026-05-31
 
 ### Added
@@ -90,8 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `release`, and `define`.
 - Added `Policy` type alias and nested type helpers (`Policy.Input`, `Policy.Source`, `Policy.Type`,
   `Policy.BuiltIn`) on `@prodkit/op/policy` for custom policy authors.
-- Added runnable custom policy example at `examples/op/custom-policy.ts` and a README custom policy
-  checklist linking `@prodkit/op/hkt` and `Policy.define`.
+- README custom policy checklist linking `@prodkit/op/hkt` and `Policy.define`.
 - Restored `@prodkit/op/internal` for extension and maintainer helpers (`Blocking`, `withBlocking`,
   `CustomInstruction`, metadata inference types, `AbortSignalLike`, `unsafeCoerce`, `NEVER`, and
   related symbols).
@@ -126,8 +87,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   validation failures; `Delay.exponential` options are validated once per run, not on every retry
   attempt. Non-integer `retries` surfaces `TypeError` as `cause`; negative `retries` use
   `RangeError`.
-- Renamed policy-related test suites to `Policy.retry` / `Policy.timeout` vocabulary and documented
-  pre-ADR 0009 policy method names in superseded ADRs 0002 and 0007.
 - Renamed retry delay type `RetryDelay` to `Delay` so it shares a name with the `Delay` helper
   namespace; `.with(...)` result typing now uses `HKT.Apply` directly instead of `OpPolicyResult`.
 
@@ -162,9 +121,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Documented `@prodkit/op/policy`, `@prodkit/op/hkt`, and subpath export surfaces in README;
-  refreshed `PERFORMANCE.md` snapshot; ADR index now includes `status`; contributor docs and
-  `changelog:api:check` cover policy and HKT entrypoints.
-
+  refreshed `PERFORMANCE.md` snapshot.
 - Added `@prodkit/op/policy` with `retry`, `timeout`, `cancel`, `release`, `Delay`, and retry
   policy types for policy composition through `.with(Policy.*)`.
 - Added `@prodkit/op/hkt` with reusable `HKT`, `HKTArg`, and `Apply` helpers for open type-level
@@ -195,7 +152,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added `@prodkit/op/di` subpath export with dependency tokens, inject, provide, and scoped/singleton
-  bindings (moved from `@prodkit/std/di`). Consumer examples live under `examples/op/di/`.
+  bindings (moved from `@prodkit/std/di`).
 
 ### Removed
 
@@ -207,29 +164,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Replaced the public retry policy shape with `attempts`, `when`, and `delay`, moved built-in
   delay helpers under `Delay`, and removed the root `exponentialBackoff` export.
-- Replaced the wall-clock `bench.ts` harness with CodSpeed (simulation + walltime Vitest benches)
-  and `compressed-size-action` for bundle-size PR comments. Added a shared comparison matrix
-  (`comparison-matrix.ts`), local `compare` report harness, `overhead.*.ratio` CodSpeed benches,
-  and restored `performance:sync` to publish native-vs-Op slowdown ratios in `PERFORMANCE.md`.
-  CodSpeed walltime benches track Op timings and overhead ratios only; native baselines stay in
-  `compare.ts` for the public snapshot table.
-- Consolidated benchmark workspace layout to match `examples/`: shared `@prodkit/benchmarks` package
-  at `benchmarks/` with Op-specific harness code under `benchmarks/op/`.
-- Benchmark harness JSON reports and V8 profiles now write under `benchmarks/op/.artifacts/`.
-- Renamed comparison scenario `singleOp` to `singleValue` so matrix keys match workload names.
-- Refactored the comparison matrix to column-driven scenarios (`implementations` keyed by library
-  id). Comparison reports now expose `vsBaseline` ratios per competitor column; `compare` and
-  `performance:sync` render absolute ops/sec and vs-native tables dynamically from
-  `IMPLEMENTATION_COLUMNS`.
-- Added an `effect` competitor column to the comparison matrix with matching scenario runners for
-  the public `PERFORMANCE.md` snapshot. CodSpeed benches remain Op-only.
-- Added `compare --pair=<left>,<right>` for direct library head-to-head output (for example
-  `--pair=op,effect`) using absolute ops/sec from the same benchmark run.
-- Removed dead hook-era internals after the plan AST cutover: unused `*CoreOp` builders,
-  `DefaultHooks`, and orphan `with*Op` policy wrappers. Fluent methods now share one
-  `fluentMethodsForContext` factory between `makePlanOp` and the sync-value hot path.
-- Folded `makeCoreOp` into `core/fluent.ts` and dropped the `policies.ts` re-export shim;
-  retry policy types and helpers now import from `core/retry-policy.ts` directly.
 
 ## [0.1.72] - 2026-05-29
 
@@ -238,63 +172,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sync `Op.of(value)` now uses a lightweight runtime shell: `.run()` resolves directly and
   `yield*` skips `makePlanOp`; fluent transforms still upgrade through the normal plan path.
 
-### Added
-
-- Added sequential-compose profile harness in `@prodkit/op-benchmarks`: shared `harness.ts` and
-  `scenarios.ts`, `tinybench` breakdown statistics, `--steps=` / `--report=profile.json`, sync
-  reference table split, CPU/heap artifact detection, and Vitest scenario smoke tests.
-
-### Fixed
-
-- Stabilized the `Op.race` first-settler property test by driving the oracle through the same
-  `Op.try` branch path as the combinator and advancing fake timers for deterministic settlement.
-
 ## [0.1.71] - 2026-05-28
 
 ### Changed
 
-- Moved `@prodkit/op` tests out of `src/` into a tiered `tests/` layout (unit, integration,
-  property, types, hygiene, support) so implementation and test-only code stay separated.
 - Replaced the internal fluent `OpHooks` rebuild path with plan-backed composition, keeping the
   public `Op` API stable while moving policy push-through into structural plan nodes.
-- Expanded the Op benchmark harness with `Op.any`, `Op.race`, and sequential compose scenarios;
-  `PERFORMANCE.md` now snapshots all seven runtime pairs.
 - `Op.recover` now accepts only a type-predicate function (for example `MyError.is`); passing a
   `TaggedError` class or a plain boolean predicate is no longer supported.
-- CI gate now fails when monitored public export entrypoints change without a matching
-  `CHANGELOG.md` update under unreleased heading.
 
 ### Fixed
 
 - `Op.all`, `Op.allSettled`, `Op.any`, and `Op.race` now merge child operation metadata so
   requirements declared only in combinator branches flow to parent `yield*` sites and provisioning.
 
-### Added
-
-- Property-based regression tests for `Op.any`, `Op.race`, retry delays, and retry
-  policy attempt-count invariants.
-- Performance snapshot in [`PERFORMANCE.md`](PERFORMANCE.md) (all harness scenarios, ops/sec,
-  slowdown ratios, and bundle size), refreshable via
-  `pnpm --filter @prodkit/tools run performance:sync -- --write`.
-- Published Op benchmark baseline guidance in [`benchmarks/op/README.md`](../../benchmarks/op/README.md),
-  with CI `op-benchmarks` artifacts carrying machine-readable `report.json` overhead ratios.
-
 ## [0.1.70] - 2026-05-27
 
 ### Changed
 
-- Normalized composed operation metadata to display without per-key `readonly` modifiers; `Op`'s `M` parameter still accepts writable object literals via {@link Meta}.
+- Normalized composed operation metadata to display without per-key `readonly` modifiers; `Op`'s `M`
+  parameter still accepts writable object literals via `Meta`.
 
 ### Added
 
 - Documented `better-result` peer dependency range, semver expectations, and which symbols callers
   import from `better-result` versus `@prodkit/op` in the package README.
-
-### Added
-
-- Documented core/fluent structural decisions in `docs/adr/` (nullary core vs lifted arity,
-  `OpHooks` push-through rebuild, timeout rebuild hook asymmetry, three cleanup channels,
-  combinator loser finalization waits, `UnhandledException` runtime channel, args-only `.run()`).
 
 ## [0.1.69] - 2026-05-26
 
@@ -306,8 +208,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (for example `@prodkit/std`).
 - Exported `AbortSignalLike`, `functionHasTruthyBrand`, and `NEVER` via `@prodkit/op/internal`
   for runtime-agnostic extension code.
-- Added regression coverage for generator-built operation callback sequencing without relying on
-  function arity reflection.
 - Added the generic `Blocking<T>` metadata brand for extension packages, exported
   `withBlocking(..., key)` / `BlockingOp` for marking operations that are not ready to run, and kept
   `IsRunnable<M>` and `SetBlockingMeta` on `@prodkit/op/internal` for extension inference.
@@ -316,10 +216,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Removed the phantom `_E` type parameter from `CustomInstruction`; typed generator errors are inferred
   only from yielded `Err` values and nested ops. Extension metadata remains on `M`.
-- Consolidated consumer examples into `examples/` (`@prodkit/examples`); consumer smoke now
-  validates packed installs for both `@prodkit/op` and `@prodkit/std`.
-- Flattened maintainer scripts workspace from `tools/op` to `tools/` and renamed it to
-  `@prodkit/tools` (was `@prodkit/op-scripts`).
 - `sleepWithSignal(ms, signal)` now types `signal` as `AbortSignalLike` (structurally compatible with
   real `AbortSignal` implementations).
 - Changed fluent callback sequencing to drive only bound nullary ops, so returned generator-built
@@ -338,32 +234,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added a comparison page covering tradeoffs against Effect, neverthrow, `fp-ts`,
-  native `Promise`, and `ResultAsync`.
-- Added CI-published Vitest coverage artifacts for `@prodkit/op` so correctness
-  evidence is easier to audit from workflow runs.
-- Added packed-package runtime smoke coverage for Bun, Deno, and a Cloudflare Workers-like
-  Miniflare environment, with CI matrix coverage for each runtime.
-- Added dependency signature auditing to CI and release-runner network auditing
-  for supply-chain monitoring.
+- Documented runtime compatibility for Bun, Deno, and Cloudflare Workers-like (Miniflare)
+  environments in package smoke coverage.
 
 ## [0.1.67] - 2026-05-14
 
-### Fixed
-
-- Built the package before release changelog validation so fresh GitHub Actions
-  runners can resolve the workspace package entrypoint.
-
 ## [0.1.66] - 2026-05-14
-
-### Changed
-
-- Hardened workspace installs by disabling npm lifecycle scripts by default.
-- Pinned GitHub Actions workflow dependencies to full commit SHAs.
-- Hardened the npm release workflow by removing pnpm cache restore from the
-  publish path.
-- Hardened GitHub Actions checkout steps so workflow tokens are not persisted
-  after checkout.
 
 ## [0.1.65] - 2026-05-14
 
@@ -372,8 +248,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `Op.sleep(ms)` as a cancellation-aware core operation for timer
   delays and polling loops, with non-finite durations surfaced as run-time
   `UnhandledException` failures.
-- Added regression coverage for parameterized generator ops to make sure
-  defaulted and rest parameters receive explicit runtime args via `.run(...args)`.
 
 ### Changed
 
@@ -384,8 +258,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   runtime-agnostic while preserving existing cancellation semantics.
 - Extended `Op.run` to accept runtime arguments (`Op.run(op, ...args)`) so the
   factory helper matches instance `run(...args)` behavior for parameterized ops.
-- Expanded and standardized JSDoc/examples across `Op` static and instance
-  methods, with type-level coverage to prevent documentation drift.
+- Expanded and standardized JSDoc across `Op` static and instance methods.
 - Limited direct `yield* op` composition to nullary ops so parameterized ops
   must be invoked before composition.
 
@@ -399,8 +272,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Clarified lifecycle docs that `ExitContext.result` is the pre-finalizer
   settlement result and that effectful cleanup belongs in registered finalizers,
   not yielded generator `finally` blocks.
-- Corrected contributor and package README smoke-check commands to point at the
-  `@prodkit/op-scripts` workspace that owns the `examples:smoke:*` scripts.
 - Corrected `Op.run` README wording to reflect parameterized
   `Op.run(op, ...args)` support.
 - Passed the same unwrapped retry cause to `RetryPolicy.when` and
@@ -433,12 +304,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.63] - 2026-05-11
 
-### Added
-
-- Added lifecycle regression coverage proving `withTimeout` does not settle
-  `run()` until async `withRelease` cleanup and async `.on("exit")` finalizers
-  finish.
-
 ### Fixed
 
 - Fixed `withTimeout` structured-cancellation semantics so timeout now waits for
@@ -450,15 +315,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.62] - 2026-05-11
 
-### Changed
-
-- Updated repository references from `trvswgnr/op` to `trvswgnr/prodkit` after the monorepo rename.
-
 ## [0.1.61] - 2026-05-11
-
-### Changed
-
-- Renamed the monorepo quality script from `pnpm run check` to `pnpm run gate`.
 
 ## [0.1.58] - 2026-05-09
 
@@ -467,24 +324,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Changed `Op.try` `onError` mapper handling to pure normalization
   (`E | Promise<E>`). Returned `Op`/generator values are no longer executed;
   they are now treated as the `Err` value directly.
-- Migrated the project to a pnpm + Turborepo monorepo layout
-  (`packages/op`, `examples/op`, `benchmarks/op`, `tools/op`) so
-  installs, task orchestration, and CI checks run from one workspace graph with
-  a single lockfile.
-- Adapted the existing tag-based release process to the monorepo structure by
-  updating CI/release workflows and release automation to run through pnpm
-  filters while keeping the current non-Changesets publish flow.
-- Updated contributor and user-facing docs to reflect the new workspace paths
-  and pnpm-based commands.
 
 ### Fixed
 
 - Fixed `Op.try` to await async `onError` mappers before emitting `Err`, so
   rejection mapping no longer leaks a raw `Promise` into the error channel and
   downstream tagged-error matching remains type- and runtime-consistent.
-- Fixed consumer smoke validation to run in an isolated temporary examples
-  workspace, preventing package-install smoke checks from mutating or clobbering
-  workspace-linked dependencies.
 
 ## [0.1.57] - 2026-05-07
 
@@ -506,28 +351,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added `src/test-utils.ts` to centralize shared integration-test helpers
-  (`deferred`, abort-listener tracking, async timing helpers, and invalid
-  concurrency fixtures) so new test files can reuse one source of truth.
 - Added an `enter` lifecycle hook (`.on("enter", ...)`) so runs can attach
   setup side effects at run start without threading setup through call sites;
-  enter/exit contexts now also expose runtime `args` for arity ops, with
-  documented behavior and integration/type coverage.
-- Added focused `core` runtime unit coverage for `drive` internals (signal
-  handoff, instruction validation, finalizer LIFO ordering, and cleanup-fault
-  precedence), plus direct tests for internal helper/type-guard behavior.
+  enter/exit contexts now also expose runtime `args` for arity ops.
 - Added `DESIGN.md` documenting execution invariants (cleanup ordering, error
-  precedence, and combinator chain-order guarantees) with direct links to
-  representative runtime paths and tests to reduce semantic drift risk.
-- Added a dedicated `benchmarks/` harness with baseline comparisons against
-  latest `main` (default) or latest npm release, covering runtime overhead
-  scenarios plus minified/gzip bundle-size deltas.
+  precedence, and combinator chain-order guarantees).
 
 ### Changed
 
-- Extracted default nullary lifecycle hook wiring into a shared helper and
-  reused it across builders, combinators, policies, and core nullary operators
-  to remove repetitive hook plumbing without changing runtime behavior.
 - Fixed `tap`, `tapErr`, and `recover` so callbacks that return `Op(function* () {})`
   are now executed instead of being treated as plain values, closing a runtime
   type-soundness hole where failures could be silently dropped or function objects
@@ -538,55 +369,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Locked `Op.any`/`Op.race` loser semantics so aborted branches now finish
   cleanup/finalizers before `run()` returns, while preserving first-settler
   result precedence to keep outcome behavior stable.
-- Added inline concurrency-contract comments for combinator drivers and policy
-  signal/timeout helpers so contributors can reason about abort propagation,
-  cleanup timing, and settle precedence without rediscovering edge cases.
-- Clarified contributor testing governance with an explicit two-tier strategy in
-  `CONTRIBUTING.md`, including unit vs integration scope boundaries and a
-  no-duplication decision rule for placing assertions.
-- Added contributor benchmark guidance in `CONTRIBUTING.md` and a dedicated
-  `benchmarks/README.md` playbook, while keeping README benchmark docs minimal.
-- Consolidated compile-time API contracts into a dedicated `src/types.test.ts`
-  file and removed scattered `expectTypeOf` assertions from runtime behavior
-  tests so type regressions can be audited in one place.
-- Strengthened algebraic correctness checks by replacing fixed-case monad law
-  assertions with property-based tests and adding randomized `Result` algebra
-  coverage for `map` and `andThen` composition laws.
-- Simplified nullary operator policy wiring to derive retry/timeout/signal behavior
-  from `inner`/`rebuild` config in `makeNullaryOp`, reducing per-operator boilerplate
-  while preserving push-through vs wrap-self semantics (including timeout widening
-  edge cases for `mapErr`, `tapErr`, `recover`, and `onExit`).
-- Collapsed arity-level operator wrappers into a generic lifting path so fluent
-  `map`/`mapErr`/`flatMap`/`tap`/`tapErr`/`recover` on parameterized ops reuse
-  shared policy plumbing while preserving timeout and lifecycle behavior.
 
 ## [0.1.53] - 2026-05-02
 
-### Changed
-
-- Hardened release cut automation so changelog promotion is formatted before
-  validation checks run.
-- Kept release behavior consistent when `Unreleased` is empty by generating a
-  minimal release note automatically.
-- Consolidated release scripts so cuts promote changelog entries, bump version,
-  and tag in one flow.
-- Aligned CONTRIBUTING release guidance with the automated cut path.
-- Captured and validated intermediate release-candidate behavior that
-  previously failed changelog/version gating.
-
 ## [0.1.50] - 2026-05-02
 
-### Added
-
-- Added a release guard that requires a changelog heading matching the current
-  package version before publish steps run.
-
 ## [0.1.49] - 2026-05-02
-
-### Added
-
-- Added the first project changelog and captured the pre-changelog release
-  history to establish a stable baseline for future release notes.
 
 ## [0.1.1 - 0.1.48] - 2026-05-02
 
@@ -599,7 +387,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `race`).
 - Added lifecycle and cleanup capabilities across operation runs, including
   release/finalizer hooks and generator-scoped deferred cleanup.
-- Expanded examples and smoke coverage for realistic consumer install paths.
 
 ### Changed
 
@@ -610,11 +397,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   explicit API surface decisions.
 - Reworked internal architecture to reduce wiring drift, centralize fluent op
   construction, and improve maintainability of core execution paths.
-- Strengthened type safety and typing clarity, including cast policy guidance,
-  tighter inference behavior, and explicit handling of unavoidable TypeScript
-  limitations.
-- Hardened release, CI, and smoke workflows around trusted publishing and
-  consumer-style verification.
+- Strengthened type safety and typing clarity, including tighter inference
+  behavior and explicit handling of unavoidable TypeScript limitations.
 
 ### Fixed
 
@@ -622,6 +406,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   paths, including generator finalization behavior.
 - Tightened combinator and policy behavior in edge cases (listener teardown,
   retry timing, and composed operation semantics).
-- Improved examples and parsing validation in places where earlier behavior
-  could produce weaker diagnostics or drift from production expectations.
 

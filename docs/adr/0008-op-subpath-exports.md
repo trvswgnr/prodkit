@@ -90,8 +90,4 @@ constructors.
 - Do not add op-native modules to `@prodkit/std` or as separate npm packages without a new ADR.
 - `@prodkit/std` drops its `@prodkit/op` peer dependency once DI leaves; std utilities should not
   require op unless a specific module documents that coupling.
-
-## Implementation
-
-- [#128](https://github.com/trvswgnr/prodkit/issues/128): Move DI to `@prodkit/op/di` and remove DI from `@prodkit/std` (done).
-- Policy subpath and `.with(Policy.*)` cutover: ADR 0009 ([#129](https://github.com/trvswgnr/prodkit/issues/129), [#130](https://github.com/trvswgnr/prodkit/issues/130), [#131](https://github.com/trvswgnr/prodkit/issues/131)).
+- Policy constructor placement and `.with(Policy.*)` attachment: [ADR 0009](0009-policy-with-attachment.md).

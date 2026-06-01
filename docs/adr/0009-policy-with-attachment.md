@@ -26,8 +26,7 @@ acquireConnection
   .with(Policy.release((conn) => conn.close()));
 ```
 
-Dedicated retry, timeout, cancel, and release methods are removed after the new surface is in place
-(hard cutover).
+Dedicated retry, timeout, cancel, and release methods were removed (hard cutover).
 
 **Constructors on `@prodkit/op/policy`.** Policy constructors (`Policy.retry`, `Policy.timeout`,
 `Policy.cancel`, `Policy.release`), `Delay`, and related public types ship on the policy subpath
@@ -37,19 +36,9 @@ and `TimeoutError`.
 **Lifecycle and transforms stay on `Op`.** Do not move `on(...)`, `map(...)`, `mapErr(...)`,
 `flatMap(...)`, `tap(...)`, `tapErr(...)`, or `recover(...)` under `Policy`.
 
-## Release typing spike
-
-Before committing `Policy.release(...)`, verify contextual typing:
-
-```ts
-acquireConnection.with(Policy.release((conn) => conn.close()));
-```
-
-`conn` must infer from the source op success type.
-
-Result: the spike passed once the release overload was placed first. With the release overload
-last, TypeScript infers the callback parameter as `unknown`; with release first, `conn` infers from
-the source op success value while timeout still widens the error channel.
+**Release overload is first in the `.with(...)` type surface.** That preserves contextual typing for
+`Policy.release((value) => ...)`. When the release overload is last, TypeScript infers the callback
+parameter as `unknown`.
 
 ## Considered options
 
@@ -73,13 +62,4 @@ hard cutover; shipped afterward via `Policy.define(...)` and `@prodkit/op/hkt` (
 - Retry defaults, policy ordering with `.with(...)`, and other behavioral contracts belong in
   `packages/op/DESIGN.md`.
 - Public docs use `@prodkit/op/policy` for constructors and `Delay`; core docs cover `.with(...)`.
-- Keep the release overload first in the `.with(...)` type surface; this preserves contextual
-  typing for `Policy.release((value) => ...)`.
-
-## Implementation
-
-- [#129](https://github.com/trvswgnr/prodkit/issues/129): Add typed `.with(...)` policy composition.
-- [#130](https://github.com/trvswgnr/prodkit/issues/130): Add `@prodkit/op/policy` subpath (blocked by #129).
-- [#131](https://github.com/trvswgnr/prodkit/issues/131): Hard-cutover from dedicated retry, timeout, and cancel methods (blocked by #129, #130).
-
-Package boundary for the policy subpath: ADR 0008 ([#128](https://github.com/trvswgnr/prodkit/issues/128)).
+- Package boundary for the policy subpath: [ADR 0008](0008-op-subpath-exports.md).

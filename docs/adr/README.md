@@ -10,10 +10,14 @@ document what must stay true; ADRs document why a shape was chosen.
 ## Format
 
 - Files live here as `NNNN-short-slug.md` with sequential numbering (`0001`, `0002`, ...).
-- Each ADR starts with YAML frontmatter, then an `#` heading that **must match** `title`, then the
-  decision statement (context, choice, and reason).
-- Optional body sections (`Considered Options`, `Consequences`) are added only when they help a
-  future maintainer avoid re-litigating a settled trade-off.
+- Each ADR starts with YAML frontmatter, then an `#` heading that **must match** `title`, then a
+  short opening paragraph (context).
+- Prefer this section order when it fits: **Decision**, **Why not** (or **Problem**), **Considered
+  options**, **Consequences**. Skip sections that would repeat `DESIGN.md` invariants without new
+  rationale.
+- Keep the body **evergreen**: describe the decision and trade-offs, not open issue checklists or
+  migration status. Track delivery in GitHub issues; do not add `Implementation` sections to
+  `accepted` ADRs.
 
 ### Frontmatter
 
@@ -49,8 +53,28 @@ pnpm --filter @prodkit/tools run adr:sync
 Add an ADR when a decision is hard to reverse, surprising without context, and the result of a
 real trade-off. Skip obvious or easily reversed choices.
 
-Track implementation work in GitHub issues; link them from the ADR `Implementation` section. Do
-not add ad hoc plan docs under `docs/` for issue checklists.
+Track implementation work in GitHub issues, not in the ADR body. Do not add ad hoc plan docs under
+`docs/` for issue checklists.
+
+## Updating and superseding
+
+Treat each ADR as a historical record of a decision at a point in time. Git history is the audit
+trail; the file should stay readable without relying on diffs alone.
+
+**When the decision changes**, add a new sequentially numbered ADR with the new choice and
+rationale. Do not delete or gut the old file. Set the old ADR's `status` to `superseded` (or
+`deprecated` when the direction is abandoned without a single replacement). Add a short note at
+the top of the old ADR linking to the replacement(s). The new ADR should name what it supersedes
+when that context helps readers.
+
+**While `status: proposed`**, the body may evolve until the team accepts it. After acceptance,
+avoid rewriting the `Decision` section to mean something different. Prefer a follow-on ADR, or a
+clear in-body note (as in ADR 0007) when the same number must record a revised recommendation
+before acceptance.
+
+**Safe edits to accepted or superseded ADRs** include cross-links, typos, and clarifications that do
+not change what was decided. Move behavioral contracts into package `DESIGN.md` (or similar) rather
+than growing ADRs into invariant checklists or issue trackers.
 
 ## Index
 

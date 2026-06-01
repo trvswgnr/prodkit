@@ -12,10 +12,9 @@ observation, fallback values, and operation sequencing. Returning an `Op` from t
 look like explicit composition, but the callback surface did not make it obvious whether the returned
 operation would be run, ignored, or treated as data.
 
-Issue #145 originally proposed hard-cutting the other way: execute op-valued callback returns when
-they are nullary. That depends on knowing whether a generator-built op is nullary or parameterized at
-runtime. Without function arity reflection, source inspection, or a new construction marker, the
-current `Op(function* ...)` value cannot safely distinguish those cases before invocation.
+An earlier direction would have executed nullary ops returned from callbacks, which requires knowing
+whether a generator-built op is nullary or parameterized before invocation. Without a trustworthy
+runtime witness, that model is unsafe.
 
 ## Decision
 
@@ -82,10 +81,3 @@ obvious enough. The callback methods should have local, predictable return seman
   methods. Use `flatMap` or `yield*` when those requirements must participate in the parent op.
 - Direct `yield* nullaryOp` remains supported. Parameterized ops still require explicit invocation
   before composition.
-
-## Implementation
-
-- [#145](https://github.com/trvswgnr/prodkit/issues/145): Superseded by the no-magic callback
-  contract.
-- [#152](https://github.com/trvswgnr/prodkit/issues/152): No longer required for #145 unless the
-  runtime/public shape of generator-built ops changes for another reason.

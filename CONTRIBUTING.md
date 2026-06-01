@@ -136,9 +136,9 @@ If a behavior is an internal invariant of one module, keep it in unit; if it is 
 - Runtime invariants and execution semantics are documented in `packages/op/DESIGN.md`.
 - Structural rationale for core/fluent choices (why separate paths exist) lives in `docs/adr/`.
   Each ADR declares `title`, `status`, and `packages` in YAML frontmatter; run
-  `pnpm --filter @prodkit/tools run adr:sync` after adding or editing one.
-- Implementation work for accepted or proposed ADRs is tracked in GitHub issues, not in ad hoc
-  docs under `docs/`. Link issues from the ADR `Implementation` section when filing them.
+  `pnpm --filter @prodkit/tools run adr:sync` after adding or editing one. Superseding and
+  immutability rules: [`docs/adr/README.md`](docs/adr/README.md#updating-and-superseding).
+- Implementation work is tracked in GitHub issues, not in ADR bodies or ad hoc docs under `docs/`.
 
 ## Core runtime architecture (`@prodkit/op`)
 
@@ -376,6 +376,17 @@ are not used for new releases.
 
    - `@prodkit/op`: `packages/op/CHANGELOG.md`
    - `@prodkit/std`: `packages/std/CHANGELOG.md`
+
+   Changelogs follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) for **npm consumers** of
+   that package only. There is no root changelog.
+
+   - **Include:** published API/behavior changes, breaking changes, deprecations, and user-visible
+     fixes or docs shipped in that package's tarball.
+   - **Omit:** monorepo tooling (CI, gate, release scripts), ADRs, contributor docs, and internal
+     refactors with no published API impact. Do not add a note when omitting.
+   - **Per release:** use at most one heading per type, in order: `Added`, `Changed`, `Deprecated`,
+     `Removed`, `Fixed`, `Security`. Skip empty types. Use past tense; do not repeat the section
+     name in every bullet ("Added X" under `### Added`).
 
 2. Cut a release (this promotes `Unreleased`, bumps npm version in the package
    `package.json`, runs release checks, commits, and creates a package-scoped tag):

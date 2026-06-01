@@ -56,8 +56,3 @@ contract tests and IDE experience to match runtime values.
   imports (no re-export barrel).
 - Subpath exports must not re-declare `Op`; they import the type from the main entry or from shared
   internal shapes (`OpInterface`) when the branded alias is not required.
-
-## Implementation
-
-- [#155](https://github.com/trvswgnr/prodkit/issues/155): closed wontfix; documents the rejected
-  dedicated brand module approach.

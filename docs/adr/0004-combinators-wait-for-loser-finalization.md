@@ -12,16 +12,16 @@ siblings, and still keep `.run()` pending until every aborted branch finishes te
 
 ## Decision
 
-**Winner selection is eager; return is not.** In `packages/op/src/combinators.ts`, `driveAny` and
-`driveRace` abort losing controllers when a winner is chosen, then `await Promise.all` on every
-child drive promise before returning. The caller gets the winner's value or error only after loser
-runs complete their exit finalizers and generator finalization.
+**Winner selection is eager; return is not.** Plan-backed `racePlan` and `anyPlan` (see
+[ADR 0013](0013-combinator-plan-nodes.md)) abort losing child controllers when a winner is chosen,
+then wait for every child drive to finish before the combinator settles. The caller gets the
+winner's value or error only after loser runs complete exit finalizers and generator finalization.
 
 **Winner outcome keeps precedence.** A loser failing while reacting to abort does not override an
 already chosen success (`Op.any`) or the first settled result (`Op.race`). Waiting is for cleanup
 completion, not for re-voting on the outcome.
 
-**Same abort umbrella for siblings.** `fanOut` gives each child its own controller linked to the
+**Same abort umbrella for siblings.** Fan-out gives each child its own controller linked to the
 outer run signal so cancellation propagates without leaking listeners when branches settle.
 
 ## Why not return immediately?
@@ -54,10 +54,9 @@ loser drive to finish.
 
 - Performance-sensitive call sites cannot shorten `Op.any` / `Op.race` by configuration today; the
   wait is part of the combinator contract (Invariant 3 in `DESIGN.md`).
-- New concurrent combinators that abort siblings should follow `fanOut` plus full sibling
-  settlement unless there is a documented, narrower leak contract.
-- `Op.all` uses the same interrupt-on-abort `executePlan` fan-out path as `Op.any` and `Op.race`. Outer
-  `Policy.timeout` on fan-out or `DI.provide` suspends sets `SuspendResume.drainAfterAbort` so
-  in-flight child plans finish teardown before the timeout result settles.
-- `DESIGN.md` states the wait-for-loser-finalization invariant and tests; this ADR records the
-  latency/correctness trade-off behind it.
+- New concurrent combinators that abort siblings should follow the shared fan-out settlement model
+  unless there is a documented, narrower leak contract ([ADR 0013](0013-combinator-plan-nodes.md)).
+- `Op.all` uses the same interrupt-on-abort fan-out path. Outer `Policy.timeout` on fan-out or
+  `DI.provide` suspends sets `SuspendResume.drainAfterAbort` so in-flight child plans finish
+  teardown before the timeout result settles.
+- `DESIGN.md` states the invariant and tests; this ADR records the latency/correctness trade-off.

@@ -36,8 +36,4 @@ the other. Providing both is valid and does not throw `DuplicateDependencyError`
   token classes; use the token class in types and stack traces for disambiguation.
 - Alpha hard cutover: no migration path for code that relied on string-key aliasing (none found
   in repo examples or tests).
-
-## Implementation
-
-- GitHub #148 (design), #149 (runtime fix and regression tests)
-- `@prodkit/op/di` README contract and `Dependency` JSDoc
+- Contract is documented on `@prodkit/op/di` and `Dependency` JSDoc.
