@@ -110,6 +110,7 @@ If a behavior is an internal invariant of one module, keep it in unit; if it is 
 ## Source Layout (`@prodkit/op`)
 
 - Public package entrypoint stays at `packages/op/src/index.ts`.
+- The branded `Op` type alias stays on that entry (merged with the `Op` factory const). Internal modules use `import type { Op } from "../index.js"` when they need the alias; do not duplicate `Op` elsewhere ([ADR 0012](docs/adr/0012-op-type-alias-on-main-entry.md)).
 - Re-exports from dependencies must be explicit named exports in `packages/op/src/index.ts` (never `export *`).
 - Internal runtime concerns are split into focused modules under `packages/op/src/`:
   - `core/` (core operation contracts and execution runtime pieces)

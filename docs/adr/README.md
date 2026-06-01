@@ -69,5 +69,6 @@ not add ad hoc plan docs under `docs/` for issue checklists.
 | [0009](0009-policy-with-attachment.md) | accepted | `@prodkit/op` | Policy attaches via .with(Policy.*) |
 | [0010](0010-di-token-class-identity.md) | accepted | `@prodkit/op` | DI dependency tokens match by class reference at runtime |
 | [0011](0011-fluent-callbacks-do-not-sequence-returned-ops.md) | accepted | `@prodkit/op` | Fluent callbacks do not sequence returned ops |
+| [0012](0012-op-type-alias-on-main-entry.md) | accepted | `@prodkit/op` | Op type alias stays on main entry for declaration emit |
 
 <!-- adr-index:end -->

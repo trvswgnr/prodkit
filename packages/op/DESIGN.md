@@ -274,4 +274,5 @@ For structural rationale that complements these invariants, see [`docs/adr/`](..
 - [0007](../../docs/adr/0007-timeout-widening-at-composition-boundary.md): plan AST execution (supersedes hook-era timeout widening notes)
 - [0009](../../docs/adr/0009-policy-with-attachment.md): `.with(Policy.*)` attachment surface
 - [0003](../../docs/adr/0003-three-cleanup-channels.md), [0004](../../docs/adr/0004-combinators-wait-for-loser-finalization.md), [0005](../../docs/adr/0005-unhandled-exception-runtime-channel.md), [0006](../../docs/adr/0006-run-args-only-fluent-policy-composition.md): cleanup channels, combinator settlement, runtime errors, args-only `.run()`
-- [0002](../../docs/adr/0002-ophooks-rebuild-and-timeout-asymmetry.md) (superseded): historical `OpHooks` push-through detail
+- [0011](../../docs/adr/0011-fluent-callbacks-do-not-sequence-returned-ops.md): fluent callback return semantics
+- [0012](../../docs/adr/0012-op-type-alias-on-main-entry.md): canonical `Op` type alias on main entry (declaration emit)
