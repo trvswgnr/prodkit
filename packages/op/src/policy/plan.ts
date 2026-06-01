@@ -23,7 +23,6 @@ import {
 import { onEnterPlan, onExitPlan } from "../core/plan/lifecycle.js";
 import { mapErrPlan, mapPlan, recoverPlan, tapErrPlan, tapPlan } from "../core/plan/transforms.js";
 import { allPlan, allSettledPlan, anyPlan, racePlan } from "../core/plan/combinators.js";
-import { providePlan, type AnyBinding } from "../di/internal.js";
 
 class DelegatingPlanRewriter implements PlanRewriter {
   apply!: PlanRewriter["apply"];
@@ -107,17 +106,6 @@ class DelegatingPlanRewriter implements PlanRewriter {
     return allSettledPlan(
       source.map((child) => child.rewrite<T, E, M>(this)),
       concurrency,
-    );
-  }
-
-  provide<T, E, M>(
-    source: Plan<T, E, M>,
-    bindings: readonly unknown[],
-  ): Plan<unknown, unknown, unknown> {
-    return providePlan(
-      source.rewrite<T, E, M>(this),
-      // SAFETY: providePlan rewrite hooks only receive binding snapshots from providePlan nodes.
-      bindings as readonly AnyBinding[],
     );
   }
 }

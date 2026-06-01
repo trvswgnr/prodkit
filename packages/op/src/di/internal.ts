@@ -290,7 +290,7 @@ export function providePlan<T, E, M>(
       return result.value;
     },
     {
-      rewrite: (self, rewriter) => rewriter.provide?.(source, snapshot) ?? rewriter.apply(self),
+      rewrite: (_self, rewriter) => providePlan(source.rewrite(rewriter), snapshot),
     },
   );
 }
