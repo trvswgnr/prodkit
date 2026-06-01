@@ -6,17 +6,10 @@ import type { UnhandledException } from "../../errors.js";
 import type { Op } from "../../index.js";
 import type { OpPolicy, OpPolicyInput, OpPolicySource } from "../../policy/types.js";
 import type { HKT } from "../../hkt.js";
-import type {
-  AnyNullaryOp,
-  AsArgs,
-  EmptyMeta,
-  EnterFn,
-  ExitFn,
-  OpInterface,
-  OpLifecycleHook,
-  RunContext,
-  TrackedErr,
-} from "../types.js";
+import type { EnterFn, ExitFn, OpLifecycleHook } from "./context.js";
+import type { AnyNullaryOp, AsArgs, OpInterface, TrackedErr } from "./surface.js";
+import type { RunContext } from "../runtime.js";
+import type { EmptyMeta } from "../meta.js";
 import {
   OP_PLAN_BIND,
   createPlan,

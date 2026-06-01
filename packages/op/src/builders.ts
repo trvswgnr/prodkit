@@ -1,16 +1,14 @@
 import { UnhandledException } from "./errors.js";
 import { makePlanOp, makeSyncValueOp } from "./core/plan/shell.js";
 import { genPlan } from "./core/plan/base.js";
+import type { AnyExitFn } from "./core/plan/context.js";
+import type { AsArgs, OpInterface, TrackedErr } from "./core/plan/surface.js";
 import type {
-  AnyExitFn,
-  AsArgs,
-  EmptyMeta,
   InferInstructionErr,
   InferInstructionMeta,
   Instruction,
-  OpInterface,
-  TrackedErr,
-} from "./core/types.js";
+} from "./core/instructions.js";
+import type { EmptyMeta } from "./core/meta.js";
 import type { Op } from "./index.js";
 import { RegisterExitFinalizerInstruction, SuspendInstruction } from "./core/instructions.js";
 import { Result } from "./result.js";

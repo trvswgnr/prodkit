@@ -1,19 +1,36 @@
 import { UnhandledException } from "../errors.js";
 import { Result } from "../result.js";
 import {
+  CUSTOM_INSTRUCTION_META,
   isErrInstruction,
   RegisterExitFinalizerInstruction,
   SuspendInstruction,
-} from "./instructions.js";
-import {
-  CUSTOM_INSTRUCTION_META,
   type CustomInstruction,
-  type ExitContext,
   type Instruction,
-  type RunContext,
-} from "./types.js";
+} from "./instructions.js";
 import type { Op } from "../index.js";
 import { EMPTY_TUPLE } from "../shared.js";
+
+/** Runtime execution context threaded through internal driver/suspend boundaries. */
+export interface RunContext<A = []> {
+  readonly signal: AbortSignal;
+  readonly args: A;
+  readonly extensions: ReadonlyMap<unknown, unknown>;
+}
+
+/**
+ * Passed to {@link ExitFn} when the run unwinds.
+ *
+ * - `args` are the runtime inputs for this run
+ * - `result` is the operation's pre-finalizer settlement result
+ *   (including {@link UnhandledException} on the error channel when relevant).
+ *   If a finalizer throws, `.run()` returns a new cleanup-failure result instead.
+ */
+export interface ExitContext<T, E, A = []> {
+  readonly signal: AbortSignal;
+  readonly args: A;
+  readonly result: Result<T, E | UnhandledException>;
+}
 
 export function createRunContext(
   signal: AbortSignal,
@@ -251,4 +268,8 @@ async function driveInternal<T, E, M>(
     const unhandled = new UnhandledException({ cause });
     return Result.err(unhandled);
   }
+}
+
+export function runOp<T, E, M>(op: Op<T, E, [], M>): Promise<Result<T, E | UnhandledException>> {
+  return drive(op, createRunContext(new AbortController().signal));
 }

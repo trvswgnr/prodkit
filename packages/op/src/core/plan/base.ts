@@ -3,17 +3,11 @@ import type { Op } from "../../index.js";
 import { Result } from "../../result.js";
 import { isIterableOp, unsafeCoerce } from "../../shared.js";
 import { driveIterator } from "../runtime.js";
-import type {
-  AsArgs,
-  EmptyMeta,
-  EnterFn,
-  ExitFn,
-  Instruction,
-  OpInterface,
-  ReleaseFn,
-  RunContext,
-  TrackedErr,
-} from "../types.js";
+import type { EnterFn, ExitFn, ReleaseFn } from "./context.js";
+import type { AsArgs, OpInterface, TrackedErr } from "./surface.js";
+import type { RunContext } from "../runtime.js";
+import type { Instruction } from "../instructions.js";
+import type { EmptyMeta } from "../meta.js";
 
 export const OP_PLAN_BIND: unique symbol = Symbol("prodkit.op.plan-bind");
 

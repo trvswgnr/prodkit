@@ -1,19 +1,13 @@
 import { ErrorGroup, UnhandledException } from "./errors.js";
-import {
-  type EmptyMeta,
-  type InferOpMeta,
-  type InferOpOk,
-  type InferOpErr,
-  type Instruction,
-  type MergeMeta,
-  type RunContext,
-} from "./core/types.js";
+import type { RunContext } from "./core/runtime.js";
+import type { AnyNullaryOp, InferOpMeta, InferOpOk, InferOpErr } from "./core/plan/surface.js";
+import type { Instruction } from "./core/instructions.js";
+import type { EmptyMeta, MergeMeta } from "./core/meta.js";
 import type { Op } from "./index.js";
 import { SuspendInstruction } from "./core/instructions.js";
 import { createRunContext, drive, driveInterruptOnAbort } from "./core/runtime.js";
 import { Result, type Err } from "./result.js";
 import { makeCoreOp } from "./core/fluent.js";
-import type { AnyNullaryOp } from "./core/types.js";
 import { unsafeCoerce } from "./shared.js";
 
 type MergeOpsMeta<Ops extends readonly AnyNullaryOp[]> = Ops extends readonly [

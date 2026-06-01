@@ -14,7 +14,7 @@ import type {
   TimeoutPolicyType,
 } from "./types.js";
 import type { ExponentialDelayOptions, RetryPolicy } from "./retry-policy.js";
-import type { ReleaseFn } from "../core/types.js";
+import type { ReleaseFn } from "../core/plan/context.js";
 import type { HKT } from "../hkt.js";
 
 function retry(policy?: RetryPolicy): RetryPolicyAttachment {

@@ -5,7 +5,9 @@ import { RegisterExitFinalizerInstruction, SuspendInstruction } from "../core/in
 import { createRunContext } from "../core/runtime.js";
 import { normalizeRetryPolicy, type NormalizedRetryPolicy } from "./retry-policy.js";
 import { validateTimeoutMs } from "./validate.js";
-import type { EnterFn, ExitFn, ReleaseFn, RunContext, TrackedErr } from "../core/types.js";
+import type { EnterFn, ExitFn, ReleaseFn } from "../core/plan/context.js";
+import type { TrackedErr } from "../core/plan/surface.js";
+import type { RunContext } from "../core/runtime.js";
 import {
   createPlan,
   executePlanInterruptOnAbort,

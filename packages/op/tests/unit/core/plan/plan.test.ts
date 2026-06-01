@@ -1,6 +1,6 @@
 import { assert, describe, expect, test } from "vitest";
 import { Op } from "../../../../src/index.js";
-import { runOp } from "../../../../src/core/run-op.js";
+import { runOp } from "../../../../src/core/runtime.js";
 import { createRunContext } from "../../../../src/core/runtime.js";
 import { getPlan } from "../../../../src/core/plan/base.js";
 

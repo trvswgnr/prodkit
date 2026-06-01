@@ -3,21 +3,21 @@
  * Not intended for typical application code that imports `@prodkit/op`.
  */
 export { withBlocking, type BlockingOp } from "../blocking.js";
+export { type EnterFn, type ExitFn } from "../core/plan/context.js";
+export { type AnyNullaryOp, type InferOpMeta } from "../core/plan/surface.js";
 export {
   CUSTOM_INSTRUCTION_META,
-  type AnyNullaryOp,
-  type Blocking,
   type CustomInstruction,
-  type EmptyMeta,
-  type EnterFn,
-  type ExitFn,
   type InferInstructionErr,
   type InferInstructionMeta,
-  type InferOpMeta,
   type Instruction,
+} from "../core/instructions.js";
+export {
+  type Blocking,
+  type EmptyMeta,
   type IsRunnable,
   type MergeMeta,
-  type RunContext,
   type SetBlockingMeta,
-} from "../core/types.js";
+} from "../core/meta.js";
+export { type RunContext } from "../core/runtime.js";
 export { type AbortSignalLike, NEVER, hasBrand, sleepWithSignal, unsafeCoerce } from "../shared.js";

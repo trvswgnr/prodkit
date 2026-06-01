@@ -8,7 +8,8 @@ export default defineConfig({
       exclude: [
         "tests/**",
         "@prodkit/shared/platform-globals",
-        "src/core/types.ts",
+        "src/core/meta.ts",
+        "src/core/plan/surface.ts",
         "src/result.ts",
       ],
       reporter: ["text", "json", "html", "lcov"],

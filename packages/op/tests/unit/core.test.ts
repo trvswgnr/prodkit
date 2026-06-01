@@ -11,13 +11,13 @@ import {
   RegisterExitFinalizerInstruction,
   SuspendInstruction,
 } from "../../src/core/instructions.js";
+import type { RunContext } from "../../src/core/runtime.js";
 import {
   CUSTOM_INSTRUCTION_META,
   type CustomInstruction,
-  type EmptyMeta,
   type Instruction,
-  type RunContext,
-} from "../../src/core/types.js";
+} from "../../src/core/instructions.js";
+import type { EmptyMeta } from "../../src/core/meta.js";
 import { Op, type Op as OpType } from "../../src/index.js";
 import { UnhandledException } from "../../src/errors.js";
 import { Result } from "../../src/result.js";

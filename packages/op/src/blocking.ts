@@ -1,5 +1,5 @@
 import { unsafeCoerce } from "./shared.js";
-import { type EmptyMeta, type SetBlockingMeta } from "./core/types.js";
+import { type EmptyMeta, type SetBlockingMeta } from "./core/meta.js";
 import type { Op } from "./index.js";
 
 /** An operation that is not ready for top-level `.run()`. */

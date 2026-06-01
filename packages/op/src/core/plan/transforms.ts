@@ -8,9 +8,9 @@ import type {
   InferOpErr,
   InferOpMeta,
   InferOpOk,
-  MergeMeta,
   TrackedErr,
-} from "../types.js";
+} from "./surface.js";
+import type { MergeMeta } from "../meta.js";
 import { createPlan, getPlan, type Plan } from "./base.js";
 
 function isRuntimeBypass(error: unknown): error is UnhandledException | TimeoutError {

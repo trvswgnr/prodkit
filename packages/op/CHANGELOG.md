@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Changed
 
-- No entries yet.
+- Colocated former `core/types.ts` with runtime owners: `core/meta.ts`, `core/instructions.ts`,
+  `core/runtime.ts` (`RunContext`, `ExitContext`, `runOp`), and `core/plan/context.ts` /
+  `core/plan/surface.ts`. Direct imports only; no re-export barrel. No published API changes.
 
 ## [0.1.77] - 2026-06-01
 

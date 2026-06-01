@@ -13,7 +13,7 @@ import {
   type MergeMeta,
   type RunContext,
 } from "../../src/internal/index.js";
-import { type NormalizeMeta } from "../../src/core/types.js";
+import { type NormalizeMeta } from "../../src/core/meta.js";
 import type { IsEqual, Assert } from "../support/type-utils.js";
 import type { Result } from "../../src/result.js";
 import type { UnhandledException } from "../../src/errors.js";

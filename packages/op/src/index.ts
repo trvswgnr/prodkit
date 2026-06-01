@@ -1,16 +1,11 @@
 import { defer, fail, fromGenFn, sleep, succeed, _try } from "./builders.js";
 import { allOp, allSettledOp, anyOp, raceOp, settleOp } from "./combinators.js";
 import { ErrorGroup, TimeoutError, type UnhandledException } from "./errors.js";
-import type {
-  EmptyMeta,
-  EnterContext,
-  ExitContext,
-  OpLifecycleHook,
-  OpInterface,
-  AsArgs,
-  IsRunnable,
-} from "./core/types.js";
-import { runOp } from "./core/run-op.js";
+import type { EnterContext, OpLifecycleHook } from "./core/plan/context.js";
+import type { OpInterface, AsArgs } from "./core/plan/surface.js";
+import type { EmptyMeta, IsRunnable } from "./core/meta.js";
+import type { ExitContext } from "./core/runtime.js";
+import { runOp } from "./core/runtime.js";
 import { Tagged } from "./tagged.js";
 import { type Result } from "./result.js";
 

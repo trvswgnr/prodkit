@@ -2,7 +2,8 @@ import { UnhandledException } from "../../errors.js";
 import { Result } from "../../result.js";
 import { unsafeCoerce } from "../../shared.js";
 import { RegisterExitFinalizerInstruction, SuspendInstruction } from "../instructions.js";
-import type { EnterContext, EnterFn, ExitContext, ExitFn } from "../types.js";
+import type { EnterContext, EnterFn, ExitFn } from "./context.js";
+import type { ExitContext } from "../runtime.js";
 import { createPlan, type Plan } from "./base.js";
 
 export function onEnterPlan<T, E, A, M>(

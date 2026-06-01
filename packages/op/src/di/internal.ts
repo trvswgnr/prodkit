@@ -1,17 +1,16 @@
 import { fromGenFn } from "../builders.js";
 import { SuspendInstruction } from "../core/instructions.js";
 import { createRunContext, driveInterruptOnAbort } from "../core/runtime.js";
+import type { AsArgs } from "../core/plan/surface.js";
+import { CUSTOM_INSTRUCTION_META, type CustomInstruction } from "../core/instructions.js";
 import {
-  CUSTOM_INSTRUCTION_META,
-  type AsArgs,
   type Blocking,
-  type CustomInstruction,
   type EmptyMeta,
   type NormalizeMeta,
-  type RunContext,
   type Simplify,
   type StripEmpty,
-} from "../core/types.js";
+} from "../core/meta.js";
+import type { RunContext } from "../core/runtime.js";
 import { NEVER, hasBrand, isPromiseLike, unsafeCoerce } from "../shared.js";
 import type { Op } from "../index.js";
 import type { Dependency } from "./index.js";

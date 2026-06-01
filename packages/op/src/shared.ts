@@ -1,5 +1,5 @@
 import type { Op } from "./index.js";
-import type { OpIterable } from "./core/types.js";
+import type { OpIterable } from "./core/plan/surface.js";
 
 export const EMPTY_TUPLE: [] = [];
 export const OP_BRAND: unique symbol = Symbol("prodkit.op");

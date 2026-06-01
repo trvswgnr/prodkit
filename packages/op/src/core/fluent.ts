@@ -1,16 +1,10 @@
 import { genPlan, getIterablePlan, getPlan } from "./plan/base.js";
 import { onEnterPlan, onExitPlan } from "./plan/lifecycle.js";
 import { makePlanOp } from "./plan/shell.js";
-import type {
-  EmptyMeta,
-  EnterFn,
-  ExitFn,
-  Instruction,
-  LifecycleFn,
-  OpInterface,
-  OpLifecycleHook,
-  TrackedErr,
-} from "./types.js";
+import type { EnterFn, ExitFn, LifecycleFn, OpLifecycleHook } from "./plan/context.js";
+import type { OpInterface, TrackedErr } from "./plan/surface.js";
+import type { Instruction } from "./instructions.js";
+import type { EmptyMeta } from "./meta.js";
 import type { Op } from "../index.js";
 import { coerceToNullaryOp, unsafeCoerce } from "../shared.js";
 
@@ -85,5 +79,3 @@ export function onOp<T, E, A, M, Yieldable extends boolean>(
 
   throw new Error(`Invalid event: ${event}`);
 }
-
-export type { EmptyMeta };

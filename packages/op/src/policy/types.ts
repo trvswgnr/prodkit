@@ -1,5 +1,6 @@
 import type { RetryPolicy } from "./retry-policy.js";
-import type { ReleaseFn, RunContext } from "../core/types.js";
+import type { ReleaseFn } from "../core/plan/context.js";
+import type { RunContext } from "../core/runtime.js";
 import type { TimeoutError, UnhandledException } from "../errors.js";
 import type { HKT } from "../hkt.js";
 import type { Op } from "../index.js";
