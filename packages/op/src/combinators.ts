@@ -1,11 +1,3 @@
-/**
- * Combinator drivers:
- * - `fanOut`: shared abort-cascade fan-out for unbounded concurrent runs
- * - `driveBoundedPool`: bounded worker pool for `Op.all` / `Op.allSettled`
- * - `driveAllUnbounded` / `driveAllSettledUnbounded`: start-all paths when limit >= size
- * - `driveAny` / `driveRace`: first-success / first-settler with loser finalization
- */
-
 import { ErrorGroup, UnhandledException } from "./errors.js";
 import {
   type EmptyMeta,
