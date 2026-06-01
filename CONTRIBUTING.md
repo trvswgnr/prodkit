@@ -160,8 +160,8 @@ packages/op/src/index.ts          (Op factory, Op.run, re-exports)
   |-- hkt.ts                      (@prodkit/op/hkt entry)
   |-- core/runtime.ts             (createRunContext, drive, runOp, RunContext, ExitContext)
   |-- core/meta.ts                (EmptyMeta, Blocking, MergeMeta, IsRunnable)
-  |-- core/fluent.ts              (makeCoreOp, fluent transforms)
-  |-- core/plan/                  (Plan AST, context/surface types, lifecycle, makePlanOp shell)
+  |-- core/fluent.ts              (makeCoreOp: nullary generator leaf factory)
+  |-- core/plan/                  (Plan AST, fluent shell, lifecycle, transforms)
   |-- core/instructions.ts        (Suspend, RegisterExitFinalizer, CustomInstruction protocol)
 
 packages/op/src/di/                 (DI.provide, DI.inject via CustomInstruction + extensions)
@@ -227,6 +227,37 @@ Built-in policies attach through `.with(Policy.*)` on the op value (`packages/op
 
 Method order on the fluent object defines wrapper nesting (outermost policy is applied last in
 the chain). See policy ordering notes in `packages/op/DESIGN.md`.
+
+### Adding a fluent plan transform
+
+Public fluent methods (`.map`, `.flatMap`, `.on("enter")`, `.with(Policy.*)`, and so on) are
+plan AST nodes built in `packages/op/src/core/plan/` and rewritten when a policy attaches. When
+you add or rename a transform, keep these touch points in sync:
+
+1. **Plan constructor** in `packages/op/src/core/plan/transforms.ts` for value/error transforms
+   (`map`, `flatMap`, `tap`, `mapErr`, `tapErr`, `recover`) or
+   `packages/op/src/core/plan/lifecycle.ts` for lifecycle hooks (`.on("enter")`, `.on("exit")`).
+   Pass a `rewrite` override to `createPlan` when policy rewrite propagation is required.
+2. **`PlanRewriter` optional method** in `packages/op/src/core/plan/base.ts` when the transform
+   needs a dedicated rewrite hook (mirror the method name on the transform, for example `map`).
+3. **`DelegatingPlanRewriter` method** in `packages/op/src/policy/plan.ts` that rewrites the
+   inner `source` plan, then applies the transform to the rewritten plan.
+4. **Fluent surface** in `packages/op/src/core/plan/shell.ts`:
+   - add the method on `fluentMethodsForContext`
+   - add the method name to `createSyncValueFluentPrototype`'s `methodNames` list when sync-value
+     ops should expose the same API
+5. **Tests**: extend `packages/op/tests/unit/fluent.test.ts` for fluent behavior; add or extend
+   policy rewrite coverage when `.with(Policy.*)` must preserve the transform.
+
+**`flatMapPlan` intentionally omits a rewrite hook.** Built-in policies wrap the outer plan
+node; `flatMap` composes a second plan inside the first at run time. Policy retry therefore
+re-executes the whole composition including the bind callback (see the
+`flatMap + Policy.retry retries the whole composition including bind` test in
+`packages/op/tests/unit/fluent.test.ts`). Adding a `flatMap` rewrite hook would imply a different
+contract and is not supported today.
+
+See also `Policy.release` in `packages/op/src/policy/plan.ts`, which follows the same
+`createPlan` + `rewrite` pattern for release finalizers.
 
 ### DI integration via `RunContext.extensions`
 

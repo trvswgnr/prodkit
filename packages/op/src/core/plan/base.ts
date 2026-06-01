@@ -28,6 +28,12 @@ export type PlanBackedOp<T, E, A, M> = OpInterface<T, E, A, M> & {
   readonly [OP_PLAN_BIND]: PlanBinder<T, E, A, M>;
 };
 
+/**
+ * Internal rewrite protocol for policy attachment. Each optional method mirrors a fluent plan
+ * transform so built-in policies can rebuild known nodes while preserving ordering semantics.
+ *
+ * When adding a new fluent transform, see "Adding a fluent plan transform" in CONTRIBUTING.md.
+ */
 export interface PlanRewriter {
   readonly apply: <T, E, M>(source: Plan<T, E, M>) => Plan<unknown, unknown, unknown>;
   readonly release?: <T, E, M>(
