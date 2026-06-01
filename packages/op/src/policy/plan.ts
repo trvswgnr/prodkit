@@ -1,4 +1,5 @@
 import { TimeoutError, UnhandledException } from "../errors.js";
+import { raceCooperativelyAfterAbort } from "../core/abort-race.js";
 import { Result } from "../result.js";
 import { sleepWithSignal } from "../shared.js";
 import { RegisterExitFinalizerInstruction, SuspendInstruction } from "../core/instructions.js";
@@ -276,10 +277,9 @@ function settleAfterBoundAbort<T, E>(
   abortReason: unknown,
   finish: (result: Result<T, E | UnhandledException>) => void,
 ): void {
-  // yield one microtask turn so cooperative children can settle before the macrotimer race
-  queueMicrotask(() => {
-    void Promise.race([runPromise, nonCooperativeCancelFallback<T, E>(abortReason)]).then(finish);
-  });
+  void raceCooperativelyAfterAbort(runPromise, () =>
+    nonCooperativeCancelFallback<T, E>(abortReason),
+  ).then(finish);
 }
 
 /**

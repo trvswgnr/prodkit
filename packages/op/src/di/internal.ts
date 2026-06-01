@@ -1,4 +1,5 @@
 import { fromGenFn } from "../builders.js";
+import { raceAgainstAbortSignal } from "../core/abort-race.js";
 import { SuspendInstruction } from "../core/instructions.js";
 import { createRunContext, driveInterruptOnAbort } from "../core/runtime.js";
 import type { AsArgs } from "../core/plan/surface.js";
@@ -211,38 +212,6 @@ function abortReason(signal: AbortSignal): unknown {
   return signal.reason ?? new Error("Aborted");
 }
 
-function awaitWithSignalAbort<T>(suspended: PromiseLike<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) {
-    return Promise.reject(abortReason(signal));
-  }
-
-  return new Promise<T>((resolve, reject) => {
-    let settled = false;
-    const onAbort = () => {
-      if (settled) return;
-      settled = true;
-      signal.removeEventListener("abort", onAbort);
-      reject(abortReason(signal));
-    };
-
-    signal.addEventListener("abort", onAbort, { once: true });
-    Promise.resolve(suspended).then(
-      (value) => {
-        if (settled) return;
-        settled = true;
-        signal.removeEventListener("abort", onAbort);
-        resolve(value);
-      },
-      (error) => {
-        if (settled) return;
-        settled = true;
-        signal.removeEventListener("abort", onAbort);
-        reject(error);
-      },
-    );
-  });
-}
-
 function resolveInjectedValue(
   env: Env,
   dependency: AnyDependency,
@@ -261,7 +230,10 @@ function resolveInjectedValue(
     return produced;
   }
 
-  const inflight = awaitWithSignalAbort(produced, signal).then(
+  const inflight = raceAgainstAbortSignal(produced, signal, {
+    mode: "rejectImmediately",
+    getAbortReason: () => abortReason(signal),
+  }).then(
     (resolved) => {
       env.set(matchedToken, resolved);
       return resolved;
