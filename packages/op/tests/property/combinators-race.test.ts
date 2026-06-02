@@ -1,166 +1,172 @@
 import * as fc from "fast-check";
 import { assert, describe, expect, test, vi } from "vitest";
-import { UnhandledException } from "../../src/errors.js";
 import { Op } from "../../src/index.js";
-import { Result } from "../../src/result.js";
 import { rejectAfter, resolveAfter, trackAbortListeners } from "../support/utils.js";
 import { Policy } from "../../src/policy/index.js";
+import {
+  assertRaceResultsEqual,
+  branchAt,
+  FC_SCHEDULER_ASSERT_OPTIONS,
+  firstSettlerRaceBranchIndex,
+  pendingUntilAbortOp,
+  raceOpFromScheduledBranch,
+  raceResultFromBranch,
+} from "../support/scheduler.js";
 
-type RaceBranch =
-  | { kind: "ok"; value: number; delay: number }
-  | { kind: "err"; error: string; delay: number };
+const raceBranchArb = fc.oneof(
+  fc.record({ kind: fc.constant("ok" as const), value: fc.integer() }),
+  fc.record({ kind: fc.constant("err" as const), error: fc.string() }),
+);
 
-function branchOp(branch: RaceBranch) {
-  if (branch.kind === "ok") {
-    return Op.try(() => resolveAfter(branch.value, branch.delay));
-  }
-
-  return Op.try(
-    () => rejectAfter(branch.error, branch.delay),
-    (cause: unknown): string => {
-      if (typeof cause !== "string") {
-        throw new Error(`expected string cause, got ${typeof cause}`);
-      }
-      return cause;
-    },
-  );
-}
-
-type BranchResult = Result<number, string | UnhandledException>;
-
-async function oracleFirstSettler(branches: readonly RaceBranch[]): Promise<BranchResult> {
-  let winner: BranchResult | undefined;
-
-  await Promise.all(
-    branches.map((branch) =>
-      branchOp(branch)
-        .run()
-        .then((result) => {
-          if (winner === undefined) winner = result;
-        }),
-    ),
-  );
-
-  if (winner === undefined) {
-    throw new Error("race oracle failed to resolve a winner");
-  }
-
-  return winner;
-}
+const raceBranchesArb = fc.array(raceBranchArb, { minLength: 1, maxLength: 6 });
 
 describe("Op.race invariants", () => {
-  test("result matches first-settler outcome under randomized delays", async () => {
+  test("result matches first-settler under scheduler-controlled completion order", async () => {
     await fc.assert(
-      fc.asyncProperty(
-        fc.array(
-          fc.oneof(
-            fc.record({
-              kind: fc.constant("ok" as const),
-              value: fc.integer(),
-              delay: fc.nat(25),
-            }),
-            fc.record({
-              kind: fc.constant("err" as const),
-              error: fc.string(),
-              delay: fc.nat(25),
-            }),
-          ),
-          { minLength: 1, maxLength: 6 },
-        ),
-        async (branches) => {
-          vi.useFakeTimers();
-          try {
-            const maxDelay = branches.reduce((max, branch) => Math.max(max, branch.delay), 0);
-            const ops = branches.map((branch) => branchOp(branch));
+      fc.asyncProperty(fc.scheduler(), raceBranchesArb, async (s, branches) => {
+        const ops = branches.map((branch, index) =>
+          raceOpFromScheduledBranch(s, branch, `branch-${index}`),
+        );
 
-            const expectedPromise = oracleFirstSettler(branches);
-            await vi.advanceTimersByTimeAsync(maxDelay);
-            const expected = await expectedPromise;
+        const resultPromise = Op.race(ops).run();
+        const result = await s.waitFor(resultPromise);
+
+        const winnerIndex = firstSettlerRaceBranchIndex(s.report(), "branch-", branches.length);
+        assertRaceResultsEqual(result, raceResultFromBranch(branchAt(branches, winnerIndex)));
+      }),
+      FC_SCHEDULER_ASSERT_OPTIONS,
+    );
+  });
+
+  test("setTimeout delays still pick earliest finisher (fake timers)", async () => {
+    await fc.assert(
+      fc
+        .asyncProperty(
+          fc.array(
+            fc.oneof(
+              fc.record({
+                kind: fc.constant("ok" as const),
+                value: fc.integer(),
+                delay: fc.nat(25),
+              }),
+              fc.record({
+                kind: fc.constant("err" as const),
+                error: fc.string(),
+                delay: fc.nat(25),
+              }),
+            ),
+            { minLength: 1, maxLength: 4 },
+          ),
+          async (branches) => {
+            const maxDelay = branches.reduce((max, branch) => Math.max(max, branch.delay), 0);
+            const ops = branches.map((branch) => {
+              if (branch.kind === "ok") {
+                return Op.try(() => resolveAfter(branch.value, branch.delay));
+              }
+
+              return Op.try(
+                () => rejectAfter(branch.error, branch.delay),
+                (cause: unknown): string => {
+                  if (typeof cause !== "string") {
+                    throw new Error(`expected string cause, got ${typeof cause}`);
+                  }
+                  return cause;
+                },
+              );
+            });
+
+            let winnerIndex = 0;
+            let minDelay = branchAt(branches, 0).delay;
+            for (let i = 1; i < branches.length; i += 1) {
+              const delay = branchAt(branches, i).delay;
+              if (delay < minDelay) {
+                minDelay = delay;
+                winnerIndex = i;
+              } else if (delay === minDelay && i < winnerIndex) {
+                winnerIndex = i;
+              }
+            }
 
             const resultPromise = Op.race(ops).run();
             await vi.advanceTimersByTimeAsync(maxDelay);
             const result = await resultPromise;
+            const expected = branchAt(branches, winnerIndex);
 
-            if (expected.isOk()) {
-              assert(result.isOk(), "expected Ok from first settler");
+            if (expected.kind === "ok") {
+              assert(result.isOk(), "expected Ok from earliest branch");
               expect(result.value).toBe(expected.value);
               return;
             }
 
-            assert(result.isErr(), "expected Err from first settler");
+            assert(result.isErr(), "expected Err from earliest branch");
             expect(result.error).toBe(expected.error);
-          } finally {
-            vi.useRealTimers();
-          }
-        },
-      ),
+          },
+        )
+        .beforeEach(() => {
+          vi.useFakeTimers();
+        })
+        .afterEach(() => {
+          vi.useRealTimers();
+        }),
+      FC_SCHEDULER_ASSERT_OPTIONS,
     );
   });
 
-  test("non-winning branches observe abort", async () => {
+  test("non-winning branches observe abort when an instant branch wins", async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.integer({ min: 15, max: 40 }),
+        fc.scheduler(),
         fc.integer(),
-        fc.array(fc.nat(10), { minLength: 1, maxLength: 4 }),
-        async (slowDelay, winnerValue, fastDelays) => {
-          const abortObserved: boolean[] = fastDelays.map(() => false);
+        fc.array(fc.integer(), { minLength: 1, maxLength: 4 }),
+        async (s, winnerValue, siblingSlots) => {
+          const abortObserved = siblingSlots.map(() => false);
 
-          const slowBranch = Op.try(
-            (signal) =>
-              new Promise<number>((resolve) => {
-                const timer = setTimeout(() => resolve(-1), slowDelay);
-                signal.addEventListener("abort", () => {
-                  clearTimeout(timer);
-                  resolve(-1);
-                });
-              }),
+          const siblings = siblingSlots.map((_, index) =>
+            pendingUntilAbortOp(s, `sibling-${index}`, () => {
+              abortObserved[index] = true;
+            }),
           );
 
-          const fastBranches = fastDelays.map((delay, index) =>
-            Op.try(
-              (signal) =>
-                new Promise<number>((resolve) => {
-                  const timer = setTimeout(() => resolve(-1), delay);
-                  signal.addEventListener("abort", () => {
-                    abortObserved[index] = true;
-                    clearTimeout(timer);
-                    resolve(-1);
-                  });
-                }),
-            ),
-          );
-
-          const result = await Op.race([slowBranch, ...fastBranches, Op.of(winnerValue)]).run();
+          const resultPromise = Op.race([...siblings, Op.of(winnerValue)]).run();
+          const result = await s.waitFor(resultPromise);
 
           assert(result.isOk(), "expected instant winner");
           expect(result.value).toBe(winnerValue);
           expect(abortObserved.every(Boolean)).toBe(true);
         },
       ),
+      FC_SCHEDULER_ASSERT_OPTIONS,
     );
   });
 
   test("cleans up abort listeners after completion", async () => {
     await fc.assert(
-      fc.asyncProperty(fc.array(fc.nat(15), { minLength: 1, maxLength: 5 }), async (delays) => {
-        const outer = new AbortController();
-        const tracked = trackAbortListeners(outer.signal);
+      fc.asyncProperty(
+        fc.scheduler(),
+        fc.array(fc.integer(), { minLength: 1, maxLength: 5 }),
+        async (s, branchValues) => {
+          const outer = new AbortController();
+          const tracked = trackAbortListeners(outer.signal);
 
-        try {
-          const ops = delays.map((delay, index) => Op.try(() => resolveAfter(index, delay)));
+          try {
+            const ops = branchValues.map((value, index) =>
+              raceOpFromScheduledBranch(s, { kind: "ok", value }, `branch-${index}`),
+            );
 
-          const result = await Op.race(ops).with(Policy.cancel(outer.signal)).run();
-          assert(result.isOk(), "expected race success");
+            const resultPromise = Op.race(ops).with(Policy.cancel(outer.signal)).run();
+            const result = await s.waitFor(resultPromise);
 
-          expect(tracked.activeAbortListeners).toBe(0);
+            assert(result.isOk(), "expected race success");
+            expect(tracked.activeAbortListeners).toBe(0);
 
-          outer.abort(new Error("too late"));
-          expect(tracked.activeAbortListeners).toBe(0);
-        } finally {
-          tracked.restore();
-        }
-      }),
+            outer.abort(new Error("too late"));
+            expect(tracked.activeAbortListeners).toBe(0);
+          } finally {
+            tracked.restore();
+          }
+        },
+      ),
+      FC_SCHEDULER_ASSERT_OPTIONS,
     );
   });
 });

@@ -101,7 +101,7 @@ Published baseline interpretation lives in [`packages/op/docs/performance.md`](p
 - **Property** (`tests/property/`) holds fast-check invariant suites (combinators, monad laws, backoff, retry).
 - **Types** (`tests/types/`) holds compile-time type contracts (`expectTypeOf`, assertion types).
 - **Hygiene** (`tests/hygiene/`) holds repo/API documentation checks.
-- **Support** (`tests/support/`) holds shared helpers (`utils.ts`, `type-utils.ts`).
+- **Support** (`tests/support/`) holds shared helpers (`utils.ts`, `scheduler.ts` for fast-check schedulers, `type-utils.ts`).
 
 If a behavior is an internal invariant of one module, keep it in unit; if it is a public composition/API contract, keep it in integration. Avoid duplicate assertions across tiers unless each tier validates meaningfully different risk.
 
