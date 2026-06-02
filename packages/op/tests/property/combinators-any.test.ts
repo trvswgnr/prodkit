@@ -14,7 +14,7 @@ function delayedOk<T>(value: T, ms: number) {
   return Op.try(() => resolveAfter(value, ms));
 }
 
-describe("Op.any invariants (property-based)", () => {
+describe("Op.any invariants", () => {
   test("all-fail ErrorGroup.errors stay in input index order", async () => {
     await fc.assert(
       fc.asyncProperty(
@@ -41,9 +41,9 @@ describe("Op.any invariants (property-based)", () => {
       fc.asyncProperty(
         fc.array(
           fc.oneof(
-            fc.record({ kind: fc.constant("ok" as const), value: fc.integer(), delay: fc.nat(25) }),
+            fc.record({ kind: fc.constant("ok"), value: fc.integer(), delay: fc.nat(25) }),
             fc.record({
-              kind: fc.constant("fail" as const),
+              kind: fc.constant("fail"),
               error: fc.string(),
               delay: fc.nat(25),
             }),

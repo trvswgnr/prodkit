@@ -1,7 +1,8 @@
 import * as fc from "fast-check";
-import { describe, expect, test } from "vitest";
+import { describe, test } from "vitest";
 import { Op } from "../../src/index.js";
-import { Result } from "../../src/result.js";
+import { identity } from "@prodkit/shared/runtime";
+import { expectRunEq, FC_ASSERT_OPTIONS } from "../support/utils.js";
 
 /** Applicative apply: independent concurrent product, then combine. */
 function ap<A, E1, B, E2>(
@@ -11,83 +12,92 @@ function ap<A, E1, B, E2>(
   return Op.all([fnOp, valOp]).map(([fn, val]) => fn(val));
 }
 
-async function expectSameOpResult<T, E>(a: Op<T, E, []>, b: Op<T, E, []>) {
-  const left = await Op.run(a);
-  const right = await Op.run(b);
-  expect(Result.serialize(left)).toEqual(Result.serialize(right));
-}
-
-const valueFnArb = fc.constantFrom<(value: number) => number>(
-  (value) => value + 1,
-  (value) => value * 2,
-  (value) => value - 3,
-  (value) => Math.abs(value),
-);
-
-const opArb: fc.Arbitrary<Op<number, string, []>> = fc.oneof(
-  fc.integer().map((value) => Op.of(value)),
-  fc.string().map((error) => Op.fail(error)),
-);
-
-const fnOpArb: fc.Arbitrary<Op<(value: number) => number, string, []>> = valueFnArb.map((fn) =>
-  Op.of(fn),
-);
-
-describe("Op applicative laws (property-based)", () => {
+describe("Op applicative laws", () => {
   test("identity", async () => {
+    const arb = {
+      op: fc.anything().map(Op.of),
+    };
     await fc.assert(
-      fc.asyncProperty(opArb, async (valOp) => {
-        await expectSameOpResult(
-          ap(
-            Op.of((value: number) => value),
-            valOp,
-          ),
-          valOp,
-        );
+      fc.asyncProperty(arb.op, async (op) => {
+        const left = ap(Op.of(identity), op);
+        const right = op;
+        await expectRunEq(left, right);
       }),
+      FC_ASSERT_OPTIONS,
     );
   });
 
   test("homomorphism", async () => {
+    const arb = {
+      f: fc.func(fc.anything()),
+      x: fc.anything(),
+    };
     await fc.assert(
-      fc.asyncProperty(valueFnArb, fc.integer(), async (fn, value) => {
-        await expectSameOpResult(ap(Op.of(fn), Op.of(value)), Op.of(fn(value)));
+      fc.asyncProperty(arb.f, arb.x, async (f, x) => {
+        const left = ap(Op.of(f), Op.of(x));
+        const right = Op.of(f(x));
+        await expectRunEq(left, right);
       }),
+      FC_ASSERT_OPTIONS,
     );
   });
 
   test("interchange", async () => {
+    const applyAt =
+      <A>(a: A) =>
+      <B>(f: (a: A) => B) =>
+        f(a);
+
+    const arb = {
+      f: fc.func(fc.anything()).map(Op.of),
+      x: fc.anything(),
+    };
+
     await fc.assert(
-      fc.asyncProperty(fnOpArb, fc.integer(), async (fnOp, value) => {
-        const left = ap(fnOp, Op.of(value));
-        const right = ap(
-          Op.of((fn: (input: number) => number) => fn(value)),
-          fnOp,
-        );
-        await expectSameOpResult(left, right);
+      fc.asyncProperty(arb.f, arb.x, async (f, x) => {
+        const left = ap(f, Op.of(x));
+        const right = ap(Op.of(applyAt(x)), f);
+        await expectRunEq(left, right);
       }),
+      FC_ASSERT_OPTIONS,
     );
   });
 
   test("composition", async () => {
     const dot =
-      (outer: (value: number) => number) => (inner: (value: number) => number) => (value: number) =>
-        outer(inner(value));
+      <A, B, C>(f: (b: B) => C) =>
+      (g: (a: A) => B) =>
+      (a: A) =>
+        f(g(a));
+
+    const arb = {
+      f: fc.func(fc.anything()).map(Op.of),
+      g: fc.func(fc.anything()).map(Op.of),
+      op: fc.anything().map(Op.of),
+    };
 
     await fc.assert(
-      fc.asyncProperty(fnOpArb, fnOpArb, opArb, async (outerFnOp, innerFnOp, valOp) => {
-        const left = ap(ap(ap(Op.of(dot), outerFnOp), innerFnOp), valOp);
-        const right = ap(outerFnOp, ap(innerFnOp, valOp));
-        await expectSameOpResult(left, right);
+      fc.asyncProperty(arb.f, arb.g, arb.op, async (f, g, op) => {
+        const left = ap(ap(ap(Op.of(dot), f), g), op);
+        const right = ap(f, ap(g, op));
+        await expectRunEq(left, right);
       }),
+      FC_ASSERT_OPTIONS,
     );
   });
 
   test("map agrees with ap", async () => {
+    const arb = {
+      op: fc.anything().map(Op.of),
+      f: fc.func(fc.anything()),
+    };
     await fc.assert(
-      fc.asyncProperty(opArb, valueFnArb, async (valOp, fn) => {
-        await expectSameOpResult(valOp.map(fn), ap(Op.of(fn), valOp));
+      fc.asyncProperty(arb.op, arb.f, async (op, f) => {
+        const left = op.map(f);
+        const right = ap(Op.of(f), op);
+        await expectRunEq(left, right);
       }),
+      FC_ASSERT_OPTIONS,
     );
   });
 });

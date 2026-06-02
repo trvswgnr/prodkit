@@ -1,50 +1,41 @@
 import * as fc from "fast-check";
-import { describe, expect, test } from "vitest";
+import { describe, test } from "vitest";
 import { Op } from "../../src/index.js";
-import { Result } from "../../src/result.js";
+import { identity } from "@prodkit/shared/runtime";
+import { expectRunEq, FC_ASSERT_OPTIONS } from "../support/utils.js";
 
-function fmap<A, E, B>(m: Op<A, E, []>, f: (value: A) => B): Op<Awaited<B>, E, []> {
-  return m.map(f);
+function fmap<A, E, B>(op: Op<A, E, []>, f: (x: A) => B): Op<Awaited<B>, E, []> {
+  return op.map(f);
 }
 
-async function expectSameOpResult<T, E>(a: Op<T, E, []>, b: Op<T, E, []>) {
-  const left = await Op.run(a);
-  const right = await Op.run(b);
-  expect(Result.serialize(left)).toEqual(Result.serialize(right));
-}
-
-const valueFnArb = fc.constantFrom<(value: number) => number>(
-  (value) => value + 1,
-  (value) => value * 2,
-  (value) => value - 3,
-  (value) => Math.abs(value),
-);
-
-const opArb: fc.Arbitrary<Op<number, string, []>> = fc.oneof(
-  fc.integer().map((value) => Op.of(value)),
-  fc.string().map((error) => Op.fail(error)),
-);
-
-describe("Op functor laws (property-based)", () => {
+describe("Op functor laws", () => {
   test("identity", async () => {
+    const arb = {
+      op: fc.anything().map(Op.of),
+    };
     await fc.assert(
-      fc.asyncProperty(opArb, async (op) => {
-        await expectSameOpResult(
-          fmap(op, (value) => value),
-          op,
-        );
+      fc.asyncProperty(arb.op, async (op) => {
+        const left = fmap(op, identity);
+        const right = identity(op);
+        await expectRunEq(left, right);
       }),
+      FC_ASSERT_OPTIONS,
     );
   });
 
   test("composition", async () => {
+    const arb = {
+      op: fc.anything().map(Op.of),
+      f: fc.func(fc.anything().map(Op.of)),
+      g: fc.func(fc.anything().map(Op.of)),
+    };
     await fc.assert(
-      fc.asyncProperty(opArb, valueFnArb, valueFnArb, async (op, f, g) => {
-        await expectSameOpResult(
-          fmap(fmap(op, f), g),
-          fmap(op, (value) => g(f(value))),
-        );
+      fc.asyncProperty(arb.op, arb.f, arb.g, async (op, f, g) => {
+        const left = fmap(fmap(op, f), g);
+        const right = fmap(op, (x) => g(f(x)));
+        await expectRunEq(left, right);
       }),
+      FC_ASSERT_OPTIONS,
     );
   });
 });

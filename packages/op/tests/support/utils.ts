@@ -1,3 +1,5 @@
+import type { Result } from "../../src/result.js";
+
 export function neverSettling(): Promise<never> {
   return new Promise<never>(() => {});
 }
@@ -83,3 +85,16 @@ export function trackAbortListeners(signal: AbortSignal) {
 export const invalidConcurrencies = [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY];
 
 export const TRUE: boolean = true;
+
+interface Runnable<T, E> {
+  run: () => Promise<Result<T, E>>;
+}
+
+export async function expectRunEq<T1, E1, T2, E2>(a: Runnable<T1, E1>, b: Runnable<T2, E2>) {
+  const { expect } = await import("vitest");
+  const left = await a.run();
+  const right = await b.run();
+  expect(left).toEqual(right);
+}
+
+export const FC_ASSERT_OPTIONS = { numRuns: 1000 };

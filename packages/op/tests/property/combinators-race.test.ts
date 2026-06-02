@@ -48,7 +48,7 @@ async function oracleFirstSettler(branches: readonly RaceBranch[]): Promise<Bran
   return winner;
 }
 
-describe("Op.race invariants (property-based)", () => {
+describe("Op.race invariants", () => {
   test("result matches first-settler outcome under randomized delays", async () => {
     await fc.assert(
       fc.asyncProperty(

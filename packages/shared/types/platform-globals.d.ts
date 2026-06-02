@@ -39,6 +39,7 @@ declare global {
   ): number;
   function clearTimeout(id: ReturnType<typeof setTimeout> | undefined): void;
   function queueMicrotask(callback: () => void): void;
+  function structuredClone<T>(value: T): T;
 }
 
 export {};

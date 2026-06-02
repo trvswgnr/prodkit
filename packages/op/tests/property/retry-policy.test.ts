@@ -27,7 +27,7 @@ const invalidExponentialDelayOptionsArb: fc.Arbitrary<ExponentialDelayOptions> =
   fc.record({ baseMs: fc.constant(-1), maxMs: fc.constant(1000), jitter: fc.constant(0.5) }),
 );
 
-describe("Delay.exponential invariants (property-based)", () => {
+describe("Delay.exponential invariants", () => {
   test("delays are finite, non-negative, and clamped to maxMs", async () => {
     await fc.assert(
       fc.asyncProperty(
@@ -96,7 +96,7 @@ describe("Delay.exponential invariants (property-based)", () => {
   });
 });
 
-describe("retry policy invariants (property-based)", () => {
+describe("retry policy invariants", () => {
   test("run attempts never exceed one plus policy retries", async () => {
     await fc.assert(
       fc.asyncProperty(fc.integer({ min: 0, max: 7 }), async (policyRetries) => {
