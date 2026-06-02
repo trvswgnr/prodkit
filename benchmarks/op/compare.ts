@@ -1,8 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { gzipSync } from "node:zlib";
-import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { transform } from "esbuild";
+import { measureOpBundleSizes, type BundleSizeBounds } from "./measure-bundle-size.ts";
 import {
   BASELINE_IMPLEMENTATION_ID,
   COMPARISON_SCENARIOS,
@@ -53,10 +51,7 @@ type ComparisonReport = {
     runtime: Record<ImplementationId, RuntimeCell>;
     vsBaseline: VsBaselineRatios;
   }>;
-  bundleSize: {
-    minBytes: number;
-    gzipBytes: number;
-  };
+  bundleSize: BundleSizeBounds;
   pair?: {
     left: ImplementationId;
     right: ImplementationId;
@@ -90,24 +85,14 @@ function readCurrentFingerprint(repoRoot: string): { headSha: string; dirty: boo
   return { headSha, dirty };
 }
 
-async function measureBundleSize(
-  packageDir: string,
-): Promise<{ minBytes: number; gzipBytes: number }> {
-  const entryPath = path.join(packageDir, "dist", "index.mjs");
-  const source = await readFile(entryPath, "utf8");
-  const transformed = await transform(source, {
-    loader: "js",
-    format: "esm",
-    minify: true,
-    target: "es2022",
-  });
-  const minBytes = Buffer.byteLength(transformed.code, "utf8");
-  const gzipBytes = gzipSync(Buffer.from(transformed.code, "utf8")).byteLength;
-  return { minBytes, gzipBytes };
-}
-
-function formatBytes(bytes: number): string {
-  return `${Intl.NumberFormat("en-US").format(bytes)} B`;
+function printBundleSize(bundleSize: BundleSizeBounds): void {
+  logger.info("");
+  logger.info(
+    `Bundle size lower (main entry): ${formatBytes(bundleSize.lower.minBytes)} minified, ${formatBytes(bundleSize.lower.gzipBytes)} minified + gzip`,
+  );
+  logger.info(
+    `Bundle size upper (consumer subpaths): ${formatBytes(bundleSize.upper.minBytes)} minified, ${formatBytes(bundleSize.upper.gzipBytes)} minified + gzip`,
+  );
 }
 
 function implementationShortLabel(column: ImplementationColumn): string {
@@ -287,11 +272,8 @@ function printPairTable(
   }
 }
 
-function printBundleSize(bundleSize: ComparisonReport["bundleSize"]): void {
-  logger.info("");
-  logger.info(
-    `Bundle size: ${formatBytes(bundleSize.minBytes)} minified, ${formatBytes(bundleSize.gzipBytes)} minified + gzip`,
-  );
+function formatBytes(bytes: number): string {
+  return `${Intl.NumberFormat("en-US").format(bytes)} B`;
 }
 
 async function main(): Promise<void> {
@@ -326,7 +308,7 @@ async function main(): Promise<void> {
     });
   }
 
-  const bundleSize = await measureBundleSize(packageDir);
+  const bundleSize = await measureOpBundleSizes(packageDir);
   const implementations = [...IMPLEMENTATION_COLUMNS];
 
   const report: ComparisonReport = {

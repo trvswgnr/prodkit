@@ -125,7 +125,7 @@ jobs:
         uses: preactjs/compressed-size-action@66325aad6443cb7cf89c4bfcd414aea2367cda94 # v2.9.1
         with:
           build-script: "build:size"
-          pattern: "packages/op/dist/*.min.mjs"
+          pattern: "packages/op/dist/bundle-size/*.min.mjs"
           compression: "gzip"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
