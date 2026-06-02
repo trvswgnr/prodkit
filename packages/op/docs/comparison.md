@@ -151,9 +151,8 @@ That code has typed failures, cancellation-aware concurrency, retry/timeout poli
 and cleanup hooks when resources enter the picture. It does not require services, layers, fibers, or
 a new standard library around the rest of your app.
 
-Choose Effect when you want the platform. Choose `Op` when you want the operation semantics above
-without adopting the full platform stack. `@prodkit/op` is alpha at 0.1.x: expect API churn while
-the surface stabilizes.
+Choose Effect when you want the platform. Choose `Op` when you want the production-grade operation
+semantics without making the platform decision.
 
 ## Why Op wins its lane
 
