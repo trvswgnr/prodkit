@@ -158,7 +158,7 @@ function extractSmokePnpmWorkspaceTail(workspaceYaml: string): string {
 
 function parsePnpmPackFilename(packOutput: string): string | undefined {
   try {
-    const parsed = JSON.parse(packOutput.trim()) as { filename?: unknown };
+    const parsed: { filename?: unknown } = JSON.parse(packOutput.trim());
     if (typeof parsed.filename === "string" && parsed.filename.length > 0) return parsed.filename;
   } catch {
     // handled below

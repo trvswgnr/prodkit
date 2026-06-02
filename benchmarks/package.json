@@ -21,6 +21,7 @@
   "devDependencies": {
     "@codspeed/vitest-plugin": "^5.0.1",
     "@prodkit/op": "workspace:*",
+    "@prodkit/shared": "workspace:*",
     "@types/node": "^24.12.2",
     "effect": "^3.21.2",
     "esbuild": "^0.25.11",

@@ -53,6 +53,9 @@ importers:
       '@prodkit/op':
         specifier: workspace:*
         version: link:../packages/op
+      '@prodkit/shared':
+        specifier: workspace:*
+        version: link:../packages/shared
       '@types/node':
         specifier: ^24.12.2
         version: 24.12.3
@@ -194,6 +197,9 @@ importers:
         specifier: ^1.4.0
         version: 1.4.0(typescript@6.0.3)
     devDependencies:
+      '@prodkit/shared':
+        specifier: workspace:*
+        version: link:../packages/shared
       '@types/node':
         specifier: ^24.12.2
         version: 24.12.3

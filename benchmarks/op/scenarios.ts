@@ -1,3 +1,5 @@
+import { unsafeCoerce } from "@prodkit/shared/runtime";
+
 export const COMPOSE_STEPS = 6;
 export const CONCURRENCY_CHILDREN = 8;
 export const RETRY_ATTEMPTS = 3;
@@ -45,7 +47,7 @@ export async function runOpYieldChain(
   const program = Op(function* () {
     let value = 1;
     for (let step = 0; step < steps; step += 1) {
-      value = yield* Op.of(value + 1) as unknown as Generator<unknown, number, unknown>;
+      value = yield* unsafeCoerce(Op.of(value + 1));
     }
     return value;
   });
@@ -53,7 +55,7 @@ export async function runOpYieldChain(
   if (!result.isOk() || result.value !== steps + 1) {
     throw new Error("runOpYieldChain failed unexpectedly.");
   }
-  return result.value as number;
+  return result.value;
 }
 
 /** Single Op, inline loop (one genPlan / one driveIterator, no nested yield*). */
@@ -72,7 +74,7 @@ export async function runOpFlatLoop(
   if (!result.isOk() || result.value !== steps + 1) {
     throw new Error("runOpFlatLoop failed unexpectedly.");
   }
-  return result.value as number;
+  return result.value;
 }
 
 /** Sequential Op.of(...).run() calls (per-step Op shell, no yield* delegation). */
@@ -86,7 +88,7 @@ export async function runOpSequentialRuns(
     if (!result.isOk()) {
       throw new Error("runOpSequentialRuns failed unexpectedly.");
     }
-    value = result.value as number;
+    value = unsafeCoerce(result.value);
   }
   if (value !== steps + 1) {
     throw new Error("runOpSequentialRuns failed unexpectedly.");

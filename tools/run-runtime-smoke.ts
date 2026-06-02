@@ -61,7 +61,7 @@ function run(command: string, args: readonly string[], cwd: string, capture = fa
 
 function parsePackFilename(packOutput: string): string {
   try {
-    const parsed = JSON.parse(packOutput.trim()) as { filename?: unknown };
+    const parsed: { filename?: unknown } = JSON.parse(packOutput.trim());
     if (typeof parsed.filename === "string" && parsed.filename.length > 0) {
       return parsed.filename;
     }

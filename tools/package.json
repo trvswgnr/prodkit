@@ -30,6 +30,7 @@
     "valibot": "^1.4.0"
   },
   "devDependencies": {
+    "@prodkit/shared": "workspace:*",
     "@types/node": "^24.12.2",
     "miniflare": "^4.20260511.0",
     "oxfmt": "catalog:",

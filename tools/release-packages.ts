@@ -1,3 +1,5 @@
+import { unsafeCoerce } from "@prodkit/shared/runtime";
+
 export const RELEASE_PACKAGES = {
   op: {
     npmName: "@prodkit/op",
@@ -13,7 +15,7 @@ export const RELEASE_PACKAGES = {
 
 export type ReleasePackageId = keyof typeof RELEASE_PACKAGES;
 
-export const ReleasePackageId = Object.keys(RELEASE_PACKAGES) as ReleasePackageId[];
+export const ReleasePackageId = unsafeCoerce(Object.keys(RELEASE_PACKAGES));
 
 export function isReleasePackageId(value: string): value is ReleasePackageId {
   return Object.hasOwn(RELEASE_PACKAGES, value);

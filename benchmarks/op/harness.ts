@@ -166,7 +166,7 @@ export function assertProfileOpFactory(input: unknown): ProfileScenarioOpFactory
   if (typeof input.of !== "function" || typeof input !== "function") {
     throw new Error("Imported Op is missing required methods (of).");
   }
-  return input as ProfileScenarioOpFactory;
+  return input;
 }
 
 export function parseArgValue(argv: readonly string[], prefix: string): string | undefined {

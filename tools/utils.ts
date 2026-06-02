@@ -6,6 +6,7 @@ import { TaggedError } from "better-result";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import * as v from "valibot";
 export { createLogger } from "./logger.ts";
+import { unsafeCoerce } from "@prodkit/shared/runtime";
 
 type OwnPropertyValue<T, K extends PropertyKey> =
   // if it's not an object, we don't know anything about the type
@@ -23,11 +24,11 @@ export const getOwnPropertyValue = <T, K extends PropertyKey>(
   value: T,
   key: K,
 ): OwnPropertyValue<T, K> => {
-  return (
+  return unsafeCoerce(
     typeof value === "object" && value !== null && Object.hasOwn(value, key)
       ? Reflect.get(value, key)
-      : undefined
-  ) as never;
+      : undefined,
+  );
 };
 
 type RaiseFn = (cause: unknown) => never;
@@ -42,17 +43,16 @@ export class InvalidJsonError extends TaggedError("InvalidJsonError")<{
 
 export const parseJson = Op(function* (input: string) {
   return yield* Op.try(
-    () => JSON.parse(input) as unknown,
-    (cause) => new InvalidJsonError({ cause: cause as SyntaxError, input }),
+    (): unknown => JSON.parse(input),
+    (cause) => new InvalidJsonError({ cause: unsafeCoerce<SyntaxError>(cause), input }),
   );
 });
 
 // oxlint-disable-next-line typescript/no-explicit-any clever hack for non-empty string type
 export type NonEmptyString = `${any}${string}`;
-export const NonEmptyString: v.BaseSchema<string, NonEmptyString, v.StringIssue> = v.pipe(
-  v.string(),
-  v.nonEmpty(),
-) as never;
+export const NonEmptyString: v.BaseSchema<string, NonEmptyString, v.StringIssue> = unsafeCoerce(
+  v.pipe(v.string(), v.nonEmpty()),
+);
 
 export type NonEmptyArray<T> = [T, ...T[]];
 export const NonEmptyArray = <S extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>>(
@@ -61,7 +61,7 @@ export const NonEmptyArray = <S extends v.BaseSchema<unknown, unknown, v.BaseIss
   v.InferInput<S>[],
   NonEmptyArray<v.InferOutput<S>>,
   v.ArrayIssue | v.InferIssue<S>
-> => v.pipe(v.array(schema), v.nonEmpty()) as never;
+> => unsafeCoerce(v.pipe(v.array(schema), v.nonEmpty()));
 
 export const PackageJson = v.object({
   name: NonEmptyString,

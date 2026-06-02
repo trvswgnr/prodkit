@@ -126,7 +126,7 @@ export function parseLibraryPairArg(argv: readonly string[]): LibraryPair | unde
     );
   }
 
-  const [left, right] = parts as [string, string];
+  const [left, right] = parts;
   if (!isImplementationId(left) || !isImplementationId(right)) {
     const valid = IMPLEMENTATION_COLUMNS.map((column) => column.id).join(", ");
     throw new Error(`Invalid --pair=${value}. Expected ids from: ${valid}.`);
@@ -292,8 +292,8 @@ async function main(): Promise<void> {
   const scenarios: ComparisonReport["scenarios"] = [];
   for (const scenario of COMPARISON_SCENARIOS) {
     logger.info(`Benchmarking ${scenario.label}...`);
-    const runtime = {} as Record<ImplementationId, RuntimeCell>;
-    const descriptions = {} as Record<ImplementationId, string>;
+    const runtime: Record<ImplementationId, RuntimeCell> = Object.create(null);
+    const descriptions: Record<ImplementationId, string> = Object.create(null);
     for (const column of IMPLEMENTATION_COLUMNS) {
       const cell = scenario.implementations[column.id];
       runtime[column.id] = await runTinybenchVariant(cell.benchName, cell.run);

@@ -1,3 +1,4 @@
+// oxlint-disable typescript/consistent-type-assertions
 // oxlint-disable no-unused-vars
 import { Op } from "@prodkit/op";
 import { Delay, Policy } from "@prodkit/op/policy";

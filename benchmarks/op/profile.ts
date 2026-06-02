@@ -31,6 +31,7 @@ import {
   runRawSyncYieldStarChain,
   runSingleOpRun,
 } from "./scenarios.ts";
+import { unsafeCoerce } from "@prodkit/shared/runtime";
 
 type AsyncProfileScenarioName =
   | "baseline.asyncChain"
@@ -151,7 +152,8 @@ function parseProfileMode(argv: readonly string[]): ProfileMode {
 function parseScenarioFilter(argv: readonly string[]): string | undefined {
   const value = parseArgValue(argv, "--scenario=");
   if (value === undefined) return undefined;
-  if (!(ALL_SCENARIO_NAMES as readonly string[]).includes(value)) {
+  const allScenarioNames: readonly string[] = unsafeCoerce(ALL_SCENARIO_NAMES);
+  if (!allScenarioNames.includes(value)) {
     throw new Error(
       `Invalid scenario "${value}". Expected one of: ${ALL_SCENARIO_NAMES.join(", ")}`,
     );
@@ -397,7 +399,7 @@ async function main(): Promise<void> {
   printInterpretationGuide();
 
   if (reportPath !== undefined) {
-    const asyncScenarios = {} as ProfileReport["asyncScenarios"];
+    const asyncScenarios: ProfileReport["asyncScenarios"] = Object.create(null);
     for (const row of asyncRows) {
       asyncScenarios[row.name] = {
         hz: row.hz,
@@ -412,7 +414,7 @@ async function main(): Promise<void> {
       };
     }
 
-    const syncReference = {} as ProfileReport["syncReference"];
+    const syncReference: ProfileReport["syncReference"] = Object.create(null);
     for (const row of syncRows) {
       syncReference[row.name] = {
         hz: row.hz,
