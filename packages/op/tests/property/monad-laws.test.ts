@@ -9,15 +9,15 @@ function bind<T, E1, U, E2>(op: Op<T, E1, []>, f: (a: T) => Op<U, E2, []>): Op<U
 
 describe("Op monad laws", () => {
   test("left identity", async () => {
-    const arb = {
-      x: fc.anything(),
+    const vars = {
+      ma: fc.anything(),
       f: fc.func(fc.anything().map(Op.of)),
     };
 
     await fc.assert(
-      fc.asyncProperty(arb.x, arb.f, async (x, f) => {
-        const left = bind(Op.of(x), f);
-        const right = f(x);
+      fc.asyncProperty(vars.ma, vars.f, async (ma, f) => {
+        const left = bind(Op.of(ma), f);
+        const right = f(ma);
         await expectRunEq(left, right);
       }),
       FC_ASSERT_OPTIONS,
@@ -25,13 +25,13 @@ describe("Op monad laws", () => {
   });
 
   test("right identity", async () => {
-    const arb = {
-      op: fc.anything().map(Op.of),
+    const vars = {
+      ma: fc.anything().map(Op.of),
     };
     await fc.assert(
-      fc.asyncProperty(arb.op, async (op) => {
-        const left = bind(op, Op.of);
-        const right = op;
+      fc.asyncProperty(vars.ma, async (ma) => {
+        const left = bind(ma, Op.of);
+        const right = ma;
         await expectRunEq(left, right);
       }),
       FC_ASSERT_OPTIONS,
@@ -39,16 +39,16 @@ describe("Op monad laws", () => {
   });
 
   test("associativity", async () => {
-    const arb = {
-      x: fc.anything().map(Op.of),
+    const vars = {
+      ma: fc.anything().map(Op.of),
       f: fc.func(fc.anything().map(Op.of)),
       g: fc.func(fc.anything().map(Op.of)),
     };
 
     await fc.assert(
-      fc.asyncProperty(arb.x, arb.f, arb.g, async (op, f, g) => {
-        const left = bind(bind(op, f), g);
-        const right = bind(op, (a) => bind(f(a), g));
+      fc.asyncProperty(vars.ma, vars.f, vars.g, async (ma, f, g) => {
+        const left = bind(bind(ma, f), g);
+        const right = bind(ma, (x) => bind(f(x), g));
         await expectRunEq(left, right);
       }),
       FC_ASSERT_OPTIONS,
