@@ -35,17 +35,16 @@ layer). Combinator plan nodes call fan-out with the settlement row from the tabl
 settlement applies so timeout/cancel on a wrapped combinator still drains in-flight children ([ADR
 0004](0004-combinators-wait-for-loser-finalization.md)).
 
-**Rewrite contract.** `PlanRewriter` exposes `all`, `race`, `any`, and `allSettled` methods. Each
-rewrites every child plan with `source.rewrite(rewriter)` and rebuilds the combinator node with the
-same options (for example `concurrency`). Policy push-through is structural: `.with(Policy.timeout(ms))`
-on `Op.all([child])` becomes `timeoutPlan(allPlan([childPlan]))` after rewrite.
+**Rewrite contract.** Built-in policies supply `PlanRewriter.apply` only. Combinator and transform
+plan nodes rebuild after `child.rewrite(rewriter)` (or `rewriteUnaryPlan` for unary wrappers).
+Policy push-through is structural: `.with(Policy.timeout(ms))` on `Op.all([child])` becomes
+`timeoutPlan(allPlan([childPlan]))` after rewrite.
 
 **Public API unchanged.** Tuple inference, meta merge, `ErrorGroup` on `Op.any`, input-order
 results on `Op.all` / `Op.allSettled`, and empty-input errors are unchanged; only the internal
 representation lives under `core/plan/`.
 
-**`DI.provide` is plan-backed** without a `PlanRewriter.provide` hook: policy push-through
-re-wraps via local `source.rewrite` at the provision site.
+**`DI.provide` is plan-backed** with the same local `source.rewrite(rewriter)` rebuild pattern.
 
 ## Why not keep imperative fan-out?
 

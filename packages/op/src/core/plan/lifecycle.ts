@@ -8,7 +8,7 @@ import {
 } from "../instructions.js";
 import type { EnterContext, EnterFn, ExitFn } from "./context.js";
 import type { ExitContext } from "../runtime.js";
-import { createPlan, type Plan } from "./base.js";
+import { createPlan, rewriteUnaryPlan, type Plan } from "./base.js";
 
 export function onEnterPlan<T, E, A, M>(
   source: Plan<T, E, M>,
@@ -34,7 +34,8 @@ export function onEnterPlan<T, E, A, M>(
       return result.value;
     },
     {
-      rewrite: (self, rewriter) => rewriter.enter?.(source, initialize) ?? rewriter.apply(self),
+      rewrite: (_self, rewriter) =>
+        rewriteUnaryPlan(rewriter, source, (inner) => onEnterPlan(inner, initialize)),
     },
   );
 }
@@ -65,7 +66,8 @@ export function onExitPlan<T, E, A, M>(
       return result.value;
     },
     {
-      rewrite: (self, rewriter) => rewriter.exit?.(source, finalize) ?? rewriter.apply(self),
+      rewrite: (_self, rewriter) =>
+        rewriteUnaryPlan(rewriter, source, (inner) => onExitPlan(inner, finalize)),
     },
   );
 }

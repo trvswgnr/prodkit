@@ -8,7 +8,6 @@ import {
   type CancelSettlement as PlanExecutionMode,
 } from "../cancel-session.js";
 import { driveIterator } from "../runtime.js";
-import type { EnterFn, ExitFn, ReleaseFn } from "./context.js";
 import type { AsArgs, OpInterface, TrackedErr } from "./surface.js";
 import type { RunContext } from "../runtime.js";
 import type { Instruction } from "../instructions.js";
@@ -37,56 +36,23 @@ export type PlanBackedOp<T, E, A, M> = OpInterface<T, E, A, M> & {
 };
 
 /**
- * Internal rewrite protocol for policy attachment. Each optional method mirrors a fluent plan
- * transform so built-in policies can rebuild known nodes while preserving ordering semantics.
+ * Internal rewrite protocol for policy attachment. Built-in policies supply `apply` to wrap leaf
+ * plans; wrapper nodes rebuild themselves via `source.rewrite(rewriter)` (see `rewriteUnaryPlan`).
  *
- * When adding a new fluent transform, see "Adding a fluent plan transform" in CONTRIBUTING.md.
+ * When adding a new fluent transform, see "Adding a fluent plan transform" in
+ * `docs/contributor/runtime-architecture.md`.
  */
 export interface PlanRewriter {
   readonly apply: <T, E, M>(source: Plan<T, E, M>) => Plan<unknown, unknown, unknown>;
-  readonly release?: <T, E, M>(
-    source: Plan<T, E, M>,
-    release: ReleaseFn<T>,
-  ) => Plan<unknown, unknown, unknown>;
-  readonly enter?: <T, E, A, M>(
-    source: Plan<T, E, M>,
-    initialize: EnterFn<A>,
-  ) => Plan<unknown, unknown, unknown>;
-  readonly exit?: <T, E, A, M>(
-    source: Plan<T, E, M>,
-    finalize: ExitFn<T, E, A>,
-  ) => Plan<unknown, unknown, unknown>;
-  readonly map?: <T, E, U, M>(
-    source: Plan<T, E, M>,
-    transform: (value: T) => U,
-  ) => Plan<unknown, unknown, unknown>;
-  readonly tap?: <T, E, R, M>(
-    source: Plan<T, E, M>,
-    observe: (value: T) => R,
-  ) => Plan<unknown, unknown, unknown>;
-  readonly mapErr?: <T, E, E2, M>(
-    source: Plan<T, E, M>,
-    transform: (error: TrackedErr<E>) => E2,
-  ) => Plan<unknown, unknown, unknown>;
-  readonly tapErr?: <T, E, R, M>(
-    source: Plan<T, E, M>,
-    observe: (error: TrackedErr<E>) => R,
-  ) => Plan<unknown, unknown, unknown>;
-  readonly recover?: <T, E, ECaught extends TrackedErr<E>, R, M>(
-    source: Plan<T, E, M>,
-    predicate: (error: TrackedErr<E>) => error is ECaught,
-    handler: (error: ECaught) => R,
-  ) => Plan<unknown, unknown, unknown>;
-  readonly all?: <T, E, M>(
-    source: readonly Plan<T, E, M>[],
-    concurrency?: number,
-  ) => Plan<unknown, unknown, unknown>;
-  readonly race?: <T, E, M>(source: readonly Plan<T, E, M>[]) => Plan<unknown, unknown, unknown>;
-  readonly any?: <T, E, M>(source: readonly Plan<T, E, M>[]) => Plan<unknown, unknown, unknown>;
-  readonly allSettled?: <T, E, M>(
-    source: readonly Plan<T, E, M>[],
-    concurrency?: number,
-  ) => Plan<unknown, unknown, unknown>;
+}
+
+/** Rebuild a unary wrapper after rewriting its child plan (standard policy push-through). */
+export function rewriteUnaryPlan<T, E, M>(
+  rewriter: PlanRewriter,
+  source: Plan<T, E, M>,
+  rebuild: (rewrittenSource: Plan<T, E, M>) => Plan<unknown, unknown, unknown>,
+): Plan<unknown, unknown, unknown> {
+  return rebuild(source.rewrite(rewriter));
 }
 
 interface PlanRewriteOverrides<T, E, M> {

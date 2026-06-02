@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Repaired `DESIGN.md` and contributor runtime-architecture references (`settleIteratorWithCleanup`,
   combinator test file paths). Gate now runs `design:check` so those references cannot drift again.
+- Plan policy push-through rewrites child plans structurally; `PlanRewriter` is `apply`-only (removed
+  `DelegatingPlanRewriter` per-transform forwarders). New fluent transforms use `rewriteUnaryPlan` or
+  child `rewrite` at the plan node only.
 
 ### Added
 

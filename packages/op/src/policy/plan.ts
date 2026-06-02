@@ -10,110 +10,19 @@ import {
 import { createRunContext } from "../core/runtime.js";
 import { normalizeRetryPolicy, type NormalizedRetryPolicy } from "./retry-policy.js";
 import { validateTimeoutMs } from "./validate.js";
-import type { EnterFn, ExitFn, ReleaseFn } from "../core/plan/context.js";
-import type { TrackedErr } from "../core/plan/surface.js";
+import type { ReleaseFn } from "../core/plan/context.js";
 import type { RunContext } from "../core/runtime.js";
 import {
   createPlan,
   executePlan,
   interruptOnAbortMode,
+  rewriteUnaryPlan,
   type Plan,
   type PlanRewriter,
 } from "../core/plan/base.js";
-import { onEnterPlan, onExitPlan } from "../core/plan/lifecycle.js";
-import { mapErrPlan, mapPlan, recoverPlan, tapErrPlan, tapPlan } from "../core/plan/transforms.js";
-import { allPlan, allSettledPlan, anyPlan, racePlan } from "../core/plan/combinators.js";
 
-class DelegatingPlanRewriter implements PlanRewriter {
-  apply!: PlanRewriter["apply"];
-
-  release<T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T>): Plan<unknown, unknown, unknown> {
-    return releasePlan(source.rewrite<T, E, M>(this), release);
-  }
-
-  enter<T, E, A, M>(
-    source: Plan<T, E, M>,
-    initialize: EnterFn<A>,
-  ): Plan<unknown, unknown, unknown> {
-    return onEnterPlan(source.rewrite<T, E, M>(this), initialize);
-  }
-
-  exit<T, E, A, M>(
-    source: Plan<T, E, M>,
-    finalize: ExitFn<T, E, A>,
-  ): Plan<unknown, unknown, unknown> {
-    return onExitPlan(source.rewrite<T, E, M>(this), finalize);
-  }
-
-  map<T, E, U, M>(
-    source: Plan<T, E, M>,
-    transform: (value: T) => U,
-  ): Plan<unknown, unknown, unknown> {
-    return mapPlan(source.rewrite<T, E, M>(this), transform);
-  }
-
-  tap<T, E, R, M>(
-    source: Plan<T, E, M>,
-    observe: (value: T) => R,
-  ): Plan<unknown, unknown, unknown> {
-    return tapPlan(source.rewrite<T, E, M>(this), observe);
-  }
-
-  mapErr<T, E, E2, M>(
-    source: Plan<T, E, M>,
-    transform: (error: TrackedErr<E>) => E2,
-  ): Plan<unknown, unknown, unknown> {
-    return mapErrPlan(source.rewrite<T, E, M>(this), transform);
-  }
-
-  tapErr<T, E, R, M>(
-    source: Plan<T, E, M>,
-    observe: (error: TrackedErr<E>) => R,
-  ): Plan<unknown, unknown, unknown> {
-    return tapErrPlan(source.rewrite<T, E, M>(this), observe);
-  }
-
-  recover<T, E, ECaught extends TrackedErr<E>, R, M>(
-    source: Plan<T, E, M>,
-    predicate: (error: TrackedErr<E>) => error is ECaught,
-    handler: (error: ECaught) => R,
-  ): Plan<unknown, unknown, unknown> {
-    return recoverPlan(source.rewrite<T, E, M>(this), predicate, handler);
-  }
-
-  all<T, E, M>(
-    source: readonly Plan<T, E, M>[],
-    concurrency?: number,
-  ): Plan<unknown, unknown, unknown> {
-    return allPlan(
-      source.map((child) => child.rewrite<T, E, M>(this)),
-      concurrency,
-    );
-  }
-
-  race<T, E, M>(source: readonly Plan<T, E, M>[]): Plan<unknown, unknown, unknown> {
-    return racePlan(source.map((child) => child.rewrite<T, E, M>(this)));
-  }
-
-  any<T, E, M>(source: readonly Plan<T, E, M>[]): Plan<unknown, unknown, unknown> {
-    return anyPlan(source.map((child) => child.rewrite<T, E, M>(this)));
-  }
-
-  allSettled<T, E, M>(
-    source: readonly Plan<T, E, M>[],
-    concurrency?: number,
-  ): Plan<unknown, unknown, unknown> {
-    return allSettledPlan(
-      source.map((child) => child.rewrite<T, E, M>(this)),
-      concurrency,
-    );
-  }
-}
-
-function createDelegatingRewriter(apply: PlanRewriter["apply"]): PlanRewriter {
-  const rewriter = new DelegatingPlanRewriter();
-  rewriter.apply = apply;
-  return rewriter;
+function policyRewriter(apply: PlanRewriter["apply"]): PlanRewriter {
+  return { apply };
 }
 
 export function releasePlan<T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T>): Plan<T, E, M> {
@@ -133,7 +42,8 @@ export function releasePlan<T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T
       return result.value;
     },
     {
-      rewrite: (self, rewriter) => rewriter.release?.(source, release) ?? rewriter.apply(self),
+      rewrite: (_self, rewriter) =>
+        rewriteUnaryPlan(rewriter, source, (inner) => releasePlan(inner, release)),
     },
   );
 }
@@ -232,15 +142,15 @@ function cancelPlan<T, E, M>(source: Plan<T, E, M>, abortSignal: AbortSignal): P
 
 export function retryRewriter(policy?: NormalizedRetryPolicy): PlanRewriter {
   const retryPolicy = policy ?? normalizeRetryPolicy();
-  return createDelegatingRewriter((source) => retryPlan(source, retryPolicy));
+  return policyRewriter((source) => retryPlan(source, retryPolicy));
 }
 
 export function timeoutRewriter(timeoutMs: number): PlanRewriter {
-  return createDelegatingRewriter((source) => timeoutPlan(source, timeoutMs));
+  return policyRewriter((source) => timeoutPlan(source, timeoutMs));
 }
 
 export function cancelRewriter(abortSignal: AbortSignal): PlanRewriter {
-  return createDelegatingRewriter((source) => cancelPlan(source, abortSignal));
+  return policyRewriter((source) => cancelPlan(source, abortSignal));
 }
 
 async function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {

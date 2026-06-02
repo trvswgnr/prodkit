@@ -23,7 +23,11 @@ export function allPlan<T, E, M>(
       return result.value;
     },
     {
-      rewrite: (self, rewriter) => rewriter.all?.(snapshot, concurrency) ?? rewriter.apply(self),
+      rewrite: (_self, rewriter) =>
+        allPlan(
+          snapshot.map((child) => child.rewrite(rewriter)),
+          concurrency,
+        ),
     },
   );
 }
@@ -42,7 +46,7 @@ export function racePlan<T, E, M>(children: readonly Plan<T, E, M>[]): Plan<T, E
       return result.value;
     },
     {
-      rewrite: (self, rewriter) => rewriter.race?.(snapshot) ?? rewriter.apply(self),
+      rewrite: (_self, rewriter) => racePlan(snapshot.map((child) => child.rewrite(rewriter))),
     },
   );
 }
@@ -61,7 +65,7 @@ export function anyPlan<T, E, M>(children: readonly Plan<T, E, M>[]): Plan<T, E,
       return result.value;
     },
     {
-      rewrite: (self, rewriter) => rewriter.any?.(snapshot) ?? rewriter.apply(self),
+      rewrite: (_self, rewriter) => anyPlan(snapshot.map((child) => child.rewrite(rewriter))),
     },
   );
 }
@@ -85,8 +89,11 @@ export function allSettledPlan<T, E, M>(
       return result.value;
     },
     {
-      rewrite: (self, rewriter) =>
-        rewriter.allSettled?.(snapshot, concurrency) ?? rewriter.apply(self),
+      rewrite: (_self, rewriter) =>
+        allSettledPlan(
+          snapshot.map((child) => child.rewrite(rewriter)),
+          concurrency,
+        ),
     },
   );
 }

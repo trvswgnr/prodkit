@@ -11,7 +11,7 @@ import type {
   TrackedErr,
 } from "./surface.js";
 import type { MergeMeta } from "../meta.js";
-import { createPlan, getPlan, type Plan } from "./base.js";
+import { createPlan, getPlan, rewriteUnaryPlan, type Plan } from "./base.js";
 
 function isRuntimeBypass(error: unknown): error is UnhandledException | TimeoutError {
   return UnhandledException.is(error) || TimeoutError.is(error);
@@ -38,11 +38,16 @@ export function mapPlan<T, E, U, M>(
       return mapped;
     },
     {
-      rewrite: (self, rewriter) => rewriter.map?.(source, transform) ?? rewriter.apply(self),
+      rewrite: (_self, rewriter) =>
+        rewriteUnaryPlan(rewriter, source, (inner) => mapPlan(inner, transform)),
     },
   );
 }
 
+/**
+ * No `rewrite` override: policies wrap the whole `flatMap` node via `rewriter.apply` so retry
+ * re-executes source and bind together (see `fluent.test.ts`, flatMap + Policy.retry).
+ */
 export function flatMapPlan<T, E, R extends AnyNullaryOp, M>(
   source: Plan<T, E, M>,
   bind: (value: T) => R,
@@ -88,7 +93,8 @@ export function tapPlan<T, E, R, M>(
       return sourceResult.value;
     },
     {
-      rewrite: (self, rewriter) => rewriter.tap?.(source, observe) ?? rewriter.apply(self),
+      rewrite: (_self, rewriter) =>
+        rewriteUnaryPlan(rewriter, source, (inner) => tapPlan(inner, observe)),
     },
   );
 }
@@ -117,7 +123,8 @@ export function mapErrPlan<T, E, E2, M>(
       return yield* Result.err(mapped);
     },
     {
-      rewrite: (self, rewriter) => rewriter.mapErr?.(source, transform) ?? rewriter.apply(self),
+      rewrite: (_self, rewriter) =>
+        rewriteUnaryPlan(rewriter, source, (inner) => mapErrPlan(inner, transform)),
     },
   );
 }
@@ -145,7 +152,8 @@ export function tapErrPlan<T, E, R, M>(
       return yield* sourceResult;
     },
     {
-      rewrite: (self, rewriter) => rewriter.tapErr?.(source, observe) ?? rewriter.apply(self),
+      rewrite: (_self, rewriter) =>
+        rewriteUnaryPlan(rewriter, source, (inner) => tapErrPlan(inner, observe)),
     },
   );
 }
@@ -177,8 +185,8 @@ export function recoverPlan<T, E, ECaught extends TrackedErr<E>, R, M>(
       return recovered;
     },
     {
-      rewrite: (self, rewriter) =>
-        rewriter.recover?.(source, predicate, handler) ?? rewriter.apply(self),
+      rewrite: (_self, rewriter) =>
+        rewriteUnaryPlan(rewriter, source, (inner) => recoverPlan(inner, predicate, handler)),
     },
   );
 }

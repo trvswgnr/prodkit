@@ -99,31 +99,27 @@ you add or rename a transform, keep these touch points in sync:
 1. **Plan constructor** in `packages/op/src/core/plan/transforms.ts` for value/error transforms
    (`map`, `flatMap`, `tap`, `mapErr`, `tapErr`, `recover`) or
    `packages/op/src/core/plan/lifecycle.ts` for lifecycle hooks (`.on("enter")`, `.on("exit")`).
-   Pass a `rewrite` override to `createPlan` when policy rewrite propagation is required.
-2. **`PlanRewriter` optional method** in `packages/op/src/core/plan/base.ts` when the transform
-   needs a dedicated rewrite hook (mirror the method name on the transform, for example `map`).
-3. **`DelegatingPlanRewriter` method** in `packages/op/src/policy/plan.ts` that rewrites the
-   inner `source` plan, then applies the transform to the rewritten plan.
-4. **Fluent surface** in `packages/op/src/core/plan/shell.ts`:
+   For policy push-through, pass a `rewrite` override that rebuilds after `source.rewrite(rewriter)`
+   (use `rewriteUnaryPlan` for single-child wrappers; combinator nodes map each child plan).
+2. **Fluent surface** in `packages/op/src/core/plan/shell.ts`:
    - add the method on `fluentMethodsForContext`
    - add the method name to `createSyncValueFluentPrototype`'s `methodNames` list when sync-value
      ops should expose the same API
-5. **Tests**: extend `packages/op/tests/unit/fluent.test.ts` for fluent behavior; add or extend
+3. **Tests**: extend `packages/op/tests/unit/fluent.test.ts` for fluent behavior; add or extend
    policy rewrite coverage when `.with(Policy.*)` must preserve the transform.
 
-**`flatMapPlan` intentionally omits a rewrite hook.** Built-in policies wrap the outer plan
-node; `flatMap` composes a second plan inside the first at run time. Policy retry therefore
-re-executes the whole composition including the bind callback (see the
+Built-in policies only extend `PlanRewriter.apply` (`policy/plan.ts`). Wrapper nodes own structural
+rewrite; no per-transform methods on the rewriter protocol.
+
+**`flatMapPlan` intentionally omits a rewrite override.** Built-in policies wrap the whole node via
+`rewriter.apply`; `flatMap` composes a second plan inside the first at run time. Policy retry
+therefore re-executes the whole composition including the bind callback (see the
 `flatMap + Policy.retry retries the whole composition including bind` test in
-`packages/op/tests/unit/fluent.test.ts`). Adding a `flatMap` rewrite hook would imply a different
-contract and is not supported today.
+`packages/op/tests/unit/fluent.test.ts`). Rewriting only the `source` child would change that
+contract.
 
-See also `Policy.release` in `packages/op/src/policy/plan.ts`, which follows the same
-`createPlan` + `rewrite` pattern for release finalizers.
-
-Extension-owned plan nodes (for example `providePlan` in `@prodkit/op/di`) can participate in
-policy push-through without adding hooks to `PlanRewriter`: the node's `rewrite` override re-wraps
-`source.rewrite(rewriter)` with the same node-local options (bindings, concurrency, and so on).
+Extension-owned plan nodes (for example `providePlan` in `@prodkit/op/di`) use the same pattern:
+`rewrite` re-wraps `source.rewrite(rewriter)` with node-local options (bindings, concurrency, and so on).
 
 ## DI integration via `RunContext.extensions`
 
