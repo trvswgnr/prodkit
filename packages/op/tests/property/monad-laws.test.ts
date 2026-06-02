@@ -10,12 +10,12 @@ function bind<T, E1, U, E2>(op: Op<T, E1, []>, f: (a: T) => Op<U, E2, []>): Op<U
 describe("Op monad laws", () => {
   test("left identity", async () => {
     const vars = {
-      ma: fc.anything(),
+      x: fc.anything(),
       f: fc.func(fc.anything().map(Op.of)),
     };
 
     await fc.assert(
-      fc.asyncProperty(vars.ma, vars.f, async (ma, f) => {
+      fc.asyncProperty(vars.x, vars.f, async (ma, f) => {
         const left = bind(Op.of(ma), f);
         const right = f(ma);
         await expectRunEq(left, right);
