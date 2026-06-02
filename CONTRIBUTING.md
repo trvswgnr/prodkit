@@ -45,6 +45,8 @@ audit unit, integration, type, and property-law coverage evidence from the run. 
 coverage is omitted until utility modules ship in `packages/std/src/`.
 CI runs `pnpm -r exec npm audit signatures` so dependency signature verification covers every
 workspace package, not just the private root manifest.
+A `design:check` gate step fails when `packages/op/DESIGN.md` references source symbols or test
+file paths that no longer exist in the repo.
 A `changelog:api:check` gate step fails when `packages/op/src/index.ts`,
 `packages/op/src/di/index.ts`, `packages/op/src/policy/index.ts`, or `packages/op/src/hkt.ts`
 public export names change without an update to that package's `CHANGELOG.md` under

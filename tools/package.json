@@ -16,6 +16,7 @@
     "performance:sync": "node ./update-op-performance-doc.ts",
     "adr:check": "node ./sync-adr-index.ts",
     "changelog:api:check": "node ./check-changelog-api.ts",
+    "design:check": "node ./check-design-md.ts",
     "adr:sync": "node ./sync-adr-index.ts --write",
     "fmt": "oxfmt \"**/*.ts\"",
     "fmt:check": "oxfmt --check \"**/*.ts\"",
