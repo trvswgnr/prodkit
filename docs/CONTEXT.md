@@ -48,7 +48,7 @@ exports, not separate npm packages or `@prodkit/std` modules.
 - **Consumer docs** (`packages/op/README.md`, `packages/op/docs/`, `DESIGN.md`, changelogs): outcome-focused usage and stable semantics. Avoid issue checklists and migration status.
 - **ADRs** (`docs/adr/`): evergreen decision records (why). Track implementation in GitHub issues, not ADR bodies.
 - **Contributor docs** (`CONTRIBUTING.md`, `docs/contributor/`): setup, gate, release, and code navigation. Not duplicated in package READMEs.
-- **Agent memory** (`AGENTS.md`): durable workspace facts for automation; not consumer-facing.
+- **Agent memory** (`AGENTS.md`): agent environment quirks, user preferences, and workflow defaults; not consumer-facing. Repo facts live in the docs above.
 
 When behavior changes, update the consumer-facing doc first, then `DESIGN.md` invariants if needed,
 then add or supersede an ADR when the decision itself changed.
