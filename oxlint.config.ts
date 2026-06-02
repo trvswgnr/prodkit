@@ -26,7 +26,7 @@ export default defineConfig({
     "typescript/no-base-to-string": "off",
     "typescript/unbound-method": "off",
     "no-await-in-loop": "off",
-    // "typescript/consistent-type-assertions": ["error", { assertionStyle: "never" }],
+    "typescript/consistent-type-assertions": ["error", { assertionStyle: "never" }],
     "require-yield": "off",
   },
   settings: {},
