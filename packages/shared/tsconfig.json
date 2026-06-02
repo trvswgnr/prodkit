@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": []
   },
-  "include": ["types/**/*.d.ts", "runtime/**/*.ts"]
+  "include": ["types/**/*.ts", "types/**/*.d.ts", "runtime/**/*.ts"]
 }

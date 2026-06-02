@@ -13,7 +13,7 @@ import type {
   WithDIMeta,
 } from "../../src/di/internal.js";
 import { Policy } from "../../src/policy/index.js";
-import type { Assert, IsEqual } from "../support/type-utils.js";
+import type { Assert, IsEqual } from "@prodkit/shared/types/utils";
 
 class DatabaseError extends Error {
   readonly _tag = "DatabaseError";

@@ -101,7 +101,7 @@ Published baseline interpretation lives in [`packages/op/docs/performance.md`](p
 - **Property** (`tests/property/`) holds fast-check invariant suites (combinators, monad laws, backoff, retry).
 - **Types** (`tests/types/`) holds compile-time type contracts (`expectTypeOf`, assertion types).
 - **Hygiene** (`tests/hygiene/`) holds repo/API documentation checks.
-- **Support** (`tests/support/`) holds shared helpers (`utils.ts`, `scheduler.ts` for fast-check schedulers, `type-utils.ts`).
+- **Support** (`tests/support/`) holds shared helpers (`utils.ts`, `scheduler.ts` for fast-check schedulers).
 
 If a behavior is an internal invariant of one module, keep it in unit; if it is a public composition/API contract, keep it in integration. Avoid duplicate assertions across tiers unless each tier validates meaningfully different risk.
 
@@ -154,8 +154,8 @@ which doc to open for a given question.
 ## Source layout (`@prodkit/shared`)
 
 - Private workspace package under `packages/shared/`; not published to npm.
-- Layout: `types/` (ambient `platform-globals.d.ts`), `runtime/index.ts` (workspace primitives consumed by publishable packages), `config/` (publishable tsconfig, vitest, and tsdown presets).
-- Export map: `@prodkit/shared` / `@prodkit/shared/platform-globals`, `@prodkit/shared/runtime`, `@prodkit/shared/tsconfig/publishable`, `@prodkit/shared/vitest/publishable`, `@prodkit/shared/tsdown/publishable`.
+- Layout: `types/` (ambient `platform-globals.d.ts`, compile-time test helpers such as `utils.ts`), `runtime/index.ts` (workspace primitives consumed by publishable packages), `config/` (publishable tsconfig, vitest, and tsdown presets).
+- Export map: `@prodkit/shared` / `@prodkit/shared/platform-globals`, `@prodkit/shared/types/utils`, `@prodkit/shared/runtime`, `@prodkit/shared/tsconfig/publishable`, `@prodkit/shared/vitest/publishable`, `@prodkit/shared/tsdown/publishable`.
 - Publishable packages extend `@prodkit/shared/tsconfig/publishable` and declare `"@prodkit/shared": "workspace:*"`.
 
 ## Source layout (`@prodkit/std`)

@@ -10,6 +10,10 @@
       "types": "./types/platform-globals.d.ts"
     },
     "./platform-globals": "./types/platform-globals.d.ts",
+    "./types/utils": {
+      "types": "./types/utils.ts",
+      "import": "./types/utils.ts"
+    },
     "./runtime": {
       "types": "./runtime/index.ts",
       "import": "./runtime/index.ts"

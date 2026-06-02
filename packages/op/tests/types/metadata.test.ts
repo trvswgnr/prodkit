@@ -15,7 +15,7 @@ import {
   type RunContext,
 } from "../../src/internal/index.js";
 import { type NormalizeMeta } from "../../src/core/meta.js";
-import type { IsEqual, Assert } from "../support/type-utils.js";
+import type { Assert, IsEqual } from "@prodkit/shared/types/utils";
 import type { Result } from "../../src/result.js";
 import type { UnhandledException } from "../../src/errors.js";
 import { Policy } from "../../src/policy/index.js";
