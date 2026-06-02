@@ -19,7 +19,7 @@ contributor commands live in
 
 <!-- op-performance-snapshot:start -->
 
-Captured on **2026-06-02** at commit [`1a7b470`](https://github.com/trvswgnr/prodkit/commit/1a7b470aa894ca2ab289b41f95aff49c674dcd20) (`@prodkit/op@0.1.78`).
+Captured on **2026-06-02** at commit [`a02537e`](https://github.com/trvswgnr/prodkit/commit/a02537e10a9d602dd68b5816c0237ef7f0faac6f) (`@prodkit/op@0.1.78`).
 Environment: v24.14.1, darwin/arm64.
 Versus-native ratios use native ops/sec divided by library ops/sec (values above 1x mean slower than native).
 Add library columns by extending `IMPLEMENTATION_COLUMNS` and scenario implementations in `benchmarks/op/comparison-matrix.ts`.
@@ -28,13 +28,13 @@ Add library columns by extending `IMPLEMENTATION_COLUMNS` and scenario implement
 
 | Scenario | Native baseline | Native baseline ops/sec | @prodkit/op | @prodkit/op ops/sec | @prodkit/op vs native | effect | effect ops/sec | effect vs native |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Single value | `Promise.resolve(x)` | 11,306,396.16 | `Op.of(x).run()` | 2,069,457.72 | 5.46x | `Effect.runPromise(Effect.succeed(x))` | 1,900,427.09 | 5.95x |
-| Parallel batch (8 children) | `Promise.all([...])` | 1,550,075.56 | `Op.all([...]).run()` | 86,917.87 | 17.83x | `Effect.all(..., { concurrency: 'unbounded' })` | 25,156.43 | 61.62x |
-| First success (8 children) | Hand-rolled first success + abort | 58,771.25 | `Op.any([...]).run()` | 35,467.75 | 1.66x | `Effect.firstSuccessOf([...])` | 605,271.82 | 10.30x faster |
-| First settler (8 children) | Hand-rolled first settler + abort | 59,593.97 | `Op.race([...]).run()` | 35,586.38 | 1.67x | `Effect.raceFirst` folded over children | 10,819.81 | 5.51x |
-| Retry loop | Hand-rolled try/catch retry | 243,530.75 | `Op.try(...).with(Policy.retry(...)).run()` | 49,464.3 | 4.92x | `Effect.retry(..., { times, schedule })` | 45,161.23 | 5.39x |
-| Timeout guard | `Promise.race` + `setTimeout` | 3,540,759.79 | `Op.of(x).with(Policy.timeout(ms)).run()` | 295,601.48 | 11.98x | `Effect.timeout(ms)` | 122,079.85 | 29.00x |
-| Sequential compose (6 steps) | `await Promise.resolve` chain | 3,248,484.02 | `yield* Op.of` generator chain | 252,287.87 | 12.88x | `Effect.gen` + `yield* Effect.succeed` chain | 868,595.55 | 3.74x |
+| Single value | `Promise.resolve(x)` | 12,633,980.56 | `Op.of(x).run()` | 2,107,066.48 | 6.00x | `Effect.runPromise(Effect.succeed(x))` | 1,894,085.43 | 6.67x |
+| Parallel batch (8 children) | `Promise.all([...])` | 1,517,936.39 | `Op.all([...]).run()` | 92,736.86 | 16.37x | `Effect.all(..., { concurrency: 'unbounded' })` | 25,409.18 | 59.74x |
+| First success (8 children) | Hand-rolled first success + abort | 59,294.16 | `Op.any([...]).run()` | 36,640.83 | 1.62x | `Effect.firstSuccessOf([...])` | 611,417.56 | 10.31x faster |
+| First settler (8 children) | Hand-rolled first settler + abort | 58,791.56 | `Op.race([...]).run()` | 36,404.52 | 1.61x | `Effect.raceFirst` folded over children | 10,811.1 | 5.44x |
+| Retry loop | Hand-rolled try/catch retry | 246,189.68 | `Op.try(...).with(Policy.retry(...)).run()` | 49,936.99 | 4.93x | `Effect.retry(..., { times, schedule })` | 43,617.17 | 5.64x |
+| Timeout guard | `Promise.race` + `setTimeout` | 3,445,089.38 | `Op.of(x).with(Policy.timeout(ms)).run()` | 325,134.35 | 10.60x | `Effect.timeout(ms)` | 124,409.93 | 27.69x |
+| Sequential compose (6 steps) | `await Promise.resolve` chain | 3,338,312.98 | `yield* Op.of` generator chain | 267,895.18 | 12.46x | `Effect.gen` + `yield* Effect.succeed` chain | 895,001.39 | 3.73x |
 
 ### Bundle size
 
@@ -44,10 +44,10 @@ Lower bound: bundled main entry only. Upper bound: bundled import of consumer su
 
 | Metric | Size |
 | --- | --- |
-| Lower bound (main entry) minified | 13,973 B |
-| Lower bound (main entry) minified + gzip | 4,353 B |
-| Upper bound (consumer subpaths) minified | 22,461 B |
-| Upper bound (consumer subpaths) minified + gzip | 6,841 B |
+| Lower bound (main entry) minified | 13,964 B |
+| Lower bound (main entry) minified + gzip | 4,346 B |
+| Upper bound (consumer subpaths) minified | 21,894 B |
+| Upper bound (consumer subpaths) minified + gzip | 6,702 B |
 
 <!-- op-performance-snapshot:end -->
 
