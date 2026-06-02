@@ -17,6 +17,9 @@ import {
 } from "./instructions.js";
 import type { Op } from "../index.js";
 import { EMPTY_TUPLE } from "../shared.js";
+import { closeGenerator, runFinalizersSafely, type ExitFinalizer } from "./cleanup.js";
+
+export { closeGenerator, chainCleanupFaults } from "./cleanup.js";
 
 /** Runtime execution context threaded through internal driver/suspend boundaries. */
 export interface RunContext<A = []> {
@@ -57,39 +60,12 @@ function isCustomInstruction(value: unknown): value is CustomInstruction<unknown
   );
 }
 
-export function closeGenerator(iterator: Iterator<unknown, unknown, unknown>) {
-  try {
-    // we intentionally ignore the return payload bc only generator finalization matters
-    iterator.return?.(undefined);
-  } catch {
-    // ignore cleanup faults so the original result/error is preserved
-  }
-}
-
-/** Fold multiple teardown faults into a nested `Error.cause` chain (outer = first failure in LIFO unwind). */
-export function chainCleanupFaults(faults: readonly unknown[]): unknown {
-  if (faults.length === 0) return undefined;
-  if (faults.length === 1) return faults[0];
-  let chain = faults[faults.length - 1];
-  for (let i = faults.length - 2; i >= 0; i--) {
-    const f = faults[i];
-    const msg = f instanceof Error ? f.message : String(f);
-    const name = f instanceof Error ? f.name : "Error";
-    const layer = new Error(msg, { cause: chain });
-    layer.name = name;
-    chain = layer;
-  }
-  return chain;
-}
-
 export async function drive<T, E, M>(
   op: Op<T, E, [], M>,
   context: RunContext<readonly unknown[]>,
 ): Promise<Result<T, E | UnhandledException>> {
   return driveInternal(op, context, CancelSettlement.passThrough);
 }
-
-type ExitFinalizer = (ctx: ExitContext<unknown, unknown, readonly unknown[]>) => PromiseLike<void>;
 
 function awaitSuspended<TValue>(
   suspended: PromiseLike<TValue>,
@@ -147,31 +123,6 @@ function registerExitFinalizerInstruction<T, E, M>(
     }),
   );
   return iterator.next(undefined);
-}
-
-/** Run every finalizer LIFO; collect faults from each (later-registered runs first; all still run even if one throws). */
-async function runFinalizersSafely(
-  finalizers: readonly ExitFinalizer[],
-  ctx: ExitContext<unknown, unknown, readonly unknown[]>,
-): Promise<unknown | void> {
-  const faults: unknown[] = [];
-  for (let index = finalizers.length - 1; index >= 0; index -= 1) {
-    const finalize = finalizers[index];
-    if (finalize !== undefined) {
-      try {
-        await finalize(ctx);
-      } catch (e) {
-        faults.push(e);
-      }
-    }
-  }
-  if (faults.length === 0) {
-    return undefined;
-  }
-  if (faults.length === 1) {
-    return faults[0];
-  }
-  return chainCleanupFaults(faults);
 }
 
 async function settleIteratorWithCleanup<T, E, M>(

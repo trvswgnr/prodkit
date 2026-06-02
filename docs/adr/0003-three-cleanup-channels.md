@@ -13,7 +13,7 @@ different roles in the runtime. They are not three implementations of one abstra
 ## Decision
 
 **Generator finalization (`closeGenerator`).** When `drive` finishes or short-circuits, it calls
-`iterator.return()` through `closeGenerator` in `packages/op/src/core/runtime.ts`. This runs
+`iterator.return()` through `closeGenerator` in `packages/op/src/core/cleanup.ts`. This runs
 synchronous native `finally` blocks in the generator body. Faults from `return()` are swallowed so
 the body result already chosen by `drive` is preserved. Yielded or async work inside `finally` is
 not driven after early exit.

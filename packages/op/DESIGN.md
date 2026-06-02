@@ -20,8 +20,8 @@ Why this matters:
 
 Enforced by code paths:
 
-- `packages/op/src/core/runtime.ts` (`runFinalizersSafely`): iterates `finalizers` from tail to head and keeps unwinding after faults
-- `packages/op/src/core/runtime.ts` (`chainCleanupFaults`): folds multiple cleanup faults into a nested `Error.cause` chain in unwind order
+- `packages/op/src/core/cleanup.ts` (`runFinalizersSafely`): iterates `finalizers` from tail to head and keeps unwinding after faults
+- `packages/op/src/core/cleanup.ts` (`chainCleanupFaults`): folds multiple cleanup faults into a nested `Error.cause` chain in unwind order
 
 Representative tests:
 
@@ -42,7 +42,7 @@ Why this matters:
 Enforced by code paths:
 
 - `packages/op/src/core/runtime.ts` (`settleIteratorWithCleanup`): finalizer faults override settled body result
-- `packages/op/src/core/runtime.ts` (`runFinalizersSafely`): returns first unwind fault (or cause chain) for wrapping
+- `packages/op/src/core/cleanup.ts` (`runFinalizersSafely`): returns first unwind fault (or cause chain) for wrapping
 
 Representative tests:
 
@@ -52,7 +52,7 @@ Representative tests:
 
 Important edge distinction:
 
-- generator finalization via `iter.return()` uses `closeGenerator()`, which intentionally swallows `return()` cleanup faults to preserve the original body result/error
+- generator finalization via `iter.return()` uses `closeGenerator()` in `packages/op/src/core/cleanup.ts`, which intentionally swallows `return()` cleanup faults to preserve the original body result/error
 - this behavior is separate from registered exit finalizers and is intentionally less intrusive
 
 Representative test:
@@ -129,7 +129,7 @@ error value and does not execute it.
 
 Cleanup hooks go through `RegisterExitFinalizerInstruction`. For each `drive` invocation the
 registered finalizers unwind last-in-first-out: `runFinalizersSafely` walks the array from the
-tail (`packages/op/src/core/runtime.ts`). In one generator body, multiple defers unwind in reverse yield order
+tail (`packages/op/src/core/cleanup.ts`). In one generator body, multiple defers unwind in reverse yield order
 (second defer runs before the first).
 
 Chained `.on("exit", ...)` builds plan wrappers where the hand you attach first behaves like the
@@ -156,7 +156,7 @@ the run is unwinding inside `drive`.
 ### Generator finalization (`closeGenerator`)
 
 `drive` touches `iterator.return` through `closeGenerator` so synchronous native `finally` code runs
-(`packages/op/src/core/runtime.ts`). This is best-effort generator finalization, not the effectful
+(`packages/op/src/core/cleanup.ts`). This is best-effort generator finalization, not the effectful
 cleanup path: yielded or async work inside a `finally` block is not driven after early exit. Use
 `Op.defer`, `.with(Policy.release(...))`, or `.on("exit", ...)` for cleanup that must suspend, fail explicitly, or
 complete before `.run()` settles. Throws from `return` are swallowed on purpose

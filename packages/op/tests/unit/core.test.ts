@@ -1,10 +1,6 @@
 import { assert, describe, expect, test } from "vitest";
-import {
-  chainCleanupFaults,
-  closeGenerator,
-  createRunContext,
-  drive,
-} from "../../src/core/runtime.js";
+import { chainCleanupFaults, closeGenerator } from "../../src/core/cleanup.js";
+import { createRunContext, drive } from "../../src/core/runtime.js";
 import { makeCoreOp } from "../../src/core/fluent.js";
 import {
   isErrInstruction,
@@ -51,7 +47,7 @@ function makeRuntimeOp<T, E>(gen: () => Generator<Instruction<E>, T, unknown>): 
   return makeCoreOp(gen);
 }
 
-describe("core/runtime helpers", () => {
+describe("core/cleanup helpers", () => {
   test("chainCleanupFaults handles empty, single, and multi-fault chains", () => {
     expect(chainCleanupFaults([])).toBeUndefined();
 
