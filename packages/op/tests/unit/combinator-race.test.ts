@@ -1,7 +1,7 @@
 import { assert, describe, expect, test, vi } from "vitest";
 import { Op } from "../../src/index.js";
 import { deferredPromise, neverSettling, resolveAfter, settleOutcome } from "../support/utils.js";
-import { identity } from "../../src/shared.js";
+import { identity } from "@prodkit/shared/runtime";
 
 describe("Op.race", () => {
   test("first settler wins (Ok)", async () => {

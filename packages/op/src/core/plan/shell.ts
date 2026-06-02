@@ -1,5 +1,6 @@
 import { Result } from "../../result.js";
-import { OP_BOUND_BRAND, OP_BRAND, unsafeCoerce } from "../../shared.js";
+import { unsafeCoerce } from "@prodkit/shared/runtime";
+import { OP_BOUND_BRAND, OP_BRAND } from "../../shared.js";
 import { createRunContext } from "../runtime.js";
 import { SuspendInstruction, SuspendResume } from "../instructions.js";
 import type { UnhandledException } from "../../errors.js";

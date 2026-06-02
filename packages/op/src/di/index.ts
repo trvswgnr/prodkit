@@ -1,4 +1,4 @@
-import { NEVER } from "../shared.js";
+import { NEVER } from "@prodkit/shared/runtime";
 import type { Op } from "../index.js";
 import {
   DI_TAG,

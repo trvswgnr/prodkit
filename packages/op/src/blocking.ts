@@ -1,4 +1,4 @@
-import { unsafeCoerce } from "./shared.js";
+import { unsafeCoerce } from "@prodkit/shared/runtime";
 import { type EmptyMeta, type SetBlockingMeta } from "./core/meta.js";
 import type { Op } from "./index.js";
 

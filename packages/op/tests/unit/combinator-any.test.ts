@@ -1,7 +1,7 @@
 import { assert, describe, expect, test, vi } from "vitest";
 import { ErrorGroup, Op } from "../../src/index.js";
 import { deferredPromise, neverSettling, rejectAfter, settleOutcome } from "../support/utils.js";
-import { identity } from "../../src/shared.js";
+import { identity } from "@prodkit/shared/runtime";
 
 describe("Op.any", () => {
   test("returns first success and aborts siblings", async () => {

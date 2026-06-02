@@ -1,24 +1,23 @@
-import { defineConfig } from "vitest/config";
+import publishable from "@prodkit/shared/vitest/publishable";
+import { defineConfig, mergeConfig } from "vitest/config";
 
-export default defineConfig({
-  test: {
-    coverage: {
-      all: true,
-      include: ["src/**/*.ts"],
-      exclude: [
-        "tests/**",
-        "@prodkit/shared/platform-globals",
-        "src/core/meta.ts",
-        "src/core/plan/surface.ts",
-        "src/result.ts",
-      ],
-      reporter: ["text", "json", "html", "lcov"],
-      reportsDirectory: "coverage",
-    },
-    include: ["tests/**/*.test.ts"],
-    typecheck: {
-      enabled: true,
+export default mergeConfig(
+  publishable,
+  defineConfig({
+    test: {
+      coverage: {
+        exclude: [
+          "tests/**",
+          "@prodkit/shared/platform-globals",
+          "src/core/meta.ts",
+          "src/core/plan/surface.ts",
+          "src/result.ts",
+        ],
+      },
       include: ["tests/**/*.test.ts"],
+      typecheck: {
+        include: ["tests/**/*.test.ts"],
+      },
     },
-  },
-});
+  }),
+);

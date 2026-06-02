@@ -210,7 +210,7 @@ Enforced by:
 
 - `packages/op/src/policy/plan.ts` (`retryPlan`, `timeoutPlan`)
 - `packages/op/src/policy/retry-policy.ts` and `packages/op/src/policy/validate.ts`
-- `packages/op/src/shared.ts` (`sleepWithSignal`) via `Op.sleep`
+- `@prodkit/shared/runtime` (`sleepWithSignal`) via `Op.sleep` in `packages/op/src/builders.ts`
 
 Representative tests:
 

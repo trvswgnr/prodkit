@@ -21,7 +21,7 @@ import {
   type StripEmpty,
 } from "../core/meta.js";
 import type { RunContext } from "../core/runtime.js";
-import { NEVER, hasBrand, isPromiseLike, unsafeCoerce } from "../shared.js";
+import { NEVER, hasBrand, isPromiseLike, unsafeCoerce } from "@prodkit/shared/runtime";
 import type { Op } from "../index.js";
 import type { Dependency } from "./index.js";
 /** Binding failure when an injected dependency was not provided for the run. */

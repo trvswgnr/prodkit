@@ -1,6 +1,6 @@
 import { UnhandledException } from "../../errors.js";
 import { Result } from "../../result.js";
-import { unsafeCoerce } from "../../shared.js";
+import { unsafeCoerce } from "@prodkit/shared/runtime";
 import {
   RegisterExitFinalizerInstruction,
   SuspendInstruction,

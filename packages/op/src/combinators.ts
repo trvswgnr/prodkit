@@ -8,7 +8,8 @@ import { SuspendInstruction, SuspendResume } from "./core/instructions.js";
 import { drive } from "./core/runtime.js";
 import { Result } from "./result.js";
 import type { EmptyMeta, MergeMeta } from "./core/meta.js";
-import { EMPTY_TUPLE, unsafeCoerce } from "./shared.js";
+import { unsafeCoerce } from "@prodkit/shared/runtime";
+import { EMPTY_TUPLE } from "./shared.js";
 import type { Instruction } from "./core/instructions.js";
 import { ErrorGroup, UnhandledException } from "./errors.js";
 

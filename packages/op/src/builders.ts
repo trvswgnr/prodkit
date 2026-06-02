@@ -17,7 +17,7 @@ import {
 } from "./core/instructions.js";
 import { Result } from "./result.js";
 import { makeCoreOp } from "./core/fluent.js";
-import { unsafeCoerce, isAwaited, sleepWithSignal } from "./shared.js";
+import { isAwaited, sleepWithSignal, unsafeCoerce } from "@prodkit/shared/runtime";
 
 export function succeed<T>(value: T | PromiseLike<T>): Op<Awaited<T>, never, [], EmptyMeta> {
   if (!isAwaited(value)) {

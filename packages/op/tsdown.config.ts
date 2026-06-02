@@ -1,6 +1,6 @@
-import { defineConfig } from "tsdown";
+import { publishableTsdown } from "@prodkit/shared/tsdown/publishable";
 
-export default defineConfig({
+export default publishableTsdown({
   entry: [
     "src/index.ts",
     "src/di/index.ts",
@@ -8,10 +8,8 @@ export default defineConfig({
     "src/internal/index.ts",
     "src/policy/index.ts",
   ],
-  format: ["esm"],
   dts: {
     resolver: "tsc",
+    eager: true,
   },
-  clean: true,
-  sourcemap: true,
 });

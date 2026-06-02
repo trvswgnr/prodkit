@@ -1,11 +1,5 @@
-import { defineConfig } from "tsdown";
+import { publishableTsdown } from "@prodkit/shared/tsdown/publishable";
 
-export default defineConfig({
+export default publishableTsdown({
   entry: ["src/index.ts"],
-  format: ["esm"],
-  dts: {
-    resolver: "tsc",
-  },
-  clean: true,
-  sourcemap: true,
 });

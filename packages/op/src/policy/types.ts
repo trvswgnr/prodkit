@@ -6,7 +6,7 @@ import type { HKT } from "../hkt.js";
 import type { Op } from "../index.js";
 import type { Plan, PlanRewriter } from "../core/plan/base.js";
 import type { Result } from "../result.js";
-import { unsafeCoerce } from "../shared.js";
+import { unsafeCoerce } from "@prodkit/shared/runtime";
 
 const OP_POLICY = Symbol("prodkit.op.policy");
 const OP_POLICY_INPUT = Symbol("prodkit.op.policy.input");

@@ -20,4 +20,3 @@ export {
   type SetBlockingMeta,
 } from "../core/meta.js";
 export { type RunContext } from "../core/runtime.js";
-export { type AbortSignalLike, NEVER, hasBrand, sleepWithSignal, unsafeCoerce } from "../shared.js";

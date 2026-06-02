@@ -1,7 +1,8 @@
 import { UnhandledException } from "../../errors.js";
 import type { Op } from "../../index.js";
 import { Result } from "../../result.js";
-import { isIterableOp, unsafeCoerce } from "../../shared.js";
+import { unsafeCoerce } from "@prodkit/shared/runtime";
+import { isIterableOp } from "../../shared.js";
 import {
   CancelSettlement,
   signalAbortReason,

@@ -1,7 +1,7 @@
 import { TimeoutError, UnhandledException } from "../errors.js";
 import { createBoundAbortSession, raceBoundCancelExecution } from "../core/cancel-session.js";
 import { Result } from "../result.js";
-import { sleepWithSignal } from "../shared.js";
+import { sleepWithSignal } from "@prodkit/shared/runtime";
 import {
   RegisterExitFinalizerInstruction,
   SuspendInstruction,
