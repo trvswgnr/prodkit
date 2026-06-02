@@ -29,7 +29,7 @@ Changelogs: [`packages/op/CHANGELOG.md`](packages/op/CHANGELOG.md), [`packages/s
 
 ## workspace layout
 
-- `packages/*`: publishable library packages
+- `packages/`: library packages
 - `apps/*`: runnable product/demo applications
 - `examples`: consumer examples and smoke workspace (`@prodkit/examples`)
 - `benchmarks`: performance benchmark harnesses (`@prodkit/benchmarks`)
