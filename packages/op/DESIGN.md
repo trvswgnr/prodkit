@@ -41,7 +41,7 @@ Why this matters:
 
 Enforced by code paths:
 
-- `packages/op/src/core/runtime.ts` (`settleWithCleanup`): finalizer faults override settled body result
+- `packages/op/src/core/runtime.ts` (`settleIteratorWithCleanup`): finalizer faults override settled body result
 - `packages/op/src/core/runtime.ts` (`runFinalizersSafely`): returns first unwind fault (or cause chain) for wrapping
 
 Representative tests:
@@ -80,15 +80,15 @@ Enforced by code paths:
 
 Representative tests:
 
-- `packages/op/tests/unit/combinators.test.ts` (`tuple of successes in input order`)
-- `packages/op/tests/unit/combinators.test.ts` (`returns tuple of Result in input order`)
-- `packages/op/tests/unit/combinators.test.ts` (`preserves index order when failures settle out of order`)
-- `packages/op/tests/unit/combinators.test.ts` (`waits for loser finalization before returning the winner`)
-- `packages/op/tests/unit/combinators.test.ts` (`waits for loser finalization before returning winner result`)
-- `packages/op/tests/unit/combinators.test.ts` (`settles when a winner succeeds and a loser ignores abort`)
+- `packages/op/tests/unit/combinator-all.test.ts` (`tuple of successes in input order`)
+- `packages/op/tests/unit/combinator-all-settled.test.ts` (`returns tuple of Result in input order`)
+- `packages/op/tests/unit/combinator-any.test.ts` (`preserves index order when failures settle out of order`)
+- `packages/op/tests/unit/combinator-any.test.ts` (`waits for loser finalization before returning the winner`)
+- `packages/op/tests/unit/combinator-race.test.ts` (`waits for loser finalization before returning winner result`)
+- `packages/op/tests/unit/combinator-any.test.ts` (`settles when a winner succeeds and a loser ignores abort`)
 - `packages/op/tests/unit/lifecycle-defer.test.ts` (`Op.all([child]).with(Policy.timeout(...)) runs child Op.defer cleanup when child Op.try ignores abort`)
 - `packages/op/tests/unit/di/index.test.ts` (`DI.provide(inner).with(Policy.timeout(...)) runs inner Op.defer cleanup when inner Op.try ignores abort`)
-- `packages/op/tests/unit/combinators.test.ts` (`settles when the winner succeeds and a loser ignores abort`)
+- `packages/op/tests/unit/combinator-race.test.ts` (`settles when the winner succeeds and a loser ignores abort`)
 
 ## Guardrails for future changes
 
@@ -101,7 +101,7 @@ Before changing runtime/combinator internals, preserve these properties:
 
 Any intentional semantic change should include:
 
-- explicit test updates in `packages/op/tests/unit/core.test.ts`, `packages/op/tests/unit/lifecycle-*.test.ts`, and/or `packages/op/tests/unit/combinators.test.ts`
+- explicit test updates in `packages/op/tests/unit/core.test.ts`, `packages/op/tests/unit/lifecycle-*.test.ts`, and/or `packages/op/tests/unit/combinator-*.test.ts`
 - an accompanying update to this document explaining the new invariant
 
 ## Operational notes and references
@@ -214,7 +214,8 @@ Enforced by:
 
 Representative tests:
 
-- `packages/op/tests/unit/policies.test.ts` (invalid retries, delay, when, timeout)
+- `packages/op/tests/unit/policy-retry.test.ts` and `packages/op/tests/unit/policy-timeout.test.ts`
+  (invalid retries, delay, when, timeout)
 - `packages/op/tests/property/retry-policy.test.ts` (invalid exponential delay options)
 - `packages/op/tests/unit/builders.test.ts` (sleep normalization and non-finite rejection)
 
@@ -233,8 +234,8 @@ Representative tests:
 `Policy.timeout(...)` second means one overall clock around the retry loop ("timeout wraps the
 entire retried run when chained outside retry"). Putting timeout inside retry means timeout
 applies independently per run inside the retry loop
-(`packages/op/tests/unit/policies.test.ts`, "timeout applies per-attempt when chained inside retry", also the converse
-scenario in the sibling test quoted there).
+`packages/op/tests/unit/policy-timeout.test.ts` (`timeout applies per-attempt when chained inside retry`) and
+`packages/op/tests/unit/policy-timeout.test.ts` (`timeout wraps the entire retried run when chained outside retry`).
 
 Retry delay and public `Op.sleep(ms)` share the same timer adapter, so timer cleanup and abort
 listener cleanup stay consistent. `Op.sleep` rejects on abort so cancellation flows through the
@@ -267,7 +268,8 @@ live under `packages/op/src/policy/`.
 ## Where else to read
 
 Cancellation and cooperative `AbortSignal` behavior show up wherever `SuspendInstruction` binds a
-signal, plus README's `Op.defer` / `.on("exit")` notes and checks in `packages/op/tests/unit/policies.test.ts` and
+signal, plus README's `Op.defer` / `.on("exit")` notes and checks in `packages/op/tests/unit/policy-retry.test.ts`,
+`packages/op/tests/unit/policy-timeout.test.ts`, and
 `packages/op/tests/unit/lifecycle-*.test.ts`. Settlement intent lives in
 `packages/op/src/core/cancel-session.ts`: DI lazy-resolve uses `rejectOnAbort`; Policy.cancel
 uses bound-abort session composition and macrotimer fallback; driveIterator suspend resume uses

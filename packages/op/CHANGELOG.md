@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as a bundled graph (`better-result` externalized), with a consumer subpath upper bound
   (`di`, `policy`, `hkt`).
 
+### Changed
+
+- Repaired `DESIGN.md` and contributor runtime-architecture references (`settleIteratorWithCleanup`,
+  combinator test file paths). Gate now runs `design:check` so those references cannot drift again.
+- Aligned `docs/comparison.md` maturity framing with the alpha disclaimer (removed
+  "production-grade" positioning without underselling operation semantics).
+
 ### Added
 
 - No entries yet.

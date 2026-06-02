@@ -189,7 +189,7 @@ flowchart TD
   err["Err instruction: settle Err"]
   invalid["invalid yield: UnhandledException"]
   done["generator return value"]
-  settle["settleWithCleanup: closeGenerator + LIFO finalizers"]
+  settle["settleIteratorWithCleanup: closeGenerator + LIFO finalizers"]
   ok["Result.ok(value)"]
 
   run --> runOp --> drive --> next --> dispatch
