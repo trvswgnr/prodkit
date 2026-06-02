@@ -118,7 +118,7 @@ export function fromGenFn<Y extends Instruction<unknown, unknown>, T, A>(
   // This keeps runtime behavior uniform while preserving exact tuple signatures at the type level.
   const bindPlan = (...args: AsArgs<A>) =>
     genPlan(() =>
-      // SAFETY: TS cannot model `Generator<Y, T, unknown>` as the internal instruction supertype.
+      // SAFETY: user generators use instruction subtype Y; runtime iterator is the internal Instruction supertype.
       unsafeCoerce<
         Generator<Instruction<InferInstructionErr<Y>, InferInstructionMeta<Y>>, T, unknown>
       >(bindArityArgsToFinalizers(f(...args), args)),
@@ -128,8 +128,7 @@ export function fromGenFn<Y extends Instruction<unknown, unknown>, T, A>(
     bindPlan,
     () =>
       bindPlan(
-        // SAFETY: direct iterator composition has no runtime args. The public type exposes that
-        // surface only for `A = []`; runtime intentionally avoids function arity reflection.
+        // SAFETY: yield* iterable is nullary (A=[]); bindPlan([]) matches AsArgs<A> for that branch.
         ...unsafeCoerce<AsArgs<A>>([]),
       ),
   );

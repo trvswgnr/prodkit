@@ -165,17 +165,17 @@ export class InjectInstruction<T, D> implements CustomInstruction<T, WithDIMeta<
 
     if (isPromiseLike(value)) {
       return value.then((resolved) =>
-        // SAFETY: lazy binding resolution is checked before coercion
+        // SAFETY: env slots are unknown at runtime; InjectInstruction<T> and resolution guarantee the value is T.
         unsafeCoerce(resolved),
       );
     }
 
-    // SAFETY: resolved dependency values are typed at the instruction boundary
+    // SAFETY: env slots are unknown at runtime; InjectInstruction<T> and resolution guarantee the value is T.
     return unsafeCoerce(value);
   }
 
   *[Symbol.iterator](): Generator<this, T, unknown> {
-    // SAFETY: InjectInstruction is a CustomInstruction and its yield type is the same as its resolve type
+    // SAFETY: generator yield type is unknown; CustomInstruction resolves yield* to the same T as resolve().
     return unsafeCoerce(yield this);
   }
 
@@ -301,11 +301,11 @@ export function provideOp<T, E, A, M, const Bindings extends readonly AnyBinding
 ): Op<T, E, A, ProvidedMeta<M, Bindings>> {
   const bindProvidePlan = (...args: AsArgs<A>) => providePlan(getPlan(op, args), bindings);
 
-  // SAFETY: provideOp preserves the inner op type while updating dependency metadata.
+  // SAFETY: makePlanOp cannot express ProvidedMeta; bindings only change metadata, not T, E, or runtime behavior.
   return unsafeCoerce(
     makePlanOp(bindProvidePlan, () =>
       bindProvidePlan(
-        // SAFETY: direct iterator composition has no runtime args at the public yield* surface.
+        // SAFETY: yield* iterable is nullary (A=[]); bindProvidePlan expects no runtime args on this surface.
         ...unsafeCoerce<AsArgs<A>>([]),
       ),
     ),

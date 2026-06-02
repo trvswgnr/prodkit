@@ -1,3 +1,4 @@
+import { NEVER, unsafeCoerce } from "@prodkit/shared/runtime";
 import { describe, expectTypeOf, test } from "vitest";
 import { Op } from "../../src/index.js";
 import {
@@ -28,7 +29,7 @@ type AuthMeta = { auth: Blocking<true> };
 type DiAndAuthMeta = MergeMeta<DiMeta, AuthMeta>;
 
 class TestInstruction<T, M> implements CustomInstruction<T, M> {
-  readonly [CUSTOM_INSTRUCTION_META]: M = undefined as M;
+  readonly [CUSTOM_INSTRUCTION_META]: M = NEVER;
   private readonly value: T;
 
   constructor(value: T) {
@@ -40,7 +41,8 @@ class TestInstruction<T, M> implements CustomInstruction<T, M> {
   }
 
   *[Symbol.iterator](): Generator<this, T, unknown> {
-    return (yield this) as T;
+    // SAFETY: TestInstruction is a CustomInstruction and its yield type matches resolve.
+    return unsafeCoerce(yield this);
   }
 }
 

@@ -436,7 +436,8 @@ describe("DI", () => {
 
     const failed = await op.run();
     const cause = getUnhandledCause(failed);
-    expect((cause as Error).message).toBe("factory failed");
+    assert(cause instanceof Error);
+    expect(cause.message).toBe("factory failed");
     expect(factoryCalls).toBe(1);
 
     const recovered = await DI.provide(
@@ -472,7 +473,9 @@ describe("DI", () => {
     );
 
     const failed = await runnable.run();
-    expect((getUnhandledCause(failed) as Error).message).toBe("async factory failed");
+    const unhandledCause = getUnhandledCause(failed);
+    assert(unhandledCause instanceof Error);
+    expect(unhandledCause.message).toBe("async factory failed");
     expect(factoryCalls).toBe(1);
 
     const recovered = await DI.provide(
@@ -513,7 +516,9 @@ describe("DI", () => {
     );
 
     const failed = await runnable.run();
-    expect((getUnhandledCause(failed) as Error).message).toBe("factory failed");
+    const unhandledCause = getUnhandledCause(failed);
+    assert(unhandledCause instanceof Error);
+    expect(unhandledCause.message).toBe("factory failed");
     expect(logs).toEqual([]);
 
     const recovered = await runnable.run();

@@ -1,3 +1,4 @@
+import { unsafeCoerce } from "@prodkit/shared/runtime";
 import { TimeoutError, UnhandledException } from "../../errors.js";
 import { Result } from "../../result.js";
 import { EMPTY_TUPLE } from "../../shared.js";
@@ -115,8 +116,11 @@ export function mapErrPlan<T, E, E2, M>(
       const sourceError = result.error;
       if (isRuntimeBypass(sourceError)) return yield* result;
 
+      // SAFETY: TS cannot narrow E to TrackedErr<E> after the bypass guard; bypass faults return above.
+      const domainError: TrackedErr<E> = unsafeCoerce(sourceError);
+
       const mapped: E2 = yield* new SuspendInstruction(
-        () => Promise.resolve(transform(sourceError as TrackedErr<E>)),
+        () => Promise.resolve(transform(domainError)),
         SuspendResume.passThrough,
       );
 
@@ -145,8 +149,11 @@ export function tapErrPlan<T, E, R, M>(
 
       if (isRuntimeBypass(sourceError)) return yield* sourceResult;
 
+      // SAFETY: TS cannot narrow E to TrackedErr<E> after the bypass guard; bypass faults return above.
+      const domainError: TrackedErr<E> = unsafeCoerce(sourceError);
+
       yield* new SuspendInstruction(
-        () => Promise.resolve(observe(sourceError as TrackedErr<E>)),
+        () => Promise.resolve(observe(domainError)),
         SuspendResume.passThrough,
       );
       return yield* sourceResult;
@@ -174,14 +181,16 @@ export function recoverPlan<T, E, ECaught extends TrackedErr<E>, R, M>(
 
       if (isRuntimeBypass(result.error)) return yield* result;
 
-      const error = result.error;
+      // SAFETY: TS cannot narrow E to TrackedErr<E> after the bypass guard; bypass faults return above.
+      const error: TrackedErr<E> = unsafeCoerce(result.error);
 
-      if (!predicate(error as TrackedErr<E>)) return yield* Result.err(error);
+      if (!predicate(error)) return yield* result;
 
       const recovered: Awaited<R> = yield* new SuspendInstruction(
-        () => Promise.resolve(handler(error as unknown as ECaught)),
+        () => Promise.resolve(handler(error)),
         SuspendResume.passThrough,
       );
+
       return recovered;
     },
     {

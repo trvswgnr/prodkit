@@ -1,3 +1,4 @@
+import { unsafeCoerce } from "@prodkit/shared/runtime";
 import { describe, expectTypeOf, test } from "vitest";
 import { HKT } from "../../src/hkt.js";
 
@@ -68,7 +69,8 @@ describe("generic HKT helpers", () => {
       _box: HKT.Applied<F, Args>,
       _result: R,
     ): HKT.Apply<HKT.Fix12<F, 1, 2>, [R]> => {
-      return null as never;
+      // SAFETY: return type is checked by expectTypeOf; the runtime value is irrelevant.
+      return unsafeCoerce(null);
     };
 
     const createBox = <const A, const B, const C>(
@@ -76,7 +78,8 @@ describe("generic HKT helpers", () => {
       b: B,
       c: C,
     ): HKT.Applied<BoxF, [A, B, C]> => {
-      return { _tag: "Box", a, b, c } as never;
+      // SAFETY: runtime value matches BoxF applied shape; HKT brand is proof-only.
+      return unsafeCoerce({ _tag: "Box", a, b, c });
     };
 
     type Triple<A, B, C> = { readonly x: A; readonly y: B; readonly z: C };
@@ -89,11 +92,13 @@ describe("generic HKT helpers", () => {
       y: B,
       z: C,
     ): HKT.Applied<TripleF, [A, B, C]> => {
-      return { x, y, z } as never;
+      // SAFETY: runtime value matches TripleF applied shape; HKT brand is proof-only.
+      return unsafeCoerce({ x, y, z });
     };
 
     const createMaybe = <const A>(value: A): HKT.Applied<MaybeF, [A]> => {
-      return { _tag: "Some", value } as never;
+      // SAFETY: runtime value matches MaybeF applied shape; HKT brand is proof-only.
+      return unsafeCoerce({ _tag: "Some", value });
     };
 
     const box = createBox("a", "b", "c");

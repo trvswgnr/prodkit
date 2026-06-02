@@ -24,7 +24,7 @@ function makeCombinatorOp<T, E, M = EmptyMeta>(
   gen: () => Generator<Instruction<E>, T, unknown>,
 ): Op<T, E, [], M> {
   return makeCoreOp<T, E, M>(
-    // SAFETY: combinator generators yield runtime instructions; M is declared on the returned Op.
+    // SAFETY: makeCoreOp expects Instruction<E>[]; combinator body yields the same instruction union at runtime.
     () => unsafeCoerce(gen()),
   );
 }
@@ -43,7 +43,7 @@ export function allOp<const Ops extends readonly AnyNullaryOp[]>(
       concurrency,
     );
 
-  // SAFETY: plan-backed binder preserves combinator tuple inference from snapshot ops.
+  // SAFETY: makePlanOp omits merged metadata in its return; bindAllPlan was built from the typed snapshot ops.
   return unsafeCoerce(makePlanOp(bindAllPlan, bindAllPlan, true));
 }
 
@@ -61,7 +61,7 @@ export function allSettledOp<const Ops extends readonly AnyNullaryOp[]>(
       concurrency,
     );
 
-  // SAFETY: plan-backed binder preserves combinator tuple inference from snapshot ops.
+  // SAFETY: makePlanOp omits merged metadata in its return; bindAllSettledPlan was built from the typed snapshot ops.
   return unsafeCoerce(makePlanOp(bindAllSettledPlan, bindAllSettledPlan, true));
 }
 
@@ -98,7 +98,7 @@ export function anyOp<const Ops extends readonly AnyNullaryOp[]>(
   const snapshot = ops.slice();
   const bindAnyPlan = () => anyPlan(snapshot.map((op) => getPlan(op, EMPTY_TUPLE)));
 
-  // SAFETY: plan-backed binder preserves combinator tuple inference from snapshot ops.
+  // SAFETY: makePlanOp omits merged metadata in its return; bindAnyPlan was built from the typed snapshot ops.
   return unsafeCoerce(makePlanOp(bindAnyPlan, bindAnyPlan, true));
 }
 
@@ -110,6 +110,6 @@ export function raceOp<const Ops extends readonly AnyNullaryOp[]>(
   const snapshot = ops.slice();
   const bindRacePlan = () => racePlan(snapshot.map((op) => getPlan(op, EMPTY_TUPLE)));
 
-  // SAFETY: plan-backed binder preserves combinator tuple inference from snapshot ops.
+  // SAFETY: makePlanOp omits merged metadata in its return; bindRacePlan was built from the typed snapshot ops.
   return unsafeCoerce(makePlanOp(bindRacePlan, bindRacePlan, true));
 }

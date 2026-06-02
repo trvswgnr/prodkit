@@ -3,6 +3,7 @@ import { Result, type Err } from "../../result.js";
 import { createRunContext } from "../runtime.js";
 import type { RunContext } from "../runtime.js";
 import { executePlan, interruptOnAbortMode, type Plan } from "./base.js";
+import { unsafeCoerce } from "@prodkit/shared/runtime";
 
 type FanOut<T, E> = {
   runs: readonly PromiseLike<Result<T, E | UnhandledException>>[];
@@ -69,7 +70,8 @@ async function driveFirstSettlerFanOutPlans<T, E>(
   const results = await Promise.all(
     fan.runs.map((run, index) =>
       run.then((result) => {
-        const typed = result as Result<T, E | UnhandledException>;
+        // SAFETY: ExecuteChildPlan types results as unknown; every plan here is Plan<T, E, ...> at this site.
+        const typed: Result<T, E | UnhandledException> = unsafeCoerce(result);
         if (!winnerClaimed && shouldClaim(typed, winnerClaimed)) {
           winnerClaimed = true;
           fan.controllers.forEach((controller, controllerIndex) => {
@@ -118,10 +120,13 @@ async function driveBoundedPoolPlans<T, E>(
       const controller = new AbortController();
       controllers.add(controller);
       if (outerContext.signal.aborted) controller.abort(outerContext.signal.reason);
-      const res = (await config.executeChild(
-        plan,
-        createRunContext(controller.signal, outerContext.args, outerContext.extensions),
-      )) as Result<T, E | UnhandledException>;
+      // SAFETY: ExecuteChildPlan types results as unknown; every plan here is Plan<T, E, ...> at this site.
+      const res: Result<T, E | UnhandledException> = unsafeCoerce(
+        await config.executeChild(
+          plan,
+          createRunContext(controller.signal, outerContext.args, outerContext.extensions),
+        ),
+      );
       controllers.delete(controller);
       results[i] = res;
       config.onResult?.(res, controllers);
@@ -238,7 +243,8 @@ async function driveAllSettledUnboundedPlans<T, E>(
   const fan = fanOutPlans(plans, outerContext, executeCooperativePlan);
   const results = await Promise.all(fan.runs);
   fan.detach();
-  return results as Result<T, E | UnhandledException>[];
+  // SAFETY: fanOutPlans types runs as Result<unknown, ...>; every child plan matches T and E at this site.
+  return unsafeCoerce(results);
 }
 
 export async function driveAllSettledPlans<T, E>(

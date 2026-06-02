@@ -56,7 +56,7 @@ export function unsafeCoerce<T>(value: unknown): T {
 
 /** `never`-typed sentinel for phantom brand slots and unused instruction payloads. */
 export const NEVER: never =
-  // SAFETY: centralized `never` sentinel; callers must treat this as proof-only at the type level.
+  // SAFETY: phantom meta slots need a never value; undefined is the sentinel and must not be read as data.
   unsafeCoerce<never>(undefined);
 
 export function isRecordLike(value: unknown): value is Record<PropertyKey, unknown> {

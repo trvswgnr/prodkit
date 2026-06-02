@@ -18,6 +18,6 @@ export function withBlocking<T, E, A, M, const K extends PropertyKey, P = true>(
   op: Op<T, E, A, M>,
   _key: K,
 ): BlockingOp<T, E, A, M, K, P> {
-  // SAFETY: type-only metadata transition; runtime op behavior is unchanged.
+  // SAFETY: withBlocking only changes metadata phantom types; the runtime callable is the same op instance.
   return unsafeCoerce(op);
 }

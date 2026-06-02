@@ -1,3 +1,4 @@
+import { NEVER, unsafeCoerce } from "@prodkit/shared/runtime";
 import { assert, describe, expect, test } from "vitest";
 import { chainCleanupFaults, closeGenerator } from "../../src/core/cleanup.js";
 import { createRunContext, drive } from "../../src/core/runtime.js";
@@ -20,26 +21,28 @@ import { UnhandledException } from "../../src/errors.js";
 import { Result } from "../../src/result.js";
 
 class ThrowingCustomInstruction implements CustomInstruction<never, EmptyMeta> {
-  readonly [CUSTOM_INSTRUCTION_META] = undefined as unknown as EmptyMeta;
+  readonly [CUSTOM_INSTRUCTION_META] = NEVER;
 
   resolve(_context: RunContext): never {
     throw new Error("resolve-threw");
   }
 
   *[Symbol.iterator](): Generator<this, never, unknown> {
-    return (yield this) as never;
+    // SAFETY: ThrowingCustomInstruction is a CustomInstruction and its yield type matches resolve.
+    return unsafeCoerce(yield this);
   }
 }
 
 class RejectingCustomInstruction implements CustomInstruction<never, EmptyMeta> {
-  readonly [CUSTOM_INSTRUCTION_META] = undefined as unknown as EmptyMeta;
+  readonly [CUSTOM_INSTRUCTION_META] = NEVER;
 
   resolve(_context: RunContext): Promise<never> {
     return Promise.reject(new Error("resolve-rejected"));
   }
 
   *[Symbol.iterator](): Generator<this, never, unknown> {
-    return (yield this) as never;
+    // SAFETY: RejectingCustomInstruction is a CustomInstruction and its yield type matches resolve.
+    return unsafeCoerce(yield this);
   }
 }
 
@@ -59,10 +62,13 @@ describe("core/cleanup helpers", () => {
     const third = new Error("third");
     const chain = chainCleanupFaults([first, second, third]);
     expect(chain).toBeInstanceOf(Error);
-    const outer = chain as Error;
+    assert(chain instanceof Error);
+    const outer = chain;
     expect(outer.message).toBe("first");
-    expect((outer.cause as Error).message).toBe("second-non-error");
-    expect(((outer.cause as Error).cause as Error).message).toBe("third");
+    assert(outer.cause instanceof Error);
+    expect(outer.cause.message).toBe("second-non-error");
+    assert(outer.cause.cause instanceof Error);
+    expect(outer.cause.cause.message).toBe("third");
   });
 
   test("closeGenerator swallows iterator.return failures", () => {
@@ -102,11 +108,12 @@ describe("drive runtime behavior", () => {
   test("resumeSuspended path passes the bound signal to suspend work", async () => {
     let seenSignal: AbortSignal | undefined;
     const op = makeRuntimeOp<number, never>(function* () {
-      const value = (yield new SuspendInstruction(async (context) => {
+      const value = yield new SuspendInstruction(async (context) => {
         seenSignal = context.signal;
         return 69;
-      }, SuspendResume.passThrough)) as number;
-      return value + 1;
+      }, SuspendResume.passThrough);
+      // SAFETY: SuspendInstruction resume type matches the generator's declared success type.
+      return unsafeCoerce<number>(value) + 1;
     });
 
     const signal = new AbortController().signal;
@@ -126,9 +133,11 @@ describe("drive runtime behavior", () => {
 
     assert(result.isErr(), "result should be Err");
     expect(result.error).toBeInstanceOf(UnhandledException);
-    const cause = (result.error as UnhandledException).cause;
+    assert(result.error instanceof UnhandledException);
+    const cause = result.error.cause;
     expect(cause).toBeInstanceOf(Error);
-    expect((cause as Error).message).toBe("resolve-threw");
+    assert(cause instanceof Error);
+    expect(cause.message).toBe("resolve-threw");
   });
 
   test("resumeCustom converts a rejected resolve into Err(UnhandledException)", async () => {
@@ -140,14 +149,17 @@ describe("drive runtime behavior", () => {
 
     assert(result.isErr(), "result should be Err");
     expect(result.error).toBeInstanceOf(UnhandledException);
-    const cause = (result.error as UnhandledException).cause;
+    assert(result.error instanceof UnhandledException);
+    const cause = result.error.cause;
     expect(cause).toBeInstanceOf(Error);
-    expect((cause as Error).message).toBe("resolve-rejected");
+    assert(cause instanceof Error);
+    expect(cause.message).toBe("resolve-rejected");
   });
 
   test("invalid yielded instructions return Err(UnhandledException(TypeError))", async () => {
     const op = makeRuntimeOp<number, never>(function* () {
-      yield { _tag: "NotAnInstruction" } as never;
+      // SAFETY: deliberately yield a non-instruction value to exercise runtime validation.
+      yield unsafeCoerce({ _tag: "NotAnInstruction" });
       return 1;
     });
 
@@ -190,8 +202,8 @@ describe("drive runtime behavior", () => {
 
     assert(result.isErr(), "result should be Err");
     expect(result.error).toBeInstanceOf(UnhandledException);
-    const unhandled = result.error as UnhandledException;
-    expect(unhandled.cause).toBe(cleanupFault);
+    assert(result.error instanceof UnhandledException);
+    expect(result.error.cause).toBe(cleanupFault);
   });
 
   test("cleanup fault takes precedence over typed body error", async () => {
@@ -207,8 +219,8 @@ describe("drive runtime behavior", () => {
 
     assert(result.isErr(), "result should be Err");
     expect(result.error).toBeInstanceOf(UnhandledException);
-    const unhandled = result.error as UnhandledException;
-    expect(unhandled.cause).toBe(cleanupFault);
+    assert(result.error instanceof UnhandledException);
+    expect(result.error.cause).toBe(cleanupFault);
   });
 
   test("multiple throwing finalizers are folded into a cause chain", async () => {
@@ -228,7 +240,9 @@ describe("drive runtime behavior", () => {
 
     assert(result.isErr(), "result should be Err");
     expect(result.error).toBeInstanceOf(UnhandledException);
-    const outer = result.error.cause as Error;
+    assert(result.error instanceof UnhandledException);
+    assert(result.error.cause instanceof Error);
+    const outer = result.error.cause;
     expect(outer.message).toBe("second-registered-runs-first");
     expect(outer.cause).toBe("first-registered-runs-second");
   });

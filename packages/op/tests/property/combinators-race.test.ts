@@ -17,7 +17,12 @@ function branchOp(branch: RaceBranch) {
 
   return Op.try(
     () => rejectAfter(branch.error, branch.delay),
-    (cause) => cause as string,
+    (cause: unknown): string => {
+      if (typeof cause !== "string") {
+        throw new Error(`expected string cause, got ${typeof cause}`);
+      }
+      return cause;
+    },
   );
 }
 

@@ -52,16 +52,17 @@ class PolicySourceImpl {
   wrap<T, E, A, M, TNext, ENext, MNext>(
     transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
   ): Op<TNext, ENext, AsArgs<A>, MNext> {
-    // SAFETY: wrapPlan returns the same branded Op runtime shell for the enclosing arity.
+    // SAFETY: PolicyWrapFn returns unknown; wrapPlanTransform builds an Op shell with TNext, ENext, and A.
     return unsafeCoerce<Op<TNext, ENext, AsArgs<A>, MNext>>(
       this.wrapPlan(
-        transform as (plan: Plan<unknown, unknown, unknown>) => Plan<TNext, ENext, MNext>,
+        // SAFETY: PolicyWrapFn erases plan generics; transform closes over the source plan's T, E, M.
+        unsafeCoerce(transform),
       ),
     );
   }
 
   rewrite<A, TNext, ENext, MNext>(rewriter: PlanRewriter): Op<TNext, ENext, AsArgs<A>, MNext> {
-    // SAFETY: Plan.rewrite returns a branded plan with the policy layer's selected type target.
+    // SAFETY: PolicyWrapFn returns unknown; rewrite already targeted TNext, ENext, MNext on the inner plan.
     return unsafeCoerce<Op<TNext, ENext, AsArgs<A>, MNext>>(
       this.wrapPlan((plan) => plan.rewrite<TNext, ENext, MNext>(rewriter)),
     );
@@ -73,10 +74,11 @@ class PolicySourceImpl {
       context: RunContext<readonly unknown[]>,
     ) => PromiseLike<Result<TNext, ENext | UnhandledException>>,
   ): Op<TNext, ENext, AsArgs<A>, MNext> {
-    // SAFETY: the generated plan preserves the enclosing policy source arity.
+    // SAFETY: PolicyWrapFn returns unknown; around() middleware was typed against the source plan's T, E, M.
     return unsafeCoerce<Op<TNext, ENext, AsArgs<A>, MNext>>(
       this.wrapPlan((plan) => {
-        const typedPlan = plan as Plan<T, E, M>;
+        // SAFETY: PolicyWrapFn erases plan to unknown; around() closes over T, E, M and only calls typedPlan.execute.
+        const typedPlan: Plan<T, E, M> = unsafeCoerce(plan);
         return createPlan<TNext, ENext, MNext>(function* () {
           const result: Result<TNext, ENext | UnhandledException> = yield* new SuspendInstruction(
             (context) => run((nextContext) => typedPlan.execute(nextContext), context),
@@ -109,19 +111,22 @@ function fluentMethodsForContext<T, E, A, M, Yieldable extends boolean>(
     transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
   ) => wrapPlanTransform<T, E, A, M, Yieldable, TNext, ENext, MNext>(ctx, transform);
 
-  const policySource = new PolicySourceImpl(wrap) as OpPolicySource<T, E, AsArgs<A>, M>;
+  // SAFETY: PolicySourceImpl is structural but unbranded; methods delegate through wrap with the same generics.
+  const policySource: OpPolicySource<T, E, AsArgs<A>, M> = unsafeCoerce(new PolicySourceImpl(wrap));
 
   return {
     with: <F extends HKT>(policy: OpPolicy<OpPolicyInput<T, E, AsArgs<A>, M>, F>) =>
       policy.apply(policySource),
     on: (event: OpLifecycleHook, handler: unknown) => {
       if (event === "enter") {
-        const initialize = handler as EnterFn<A>;
+        // SAFETY: on() types handler as unknown; the enter branch only runs when event === "enter".
+        const initialize: EnterFn<A> = unsafeCoerce(handler);
         return wrap((plan) => onEnterPlan(plan, initialize));
       }
 
       if (event === "exit") {
-        const finalize = handler as ExitFn<T, E, A>;
+        // SAFETY: on() types handler as unknown; the exit branch only runs when event === "exit".
+        const finalize: ExitFn<T, E, A> = unsafeCoerce(handler);
         return wrap((plan) => onExitPlan(plan, finalize));
       }
 
@@ -161,7 +166,9 @@ function createSyncValueFluentPrototype(): PropertyDescriptorMap {
       const methods = fluentMethodsForContext<unknown, never, [], EmptyMeta, true>(
         syncValueShellContext(this),
       );
-      const method = methods[name] as (...methodArgs: unknown[]) => unknown;
+
+      // SAFETY: prototype dispatch erases generics; name is a FluentMethod key from the same methods table.
+      const method: (...methodArgs: unknown[]) => unknown = unsafeCoerce(methods[name]);
       return method(...args);
     },
   });
@@ -206,7 +213,7 @@ export function makePlanOp<
     (bound
       ? () =>
           bindArgs(
-            // SAFETY: bound plan ops are always nullary at the public call surface.
+            // SAFETY: iterable branch is bound and nullary; invoke already fixed args so the binder expects [].
             ...unsafeCoerce<AsArgs<A>>([]),
           )
       : undefined);
@@ -221,8 +228,7 @@ export function makePlanOp<
     bound,
   };
 
-  // SAFETY: Object.assign decorates the runtime callable with the Op method surface and
-  // internal plan binder. The callable and method signatures are supplied by the generic inputs.
+  // SAFETY: Object.assign builds a callable Object without Op branding; invoke/run/methods match generic inputs.
   self = unsafeCoerce(
     Object.assign(invoke, {
       [OP_PLAN_BIND]: bindArgs,
@@ -252,10 +258,10 @@ function* syncValueIterator<T>(value: T): Generator<never, T, unknown> {
   return value;
 }
 
-const SYNC_VALUE_OP_PROTOTYPE = Object.create(
+const SYNC_VALUE_OP_PROTOTYPE: SyncValueOpShell<unknown> = Object.create(
   null,
   createSyncValueFluentPrototype(),
-) as SyncValueOpShell<unknown>;
+);
 
 /**
  * Builds a bound nullary Op for an already-awaited sync success value.
@@ -269,10 +275,10 @@ export function makeSyncValueOp<T>(value: T): OpInterface<T, never, [], EmptyMet
       return value;
     });
 
-  const invoke = (() => self) as SyncValueOpShell<T>;
+  const invoke = () => self;
   let self: SyncValueOpShell<T>;
 
-  // SAFETY: same runtime decoration pattern as makePlanOp; brands are proof-only at the type level.
+  // SAFETY: Object.assign builds the same shell shape as makePlanOp; sync values skip generator drive only.
   self = unsafeCoerce(
     Object.assign(invoke, {
       [OP_PLAN_BIND]: bindPlan,

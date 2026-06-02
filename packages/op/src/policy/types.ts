@@ -56,7 +56,7 @@ export function define<Input, F extends HKT, Extras extends object = Record<neve
   },
 ): OpPolicy<Input, F> & Extras {
   Object.defineProperty(definition, OP_POLICY, { value: undefined });
-  // SAFETY: we know the definition is a valid OpPolicy<Input, F> & Extras
+  // SAFETY: define() returns a plain object without OpPolicy branding; apply satisfies OpPolicy at runtime.
   return unsafeCoerce(definition);
 }
 

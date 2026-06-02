@@ -19,7 +19,7 @@ export function onEnterPlan<T, E, A, M>(
       yield new SuspendInstruction(async (context) => {
         const enterCtx: EnterContext<A> = {
           signal: context.signal,
-          // SAFETY: this plan is bound by the op shell for the same tuple arity `A`.
+          // SAFETY: RunContext stores args as readonly unknown[]; they are the tuple from this op's invocation.
           args: unsafeCoerce(context.args),
         };
         await Promise.resolve(initialize(enterCtx));
@@ -49,9 +49,9 @@ export function onExitPlan<T, E, A, M>(
       yield new RegisterExitFinalizerInstruction(async (ctx) => {
         const exitCtx: ExitContext<T, E, A> = {
           signal: ctx.signal,
-          // SAFETY: this finalizer is registered by the plan that produced the result type `T | E`.
+          // SAFETY: ExitFinalizerContext erases result; this hook is registered by the enclosing plan for T, E.
           result: unsafeCoerce(ctx.result),
-          // SAFETY: this plan is bound by the op shell for the same tuple arity `A`.
+          // SAFETY: RunContext stores args as readonly unknown[]; they are the tuple from this op's invocation.
           args: unsafeCoerce(ctx.args),
         };
         await Promise.resolve(finalize(exitCtx));

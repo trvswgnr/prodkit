@@ -54,7 +54,7 @@ export class SuspendInstruction extends Tagged("SuspendInstruction") {
     this.resume = resume;
   }
 
-  // SAFETY: TS doesn't know the type of the yielded value, so it's always `unknown`
+  // SAFETY: SuspendInstruction yield type is call-site specific; one any avoids per-site coercion.
   // we use a single `any` here to avoid casting at every call site
   // oxlint-disable-next-line typescript/no-explicit-any
   *[Symbol.iterator](): Generator<Instruction<never, any>, any, unknown> {

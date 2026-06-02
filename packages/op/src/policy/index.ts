@@ -1,3 +1,4 @@
+import { unsafeCoerce } from "@prodkit/shared/runtime";
 import { define } from "./types.js";
 import { cancelRewriter, releasePlan, retryRewriter, timeoutRewriter } from "./plan.js";
 import { Delay, normalizeRetryPolicy } from "./retry-policy.js";
@@ -42,9 +43,11 @@ function cancel(abortSignal: AbortSignal): CancelPolicyAttachment {
 }
 
 function release<T>(releaseFn: ReleaseFn<T>): ReleasePolicyAttachment<T> {
+  // SAFETY: wrap cannot prove ReleaseFn<T> matches plan T; release is only called with result.value after success.
+  const releaseForPlan: ReleaseFn<unknown> = unsafeCoerce(releaseFn);
   return define<OpPolicyInput<T>, OpPolicyType, { readonly release: ReleaseFn<T> }>({
     release: releaseFn,
-    apply: (source) => source.wrap((plan) => releasePlan(plan, releaseFn as ReleaseFn<unknown>)),
+    apply: (source) => source.wrap((plan) => releasePlan(plan, releaseForPlan)),
   });
 }
 

@@ -6,7 +6,7 @@ import { rejectAfter, resolveAfter } from "../support/utils.js";
 function delayedFail<T>(tag: T, ms: number) {
   return Op.try(
     () => rejectAfter(tag, ms),
-    (cause) => cause as T,
+    (): T => tag,
   );
 }
 

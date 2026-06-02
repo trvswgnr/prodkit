@@ -1,3 +1,4 @@
+import { unsafeCoerce } from "@prodkit/shared/runtime";
 import { describe, expect, test, assert, vi } from "vitest";
 import { fail, fromGenFn, succeed, _try } from "../../src/builders.js";
 import { UnhandledException } from "../../src/errors.js";
@@ -181,11 +182,13 @@ describe("Policy.retry", () => {
   });
 
   test("invalid when fails at run time", async () => {
-    const result = await createFetchProgram(vi.fn(createFetcher()), {
+    // SAFETY: intentionally invalid retry policy shape for runtime validation coverage.
+    const invalidPolicy: RetryPolicy = unsafeCoerce({
       retries: 1,
       when: "not a function",
       delay: () => 0,
-    } as unknown as RetryPolicy).run("123");
+    });
+    const result = await createFetchProgram(vi.fn(createFetcher()), invalidPolicy).run("123");
 
     assert(result.isErr(), "result should be Err");
     expect(result.error).toBeInstanceOf(UnhandledException);
@@ -200,7 +203,8 @@ describe("Policy.retry", () => {
       attempts += 1;
       throw new Error("fail");
     })
-      .with(Policy.retry(null as unknown as RetryPolicy))
+      // SAFETY: intentionally invalid retry policy for runtime validation coverage.
+      .with(Policy.retry(unsafeCoerce<RetryPolicy>(null)))
       .run();
 
     assert(result.isErr(), "result should be Err");

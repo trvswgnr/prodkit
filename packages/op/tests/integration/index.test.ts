@@ -1,3 +1,4 @@
+import { unsafeCoerce } from "@prodkit/shared/runtime";
 import { assert, describe, expect, test, vi } from "vitest";
 import { Op, TimeoutError } from "../../src/index.js";
 import { Delay, Policy } from "../../src/policy/index.js";
@@ -31,7 +32,8 @@ describe("OpFactory", () => {
   });
 
   test("legacy withRetry, withTimeout, withCancel, and withRelease methods are not exposed", () => {
-    const op = Op.of(1) as unknown as Record<string, unknown>;
+    // SAFETY: probe the runtime object for legacy method names not present on the public type.
+    const op: Record<string, unknown> = unsafeCoerce(Op.of(1));
 
     expect(op.withRetry).toBeUndefined();
     expect(op.withTimeout).toBeUndefined();
@@ -40,7 +42,8 @@ describe("OpFactory", () => {
   });
 
   test("extension-only exports are not on the main entry", async () => {
-    const main = (await import("../../src/index.js")) as Record<string, unknown>;
+    // SAFETY: inspect the module namespace for exports that should stay off the main entry.
+    const main: Record<string, unknown> = unsafeCoerce(await import("../../src/index.js"));
 
     expect(main.withBlocking).toBeUndefined();
     expect(main.Blocking).toBeUndefined();

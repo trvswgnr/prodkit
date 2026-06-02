@@ -72,8 +72,7 @@ export function createPlan<T, E, M>(
     iterate,
     rewrite: (rewriter) => {
       const rewritten = overrides.rewrite?.(plan, rewriter) ?? rewriter.apply(plan);
-      // SAFETY: PlanRewriter is an internal generic rewrite protocol. Callers choose the typed
-      // target when they supply the matching rewriter from the policy layer.
+      // SAFETY: rewriter.apply loses rewritten generics; the caller's rewriter targets TNext, ENext, MNext.
       return unsafeCoerce(rewritten);
     },
   };
@@ -89,8 +88,7 @@ export function executePlan<T, E, M>(
   context: RunContext<readonly unknown[]>,
   mode: PlanExecutionMode = CancelSettlement.passThrough,
 ): Promise<Result<T, E | UnhandledException>> {
-  // SAFETY: plan constructors type their public error channel on Plan<T, E>; the shared
-  // generator driver also appends UnhandledException for runtime faults.
+  // SAFETY: driveIterator may return UnhandledException; executePlan widens E for settlement faults.
   return unsafeCoerce(driveIterator(plan.iterate(), context, mode));
 }
 
@@ -112,8 +110,7 @@ export function getIterablePlan<T, E, M>(op: Op<T, E, [], M>): Plan<T, E, M> | u
   if (!isIterableOp(op)) return undefined;
 
   if (isPlanBackedOp(op)) {
-    // SAFETY: the iterable guard proves the public op is nullary for this branch; the plan-backed
-    // binder was installed on the same branded Op value and returns the matching plan shape.
+    // SAFETY: OP_PLAN_BIND return is untyped; isIterableOp proves nullary and the binder matches T, E, M.
     return unsafeCoerce<Plan<T, E, M>>(op[OP_PLAN_BIND]());
   }
 
