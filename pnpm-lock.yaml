@@ -148,9 +148,15 @@ importers:
       oxlint:
         specifier: 'catalog:'
         version: 1.55.0(oxlint-tsgolint@0.23.0)
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.0(typescript@6.0.3)(unrun@0.3.0)
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.0(@types/node@24.12.3)(vite@8.0.11(@types/node@24.12.3))
 
   packages/std:
     devDependencies:

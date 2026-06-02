@@ -1,18 +1,7 @@
 {
+  "extends": "./config/tsconfig.publishable.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "lib": ["ES2022"],
-    "types": [],
-    "strict": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "noEmit": true,
-    "noFallthroughCasesInSwitch": true,
-    "exactOptionalPropertyTypes": true,
-    "noErrorTruncation": true,
-    "erasableSyntaxOnly": true
+    "types": []
   },
-  "include": ["platform-globals.d.ts"]
+  "include": ["types/**/*.d.ts", "runtime/**/*.ts"]
 }

@@ -2,24 +2,33 @@
   "name": "@prodkit/shared",
   "private": true,
   "version": "0.0.0",
-  "description": "Private workspace-only shared types and config for @prodkit packages.",
+  "description": "Private workspace-only shared types, config, and runtime primitives for @prodkit packages.",
   "type": "module",
-  "types": "platform-globals.d.ts",
+  "types": "types/platform-globals.d.ts",
   "exports": {
     ".": {
-      "types": "./platform-globals.d.ts"
+      "types": "./types/platform-globals.d.ts"
     },
-    "./platform-globals": "./platform-globals.d.ts"
+    "./platform-globals": "./types/platform-globals.d.ts",
+    "./runtime": {
+      "types": "./runtime/index.ts",
+      "import": "./runtime/index.ts"
+    },
+    "./tsconfig/publishable": "./config/tsconfig.publishable.json",
+    "./vitest/publishable": "./config/vitest.publishable.ts",
+    "./tsdown/publishable": "./config/tsdown.publishable.ts"
   },
   "scripts": {
-    "fmt": "oxfmt \"**/*.ts\" \"**/*.d.ts\"",
-    "fmt:check": "oxfmt --check \"**/*.ts\" \"**/*.d.ts\"",
+    "fmt": "oxfmt \"types/**/*.ts\" \"runtime/**/*.ts\" \"config/**/*.ts\" \"types/**/*.d.ts\"",
+    "fmt:check": "oxfmt --check \"types/**/*.ts\" \"runtime/**/*.ts\" \"config/**/*.ts\" \"types/**/*.d.ts\"",
     "lint": "pnpm -w exec oxlint --config oxlint.config.ts packages/shared",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
-    "typescript": "catalog:"
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }
