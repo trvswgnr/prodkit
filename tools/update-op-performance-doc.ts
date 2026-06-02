@@ -44,8 +44,8 @@ type ComparisonReport = {
     vsBaseline: Record<string, number>;
   }>;
   bundleSize: {
-    minBytes: number;
-    gzipBytes: number;
+    lower: { minBytes: number; gzipBytes: number };
+    upper: { minBytes: number; gzipBytes: number };
   };
 };
 
@@ -82,6 +82,21 @@ function readStringField(object: object, key: string, label: string): string {
     throw new Error(`comparison report is missing ${label}`);
   }
   return value;
+}
+
+function readBundleSizeSample(
+  object: object,
+  key: string,
+  label: string,
+): { minBytes: number; gzipBytes: number } {
+  const value = Reflect.get(object, key);
+  if (typeof value !== "object" || value === null) {
+    throw new Error(`comparison report is missing ${label}`);
+  }
+  return {
+    minBytes: readNumberField(value, "minBytes", `${label}.minBytes`),
+    gzipBytes: readNumberField(value, "gzipBytes", `${label}.gzipBytes`),
+  };
 }
 
 function readNumberField(object: object, key: string, label: string): number {
@@ -214,8 +229,8 @@ function readComparisonReport(reportPath: string): ComparisonReport {
     implementations,
     scenarios,
     bundleSize: {
-      minBytes: readNumberField(bundleSize, "minBytes", "bundleSize.minBytes"),
-      gzipBytes: readNumberField(bundleSize, "gzipBytes", "bundleSize.gzipBytes"),
+      lower: readBundleSizeSample(bundleSize, "lower", "bundleSize.lower"),
+      upper: readBundleSizeSample(bundleSize, "upper", "bundleSize.upper"),
     },
   };
 }
@@ -279,10 +294,16 @@ function renderSnapshot(report: ComparisonReport): string {
     "",
     "### Bundle size",
     "",
+    "Lower bound: bundled main entry only. Upper bound: bundled import of consumer subpaths",
+    "(`@prodkit/op`, `@prodkit/op/di`, `@prodkit/op/policy`, `@prodkit/op/hkt`).",
+    "`@prodkit/op/internal` is extension-only and is excluded. `better-result` is external in both cases.",
+    "",
     "| Metric | Size |",
     "| --- | --- |",
-    `| ESM entry minified | ${formatBytes(report.bundleSize.minBytes)} |`,
-    `| ESM entry minified + gzip | ${formatBytes(report.bundleSize.gzipBytes)} |`,
+    `| Lower bound (main entry) minified | ${formatBytes(report.bundleSize.lower.minBytes)} |`,
+    `| Lower bound (main entry) minified + gzip | ${formatBytes(report.bundleSize.lower.gzipBytes)} |`,
+    `| Upper bound (consumer subpaths) minified | ${formatBytes(report.bundleSize.upper.minBytes)} |`,
+    `| Upper bound (consumer subpaths) minified + gzip | ${formatBytes(report.bundleSize.upper.gzipBytes)} |`,
   ].join("\n");
 }
 

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Corrected bundle size figures in the published performance docs; the main entry is now measured
+  as a bundled graph (`better-result` externalized), with a consumer subpath upper bound
+  (`di`, `policy`, `hkt`).
+
 ### Added
 
 - No entries yet.

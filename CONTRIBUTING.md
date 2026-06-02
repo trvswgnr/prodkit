@@ -51,8 +51,8 @@ public export names change without an update to that package's `CHANGELOG.md` un
 `## [Unreleased]`. The check compares against an explicit base ref (`GITHUB_BASE_SHA` on pull
 requests, the pre-push commit on pushes to `main`, or `CHANGELOG_API_BASE_REF` locally) and fails
 closed when no base ref can be resolved. Internal re-export paths do not count as API changes.
-A `bundle-size` job compares `@prodkit/op` minified + gzip bundle size on pull requests via
-`compressed-size-action`; runtime regressions are tracked separately by CodSpeed
+A `bundle-size` job compares `@prodkit/op` lower and upper bundled size bounds (minified + gzip)
+on pull requests via `compressed-size-action`; runtime regressions are tracked separately by CodSpeed
 (see [`packages/op/docs/performance.md`](packages/op/docs/performance.md) and [`benchmarks/op/README.md`](benchmarks/op/README.md)).
 
 All runnable consumer examples and smoke entrypoints live in the **`examples/`** workspace (`@prodkit/examples`):

@@ -97,9 +97,9 @@ To add another competitor column, extend `IMPLEMENTATION_COLUMNS` and each scena
 
 ### Bundle size
 
-The CI `bundle-size` job uses [`preactjs/compressed-size-action`](https://github.com/preactjs/compressed-size-action) to build the PR branch and target branch, minify the `@prodkit/op` ESM entry with esbuild, and compare gzip sizes. It comments on pull requests automatically.
+The CI `bundle-size` job uses [`preactjs/compressed-size-action`](https://github.com/preactjs/compressed-size-action) to build the PR branch and target branch, bundle and minify lower and upper bound artifacts with esbuild (`better-result` external), and compare gzip sizes. Lower bound is the main entry; upper bound is a fixture that imports consumer subpaths (`di`, `policy`, `hkt`), excluding `@prodkit/op/internal`. It comments on pull requests automatically.
 
-Measurement matches the compare harness (`pnpm run build:size`). Fork PRs cannot receive comments (GitHub permission model); the job still prints the comparison to stdout.
+Measurement matches the compare harness (`pnpm run build:size` / `compare.ts`). Fork PRs cannot receive comments (GitHub permission model); the job still prints the comparison to stdout.
 
 ## Profiling sequential composition
 
