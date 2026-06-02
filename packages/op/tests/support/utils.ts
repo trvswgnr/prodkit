@@ -94,7 +94,13 @@ export async function expectRunEq<T1, E1, T2, E2>(a: Runnable<T1, E1>, b: Runnab
   const { expect } = await import("vitest");
   const left = await a.run();
   const right = await b.run();
-  expect(left).toEqual(right);
+  if (left.isOk() && right.isOk()) {
+    return expect(left.value).toEqual(right.value);
+  }
+  if (left.isErr() && right.isErr()) {
+    return expect(left.error).toEqual(right.error);
+  }
+  throw new Error(`expected both Ok or both Err, got ${left.status} and ${right.status}`);
 }
 
 export const FC_ASSERT_OPTIONS = { numRuns: 1000 };

@@ -7,17 +7,20 @@ function bind<T, E1, U, E2>(op: Op<T, E1, []>, f: (a: T) => Op<U, E2, []>): Op<U
   return op.flatMap(f);
 }
 
+const makeOpArb = () => fc.oneof(fc.anything().map(Op.of), fc.anything().map(Op.fail));
+const makeKleisliArb = () => fc.func(makeOpArb());
+
 describe("Op monad laws", () => {
   test("left identity", async () => {
     const vars = {
       x: fc.anything(),
-      f: fc.func(fc.anything().map(Op.of)),
+      f: makeKleisliArb(),
     };
 
     await fc.assert(
-      fc.asyncProperty(vars.x, vars.f, async (ma, f) => {
-        const left = bind(Op.of(ma), f);
-        const right = f(ma);
+      fc.asyncProperty(vars.x, vars.f, async (x, f) => {
+        const left = bind(Op.of(x), f);
+        const right = f(x);
         await expectRunEq(left, right);
       }),
       FC_ASSERT_OPTIONS,
@@ -26,7 +29,7 @@ describe("Op monad laws", () => {
 
   test("right identity", async () => {
     const vars = {
-      ma: fc.anything().map(Op.of),
+      ma: makeOpArb(),
     };
     await fc.assert(
       fc.asyncProperty(vars.ma, async (ma) => {
@@ -40,9 +43,9 @@ describe("Op monad laws", () => {
 
   test("associativity", async () => {
     const vars = {
-      ma: fc.anything().map(Op.of),
-      f: fc.func(fc.anything().map(Op.of)),
-      g: fc.func(fc.anything().map(Op.of)),
+      ma: makeOpArb(),
+      f: makeKleisliArb(),
+      g: makeKleisliArb(),
     };
 
     await fc.assert(
