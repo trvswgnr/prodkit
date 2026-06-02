@@ -71,15 +71,15 @@ describe("Op applicative laws", () => {
         f(g(a));
 
     const vars = {
-      f: fc.func(fc.anything()).map(Op.of),
-      g: fc.func(fc.anything()).map(Op.of),
+      mf: fc.func(fc.anything()).map(Op.of),
+      mg: fc.func(fc.anything()).map(Op.of),
       ma: fc.anything().map(Op.of),
     };
 
     await fc.assert(
-      fc.asyncProperty(vars.f, vars.g, vars.ma, async (f, g, ma) => {
-        const left = ap(ap(ap(Op.of(dot), f), g), ma);
-        const right = ap(f, ap(g, ma));
+      fc.asyncProperty(vars.mf, vars.mg, vars.ma, async (mf, mg, ma) => {
+        const left = ap(ap(ap(Op.of(dot), mf), mg), ma);
+        const right = ap(mf, ap(mg, ma));
         await expectRunEq(left, right);
       }),
       FC_ASSERT_OPTIONS,
@@ -103,7 +103,7 @@ describe("Op applicative laws", () => {
 });
 
 describe("Op ap error propagation", () => {
-  test("failing fn discards successful val", async () => {
+  test("binary ap outcome by fn and val results", async () => {
     const vars = {
       mf: makeOpFuncArb(),
       ma: makeOpArb(),
@@ -113,27 +113,23 @@ describe("Op ap error propagation", () => {
       fc.asyncProperty(vars.mf, vars.ma, async (mf, ma) => {
         const fnResult = await mf.run();
         const valResult = await ma.run();
-        if (fnResult.isErr() && valResult.isOk()) {
-          await expectRunEq(ap(mf, ma), mf);
+        if (fnResult.isErr() && valResult.isErr()) {
+          await expectRunEq(ap(mf, ma), Op.all([mf, ma]));
+          return;
         }
-      }),
-      FC_ASSERT_OPTIONS,
-    );
-  });
-
-  test("failing val discards successful fn", async () => {
-    const vars = {
-      mf: makeOpFuncArb(),
-      ma: makeOpArb(),
-    };
-
-    await fc.assert(
-      fc.asyncProperty(vars.mf, vars.ma, async (mf, ma) => {
-        const fnResult = await mf.run();
-        const valResult = await ma.run();
         if (fnResult.isOk() && valResult.isErr()) {
           await expectRunEq(ap(mf, ma), ma);
+          return;
         }
+        if (fnResult.isErr() && valResult.isOk()) {
+          await expectRunEq(ap(mf, ma), mf);
+          return;
+        }
+        if (fnResult.isOk() && valResult.isOk()) {
+          await expectRunEq(ap(mf, ma), Op.of(fnResult.value(valResult.value)));
+          return;
+        }
+        throw new Error("unreachable");
       }),
       FC_ASSERT_OPTIONS,
     );
@@ -152,28 +148,21 @@ describe("Op ap error propagation", () => {
         const [fnResult, innerResult] = await Promise.all([mf.run(), inner.run()]);
         if (fnResult.isErr() && innerResult.isOk()) {
           await expectRunEq(ap(mf, inner), mf);
+          return;
         }
         if (fnResult.isOk() && innerResult.isErr()) {
           await expectRunEq(ap(mf, inner), inner);
+          return;
         }
-      }),
-      FC_ASSERT_OPTIONS,
-    );
-  });
-
-  test("dual failure matches Op.all fail-fast", async () => {
-    const vars = {
-      mf: makeOpFuncArb(),
-      ma: makeOpArb(),
-    };
-
-    await fc.assert(
-      fc.asyncProperty(vars.mf, vars.ma, async (mf, ma) => {
-        const fnResult = await mf.run();
-        const valResult = await ma.run();
-        if (fnResult.isErr() && valResult.isErr()) {
-          await expectRunEq(ap(mf, ma), Op.all([mf, ma]));
+        if (fnResult.isOk() && innerResult.isOk()) {
+          await expectRunEq(ap(mf, inner), Op.of(fnResult.value(innerResult.value)));
+          return;
         }
+        if (fnResult.isErr() && innerResult.isErr()) {
+          await expectRunEq(ap(mf, inner), Op.all([mf, inner]));
+          return;
+        }
+        throw new Error("unreachable");
       }),
       FC_ASSERT_OPTIONS,
     );
