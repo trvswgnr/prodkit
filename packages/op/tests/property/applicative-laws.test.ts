@@ -2,7 +2,7 @@ import * as fc from "fast-check";
 import { describe, test } from "vitest";
 import { Op } from "../../src/index.js";
 import { identity } from "@prodkit/shared/runtime";
-import { expectRunEq, FC_ASSERT_OPTIONS } from "../support/utils.js";
+import { expectRunEq, FC_ASSERT_OPTIONS, makeOpArb, makeOpFuncArb } from "../support/utils.js";
 
 /** Applicative apply: independent concurrent product, then combine. */
 function ap<A, E1, B, E2>(
@@ -14,13 +14,13 @@ function ap<A, E1, B, E2>(
 
 describe("Op applicative laws", () => {
   test("identity", async () => {
-    const arb = {
-      op: fc.anything().map(Op.of),
+    const vars = {
+      ma: makeOpArb(),
     };
     await fc.assert(
-      fc.asyncProperty(arb.op, async (op) => {
-        const left = ap(Op.of(identity), op);
-        const right = op;
+      fc.asyncProperty(vars.ma, async (ma) => {
+        const left = ap(Op.of(identity), ma);
+        const right = ma;
         await expectRunEq(left, right);
       }),
       FC_ASSERT_OPTIONS,
@@ -28,12 +28,12 @@ describe("Op applicative laws", () => {
   });
 
   test("homomorphism", async () => {
-    const arb = {
+    const vars = {
       f: fc.func(fc.anything()),
       x: fc.anything(),
     };
     await fc.assert(
-      fc.asyncProperty(arb.f, arb.x, async (f, x) => {
+      fc.asyncProperty(vars.f, vars.x, async (f, x) => {
         const left = ap(Op.of(f), Op.of(x));
         const right = Op.of(f(x));
         await expectRunEq(left, right);
@@ -48,15 +48,15 @@ describe("Op applicative laws", () => {
       <B>(f: (a: A) => B) =>
         f(a);
 
-    const arb = {
-      f: fc.func(fc.anything()).map(Op.of),
+    const vars = {
+      mf: makeOpFuncArb(),
       x: fc.anything(),
     };
 
     await fc.assert(
-      fc.asyncProperty(arb.f, arb.x, async (f, x) => {
-        const left = ap(f, Op.of(x));
-        const right = ap(Op.of(applyAt(x)), f);
+      fc.asyncProperty(vars.mf, vars.x, async (mf, x) => {
+        const left = ap(mf, Op.of(x));
+        const right = ap(Op.of(applyAt(x)), mf);
         await expectRunEq(left, right);
       }),
       FC_ASSERT_OPTIONS,
@@ -70,16 +70,16 @@ describe("Op applicative laws", () => {
       (a: A) =>
         f(g(a));
 
-    const arb = {
+    const vars = {
       f: fc.func(fc.anything()).map(Op.of),
       g: fc.func(fc.anything()).map(Op.of),
-      op: fc.anything().map(Op.of),
+      ma: fc.anything().map(Op.of),
     };
 
     await fc.assert(
-      fc.asyncProperty(arb.f, arb.g, arb.op, async (f, g, op) => {
-        const left = ap(ap(ap(Op.of(dot), f), g), op);
-        const right = ap(f, ap(g, op));
+      fc.asyncProperty(vars.f, vars.g, vars.ma, async (f, g, ma) => {
+        const left = ap(ap(ap(Op.of(dot), f), g), ma);
+        const right = ap(f, ap(g, ma));
         await expectRunEq(left, right);
       }),
       FC_ASSERT_OPTIONS,
@@ -87,15 +87,93 @@ describe("Op applicative laws", () => {
   });
 
   test("map agrees with ap", async () => {
-    const arb = {
-      op: fc.anything().map(Op.of),
+    const vars = {
+      ma: makeOpArb(),
       f: fc.func(fc.anything()),
     };
     await fc.assert(
-      fc.asyncProperty(arb.op, arb.f, async (op, f) => {
-        const left = op.map(f);
-        const right = ap(Op.of(f), op);
+      fc.asyncProperty(vars.ma, vars.f, async (ma, f) => {
+        const left = ma.map(f);
+        const right = ap(Op.of(f), ma);
         await expectRunEq(left, right);
+      }),
+      FC_ASSERT_OPTIONS,
+    );
+  });
+});
+
+describe("Op ap error propagation", () => {
+  test("failing fn discards successful val", async () => {
+    const vars = {
+      mf: makeOpFuncArb(),
+      ma: makeOpArb(),
+    };
+
+    await fc.assert(
+      fc.asyncProperty(vars.mf, vars.ma, async (mf, ma) => {
+        const fnResult = await mf.run();
+        const valResult = await ma.run();
+        if (fnResult.isErr() && valResult.isOk()) {
+          await expectRunEq(ap(mf, ma), mf);
+        }
+      }),
+      FC_ASSERT_OPTIONS,
+    );
+  });
+
+  test("failing val discards successful fn", async () => {
+    const vars = {
+      mf: makeOpFuncArb(),
+      ma: makeOpArb(),
+    };
+
+    await fc.assert(
+      fc.asyncProperty(vars.mf, vars.ma, async (mf, ma) => {
+        const fnResult = await mf.run();
+        const valResult = await ma.run();
+        if (fnResult.isOk() && valResult.isErr()) {
+          await expectRunEq(ap(mf, ma), ma);
+        }
+      }),
+      FC_ASSERT_OPTIONS,
+    );
+  });
+
+  test("nested ap propagates inner failure", async () => {
+    const vars = {
+      mf: makeOpFuncArb(),
+      mg: makeOpFuncArb(),
+      ma: makeOpArb(),
+    };
+
+    await fc.assert(
+      fc.asyncProperty(vars.mf, vars.mg, vars.ma, async (mf, mg, ma) => {
+        const inner = ap(mg, ma);
+        const [fnResult, innerResult] = await Promise.all([mf.run(), inner.run()]);
+        if (fnResult.isErr() && innerResult.isOk()) {
+          await expectRunEq(ap(mf, inner), mf);
+        }
+        if (fnResult.isOk() && innerResult.isErr()) {
+          await expectRunEq(ap(mf, inner), inner);
+        }
+      }),
+      FC_ASSERT_OPTIONS,
+    );
+  });
+
+  test("dual failure matches Op.all fail-fast", async () => {
+    const vars = {
+      mf: makeOpFuncArb(),
+      ma: makeOpArb(),
+    };
+
+    await fc.assert(
+      fc.asyncProperty(vars.mf, vars.ma, async (mf, ma) => {
+        const fnResult = await mf.run();
+        const valResult = await ma.run();
+        if (fnResult.isErr() && valResult.isErr()) {
+          await expectRunEq(ap(mf, ma), Op.all([mf, ma]));
+        }
       }),
       FC_ASSERT_OPTIONS,
     );

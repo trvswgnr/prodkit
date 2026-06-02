@@ -1,14 +1,11 @@
 import * as fc from "fast-check";
 import { describe, test } from "vitest";
 import { Op } from "../../src/index.js";
-import { expectRunEq, FC_ASSERT_OPTIONS } from "../support/utils.js";
+import { expectRunEq, FC_ASSERT_OPTIONS, makeKleisliArb, makeOpArb } from "../support/utils.js";
 
 function bind<T, E1, U, E2>(op: Op<T, E1, []>, f: (a: T) => Op<U, E2, []>): Op<U, E1 | E2, []> {
   return op.flatMap(f);
 }
-
-const makeOpArb = () => fc.oneof(fc.anything().map(Op.of), fc.anything().map(Op.fail));
-const makeKleisliArb = () => fc.func(makeOpArb());
 
 describe("Op monad laws", () => {
   test("left identity", async () => {

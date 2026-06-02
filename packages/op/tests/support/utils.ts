@@ -1,3 +1,6 @@
+import { Op } from "../../src/index.js";
+import * as fc from "fast-check";
+
 import type { Result } from "../../src/result.js";
 
 export function neverSettling(): Promise<never> {
@@ -104,3 +107,16 @@ export async function expectRunEq<T1, E1, T2, E2>(a: Runnable<T1, E1>, b: Runnab
 }
 
 export const FC_ASSERT_OPTIONS = { numRuns: 1000 };
+
+export function makeOpArb() {
+  return fc.oneof(fc.anything().map(Op.of), fc.anything().map(Op.fail));
+}
+
+export function makeKleisliArb() {
+  return fc.func(makeOpArb());
+}
+
+/** Op of a pure function or Op.fail, for applicative function slots. */
+export function makeOpFuncArb() {
+  return fc.oneof(fc.func(fc.anything()).map(Op.of), fc.anything().map(Op.fail));
+}
