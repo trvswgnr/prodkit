@@ -121,8 +121,8 @@ If a behavior is an internal invariant of one module, keep it in unit; if it is 
   - `hkt.ts` (reusable HKT primitives for `@prodkit/op/hkt`)
   - `combinators.ts` (all/any/race combinators)
   - `errors.ts`, `result.ts`, `tagged.ts` (shared domain contracts)
-  - `shared.ts` (small shared type/runtime helpers)
-- `@prodkit/shared` (`packages/shared`, private): workspace-only shared typings and config. Today this includes `platform-globals.d.ts` (runtime-global typings for packages without DOM `lib`). Consumers declare `"@prodkit/shared": "workspace:*"` and set `"types": ["@prodkit/shared"]` in tsconfig.
+  - `shared.ts` (Op brands and `isOp` helpers only; workspace primitives import `@prodkit/shared/runtime` directly)
+- `@prodkit/shared` (`packages/shared`, private): workspace globals, publishable tsconfig/vitest presets, and runtime primitives (`@prodkit/shared/runtime`). Publishable packages declare `"@prodkit/shared": "workspace:*"` and extend `@prodkit/shared/tsconfig/publishable`.
 - Test layout under `packages/op/tests/`:
   - `integration/index.test.ts` for public API contract coverage
   - `unit/errors.test.ts` for typed error contracts
@@ -154,8 +154,9 @@ which doc to open for a given question.
 ## Source layout (`@prodkit/shared`)
 
 - Private workspace package under `packages/shared/`; not published to npm.
-- Export map today: `@prodkit/shared` / `@prodkit/shared/platform-globals` (ambient runtime-global typings).
-- Publishable packages that need those globals declare `"@prodkit/shared": "workspace:*"` and set `"types": ["@prodkit/shared"]` in tsconfig `compilerOptions`.
+- Layout: `types/` (ambient `platform-globals.d.ts`), `runtime/index.ts` (workspace primitives consumed by publishable packages), `config/` (publishable tsconfig, vitest, and tsdown presets).
+- Export map: `@prodkit/shared` / `@prodkit/shared/platform-globals`, `@prodkit/shared/runtime`, `@prodkit/shared/tsconfig/publishable`, `@prodkit/shared/vitest/publishable`, `@prodkit/shared/tsdown/publishable`.
+- Publishable packages extend `@prodkit/shared/tsconfig/publishable` and declare `"@prodkit/shared": "workspace:*"`.
 
 ## Source layout (`@prodkit/std`)
 

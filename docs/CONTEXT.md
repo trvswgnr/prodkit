@@ -9,7 +9,7 @@ right doc before diving into code.
 | --- | --- |
 | `@prodkit/op` | Runtime-agnostic operation library: typed async composition, policies, combinators, DI subpath |
 | `@prodkit/std` | Reserved runtime-agnostic utilities (no `@prodkit/op` dependency); subpaths such as `@prodkit/std/array` planned |
-| `@prodkit/shared` | Private workspace typings and config (not published) |
+| `@prodkit/shared` | Private workspace globals, publishable tsconfig/vitest presets, and runtime primitives (not published) |
 | `@prodkit/examples` | Consumer smoke and sample apps |
 | `@prodkit/benchmarks` | Performance harnesses |
 | `@prodkit/tools` | Maintainer scripts (ADR index sync, release cut, smoke harnesses) |
