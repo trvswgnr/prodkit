@@ -504,7 +504,11 @@ const installAndSmoke = Op(function* (
   sourceLabel: string,
 ) {
   const smokeWorkspaceDir = yield* createTempExamplesWorkspace(examplesDir, dependencyOverrides);
-  yield* execOp("pnpm", ["install", `--store-dir=${PNPM_STORE_DIR}`], smokeWorkspaceDir);
+  yield* execOp(
+    "pnpm",
+    ["install", "--reporter=silent", `--store-dir=${PNPM_STORE_DIR}`],
+    smokeWorkspaceDir,
+  );
   yield* ensureInstalledPackagesReady(smokeWorkspaceDir, sourceLabel);
   yield* execOp("pnpm", ["--filter", EXAMPLES_PACKAGE_NAME, "run", "smoke"], smokeWorkspaceDir);
 });
@@ -517,8 +521,16 @@ async function cleanupPackOutput(tarballPath: string) {
 const installFromPack = Op(function* () {
   const repoRoot = yield* fromRepoRoot(".");
   const examplesDir = yield* fromRepoRoot("examples");
-  yield* execOp("pnpm", ["--filter", "@prodkit/op", "run", "build"], repoRoot);
-  yield* execOp("pnpm", ["--filter", "@prodkit/std", "run", "build"], repoRoot);
+  yield* execOp(
+    "pnpm",
+    ["--filter", "@prodkit/op", "exec", "tsdown", "--logLevel", "warn"],
+    repoRoot,
+  );
+  yield* execOp(
+    "pnpm",
+    ["--filter", "@prodkit/std", "exec", "tsdown", "--logLevel", "warn"],
+    repoRoot,
+  );
 
   const packOpOutput = yield* execOp(
     "pnpm",

@@ -1,7 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
 import { build } from "esbuild";
 import { getRepoRoot, resolveOpPackageDir } from "./harness.ts";
@@ -116,11 +115,7 @@ async function main(): Promise<void> {
   process.stdout.write(`${JSON.stringify(bounds)}\n`);
 }
 
-const isDirectRun =
-  process.argv[1] !== undefined &&
-  import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
-
-if (isDirectRun) {
+if (import.meta.main) {
   main().catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     process.stderr.write(`${message}\n`);

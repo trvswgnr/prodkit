@@ -1,37 +1,46 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "envMode": "loose",
+  "noUpdateNotifier": true,
   "globalDependencies": ["oxlint.config.ts"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**"],
-      "inputs": ["src/**/*.ts", "tsdown.config.ts", "tsconfig.json", "package.json"]
+      "inputs": ["src/**/*.ts", "tsdown.config.ts", "tsconfig.json", "package.json"],
+      "outputLogs": "new-only"
     },
     "test": {
       "dependsOn": ["^build", "build"],
-      "inputs": ["**/*.ts", "vitest.config.ts", "tsconfig.json", "package.json"]
+      "inputs": ["**/*.ts", "vitest.config.ts", "tsconfig.json", "package.json"],
+      "outputLogs": "new-only"
     },
     "typecheck": {
       "dependsOn": ["^build"],
-      "inputs": ["**/*.ts", "tsconfig.json"]
+      "inputs": ["**/*.ts", "tsconfig.json"],
+      "outputLogs": "new-only"
     },
     "lint": {
-      "inputs": ["**/*.ts", "tsconfig.json", "package.json"]
+      "inputs": ["**/*.ts", "tsconfig.json", "package.json"],
+      "outputLogs": "new-only"
     },
     "fmt": {
-      "cache": false
+      "cache": false,
+      "outputLogs": "new-only"
     },
     "fmt:check": {
-      "inputs": ["**/*.ts"]
+      "inputs": ["**/*.ts"],
+      "outputLogs": "new-only"
     },
     "smoke": {
       "dependsOn": ["build", "^build"],
-      "cache": false
+      "cache": false,
+      "outputLogs": "new-only"
     },
     "codspeed:bench": {
       "dependsOn": ["^build"],
-      "cache": false
+      "cache": false,
+      "outputLogs": "new-only"
     }
   }
 }

@@ -341,7 +341,9 @@ async function main(): Promise<void> {
   );
 }
 
-main().catch((error) => {
-  logger.error(error);
-  process.exitCode = 1;
-});
+if (import.meta.main) {
+  main().catch((error) => {
+    logger.error(error);
+    process.exitCode = 1;
+  });
+}
