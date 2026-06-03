@@ -21,19 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as a bundled graph (`better-result` externalized), with a consumer subpath upper bound
   (`di`, `policy`, `hkt`).
 
-### Changed
+### Removed
 
-- `@prodkit/op/internal` no longer re-exports workspace primitives (`AbortSignalLike`, `unsafeCoerce`,
-  `NEVER`, `hasBrand`, `sleepWithSignal`). Monorepo code uses `@prodkit/shared/runtime` instead.
-- Repaired `DESIGN.md` and contributor runtime-architecture references (`settleIteratorWithCleanup`,
-  combinator test file paths). Gate now runs `design:check` so those references cannot drift again.
-- Plan policy push-through rewrites child plans structurally; `PlanRewriter` is `apply`-only (removed
-  `DelegatingPlanRewriter` per-transform forwarders). New fluent transforms use `rewriteUnaryPlan` or
-  child `rewrite` at the plan node only.
-
-### Added
-
-- No entries yet.
+- `@prodkit/op/internal` no longer exports `AbortSignalLike`, `unsafeCoerce`, `NEVER`, `hasBrand`, or
+  `sleepWithSignal`.
 
 ## [0.1.78] - 2026-06-01
 

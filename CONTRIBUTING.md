@@ -192,8 +192,9 @@ are not used for new releases.
 
    - **Include:** published API/behavior changes, breaking changes, deprecations, and user-visible
      fixes or docs shipped in that package's tarball.
-   - **Omit:** monorepo tooling (CI, gate, release scripts), ADRs, contributor docs, and internal
-     refactors with no published API impact. Do not add a note when omitting.
+   - **Omit:** monorepo tooling (CI, gate, release scripts), ADRs, contributor docs, internal plan
+     implementation names, and refactors with no published API or behavior impact. Do not add a note
+     when omitting.
    - **Per release:** use at most one heading per type, in order: `Added`, `Changed`, `Deprecated`,
      `Removed`, `Fixed`, `Security`. Skip empty types. Use past tense; do not repeat the section
      name in every bullet ("Added X" under `### Added`).
