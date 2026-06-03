@@ -86,3 +86,7 @@ export function isAwaited<T>(value: T | PromiseLike<T> | Awaited<T>): value is A
 export function identity<T>(value: T): T {
   return value;
 }
+
+export function hasOwn<K extends PropertyKey>(value: object, key: K): value is Record<K, unknown> {
+  return Object.hasOwn(value, key);
+}
