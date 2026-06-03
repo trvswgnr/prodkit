@@ -15,6 +15,7 @@ import {
   OP_PLAN_BIND,
   createPlan,
   genPlan,
+  splitLeadingUnaryWraps,
   type Plan,
   type PlanBackedOp,
   type PlanBinder,
@@ -174,12 +175,25 @@ function getPlanFactoryChain(factory: ErasedPlanFactory): PlanFactoryChain {
 
 function applyPlanTransforms(source: ErasedPlan, tail: PlanTransformNode): ErasedPlan {
   const nodes: PlanTransformNode[] = [];
+  let hasPushPolicy = false;
   for (let node: PlanTransformNode | undefined = tail; node !== undefined; node = node.previous) {
     nodes.push(node);
+    if (node.kind === "pushPolicy") hasPushPolicy = true;
   }
 
   let base = source;
   const pendingUnaryWraps: ErasedPlanTransform[] = [];
+
+  // When a push-through policy is present and the entry plan is itself a deep unary chain (for
+  // example an already-folded op reached through `getPlan`/`invoke`), split the entry plan's leading
+  // unary wrappers up front. That keeps `base` shallow so each `pushPolicy` rewrites it in O(1)
+  // instead of re-walking and rebuilding the entry chain per policy. A shallow (non-unary) entry
+  // short-circuits the split in O(1), so the common case is unaffected.
+  if (hasPushPolicy) {
+    const split = splitLeadingUnaryWraps(source);
+    base = split.base;
+    for (const wrap of split.wraps) pendingUnaryWraps.push(wrap);
+  }
 
   const materialize = () => {
     for (let index = 0; index < pendingUnaryWraps.length; index += 1) {
