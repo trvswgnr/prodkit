@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Deep fluent and policy chains now execute stack-safely instead of resolving to
+  `Err(UnhandledException)` or throwing from `.run()` when valid compositions get large.
 - Corrected bundle size figures in the published performance docs; the main entry is now measured
   as a bundled graph (`better-result` externalized), with a consumer subpath upper bound
   (`di`, `policy`, `hkt`).
@@ -432,5 +434,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   paths, including generator finalization behavior.
 - Tightened combinator and policy behavior in edge cases (listener teardown,
   retry timing, and composed operation semantics).
-
 
