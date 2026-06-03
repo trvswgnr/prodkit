@@ -40,9 +40,11 @@ type ErasedPlan = Plan<unknown, unknown, unknown>;
 type ErasedPlanFactory = (...args: readonly unknown[]) => ErasedPlan;
 type ErasedPlanTransform = (plan: ErasedPlan) => ErasedPlan;
 const PLAN_FACTORY_CHAIN: unique symbol = Symbol("prodkit.op.plan-factory-chain");
+type TransformKind = "unaryWrap" | "pushPolicy" | "boundary";
 type PlanTransformNode = {
   readonly previous: PlanTransformNode | undefined;
   readonly transform: ErasedPlanTransform;
+  readonly kind: TransformKind;
 };
 type PlanFactoryChain = {
   readonly base: ErasedPlanFactory;
@@ -54,6 +56,7 @@ type ChainablePlanFactory = ErasedPlanFactory & {
 
 type PolicyWrapFn = <TNext, ENext, MNext>(
   transform: (plan: Plan<unknown, unknown, unknown>) => Plan<TNext, ENext, MNext>,
+  kind: TransformKind,
 ) => unknown;
 
 class PolicySourceImpl {
@@ -71,6 +74,7 @@ class PolicySourceImpl {
       this.wrapPlan(
         // SAFETY: PolicyWrapFn erases plan generics; transform closes over the source plan's T, E, M.
         unsafeCoerce(transform),
+        "boundary",
       ),
     );
   }
@@ -78,7 +82,7 @@ class PolicySourceImpl {
   rewrite<A, TNext, ENext, MNext>(rewriter: PlanRewriter): Op<TNext, ENext, AsArgs<A>, MNext> {
     // SAFETY: PolicyWrapFn returns unknown; rewrite already targeted TNext, ENext, MNext on the inner plan.
     return unsafeCoerce<Op<TNext, ENext, AsArgs<A>, MNext>>(
-      this.wrapPlan((plan) => plan.rewrite<TNext, ENext, MNext>(rewriter)),
+      this.wrapPlan((plan) => plan.rewrite<TNext, ENext, MNext>(rewriter), "pushPolicy"),
     );
   }
 
@@ -102,7 +106,7 @@ class PolicySourceImpl {
           if (result.isErr()) return yield* result;
           return result.value;
         });
-      }),
+      }, "boundary"),
     );
   }
 }
@@ -110,10 +114,13 @@ class PolicySourceImpl {
 function wrapPlanTransform<T, E, A, M, Yieldable extends boolean, TNext, ENext, MNext>(
   ctx: PlanShellContext<T, E, A, M>,
   transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
+  kind: TransformKind,
 ): OpInterface<TNext, ENext, A, MNext, Yieldable> {
-  const bindArgs = appendPlanBinder(ctx.bindArgs, transform);
+  const bindArgs = appendPlanBinder(ctx.bindArgs, transform, kind);
   const makeIterable =
-    ctx.makeIterable === undefined ? undefined : appendPlanProvider(ctx.makeIterable, transform);
+    ctx.makeIterable === undefined
+      ? undefined
+      : appendPlanProvider(ctx.makeIterable, transform, kind);
 
   return makePlanOp<TNext, ENext, A, MNext, Yieldable>(bindArgs, makeIterable, ctx.bound);
 }
@@ -121,12 +128,13 @@ function wrapPlanTransform<T, E, A, M, Yieldable extends boolean, TNext, ENext, 
 function appendPlanBinder<T, E, A, M, TNext, ENext, MNext>(
   bindArgs: PlanBinder<T, E, A, M>,
   transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
+  kind: TransformKind,
 ): PlanBinder<TNext, ENext, A, MNext> {
   // SAFETY: transform chains erase plan generics until bind time, then restore the typed binder surface.
   const erasedBindArgs: ErasedPlanFactory = unsafeCoerce(bindArgs);
   // SAFETY: transform closes over the source plan generics; the erased chain preserves transform order only.
   const erasedTransform: ErasedPlanTransform = unsafeCoerce(transform);
-  const appended = appendPlanTransform(erasedBindArgs, erasedTransform);
+  const appended = appendPlanTransform(erasedBindArgs, erasedTransform, kind);
   // SAFETY: appended binder keeps the original args tuple and returns the transform's next plan type.
   return unsafeCoerce(appended);
 }
@@ -134,12 +142,13 @@ function appendPlanBinder<T, E, A, M, TNext, ENext, MNext>(
 function appendPlanProvider<T, E, M, TNext, ENext, MNext>(
   provider: () => Plan<T, E, M>,
   transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
+  kind: TransformKind,
 ): () => Plan<TNext, ENext, MNext> {
   // SAFETY: iterable providers are nullary plan factories; only plan generics are erased in the chain.
   const erasedProvider: ErasedPlanFactory = unsafeCoerce(provider);
   // SAFETY: transform closes over the source plan generics; the erased chain preserves transform order only.
   const erasedTransform: ErasedPlanTransform = unsafeCoerce(transform);
-  const appended = appendPlanTransform(erasedProvider, erasedTransform);
+  const appended = appendPlanTransform(erasedProvider, erasedTransform, kind);
   // SAFETY: appended provider returns the transform's next plan type.
   return unsafeCoerce(appended);
 }
@@ -147,9 +156,10 @@ function appendPlanProvider<T, E, M, TNext, ENext, MNext>(
 function appendPlanTransform(
   factory: ErasedPlanFactory,
   transform: ErasedPlanTransform,
+  kind: TransformKind,
 ): ErasedPlanFactory {
   const chain = getPlanFactoryChain(factory);
-  const tail: PlanTransformNode = { previous: chain.tail, transform };
+  const tail: PlanTransformNode = { previous: chain.tail, transform, kind };
   const next: ErasedPlanFactory = (...args) => applyPlanTransforms(chain.base(...args), tail);
   Object.defineProperty(next, PLAN_FACTORY_CHAIN, {
     value: { base: chain.base, tail } satisfies PlanFactoryChain,
@@ -163,17 +173,46 @@ function getPlanFactoryChain(factory: ErasedPlanFactory): PlanFactoryChain {
 }
 
 function applyPlanTransforms(source: ErasedPlan, tail: PlanTransformNode): ErasedPlan {
-  const transforms: ErasedPlanTransform[] = [];
+  const nodes: PlanTransformNode[] = [];
   for (let node: PlanTransformNode | undefined = tail; node !== undefined; node = node.previous) {
-    transforms.push(node.transform);
+    nodes.push(node);
   }
 
-  let plan = source;
-  for (let index = transforms.length - 1; index >= 0; index -= 1) {
-    const transform = transforms[index];
-    if (transform !== undefined) plan = transform(plan);
+  let base = source;
+  const pendingUnaryWraps: ErasedPlanTransform[] = [];
+
+  const materialize = () => {
+    for (let index = 0; index < pendingUnaryWraps.length; index += 1) {
+      const wrap = pendingUnaryWraps[index];
+      if (wrap !== undefined) base = wrap(base);
+    }
+    pendingUnaryWraps.length = 0;
+  };
+
+  // nodes is tail..head; iterate head..tail to apply transforms in fluent-call order.
+  for (let index = nodes.length - 1; index >= 0; index -= 1) {
+    const node = nodes[index];
+    if (node === undefined) continue;
+
+    if (node.kind === "unaryWrap") {
+      pendingUnaryWraps.push(node.transform);
+      continue;
+    }
+
+    if (node.kind === "pushPolicy") {
+      // transform(base) is base.rewrite(rewriter); with deferred wraps, base is the nearest
+      // non-unary node, which is exactly the push-through target.
+      base = node.transform(base);
+      continue;
+    }
+
+    // boundary
+    materialize();
+    base = node.transform(base);
   }
-  return plan;
+
+  materialize();
+  return base;
 }
 
 function fluentMethodsForContext<T, E, A, M, Yieldable extends boolean>(
@@ -181,7 +220,8 @@ function fluentMethodsForContext<T, E, A, M, Yieldable extends boolean>(
 ) {
   const wrap = <TNext, ENext, MNext>(
     transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
-  ) => wrapPlanTransform<T, E, A, M, Yieldable, TNext, ENext, MNext>(ctx, transform);
+    kind: TransformKind = "unaryWrap",
+  ) => wrapPlanTransform<T, E, A, M, Yieldable, TNext, ENext, MNext>(ctx, transform, kind);
 
   // SAFETY: PolicySourceImpl is structural but unbranded; methods delegate through wrap with the same generics.
   const policySource: OpPolicySource<T, E, AsArgs<A>, M> = unsafeCoerce(new PolicySourceImpl(wrap));
@@ -208,7 +248,7 @@ function fluentMethodsForContext<T, E, A, M, Yieldable extends boolean>(
     mapErr: <E2>(transform: (error: TrackedErr<E>) => E2) =>
       wrap((plan) => mapErrPlan(plan, transform)),
     flatMap: <R extends AnyNullaryOp>(bind: (value: T) => R) =>
-      wrap((plan) => flatMapPlan(plan, bind)),
+      wrap((plan) => flatMapPlan(plan, bind), "boundary"),
     tap: <R>(observe: (value: T) => R) => wrap((plan) => tapPlan(plan, observe)),
     tapErr: <R>(observe: (error: TrackedErr<E>) => R) => wrap((plan) => tapErrPlan(plan, observe)),
     recover: <ECaught extends TrackedErr<E>, R>(
