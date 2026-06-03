@@ -40,9 +40,7 @@ An op that uses `DI.inject` cannot be `.run()` until you satisfy bindings with `
 
 Each dependency slot is the token **class** you declare and pass to `DI.inject` / `DI.singleton` /
 `DI.scoped`. The string passed to `DI.Dependency("...")` is a diagnostic label for errors only;
-two classes may share the same label and remain separate slots
-([ADR 0010](https://github.com/trvswgnr/prodkit/blob/main/docs/adr/0010-di-token-class-identity.md)
-in the monorepo; not shipped in the npm tarball).
+two classes may share the same label and remain separate slots.
 
 ## Run time
 

@@ -1,7 +1,8 @@
 # Lifecycle and finalizers
 
 Resource cleanup, success-gated release, and run boundary hooks share one LIFO finalizer stack per
-run. See [`DESIGN.md`](../DESIGN.md) for invariant details.
+run. If a registered finalizer throws after the body settles, that fault becomes the observable
+`Err(UnhandledException)`, even when the body already succeeded or failed with a typed error.
 
 ## `Op.defer(finalize)`
 

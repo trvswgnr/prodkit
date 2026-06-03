@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Reclassified execution invariants as contributor documentation (`docs/contributor/op-invariants.md`);
+  the former `packages/op/DESIGN.md` no longer ships in the npm tarball. Consumer guides under
+  `packages/op/` no longer link to monorepo ADRs or other contributor-only docs.
+
 ### Fixed
 
 - Deep fluent and policy chains now execute stack-safely instead of resolving to

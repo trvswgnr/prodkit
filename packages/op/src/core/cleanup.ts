@@ -12,7 +12,7 @@ import type { Result } from "../result.js";
  * 2. **Registered exit finalizers** (`runFinalizersSafely`, `chainCleanupFaults`): effectful
  *    cleanup via `RegisterExitFinalizerInstruction` (`Op.defer`, `.on("exit")`, and release hooks
  *    registered after success). Unwind is LIFO; every handler runs; faults take precedence at
- *    settlement (see DESIGN.md Invariants 1 and 2).
+ *    settlement (see op-invariants.md Invariants 1 and 2).
  *
  * 3. **Success-gated release** (`releasePlan` in `packages/op/src/policy/plan.ts`): drives the
  *    inner plan first, schedules a single exit finalizer only on success. Not implemented here;

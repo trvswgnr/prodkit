@@ -36,5 +36,4 @@ from this subpath.
 ## Ordering
 
 Policy ordering semantics are summarized under [`.with(policy)`](../README.md#withpolicy) and
-[Retry defaults](../README.md#retry-defaults) in the package README, and in
-[`DESIGN.md`](../DESIGN.md#policy-ordering-retry-and-timeout).
+[Retry defaults](../README.md#retry-defaults) in the package README.

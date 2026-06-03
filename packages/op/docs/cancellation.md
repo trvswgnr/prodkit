@@ -48,5 +48,6 @@ controller.abort(new Error("caller aborted dashboard load"));
 const result = await runPromise;
 ```
 
-Combinator interrupt behavior and timeout drain semantics are documented in
-[`DESIGN.md`](../DESIGN.md).
+When a combinator decides early (`Op.all`, `Op.any`, `Op.race`), aborted siblings are interrupted at
+suspend boundaries and the combinator waits for their teardown to finish before `.run()` resolves.
+`Op.allSettled` does not short-circuit on failure and relies on cooperative cancel only.

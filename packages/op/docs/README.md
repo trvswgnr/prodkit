@@ -1,7 +1,7 @@
 # @prodkit/op guides
 
 Extended documentation for `@prodkit/op`. These files ship in the npm tarball alongside
-[`README.md`](../README.md) (hub + core API) and [`DESIGN.md`](../DESIGN.md) (execution invariants).
+[`README.md`](../README.md) (hub + core API).
 
 | Guide | Topic |
 | --- | --- |
@@ -13,5 +13,3 @@ Extended documentation for `@prodkit/op`. These files ship in the npm tarball al
 | [internal.md](internal.md) | `@prodkit/op/internal` extension surface |
 | [lifecycle.md](lifecycle.md) | `Op.defer`, release, enter/exit hooks, finalizer ordering |
 | [cancellation.md](cancellation.md) | Cooperative cancellation contract and composed-run wiring |
-
-Monorepo decision records: [`docs/adr/`](../../../docs/adr/).

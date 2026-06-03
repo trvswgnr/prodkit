@@ -22,7 +22,6 @@
   "files": [
     "dist",
     "docs",
-    "DESIGN.md",
     "CHANGELOG.md",
     "README.md",
     "LICENSE"

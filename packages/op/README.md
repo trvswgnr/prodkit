@@ -4,18 +4,15 @@ A runtime-agnostic, composable, and predictable library for writing operations i
 
 This README is the **hub**: installation, quick start, and core API reference. Extended guides for
 subpaths, lifecycle, and cancellation live in [`docs/`](docs/README.md) and ship in the npm tarball.
-See also [`DESIGN.md`](DESIGN.md) (execution invariants), [docs/comparison.md](docs/comparison.md),
-[docs/performance.md](docs/performance.md), and monorepo [`docs/CONTEXT.md`](https://github.com/trvswgnr/prodkit/blob/main/docs/CONTEXT.md).
+See also [docs/comparison.md](docs/comparison.md) and [docs/performance.md](docs/performance.md).
 
 > [!WARNING]
 > This library is currently in alpha. The API will almost certainly change between releases while it stabilizes.
 
 > [!NOTE]
 > Subpath exports (`@prodkit/op/di`, `@prodkit/op/policy`, `@prodkit/op/hkt`, `@prodkit/op/internal`)
-> ship with the matching npm release. If your installed version predates a subpath, upgrade
-> `@prodkit/op` or import only what that version's `package.json` `exports` lists. This repo's
-> `main` branch may document APIs still under `## [Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md)
-> until they are published.
+> ship with the matching npm release. If a subpath or API is missing, upgrade `@prodkit/op` or
+> import only what your installed version's `package.json` `exports` lists.
 
 Compose steps top-to-bottom, attach retry, timeout, and cancellation as policy, and run parallel
 work without scattering reliability logic across your app.
@@ -72,8 +69,7 @@ From **`@prodkit/op`**: `TimeoutError` (from `.with(Policy.timeout(...))`), `Err
 ## Subpath exports
 
 Op-native extensions ship as separate subpath exports. The main `@prodkit/op` entry does not
-re-export them ([ADR 0008](https://github.com/trvswgnr/prodkit/blob/main/docs/adr/0008-op-subpath-exports.md)
-in the monorepo).
+re-export them.
 
 | Subpath | Guide |
 | --- | --- |
@@ -172,7 +168,8 @@ with the validation error as `cause`.
 | `Op.sleep(ms)` | Normalized to `0` | `Err(UnhandledException)` |
 | `Policy.timeout(timeoutMs)` | `Err(UnhandledException)` | `Err(UnhandledException)` |
 
-See [`DESIGN.md`](DESIGN.md#invariant-input-normalization-and-validation-at-run-time) for the full table.
+Invalid `Policy.retry` shapes (`retries`, `when`, `delay`) and invalid `Delay.exponential` options
+also fail at run time as `Err(UnhandledException)`.
 
 ### `Op.try(f, onError?)`
 
