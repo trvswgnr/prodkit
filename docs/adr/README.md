@@ -4,7 +4,7 @@ ADRs capture **why** the codebase is shaped the way it is. They live at repo roo
 is a monorepo, but each record should name the package(s) it applies to so readers know where to
 look in the tree.
 
-Package-local invariant docs (for example [`packages/op/DESIGN.md`](../../packages/op/DESIGN.md))
+Contributor invariant docs (for example [`docs/contributor/op-invariants.md`](../contributor/op-invariants.md))
 document what must stay true; ADRs document why a shape was chosen.
 
 ## Format
@@ -13,7 +13,7 @@ document what must stay true; ADRs document why a shape was chosen.
 - Each ADR starts with YAML frontmatter, then an `#` heading that **must match** `title`, then a
   short opening paragraph (context).
 - Prefer this section order when it fits: **Decision**, **Why not** (or **Problem**), **Considered
-  options**, **Consequences**. Skip sections that would repeat `DESIGN.md` invariants without new
+  options**, **Consequences**. Skip sections that would repeat `op-invariants.md` invariants without new
   rationale.
 - Keep the body **evergreen**: describe the decision and trade-offs, not open issue checklists or
   migration status. Track delivery in GitHub issues; do not add `Implementation` sections to
@@ -73,7 +73,7 @@ clear in-body note (as in ADR 0007) when the same number must record a revised r
 before acceptance.
 
 **Safe edits to accepted or superseded ADRs** include cross-links, typos, and clarifications that do
-not change what was decided. Move behavioral contracts into package `DESIGN.md` (or similar) rather
+not change what was decided. Move behavioral contracts into `docs/contributor/op-invariants.md` (or similar) rather
 than growing ADRs into invariant checklists or issue trackers.
 
 ## Index

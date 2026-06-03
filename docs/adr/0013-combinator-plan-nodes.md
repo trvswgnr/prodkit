@@ -72,5 +72,5 @@ nodes still need explicit rewrite methods until ceremony is reduced.
   generic rewrite reduces ceremony.
 - `packages/op/src/combinators.ts` holds public op factories and type helpers; fan-out and plan
   shapes live under `core/plan/`.
-- Tests from ADR 0004 and DESIGN.md Invariant 3 are the behavioral contract.
+- Tests from ADR 0004 and op-invariants.md Invariant 3 are the behavioral contract.
 - Cancellation settlement uses `core/cancel-session.ts`.

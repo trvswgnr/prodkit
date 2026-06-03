@@ -2,7 +2,7 @@
 
 Execution-level map of how a single `Op` run moves through the codebase. Correctness invariants
 (cleanup ordering, combinator semantics, settlement rules) live in
-[`packages/op/DESIGN.md`](../../packages/op/DESIGN.md). ADRs under [`docs/adr/`](../adr/) explain
+[`op-invariants.md`](op-invariants.md). ADRs under [`docs/adr/`](../adr/) explain
 why the core/fluent split and policy hooks are shaped the way they are. Domain vocabulary and
 documentation roles: [`docs/CONTEXT.md`](../CONTEXT.md).
 
@@ -88,7 +88,7 @@ Built-in policies attach through `.with(Policy.*)` on the op value (`packages/op
   through a composed `AbortController` so either parent or bound signal can cancel the inner run.
 
 Method order on the fluent object defines wrapper nesting (outermost policy is applied last in
-the chain). See policy ordering notes in `packages/op/DESIGN.md`.
+the chain). See policy ordering notes in `op-invariants.md`.
 
 ## Adding a fluent plan transform
 
@@ -164,7 +164,7 @@ Import extension helpers from `@prodkit/op/internal` (for example `Blocking`, `w
 
 `packages/op/src/core/plan/combinators.ts` and `packages/op/src/core/plan/fan-out.ts` run combinator
 child plans through `Plan.execute` / `executePlan` (often with per-child `AbortController` signals)
-and enforce ordering contracts documented in `DESIGN.md`. `Op.all`, `Op.any`, and `Op.race` wait
+and enforce ordering contracts documented in `op-invariants.md`. `Op.all`, `Op.any`, and `Op.race` wait
 for aborted sibling finalization before the parent `run()` settles
 ([ADR 0004](../adr/0004-combinators-wait-for-loser-finalization.md)). Interrupt-on-abort fan-out
 uses `executePlan(..., interruptOnAbortMode)` so aborted losers still unwind when they never observe

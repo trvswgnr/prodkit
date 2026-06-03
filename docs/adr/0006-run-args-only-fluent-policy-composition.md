@@ -24,7 +24,7 @@ options bag.
 **Policy stacks on the op value.** `.with(Policy.retry(...))`, `.with(Policy.timeout(...))`,
 `.with(Policy.cancel(...))`, `.with(Policy.release(...))`, transforms, and lifecycle hooks compose
 left-to-right on the callable op object. Method order defines wrapper nesting (documented under
-policy ordering in `DESIGN.md`).
+policy ordering in `op-invariants.md`).
 
 **Static `Op.run` is sugar, not a second config surface.** `Op.run(op, ...args)` delegates to
 `op(...args).run()` with the same semantics; it does not accept signals or policies.

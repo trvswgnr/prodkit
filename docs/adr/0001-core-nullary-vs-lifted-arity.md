@@ -46,5 +46,5 @@ policies compose on the intended inner work and the outer arity stays stable.
   the operation is user-facing.
 - Brand and `Object.assign` coerces exist because TypeScript cannot infer the callable-plus-methods
   intersection after `Object.assign`; that limitation is structural, not a missing refactor.
-- `DESIGN.md` documents execution invariants for the nullary driver; this ADR documents why arity
+- `op-invariants.md` documents execution invariants for the nullary driver; this ADR documents why arity
   lifting is a separate layer.

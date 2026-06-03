@@ -18,7 +18,7 @@ callable facade; tuple args bind at the shell, then `Plan.execute` drives the tr
 
 **Policy push-through is structural rewrite**, not per-combinator `OpHooks.rebuild` /
 `rebuildForTimeout`. `.with(Policy.timeout(ms))` on `op.map(f)` becomes a timeout plan node around
-the mapped inner plan, preserving ordering documented in `DESIGN.md`. The hook rebuild layer and
+the mapped inner plan, preserving ordering documented in `op-invariants.md`. The hook rebuild layer and
 `fluent-timeout.ts` adapters were removed at cutover.
 
 **Timeout widening stays at the plan boundary.** Error-channel transforms filter `TimeoutError` at
@@ -55,4 +55,4 @@ did not remove the fundamental typing problem.
   ([ADR 0013](0013-combinator-plan-nodes.md)), not reintroduce rebuild callbacks.
 - ADR 0002 is superseded; read it only for pre-plan history.
 - Behavioral contracts (policy ordering, timeout widening, combinator settlement) live in
-  `DESIGN.md`; this ADR records why the AST replaced hooks.
+  `op-invariants.md`; this ADR records why the AST replaced hooks.

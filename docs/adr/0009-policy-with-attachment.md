@@ -60,6 +60,6 @@ hard cutover; shipped afterward via `Policy.define(...)` and `@prodkit/op/hkt` (
 - The open policy protocol (`Policy.define`, `@prodkit/op/hkt`) is part of the public surface; custom
   attachments can describe type-level op transforms without core `.with` overloads.
 - Retry defaults, policy ordering with `.with(...)`, and other behavioral contracts belong in
-  `packages/op/DESIGN.md`.
+  `docs/contributor/op-invariants.md`.
 - Public docs use `@prodkit/op/policy` for constructors and `Delay`; core docs cover `.with(...)`.
 - Package boundary for the policy subpath: [ADR 0008](0008-op-subpath-exports.md).

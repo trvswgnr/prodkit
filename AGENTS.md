@@ -2,7 +2,7 @@
 
 - Treat this file as living memory: update it whenever durable user preferences or agent-specific workflow signals become clear.
 - Capture only durable signals; do not add task-specific notes, temporary debugging details, or one-off preferences.
-- Before adding a bullet, check whether `docs/CONTEXT.md`, `CONTRIBUTING.md`, or package `DESIGN.md` already cover it. If yes, link there instead of duplicating.
+- Before adding a bullet, check whether `docs/CONTEXT.md`, `CONTRIBUTING.md`, or `docs/contributor/op-invariants.md` already cover it. If yes, link there instead of duplicating.
 - If a new signal contradicts an existing bullet, replace the old bullet instead of adding both.
 - Keep bullets short and decision-relevant so future agents can scan this file quickly.
 - Review this file before major edits and after finishing major tasks to keep memory fresh.
@@ -13,7 +13,7 @@ Read these before guessing repo structure or conventions:
 
 - Vocabulary and which doc to open: `docs/CONTEXT.md`
 - Setup, gate, release, and monorepo layout: `CONTRIBUTING.md`
-- `@prodkit/op` runtime invariants: `packages/op/DESIGN.md`
+- `@prodkit/op` runtime invariants: `docs/contributor/op-invariants.md`
 - Decision history: `docs/adr/README.md`
 - Execution module map: `docs/contributor/runtime-architecture.md`
 

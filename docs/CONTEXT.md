@@ -35,9 +35,9 @@ exports, not separate npm packages or `@prodkit/std` modules.
 | --- | --- |
 | How do I install and use `@prodkit/op`? | [`packages/op/README.md`](../packages/op/README.md) (hub + core API; ships on npm) |
 | Subpaths, lifecycle, cancellation depth | [`packages/op/docs/`](../packages/op/docs/README.md) (ships on npm) |
-| What must stay true at run time? | [`packages/op/DESIGN.md`](../packages/op/DESIGN.md) (invariants; ships on npm) |
 | Why was it built this way? | [`docs/adr/README.md`](adr/README.md) (monorepo only) |
 | How does execution flow through modules? | [`docs/contributor/runtime-architecture.md`](contributor/runtime-architecture.md) |
+| What must stay true at run time? | [`docs/contributor/op-invariants.md`](contributor/op-invariants.md) |
 | How do I set up, test, and release? | [`CONTRIBUTING.md`](../CONTRIBUTING.md) |
 | How does `@prodkit/op` compare to Effect / neverthrow? | [`packages/op/docs/comparison.md`](../packages/op/docs/comparison.md) (ships on npm) |
 | What is the runtime overhead? | [`packages/op/docs/performance.md`](../packages/op/docs/performance.md) (ships on npm) |
@@ -45,10 +45,11 @@ exports, not separate npm packages or `@prodkit/std` modules.
 
 ## Documentation boundaries
 
-- **Consumer docs** (`packages/op/README.md`, `packages/op/docs/`, `DESIGN.md`, changelogs): outcome-focused usage and stable semantics. Avoid issue checklists and migration status.
+- **Consumer docs** (`packages/op/README.md`, `packages/op/docs/`, changelogs): outcome-focused usage and stable semantics. Avoid issue checklists and migration status.
 - **ADRs** (`docs/adr/`): evergreen decision records (why). Track implementation in GitHub issues, not ADR bodies.
-- **Contributor docs** (`CONTRIBUTING.md`, `docs/contributor/`): setup, gate, release, and code navigation. Not duplicated in package READMEs.
+- **Contributor docs** (`CONTRIBUTING.md`, `docs/contributor/`): setup, gate, release, code navigation, and runtime invariants. Not duplicated in package READMEs.
 - **Agent memory** (`AGENTS.md`): agent environment quirks, user preferences, and workflow defaults; not consumer-facing. Repo facts live in the docs above.
 
-When behavior changes, update the consumer-facing doc first, then `DESIGN.md` invariants if needed,
-then add or supersede an ADR when the decision itself changed.
+When behavior changes, update the consumer-facing doc first (`packages/op/README.md` or
+`packages/op/docs/`), then `docs/contributor/op-invariants.md` if the contract changed, then add or
+supersede an ADR when the decision itself changed.

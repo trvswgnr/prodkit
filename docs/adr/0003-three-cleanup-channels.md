@@ -41,7 +41,7 @@ release, `.with(Policy.release(...))`.
 
 **Exit finalizers must not inherit generator `return()` semantics.** Swallowing finalizer faults
 would hide teardown corruption. Registered finalizer failure taking precedence at settlement is
-Invariant 2 in `DESIGN.md`; generator finalization intentionally does the opposite so body errors
+Invariant 2 in `op-invariants.md`; generator finalization intentionally does the opposite so body errors
 stay visible when native `finally` misbehaves.
 
 **`Policy.release` is not a synonym for defer.** Running release on typed failure would convert
@@ -66,5 +66,5 @@ surface unchanged.
   `Op.defer`, `.on("exit")`, or `.with(Policy.release(...))` as appropriate.
 - Do not merge `closeGenerator` fault handling with `runFinalizersSafely`; the asymmetry is the
   contract.
-- `DESIGN.md` documents LIFO ordering, finalizer precedence, and release success-gating as
+- `op-invariants.md` documents LIFO ordering, finalizer precedence, and release success-gating as
   invariants; this ADR documents why three channels remain distinct.

@@ -19,6 +19,24 @@ pnpm install
 - `@prodkit/op` landed first historically; the repo is intentionally multi-package.
 - Package-scoped scripts stay in the owning workspace `package.json`; invoke them with `pnpm --filter <workspace> run <script>`.
 
+## Documentation
+
+`@prodkit/op` consumer docs (`packages/op/README.md`, `packages/op/docs/`) ship on npm. They cover
+installation, API usage, and runtime semantics for library users. They do not link to monorepo-only
+material (ADRs, contributor guides, or `docs/CONTEXT.md`).
+
+Contributor and architecture docs live in the repo only:
+
+- [`docs/CONTEXT.md`](docs/CONTEXT.md): domain vocabulary and which doc to open for a given question
+- [`docs/contributor/`](docs/contributor/): execution module map (`runtime-architecture.md`) and
+  correctness invariants (`op-invariants.md`)
+- [`docs/adr/`](docs/adr/): architectural decision records (why the codebase is shaped this way).
+  Index and format rules: [`docs/adr/README.md`](docs/adr/README.md). Run
+  `pnpm --filter @prodkit/tools run adr:sync` after adding or editing an ADR.
+
+When behavior changes, update consumer docs first, then `docs/contributor/op-invariants.md` if the
+contract changed, then add or supersede an ADR when the decision itself changed.
+
 ## Contributor Runtime
 
 - Node `>=24.14.0` on 24.x Active LTS is required for local development and release tasks. Node 22.x is maintenance LTS; this repo standardizes on 24.x, not 22 or 20.
@@ -45,7 +63,7 @@ audit unit, integration, type, and property-law coverage evidence from the run. 
 coverage is omitted until utility modules ship in `packages/std/src/`.
 CI runs `pnpm -r exec npm audit signatures` so dependency signature verification covers every
 workspace package, not just the private root manifest.
-A `design:check` gate step fails when `packages/op/DESIGN.md` references source symbols or test
+An `invariants:check` gate step fails when `docs/contributor/op-invariants.md` references source symbols or test
 file paths that no longer exist in the repo.
 A `changelog:api:check` gate step fails when `packages/op/src/index.ts`,
 `packages/op/src/di/index.ts`, `packages/op/src/policy/index.ts`, or `packages/op/src/hkt.ts`
@@ -136,7 +154,7 @@ If a behavior is an internal invariant of one module, keep it in unit; if it is 
   - `property/monad-laws.test.ts` for algebraic contract checks
   - `types/op.test.ts` for compile-time type contracts
   - `types/di.test.ts` for DI compile-time type contracts
-- Runtime invariants and execution semantics are documented in `packages/op/DESIGN.md`.
+- Runtime invariants and execution semantics are documented in `docs/contributor/op-invariants.md`.
 - Structural rationale for core/fluent choices (why separate paths exist) lives in `docs/adr/`.
   Each ADR declares `title`, `status`, and `packages` in YAML frontmatter; run
   `pnpm --filter @prodkit/tools run adr:sync` after adding or editing one. Superseding and
@@ -148,7 +166,7 @@ If a behavior is an internal invariant of one module, keep it in unit; if it is 
 Execution-level maps (module graph, instruction lifecycle, policy wrappers, fluent transform
 cookbook, DI integration, driver loop) live in
 [`docs/contributor/runtime-architecture.md`](docs/contributor/runtime-architecture.md). Correctness
-invariants are in [`packages/op/DESIGN.md`](packages/op/DESIGN.md); decision rationale is in
+invariants are in [`docs/contributor/op-invariants.md`](docs/contributor/op-invariants.md); decision rationale is in
 [`docs/adr/`](docs/adr/). See [`docs/CONTEXT.md`](docs/CONTEXT.md) for domain vocabulary and
 which doc to open for a given question.
 

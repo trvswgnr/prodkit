@@ -29,7 +29,7 @@ on typed `E`. Runtime faults and cleanup failures stay on the `UnhandledExceptio
 
 **Cleanup faults use the same channel.** When registered exit finalizers throw after the body
 settles, the observable outcome becomes `Err(UnhandledException)` with the cleanup fault as
-`cause`, even if the body already returned typed `Err` (Invariant 2 in `DESIGN.md`).
+`cause`, even if the body already returned typed `Err` (Invariant 2 in `op-invariants.md`).
 
 ## Why not fold everything into E?
 
@@ -61,5 +61,5 @@ between expected and unexpected failure; see `recover` docs in `packages/op/READ
   `Err` when the failure is truly part of `E`), not throw through exported functions.
 - Error-aware fluent transforms must filter `TimeoutError` and avoid treating `UnhandledException`
   as user `E`; ADR 0007 records the plan-node model that enforces this boundary.
-- `DESIGN.md` documents finalizer precedence and `Op.try` mapping; this ADR documents why the
+- `op-invariants.md` documents finalizer precedence and `Op.try` mapping; this ADR documents why the
   second error channel exists and stays non-recoverable through user transforms.

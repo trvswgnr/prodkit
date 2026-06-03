@@ -5,9 +5,9 @@ import { createLogger, readRepoRoot } from "./utils.ts";
 
 const logger = createLogger();
 
-const DESIGN_MD = "packages/op/DESIGN.md";
+const OP_INVARIANTS_MD = "docs/contributor/op-invariants.md";
 
-/** Repo-relative paths in DESIGN.md backticks (concrete files only). */
+/** Repo-relative paths in op-invariants.md backticks (concrete files only). */
 const PATH_IN_BACKTICKS = /`(packages\/op\/(?:src|tests)\/[^`*]+)`/g;
 
 /** Source path plus symbol, e.g. `runtime.ts` (`settleIteratorWithCleanup`). */
@@ -19,7 +19,7 @@ const TEST_TITLE = /`(packages\/op\/tests\/[^`]+\.test\.ts)`\s+\(`([^`]+)`\)/g;
 function assertFileExists(repoRoot: string, relativePath: string): void {
   const absolute = path.join(repoRoot, relativePath);
   if (!existsSync(absolute)) {
-    throw new Error(`${DESIGN_MD}: missing path \`${relativePath}\``);
+    throw new Error(`${OP_INVARIANTS_MD}: missing path \`${relativePath}\``);
   }
 }
 
@@ -28,7 +28,7 @@ function assertSymbolInSource(repoRoot: string, relativePath: string, symbol: st
   const pattern = new RegExp(`\\b(?:async\\s+)?function\\s+${symbol}\\b|\\bconst\\s+${symbol}\\b`);
   if (!pattern.test(source)) {
     throw new Error(
-      `${DESIGN_MD}: \`${relativePath}\` does not define \`${symbol}\` (update doc or implementation)`,
+      `${OP_INVARIANTS_MD}: \`${relativePath}\` does not define \`${symbol}\` (update doc or implementation)`,
     );
   }
 }
@@ -39,7 +39,7 @@ function assertTestTitle(repoRoot: string, relativePath: string, title: string):
   const pattern = new RegExp(`\\btest\\(\\s*["'\`]${escaped}["'\`]`);
   if (!pattern.test(source)) {
     throw new Error(
-      `${DESIGN_MD}: \`${relativePath}\` has no test titled \`${title}\` (update doc or rename test)`,
+      `${OP_INVARIANTS_MD}: \`${relativePath}\` has no test titled \`${title}\` (update doc or rename test)`,
     );
   }
 }
@@ -56,8 +56,8 @@ function collectConcretePaths(content: string): Set<string> {
 
 function main(): void {
   const repoRoot = readRepoRoot();
-  const designPath = path.join(repoRoot, DESIGN_MD);
-  const content = readFileSync(designPath, "utf8");
+  const invariantsPath = path.join(repoRoot, OP_INVARIANTS_MD);
+  const content = readFileSync(invariantsPath, "utf8");
 
   for (const relativePath of collectConcretePaths(content)) {
     assertFileExists(repoRoot, relativePath);
@@ -79,7 +79,7 @@ function main(): void {
     assertTestTitle(repoRoot, relativePath, title);
   }
 
-  logger.info(`${DESIGN_MD} references are consistent with the repo`);
+  logger.info(`${OP_INVARIANTS_MD} references are consistent with the repo`);
 }
 
 try {
