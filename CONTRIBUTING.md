@@ -50,8 +50,9 @@ file paths that no longer exist in the repo.
 A `changelog:api:check` gate step fails when `packages/op/src/index.ts`,
 `packages/op/src/di/index.ts`, `packages/op/src/policy/index.ts`, or `packages/op/src/hkt.ts`
 public export names change without an update to that package's `CHANGELOG.md` under
-`## [Unreleased]`. The check compares against an explicit base ref (`GITHUB_BASE_SHA` on pull
-requests, the pre-push commit on pushes to `main`, or `CHANGELOG_API_BASE_REF` locally) and fails
+`## [Unreleased]`. The check compares against an explicit base ref (`pull_request.base.sha` on pull
+requests via `CHANGELOG_API_BASE_REF`, the pre-push commit on pushes to `main`, or
+`CHANGELOG_API_BASE_REF` locally) and fails
 closed when no base ref can be resolved. Internal re-export paths do not count as API changes.
 A `bundle-size` job compares `@prodkit/op` lower and upper bundled size bounds (minified + gzip)
 on pull requests via `compressed-size-action`; runtime regressions are tracked separately by CodSpeed
