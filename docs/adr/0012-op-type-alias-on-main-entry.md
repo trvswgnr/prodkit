@@ -9,8 +9,8 @@ packages:
 
 Internal `@prodkit/op` modules (for example `core/plan/surface.ts`) reference the branded `Op` type in
 fluent interfaces and inference helpers. A natural refactor is to extract `Op` into a dedicated
-module so core stops importing from the package entry. Issue [#155](https://github.com/trvswgnr/prodkit/issues/155)
-proposed that shape and was closed wontfix after review.
+module so core stops importing from the package entry. That layout was explored and rejected after
+review because of declaration emit and const/type merge constraints (below).
 
 ## Decision
 
@@ -42,7 +42,7 @@ same way and breaks generic typing against the factory namespace.
 ## Considered options
 
 **Duplicate `Op` in `core/op-brand.ts` and re-export from the entry.** Rejected: duplicate
-declaration emit (`Op$1`) and fragile const/type merge (see #155 experiment).
+declaration emit (`Op$1`) and fragile const/type merge in that experiment.
 
 **Stop referencing `Op` in core; use `OpInterface` everywhere.** Rejected: fluent return types and
 inference helpers (`InferOpOk`, `InferOpErr`, `AnyNullaryOp`) need the branded alias for the public
@@ -51,7 +51,7 @@ contract tests and IDE experience to match runtime values.
 ## Consequences
 
 - Refactors may keep `import type { Op } from "../index.js"` in core modules; that is intentional.
-- Splitting former `core/types.ts` (#158) should not extract the `Op` alias; colocate metadata,
+- Splitting the former monolithic types module should not extract the `Op` alias; colocate metadata,
   instruction protocol, run contexts, and plan surface types with their owning modules using direct
   imports (no re-export barrel).
 - Subpath exports must not re-declare `Op`; they import the type from the main entry or from shared

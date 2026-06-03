@@ -37,6 +37,8 @@ Contributor and architecture docs live in the repo only:
 When behavior changes, update consumer docs first, then `docs/contributor/op-invariants.md` if the
 contract changed, then add or supersede an ADR when the decision itself changed.
 
+Evergreen style rules (what to avoid in durable docs): [`docs/CONTEXT.md`](docs/CONTEXT.md#evergreen-writing).
+
 ## Contributor Runtime
 
 - Node `>=24.14.0` on 24.x Active LTS is required for local development and release tasks. Node 22.x is maintenance LTS; this repo standardizes on 24.x, not 22 or 20.

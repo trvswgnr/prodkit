@@ -8,7 +8,7 @@ right doc before diving into code.
 | Package | Role |
 | --- | --- |
 | `@prodkit/op` | Runtime-agnostic operation library: typed async composition, policies, combinators, DI subpath |
-| `@prodkit/std` | Reserved runtime-agnostic utilities (no `@prodkit/op` dependency); subpaths such as `@prodkit/std/array` planned |
+| `@prodkit/std` | Reserved runtime-agnostic utilities (no `@prodkit/op` dependency); example subpath `@prodkit/std/array` |
 | `@prodkit/shared` | Private workspace globals, publishable tsconfig/vitest presets, and runtime primitives (not published) |
 | `@prodkit/examples` | Consumer smoke and sample apps |
 | `@prodkit/benchmarks` | Performance harnesses |
@@ -39,6 +39,7 @@ exports, not separate npm packages or `@prodkit/std` modules.
 | How does execution flow through modules? | [`docs/contributor/runtime-architecture.md`](contributor/runtime-architecture.md) |
 | What must stay true at run time? | [`docs/contributor/op-invariants.md`](contributor/op-invariants.md) |
 | How do I set up, test, and release? | [`CONTRIBUTING.md`](../CONTRIBUTING.md) |
+| How should durable docs be written? | [Evergreen writing](#evergreen-writing) (this file) |
 | How does `@prodkit/op` compare to Effect / neverthrow? | [`packages/op/docs/comparison.md`](../packages/op/docs/comparison.md) (ships on npm) |
 | What is the runtime overhead? | [`packages/op/docs/performance.md`](../packages/op/docs/performance.md) (ships on npm) |
 | What changed in the last release? | Package `CHANGELOG.md` under `packages/op` or `packages/std` |
@@ -53,3 +54,36 @@ exports, not separate npm packages or `@prodkit/std` modules.
 When behavior changes, update the consumer-facing doc first (`packages/op/README.md` or
 `packages/op/docs/`), then `docs/contributor/op-invariants.md` if the contract changed, then add or
 supersede an ADR when the decision itself changed.
+
+## Evergreen writing
+
+Write docs so they stay useful after refactors, releases, and issue closure. Prefer durable facts
+(decisions, contracts, outcomes) over pointers that rot quickly.
+
+**Avoid in prose (especially ADRs and consumer guides):**
+
+- GitHub issue or PR numbers, sprint or milestone labels, and "tracked in #N" delivery status.
+- "For now", "soon", "will be added", "not yet", and other schedule language unless the doc is a
+  changelog entry or an explicit `proposed` ADR.
+- Line-number citations into source; link modules or symbols and let readers search.
+- Duplicate version pins when `package.json`, `.nvmrc`, or CI already define them (contributor setup
+  may name the supported Node/pnpm line once; do not scatter patch versions through unrelated docs).
+- Hand-maintained benchmark numbers outside the generated performance snapshot block in
+  `packages/op/docs/performance.md` (refresh with `performance:sync`, documented in
+  `CONTRIBUTING.md`).
+
+**Appropriate to name when it helps readers act:**
+
+- npm package and subpath names, public API symbols, and stable user-visible behavior.
+- Module paths and ADR numbers in contributor architecture docs (navigation, not delivery trackers).
+- CI workflow files and maintainer script names in `CONTRIBUTING.md` and `benchmarks/op/README.md`.
+- Machine-generated snapshot metadata (commit, date, version) inside the performance snapshot
+  markers; treat that block as generated output, not hand-written narrative.
+- Changelog sections under `## [Unreleased]` and released version headings (historical record).
+
+**ADRs:** state the decision and why alternatives were rejected; do not embed open worklists. When
+a decision changes, supersede with a new ADR per [`docs/adr/README.md`](adr/README.md).
+
+**Consumer docs:** describe what callers get today; put alpha or stability expectations in one clear
+notice (for example `packages/op/README.md`) instead of repeating release-phase language across
+guides.

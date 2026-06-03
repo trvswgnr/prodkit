@@ -59,7 +59,7 @@ parameters, and transpilation can all make the apparent arity disagree with the 
 
 ## Considered options
 
-**Execute every returned nullary `Op`.** Rejected: this was the original #145 direction, but it
+**Execute every returned nullary `Op`.** Rejected: an earlier explored direction, but it
 requires a trustworthy nullary witness for uninvoked generator factories. Adding that witness would
 be a larger public/runtime shape change, and the behavior still makes callback returns implicit
 sequencing.

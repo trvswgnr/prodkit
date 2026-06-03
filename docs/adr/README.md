@@ -17,7 +17,7 @@ document what must stay true; ADRs document why a shape was chosen.
   rationale.
 - Keep the body **evergreen**: describe the decision and trade-offs, not open issue checklists or
   migration status. Track delivery in GitHub issues; do not add `Implementation` sections to
-  `accepted` ADRs.
+  `accepted` ADRs. Full style rules: [`docs/CONTEXT.md`](../CONTEXT.md#evergreen-writing).
 
 ### Frontmatter
 

@@ -29,6 +29,7 @@ Read these before guessing repo structure or conventions:
 - Prefers agreeing on API/design direction before implementation when requirements are ambiguous.
 - Prefers `.run(...args)` to stay args-only; cancellation/config should compose fluently (for example via `.with(Policy.cancel(...))`) rather than be passed to `run`.
 - Prefers user-facing docs and comments to emphasize outcomes and usage over internal implementation details.
+- Prefers evergreen durable docs; avoid issue numbers, schedule language, and other fast-rotting references (`docs/CONTEXT.md` evergreen writing).
 - Requires ASCII-only in repo text (comments, docs, changelogs): no Unicode symbols or typographic punctuation (arrows, em dashes, etc.).
 - Forbids `--` as a markdown list-item separator between a term and description; write full sentences or use a colon after the term instead (shell passthrough `--` in commands is fine).
 - Prefers file relocations to be done with move operations first (for example `mv`) followed by minimal targeted edits, not full-file rewrites.

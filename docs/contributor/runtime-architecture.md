@@ -27,7 +27,7 @@ packages/op/src/index.ts          (Op factory, Op.run, re-exports)
 packages/op/src/di/                 (DI.provide, DI.inject via CustomInstruction + extensions)
   '-- imports core/runtime, core/instructions, core/meta, core/plan/surface, builders directly
 
-packages/std/src/                   (future runtime-agnostic utility subpaths)
+packages/std/src/                   (reserved runtime-agnostic utility subpaths)
 ```
 
 ## From `Op.run()` to `drive()`

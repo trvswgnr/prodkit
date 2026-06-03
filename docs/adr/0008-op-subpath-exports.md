@@ -71,15 +71,15 @@ DI now lives on `@prodkit/op/di`:
 install for features that always need the driver, and no meaningful bundle isolation when std
 already externalizes op.
 
-**Retire `@prodkit/std` after DI moves.** Rejected: std will ship general utilities soon; the
-package name and publish pipeline stay useful once op-specific code leaves.
+**Retire `@prodkit/std` after DI moves.** Rejected: `@prodkit/std` is reserved for general
+runtime-agnostic utilities; the package name and publish pipeline stay useful once op-specific code
+leaves.
 
 **Separate packages per feature (`@prodkit/di`, etc.).** Rejected: same install and release cost
 without clearer boundaries than subpath exports.
 
-**Re-export subpaths from the root `@prodkit/op` entry.** Rejected for now: grows the default
-import and CI bundle-size baseline (`dist/index.mjs`) for users who never use DI or policy
-constructors.
+**Re-export subpaths from the root `@prodkit/op` entry.** Rejected: grows the default import and CI
+bundle-size baseline (`dist/index.mjs`) for users who never use DI or policy constructors.
 
 ## Consequences
 
