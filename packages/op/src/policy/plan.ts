@@ -14,9 +14,9 @@ import type { ReleaseFn } from "../core/plan/context.js";
 import type { RunContext } from "../core/runtime.js";
 import {
   createPlan,
+  createUnaryPlan,
   executePlan,
   interruptOnAbortMode,
-  rewriteUnaryPlan,
   type Plan,
   type PlanRewriter,
 } from "../core/plan/base.js";
@@ -26,7 +26,7 @@ function policyRewriter(apply: PlanRewriter["apply"]): PlanRewriter {
 }
 
 export function releasePlan<T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T>): Plan<T, E, M> {
-  return createPlan(
+  return createUnaryPlan(
     function* () {
       const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
         (context) => source.execute(context),
@@ -41,10 +41,8 @@ export function releasePlan<T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T
 
       return result.value;
     },
-    {
-      rewrite: (_self, rewriter) =>
-        rewriteUnaryPlan(rewriter, source, (inner) => releasePlan(inner, release)),
-    },
+    source,
+    (inner) => releasePlan(inner, release),
   );
 }
 

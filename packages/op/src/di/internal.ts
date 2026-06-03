@@ -1,6 +1,6 @@
 import {
   getPlan,
-  createPlan,
+  createUnaryPlan,
   executePlan,
   interruptOnAbortMode,
   type Plan,
@@ -274,7 +274,7 @@ export function providePlan<T, E, M>(
 ): Plan<T, E, M> {
   const snapshot = bindings.slice();
 
-  return createPlan(
+  return createUnaryPlan(
     function* () {
       const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
         (context: RunContext<readonly unknown[]>) =>
@@ -289,9 +289,8 @@ export function providePlan<T, E, M>(
       if (result.isErr()) return yield* result;
       return result.value;
     },
-    {
-      rewrite: (_self, rewriter) => providePlan(source.rewrite(rewriter), snapshot),
-    },
+    source,
+    (inner) => providePlan(inner, snapshot),
   );
 }
 

@@ -32,10 +32,24 @@ import {
 
 type PlanShellContext<T, E, A, M> = {
   bindArgs: PlanBinder<T, E, A, M>;
-  withPolicyIterable: <TNext, ENext, MNext>(
-    transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
-  ) => (() => Plan<TNext, ENext, MNext>) | undefined;
+  makeIterable: (() => Plan<T, E, M>) | undefined;
   bound: boolean;
+};
+
+type ErasedPlan = Plan<unknown, unknown, unknown>;
+type ErasedPlanFactory = (...args: readonly unknown[]) => ErasedPlan;
+type ErasedPlanTransform = (plan: ErasedPlan) => ErasedPlan;
+const PLAN_FACTORY_CHAIN: unique symbol = Symbol("prodkit.op.plan-factory-chain");
+type PlanTransformNode = {
+  readonly previous: PlanTransformNode | undefined;
+  readonly transform: ErasedPlanTransform;
+};
+type PlanFactoryChain = {
+  readonly base: ErasedPlanFactory;
+  readonly tail: PlanTransformNode | undefined;
+};
+type ChainablePlanFactory = ErasedPlanFactory & {
+  readonly [PLAN_FACTORY_CHAIN]?: PlanFactoryChain;
 };
 
 type PolicyWrapFn = <TNext, ENext, MNext>(
@@ -97,11 +111,69 @@ function wrapPlanTransform<T, E, A, M, Yieldable extends boolean, TNext, ENext, 
   ctx: PlanShellContext<T, E, A, M>,
   transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
 ): OpInterface<TNext, ENext, A, MNext, Yieldable> {
-  return makePlanOp<TNext, ENext, A, MNext, Yieldable>(
-    (...args) => transform(ctx.bindArgs(...args)),
-    ctx.withPolicyIterable(transform),
-    ctx.bound,
-  );
+  const bindArgs = appendPlanBinder(ctx.bindArgs, transform);
+  const makeIterable =
+    ctx.makeIterable === undefined ? undefined : appendPlanProvider(ctx.makeIterable, transform);
+
+  return makePlanOp<TNext, ENext, A, MNext, Yieldable>(bindArgs, makeIterable, ctx.bound);
+}
+
+function appendPlanBinder<T, E, A, M, TNext, ENext, MNext>(
+  bindArgs: PlanBinder<T, E, A, M>,
+  transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
+): PlanBinder<TNext, ENext, A, MNext> {
+  // SAFETY: transform chains erase plan generics until bind time, then restore the typed binder surface.
+  const erasedBindArgs: ErasedPlanFactory = unsafeCoerce(bindArgs);
+  // SAFETY: transform closes over the source plan generics; the erased chain preserves transform order only.
+  const erasedTransform: ErasedPlanTransform = unsafeCoerce(transform);
+  const appended = appendPlanTransform(erasedBindArgs, erasedTransform);
+  // SAFETY: appended binder keeps the original args tuple and returns the transform's next plan type.
+  return unsafeCoerce(appended);
+}
+
+function appendPlanProvider<T, E, M, TNext, ENext, MNext>(
+  provider: () => Plan<T, E, M>,
+  transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
+): () => Plan<TNext, ENext, MNext> {
+  // SAFETY: iterable providers are nullary plan factories; only plan generics are erased in the chain.
+  const erasedProvider: ErasedPlanFactory = unsafeCoerce(provider);
+  // SAFETY: transform closes over the source plan generics; the erased chain preserves transform order only.
+  const erasedTransform: ErasedPlanTransform = unsafeCoerce(transform);
+  const appended = appendPlanTransform(erasedProvider, erasedTransform);
+  // SAFETY: appended provider returns the transform's next plan type.
+  return unsafeCoerce(appended);
+}
+
+function appendPlanTransform(
+  factory: ErasedPlanFactory,
+  transform: ErasedPlanTransform,
+): ErasedPlanFactory {
+  const chain = getPlanFactoryChain(factory);
+  const tail: PlanTransformNode = { previous: chain.tail, transform };
+  const next: ErasedPlanFactory = (...args) => applyPlanTransforms(chain.base(...args), tail);
+  Object.defineProperty(next, PLAN_FACTORY_CHAIN, {
+    value: { base: chain.base, tail } satisfies PlanFactoryChain,
+  });
+  return next;
+}
+
+function getPlanFactoryChain(factory: ErasedPlanFactory): PlanFactoryChain {
+  const chainable: ChainablePlanFactory = factory;
+  return chainable[PLAN_FACTORY_CHAIN] ?? { base: factory, tail: undefined };
+}
+
+function applyPlanTransforms(source: ErasedPlan, tail: PlanTransformNode): ErasedPlan {
+  const transforms: ErasedPlanTransform[] = [];
+  for (let node: PlanTransformNode | undefined = tail; node !== undefined; node = node.previous) {
+    transforms.push(node.transform);
+  }
+
+  let plan = source;
+  for (let index = transforms.length - 1; index >= 0; index -= 1) {
+    const transform = transforms[index];
+    if (transform !== undefined) plan = transform(plan);
+  }
+  return plan;
 }
 
 function fluentMethodsForContext<T, E, A, M, Yieldable extends boolean>(
@@ -151,7 +223,7 @@ function syncValueShellContext<T>(
 ): PlanShellContext<T, never, [], EmptyMeta> {
   return {
     bindArgs: () => self[OP_PLAN_BIND](),
-    withPolicyIterable: (transform) => () => transform(self[OP_PLAN_BIND]()),
+    makeIterable: () => self[OP_PLAN_BIND](),
     bound: true,
   };
 }
@@ -218,13 +290,9 @@ export function makePlanOp<
           )
       : undefined);
 
-  const withPolicyIterable = <TNext, ENext, MNext>(
-    transform: (plan: Plan<T, E, M>) => Plan<TNext, ENext, MNext>,
-  ) => (iterable === undefined ? undefined : () => transform(iterable()));
-
   const shellContext: PlanShellContext<T, E, A, M> = {
     bindArgs,
-    withPolicyIterable,
+    makeIterable: iterable,
     bound,
   };
 
