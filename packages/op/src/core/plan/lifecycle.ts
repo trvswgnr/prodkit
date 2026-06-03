@@ -8,13 +8,13 @@ import {
 } from "../instructions.js";
 import type { EnterContext, EnterFn, ExitFn } from "./context.js";
 import type { ExitContext } from "../runtime.js";
-import { createPlan, rewriteUnaryPlan, type Plan } from "./base.js";
+import { createUnaryPlan, type Plan } from "./base.js";
 
 export function onEnterPlan<T, E, A, M>(
   source: Plan<T, E, M>,
   initialize: EnterFn<A>,
 ): Plan<T, E, M> {
-  return createPlan(
+  return createUnaryPlan(
     function* () {
       yield new SuspendInstruction(async (context) => {
         const enterCtx: EnterContext<A> = {
@@ -33,10 +33,8 @@ export function onEnterPlan<T, E, A, M>(
       if (result.isErr()) return yield* result;
       return result.value;
     },
-    {
-      rewrite: (_self, rewriter) =>
-        rewriteUnaryPlan(rewriter, source, (inner) => onEnterPlan(inner, initialize)),
-    },
+    source,
+    (inner) => onEnterPlan(inner, initialize),
   );
 }
 
@@ -44,7 +42,7 @@ export function onExitPlan<T, E, A, M>(
   source: Plan<T, E, M>,
   finalize: ExitFn<T, E, A>,
 ): Plan<T, E, M> {
-  return createPlan(
+  return createUnaryPlan(
     function* () {
       yield new RegisterExitFinalizerInstruction(async (ctx) => {
         const exitCtx: ExitContext<T, E, A> = {
@@ -65,9 +63,7 @@ export function onExitPlan<T, E, A, M>(
       if (result.isErr()) return yield* result;
       return result.value;
     },
-    {
-      rewrite: (_self, rewriter) =>
-        rewriteUnaryPlan(rewriter, source, (inner) => onExitPlan(inner, finalize)),
-    },
+    source,
+    (inner) => onExitPlan(inner, finalize),
   );
 }

@@ -12,7 +12,7 @@ import type {
   TrackedErr,
 } from "./surface.js";
 import type { MergeMeta } from "../meta.js";
-import { createPlan, getPlan, rewriteUnaryPlan, type Plan } from "./base.js";
+import { createPlan, createUnaryPlan, getPlan, type Plan } from "./base.js";
 
 function isRuntimeBypass(error: unknown): error is UnhandledException | TimeoutError {
   return UnhandledException.is(error) || TimeoutError.is(error);
@@ -22,7 +22,7 @@ export function mapPlan<T, E, U, M>(
   source: Plan<T, E, M>,
   transform: (value: T) => U,
 ): Plan<Awaited<U>, E, M> {
-  return createPlan(
+  return createUnaryPlan(
     function* () {
       const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
         (context) => source.execute(context),
@@ -38,10 +38,8 @@ export function mapPlan<T, E, U, M>(
 
       return mapped;
     },
-    {
-      rewrite: (_self, rewriter) =>
-        rewriteUnaryPlan(rewriter, source, (inner) => mapPlan(inner, transform)),
-    },
+    source,
+    (inner) => mapPlan(inner, transform),
   );
 }
 
@@ -78,7 +76,7 @@ export function tapPlan<T, E, R, M>(
   source: Plan<T, E, M>,
   observe: (value: T) => R,
 ): Plan<T, E, M> {
-  return createPlan(
+  return createUnaryPlan(
     function* () {
       const sourceResult: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
         (context) => source.execute(context),
@@ -93,10 +91,8 @@ export function tapPlan<T, E, R, M>(
       );
       return sourceResult.value;
     },
-    {
-      rewrite: (_self, rewriter) =>
-        rewriteUnaryPlan(rewriter, source, (inner) => tapPlan(inner, observe)),
-    },
+    source,
+    (inner) => tapPlan(inner, observe),
   );
 }
 
@@ -104,7 +100,7 @@ export function mapErrPlan<T, E, E2, M>(
   source: Plan<T, E, M>,
   transform: (error: TrackedErr<E>) => E2,
 ): Plan<T, E2 | BypassedErr<E>, M> {
-  return createPlan(
+  return createUnaryPlan(
     function* () {
       const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
         (context) => source.execute(context),
@@ -126,10 +122,8 @@ export function mapErrPlan<T, E, E2, M>(
 
       return yield* Result.err(mapped);
     },
-    {
-      rewrite: (_self, rewriter) =>
-        rewriteUnaryPlan(rewriter, source, (inner) => mapErrPlan(inner, transform)),
-    },
+    source,
+    (inner) => mapErrPlan(inner, transform),
   );
 }
 
@@ -137,7 +131,7 @@ export function tapErrPlan<T, E, R, M>(
   source: Plan<T, E, M>,
   observe: (error: TrackedErr<E>) => R,
 ): Plan<T, TrackedErr<E> | BypassedErr<E>, M> {
-  return createPlan(
+  return createUnaryPlan(
     function* () {
       const sourceResult: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
         (context) => source.execute(context),
@@ -158,10 +152,8 @@ export function tapErrPlan<T, E, R, M>(
       );
       return yield* sourceResult;
     },
-    {
-      rewrite: (_self, rewriter) =>
-        rewriteUnaryPlan(rewriter, source, (inner) => tapErrPlan(inner, observe)),
-    },
+    source,
+    (inner) => tapErrPlan(inner, observe),
   );
 }
 
@@ -170,7 +162,7 @@ export function recoverPlan<T, E, ECaught extends TrackedErr<E>, R, M>(
   predicate: (error: TrackedErr<E>) => error is ECaught,
   handler: (error: ECaught) => R,
 ): Plan<T | Awaited<R>, TrackedErr<E, ECaught> | BypassedErr<E>, M> {
-  return createPlan(
+  return createUnaryPlan(
     function* () {
       const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
         (context) => source.execute(context),
@@ -193,9 +185,7 @@ export function recoverPlan<T, E, ECaught extends TrackedErr<E>, R, M>(
 
       return recovered;
     },
-    {
-      rewrite: (_self, rewriter) =>
-        rewriteUnaryPlan(rewriter, source, (inner) => recoverPlan(inner, predicate, handler)),
-    },
+    source,
+    (inner) => recoverPlan(inner, predicate, handler),
   );
 }
