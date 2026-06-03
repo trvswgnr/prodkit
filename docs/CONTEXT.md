@@ -15,7 +15,41 @@ right doc before diving into code.
 | `@prodkit/tools` | Maintainer scripts (ADR index sync, release cut, smoke harnesses) |
 
 Op-native extension modules (DI, policy, HKT, internal helpers) ship as `@prodkit/op` subpath
-exports, not separate npm packages or `@prodkit/std` modules.
+exports, not separate npm packages or `@prodkit/std` modules. Full placement rules:
+[Where new code lives](#where-new-code-lives) and [ADR 0008](adr/0008-op-subpath-exports.md).
+
+### Path cheat sheet
+
+| Path | Workspace | Audience |
+| --- | --- | --- |
+| `packages/op/` | `@prodkit/op` | Published operation runtime and subpaths |
+| `packages/std/` | `@prodkit/std` | Published utilities with no `@prodkit/op` dependency |
+| `packages/shared/` | `@prodkit/shared` | Private presets and workspace primitives (not on npm) |
+| `examples/op/` | `@prodkit/examples` | Consumer samples and smoke for op and op/di |
+| `benchmarks/op/` | `@prodkit/benchmarks` | Performance and bundle-size harnesses for op |
+
+## Where new code lives
+
+Use this table when adding a feature. Rationale and examples:
+[ADR 0008](adr/0008-op-subpath-exports.md).
+
+| Situation | Home |
+| --- | --- |
+| Builds on `Op`, plans, policies, or DI; runtime-agnostic; depends only on `@prodkit/op` and `better-result` (existing op peer) | `@prodkit/op/<subpath>` (for example `@prodkit/op/policy` for a circuit-breaker policy) |
+| Runtime-agnostic utilities that do not import `@prodkit/op` | `@prodkit/std/<subpath>` (for example `@prodkit/std/array`) |
+| Platform-specific (Node-only CLI adapter, DOM-only helper) | New `@prodkit/*` package under `packages/` |
+| Hard dependency on an integration SDK (OpenTelemetry, a validation stack, an HTTP framework) | New `@prodkit/*` package under `packages/` |
+| Workspace-only types, casts, or toolchain presets | `@prodkit/shared` (private; not published) |
+
+**Op subpath allowlist:** `@prodkit/op` and `better-result` only. Do not add other runtime or
+integration dependencies to op subpath modules; those belong in a separate package so default
+`@prodkit/op` installs stay lean.
+
+**Std constraints:** no `@prodkit/op` dependency; prefer zero runtime dependencies and
+tree-shakeable subpaths. Do not put op-native features on std.
+
+**New packages:** add `packages/<name>/`, workspace entry in `pnpm-workspace.yaml`, and an ADR when
+the boundary choice is not already covered by ADR 0008.
 
 ## Domain vocabulary (`@prodkit/op`)
 
@@ -38,6 +72,7 @@ exports, not separate npm packages or `@prodkit/std` modules.
 | Why was it built this way? | [`docs/adr/README.md`](adr/README.md) (monorepo only) |
 | How does execution flow through modules? | [`docs/contributor/runtime-architecture.md`](contributor/runtime-architecture.md) |
 | What must stay true at run time? | [`docs/contributor/op-invariants.md`](contributor/op-invariants.md) |
+| Where should a new module live (op subpath, std, or new package)? | [Where new code lives](#where-new-code-lives), [ADR 0008](adr/0008-op-subpath-exports.md) |
 | How do I set up, test, and release? | [`CONTRIBUTING.md`](../CONTRIBUTING.md) |
 | How should durable docs be written? | [Evergreen writing](#evergreen-writing) (this file) |
 | How does `@prodkit/op` compare to Effect / neverthrow? | [`packages/op/docs/comparison.md`](../packages/op/docs/comparison.md) (ships on npm) |

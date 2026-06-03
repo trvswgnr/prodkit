@@ -18,6 +18,7 @@ pnpm install
 - Supporting workspaces: **`@prodkit/shared`** (`packages/shared`, private workspace types/config), **`@prodkit/examples`** (`examples/`), **`@prodkit/tools`** (`tools/`), **`@prodkit/benchmarks`** (`benchmarks/`).
 - `@prodkit/op` landed first historically; the repo is intentionally multi-package.
 - Package-scoped scripts stay in the owning workspace `package.json`; invoke them with `pnpm --filter <workspace> run <script>`.
+- When adding a feature, use the placement table in [`docs/CONTEXT.md`](docs/CONTEXT.md#where-new-code-lives) and [ADR 0008](docs/adr/0008-op-subpath-exports.md): op subpath for portable op-native code with only `better-result` beyond op; `@prodkit/std` for op-free utilities; new `packages/<name>/` for platform-specific or integration-SDK adapters.
 
 ## Documentation
 
@@ -132,6 +133,9 @@ If a behavior is an internal invariant of one module, keep it in unit; if it is 
 
 ## Source Layout (`@prodkit/op`)
 
+- New op-native modules that meet the [placement criteria](docs/adr/0008-op-subpath-exports.md#placement-criteria)
+  (runtime-agnostic; only `@prodkit/op` and `better-result` as runtime deps) ship as subpaths under
+  `packages/op/src/<name>/`, not as `@prodkit/std` or separate npm packages.
 - Public package entrypoint stays at `packages/op/src/index.ts`.
 - The branded `Op` type alias stays on that entry (merged with the `Op` factory const). Internal modules use `import type { Op } from "../index.js"` when they need the alias; do not duplicate `Op` elsewhere ([ADR 0012](docs/adr/0012-op-type-alias-on-main-entry.md)).
 - Re-exports from dependencies must be explicit named exports in `packages/op/src/index.ts` (never `export *`).
@@ -148,7 +152,7 @@ If a behavior is an internal invariant of one module, keep it in unit; if it is 
   - `integration/index.test.ts` for public API contract coverage
   - `unit/errors.test.ts` for typed error contracts
   - `unit/builders.test.ts` for operation builders, runtime composition, and builder type-inference contracts
-  - `unit/policies.test.ts` for retry/timeout/signal behavior
+  - `unit/policy-*.test.ts` for retry, timeout, cancel, and abort-signal behavior
   - `unit/core.test.ts` for core execution invariants
   - `unit/lifecycle-*.test.ts` for lifecycle/finalizer behavior (release, enter/exit hooks, defer, generator finalization)
   - `unit/fluent.test.ts` for fluent operator semantics
@@ -183,6 +187,12 @@ which doc to open for a given question.
 
 - Source under `packages/std/src/`; published entrypoint is `@prodkit/std` (utility subpaths such as
   `@prodkit/std/array` are planned).
+- **Not** the home for op-native features (DI, policies, circuit breakers, and similar): those belong on
+  `@prodkit/op` subpaths when they depend on op and stay runtime-agnostic with only `better-result` as an
+  extra dependency. See [ADR 0008](docs/adr/0008-op-subpath-exports.md) and
+  [`docs/CONTEXT.md`](docs/CONTEXT.md#where-new-code-lives).
+- Platform-specific or integration-SDK modules (OpenTelemetry, Node CLI adapters) ship as new packages under
+  `packages/`, not under std or op subpaths.
 - Package docs: [`packages/std/README.md`](packages/std/README.md). Ship changelog: [`packages/std/CHANGELOG.md`](packages/std/CHANGELOG.md).
 
 You can run consumer install path checks directly. Each mode builds a temporary mini-pnpm workspace (reusing `catalog:` and pnpm safety policy from `pnpm-workspace.yaml`), installs `@prodkit/op` and `@prodkit/std` from the chosen source, then runs `examples/` smoke:

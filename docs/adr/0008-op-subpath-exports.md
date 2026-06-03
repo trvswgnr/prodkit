@@ -41,9 +41,13 @@ not re-export subpath modules.
 | Platform-specific (Node-only, DOM-only, etc.) | no | no | yes |
 | Optional for most users | yes (subpath) | yes (subpath) | yes |
 
-Examples: DI and policy constructors are op subpaths. Array, object, string, and encoding helpers
-that do not depend on op are std subpaths. A future OpenTelemetry adapter or validation-library
-env module is a separate package.
+Examples:
+
+- **Op subpath:** DI, policy constructors, HKT; a future circuit-breaker policy that composes with
+  `Policy` and the plan driver (runtime-agnostic, no integration SDK).
+- **Std subpath:** array, object, string, and encoding helpers that do not import `@prodkit/op`.
+- **Separate package:** OpenTelemetry telemetry bridge, a Node-specific CLI adapter, or any module
+  that depends on a platform or third-party integration stack beyond `better-result`.
 
 ## `@prodkit/std`
 
@@ -75,8 +79,10 @@ already externalizes op.
 runtime-agnostic utilities; the package name and publish pipeline stay useful once op-specific code
 leaves.
 
-**Separate packages per feature (`@prodkit/di`, etc.).** Rejected: same install and release cost
-without clearer boundaries than subpath exports.
+**Separate npm package per op-native feature (`@prodkit/di`, `@prodkit/policy`, etc.).** Rejected for
+portable op extensions: same install and release cost without clearer boundaries than subpath exports.
+Integration and platform adapters still ship as their own packages when they pull in otel, Node APIs,
+or other non-peer dependencies.
 
 **Re-export subpaths from the root `@prodkit/op` entry.** Rejected: grows the default import and CI
 bundle-size baseline (`dist/index.mjs`) for users who never use DI or policy constructors.
@@ -87,7 +93,8 @@ bundle-size baseline (`dist/index.mjs`) for users who never use DI or policy con
   entries, and `package.json` `exports` entries. Tests live under `packages/op/tests/`.
 - Consumers import op subpaths explicitly (`@prodkit/op/di`, `@prodkit/op/policy`).
 - CI `bundle-size` continues to measure only the main `@prodkit/op` entry.
-- Do not add op-native modules to `@prodkit/std` or as separate npm packages without a new ADR.
+- Do not add op-native modules to `@prodkit/std`. Use op subpaths for portable op extensions; add a new
+  package (and ADR when the choice is non-obvious) for platform-specific or integration-SDK adapters.
 - `@prodkit/std` drops its `@prodkit/op` peer dependency once DI leaves; std utilities should not
   require op unless a specific module documents that coupling.
 - Policy constructor placement and `.with(Policy.*)` attachment: [ADR 0009](0009-policy-with-attachment.md).

@@ -20,7 +20,7 @@ Other workspace roots are maintainer- or CI-oriented: [`examples`](examples/) (`
 | npm consumers | [`packages/op/README.md`](packages/op/README.md) | Hub, quick start, core API |
 | npm consumers | [`packages/op/docs/`](packages/op/docs/README.md) | Comparison, performance, subpaths, lifecycle (ships on npm) |
 | contributors | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Setup, gate, testing, release |
-| contributors | [`docs/CONTEXT.md`](docs/CONTEXT.md) | Domain vocabulary and doc roles |
+| contributors | [`docs/CONTEXT.md`](docs/CONTEXT.md) | Domain vocabulary, doc roles, where new modules live |
 | contributors | [`docs/contributor/op-invariants.md`](docs/contributor/op-invariants.md) | Runtime invariants and enforcement map |
 | contributors | [`docs/contributor/runtime-architecture.md`](docs/contributor/runtime-architecture.md) | Module graph and execution flow |
 | architects | [`docs/adr/`](docs/adr/) | Why decisions were made |
