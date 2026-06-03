@@ -119,6 +119,30 @@ export function createUnaryPlan<T, E, M, TSource, ESource, MSource>(
   return plan;
 }
 
+/**
+ * Splits a plan's leading run of unary wrappers from its nearest non-unary node.
+ *
+ * Returned `wraps` are innermost-first, matching left-to-right application order:
+ * `wraps.reduce((plan, wrap) => wrap(plan), base)` reconstructs the input plan.
+ */
+export function splitLeadingUnaryWraps(plan: ErasedPlan): {
+  readonly base: ErasedPlan;
+  readonly wraps: ReadonlyArray<UnaryPlanRewrite["rebuild"]>;
+} {
+  const wraps: UnaryPlanRewrite["rebuild"][] = [];
+  let current = plan;
+
+  while (true) {
+    const unary = current[PLAN_UNARY_REWRITE];
+    if (unary === undefined) break;
+    wraps.push(unary.rebuild);
+    current = unary.source;
+  }
+
+  wraps.reverse();
+  return { base: current, wraps };
+}
+
 function rewritePlanStackSafe(source: ErasedPlan, rewriter: PlanRewriter): ErasedPlan {
   const rebuilds: UnaryPlanRewrite["rebuild"][] = [];
   let current = source;
