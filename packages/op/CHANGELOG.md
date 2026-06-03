@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Deep fluent and policy chains now execute stack-safely instead of resolving to
   `Err(UnhandledException)` or throwing from `.run()` when valid compositions get large.
+- Interleaved fluent transforms and push-through policies (for example
+  `.with(Policy.retry(...)).map(...)`) now bind in linear time instead of quadratic time at
+  `.run()` / `yield*`, with unchanged push-through semantics.
+- Stacking push-through policies on an op whose bound plan is already a deep unary chain (for
+  example after invoking a parameterized op built with many `.map(...)` layers) no longer re-walks
+  that entry depth once per policy at bind time.
 - Corrected bundle size figures in the published performance docs; the main entry is now measured
   as a bundled graph (`better-result` externalized), with a consumer subpath upper bound
   (`di`, `policy`, `hkt`).
