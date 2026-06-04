@@ -39,19 +39,16 @@ export function onExitPlan<T, E, A, M>(
 ): Plan<T, E, M> {
   return createUnaryPlan(
     function* () {
-      yield new RegisterExitFinalizerInstruction(
-        async (ctx) => {
-          const exitCtx: ExitContext<T, E, A> = {
-            signal: ctx.signal,
-            // SAFETY: ExitFinalizerContext erases result; this hook is registered by the enclosing plan for T, E.
-            result: unsafeCoerce(ctx.result),
-            // SAFETY: RunContext stores args as readonly unknown[]; they are the tuple from this op's invocation.
-            args: unsafeCoerce(ctx.args),
-          };
-          await Promise.resolve(finalize(exitCtx));
-        },
-        undefined,
-      );
+      yield new RegisterExitFinalizerInstruction(async (ctx) => {
+        const exitCtx: ExitContext<T, E, A> = {
+          signal: ctx.signal,
+          // SAFETY: ExitFinalizerContext erases result; this hook is registered by the enclosing plan for T, E.
+          result: unsafeCoerce(ctx.result),
+          // SAFETY: RunContext stores args as readonly unknown[]; they are the tuple from this op's invocation.
+          args: unsafeCoerce(ctx.args),
+        };
+        await Promise.resolve(finalize(exitCtx));
+      }, undefined);
 
       const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
         source.execute(context),
