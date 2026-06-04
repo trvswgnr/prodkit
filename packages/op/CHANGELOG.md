@@ -7,9 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Changed
 
-- No entries yet.
+- Declare `sideEffects: false` in `package.json` so bundlers can tree-shake unused exports.
 
 ## [0.1.79] - 2026-06-03
 

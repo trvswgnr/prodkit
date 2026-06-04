@@ -18,11 +18,6 @@ export function isLazyBinding(value: unknown): value is AnyLazyBinding {
   return hasBrand(value, DI_LAZY_BINDING);
 }
 
-/** Slot identity is token class reference; `key` is diagnostic only (ADR 0010). */
-export function isMatchingDependency(a: AnyDependency, b: AnyDependency): boolean {
-  return a === b;
-}
-
 export type Env = Map<AnyDependency, DependencyValue<AnyDependency>>;
 
 export function readEnv(context: RunContext<readonly unknown[]>): Env {
@@ -31,15 +26,8 @@ export function readEnv(context: RunContext<readonly unknown[]>): Env {
   return new Map();
 }
 
-function findProvidedToken(env: Env, dependency: AnyDependency): AnyDependency | undefined {
-  for (const token of env.keys()) {
-    if (isMatchingDependency(token, dependency)) return token;
-  }
-  return undefined;
-}
-
 function withProvisionEntry(env: Env, entry: AnyBinding): Env {
-  if (findProvidedToken(env, entry.dependency) !== undefined) {
+  if (env.has(entry.dependency)) {
     throw new DuplicateDependencyError(entry.dependency.key);
   }
   const value = hasBrand(entry, DI_SINGLETON_BINDING) ? entry.value : entry;
@@ -52,16 +40,15 @@ export function resolveInjectedValue(
   dependency: AnyDependency,
   signal: AbortSignal,
 ): unknown | PromiseLike<unknown> {
-  const matchedToken = findProvidedToken(env, dependency);
-  if (matchedToken === undefined) return MISSING_DEPENDENCY;
+  if (!env.has(dependency)) return MISSING_DEPENDENCY;
 
-  const matchedValue = env.get(matchedToken);
-  if (!isLazyBinding(matchedValue)) return matchedValue;
+  const matchedValue = env.get(dependency);
+  if (matchedValue === undefined || !isLazyBinding(matchedValue)) return matchedValue;
 
   const produced = matchedValue.resolve(signal);
 
   if (!isPromiseLike(produced)) {
-    env.set(matchedToken, produced);
+    env.set(dependency, produced);
     return produced;
   }
 
@@ -71,16 +58,16 @@ export function resolveInjectedValue(
     AbortSettlement.rejectOnAbort(() => abortReason(signal)),
   ).then(
     (resolved) => {
-      env.set(matchedToken, resolved);
+      env.set(dependency, resolved);
       return resolved;
     },
     (error) => {
-      env.set(matchedToken, matchedValue);
+      env.set(dependency, matchedValue);
       return Promise.reject(error);
     },
   );
 
-  env.set(matchedToken, inflight);
+  env.set(dependency, inflight);
   return inflight;
 }
 
