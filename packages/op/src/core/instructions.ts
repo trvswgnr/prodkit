@@ -1,8 +1,12 @@
 // oxlint-disable typescript/no-explicit-any
 import { Tagged } from "../tagged.js";
 import { Err } from "../result.js";
+import type { SuspendWork } from "./settlement.js";
 import type { ExitContext, RunContext } from "./runtime.js";
 import type { EmptyMeta, MergeUnionMeta } from "./meta.js";
+
+export type { SuspendWork } from "./settlement.js";
+export { isAbortDrainedWork, withAbortDrain } from "./settlement.js";
 
 export const CUSTOM_INSTRUCTION_META = Symbol("prodkit.op.custom-instruction-meta");
 
@@ -34,23 +38,6 @@ type DropUnknown<E> = unknown extends E ? never : E;
 type ExtractResultErr<Y> = Y extends Err<unknown, infer E> ? DropUnknown<E> : never;
 
 export type InferInstructionErr<Y> = ExtractResultErr<Y>;
-
-const ABORT_DRAINED_WORK = Symbol("prodkit.op.abort-drained-work");
-
-type AbortDrainedWork<T> = {
-  readonly [ABORT_DRAINED_WORK]: true;
-  readonly promise: PromiseLike<T>;
-};
-
-export type SuspendWork<T> = PromiseLike<T> | AbortDrainedWork<T>;
-
-export function withAbortDrain<T>(promise: PromiseLike<T>): AbortDrainedWork<T> {
-  return { [ABORT_DRAINED_WORK]: true, promise };
-}
-
-export function isAbortDrainedWork<T>(work: SuspendWork<T>): work is AbortDrainedWork<T> {
-  return typeof work === "object" && work !== null && ABORT_DRAINED_WORK in work;
-}
 
 export type SuspendFn = (ctx: RunContext<readonly unknown[]>) => SuspendWork<unknown>;
 

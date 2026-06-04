@@ -293,7 +293,7 @@ Cancellation and cooperative `AbortSignal` behavior show up wherever `SuspendIns
 signal, plus README's `Op.defer` / `.on("exit")` notes and checks in `packages/op/tests/unit/policy-retry.test.ts`,
 `packages/op/tests/unit/policy-timeout.test.ts`, and
 `packages/op/tests/unit/lifecycle-*.test.ts`. Settlement intent lives in
-`packages/op/src/core/abort.ts`: DI lazy-resolve uses `AbortSettlement.rejectOnAbort`;
+`packages/op/src/core/settlement.ts`: DI lazy-resolve uses `AbortSettlement.rejectOnAbort`;
 Policy.cancel owns bound-abort session composition and macrotimer fallback in `policy/plan.ts` and
 wraps its suspend with `withAbortDrain(...)`; driveIterator suspend resume uses
 `AbortSettlement.interruptOnAbort`; combinator and DI provision drains also mark suspend work with

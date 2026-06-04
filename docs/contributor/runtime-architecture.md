@@ -18,6 +18,7 @@ packages/op/src/index.ts          (Op factory, Op.run, re-exports)
   |-- policy/                     (Policy.* constructors, retry-policy, plan rewriters)
   |-- hkt.ts                      (@prodkit/op/hkt entry)
   |-- core/runtime.ts             (createRunContext, drive, runOp, RunContext, ExitContext)
+  |-- core/settlement.ts          (AbortSettlement, withAbortDrain, awaitWithAbort, settlementForSuspendedWork)
   |-- core/cleanup.ts             (ADR-0003 cleanup helpers: closeGenerator, runFinalizersSafely, chainCleanupFaults)
   |-- core/meta.ts                (EmptyMeta, Blocking, MergeMeta, IsRunnable)
   |-- core/fluent.ts              (makeCoreOp: nullary generator leaf factory)
@@ -25,7 +26,7 @@ packages/op/src/index.ts          (Op factory, Op.run, re-exports)
   |-- core/instructions.ts        (Suspend, RegisterExitFinalizer, CustomInstruction protocol)
 
 packages/op/src/di/                 (DI.provide, DI.inject via CustomInstruction + extensions)
-  '-- internal.ts imports core/runtime, core/instructions, core/abort, core/plan/shell,
+  '-- internal.ts imports core/runtime, core/instructions, core/settlement, core/plan/shell,
       core/plan/surface (type-only), errors, result, index (type-only), @prodkit/shared/runtime
 
 Verified import contracts (checked by `pnpm --filter @prodkit/tools run architecture:check`):
@@ -35,6 +36,7 @@ small plan modules where surprise imports are regressions.
 
 <!-- architecture-check-closed: packages/op/src/di/internal.ts -->
 <!-- architecture-check-closed: packages/op/src/core/plan/factory-chain.ts -->
+<!-- architecture-check-closed: packages/op/src/core/settlement.ts -->
 
 **Partial edges** document specific architectural links. Each line must match source; hub modules
 (for example `shell.ts`) may import more than the list shows.
@@ -43,7 +45,7 @@ small plan modules where surprise imports are regressions.
 - `packages/op/src/di/internal.ts` imports `packages/op/src/core/plan/base.ts`
 - `packages/op/src/di/internal.ts` imports `packages/op/src/core/plan/surface.ts`
 - `packages/op/src/di/internal.ts` imports `packages/op/src/core/plan/shell.ts`
-- `packages/op/src/di/internal.ts` imports `packages/op/src/core/abort.ts`
+- `packages/op/src/di/internal.ts` imports `packages/op/src/core/settlement.ts`
 - `packages/op/src/di/internal.ts` imports `packages/op/src/core/instructions.ts`
 - `packages/op/src/di/internal.ts` imports `packages/op/src/core/runtime.ts`
 - `packages/op/src/di/internal.ts` imports `packages/op/src/core/meta.ts`
@@ -53,6 +55,7 @@ small plan modules where surprise imports are regressions.
 - `packages/op/src/di/internal.ts` imports `packages/op/src/di/index.ts`
 - `packages/op/src/di/internal.ts` imports `@prodkit/shared/runtime`
 - `packages/op/src/core/plan/factory-chain.ts` imports `packages/op/src/core/plan/base.ts`
+- `packages/op/src/core/settlement.ts` imports `@prodkit/shared/runtime`
 
 packages/std/src/                   (reserved runtime-agnostic utility subpaths)
 ```
@@ -80,6 +83,23 @@ packages/std/src/                   (reserved runtime-agnostic utility subpaths)
 
 Built-in policies (retry, timeout, cancel) attach on the op value **before** `.run()`, not as extra
 `run` parameters ([ADR 0006](../adr/0006-run-args-only-fluent-policy-composition.md)).
+
+## Abort settlement
+
+Types and helpers live in `packages/op/src/core/settlement.ts`. Import settlement from there when
+adding combinators, policies, DI suspends, or driver-adjacent code (not from scattered modules).
+
+| `AbortSettlement` | Typical use | Suspend return shape | Notes |
+| --- | --- | --- | --- |
+| `passThrough` | Top-level `drive`, `Op.settle`, retry/cancel policy loops | `Promise` | Abort does not race the suspend await |
+| `rejectOnAbort` | DI lazy factory resolve (`awaitWithAbort` on factory work) | `Promise` | Aborts reject the await with the run signal reason |
+| `interruptOnAbort` | Fan-out children, `Policy.timeout` inner `executePlan` | `Promise` | Aborts race the suspend; losers unwind without drain |
+| `interruptAndDrainOnAbort` | Combinator/provision/DI nodes that must drain in-flight work | `withAbortDrain(promise)` | Driver upgrades `interruptOnAbort` to this when the suspend returns drained work |
+
+`settlementForSuspendedWork` applies the `withAbortDrain` upgrade inside `drive` so call sites pass
+`interruptOnAbortSettlement(signal)` to `executePlan` and wrap fan-out/provision bodies with
+`withAbortDrain(...)`. Combinators still wait for loser finalization per
+[ADR 0004](../adr/0004-combinators-wait-for-loser-finalization.md) before parent `run()` settles.
 
 ## Instruction lifecycle
 

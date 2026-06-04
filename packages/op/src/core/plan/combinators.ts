@@ -1,6 +1,7 @@
 import { UnhandledException } from "../../errors.js";
 import { Result } from "../../result.js";
-import { SuspendInstruction, withAbortDrain } from "../instructions.js";
+import { SuspendInstruction } from "../instructions.js";
+import { withAbortDrain } from "../settlement.js";
 import type { RunContext } from "../runtime.js";
 import { createPlan, createUnaryPlan, type Plan } from "./base.js";
 import { driveAllPlans, driveAllSettledPlans, driveAnyPlans, driveRacePlans } from "./fan-out.js";

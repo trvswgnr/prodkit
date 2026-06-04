@@ -1,14 +1,13 @@
-import {
-  getPlan,
-  createUnaryPlan,
-  executePlan,
-  interruptOnAbortSettlement,
-  type Plan,
-} from "../core/plan/base.js";
+import { getPlan, createUnaryPlan, executePlan, type Plan } from "../core/plan/base.js";
 import type { AsArgs } from "../core/plan/surface.js";
 import { makeUnboundPlanOp } from "../core/plan/shell.js";
-import { AbortSettlement, awaitWithAbort } from "../core/abort.js";
-import { SuspendInstruction, withAbortDrain } from "../core/instructions.js";
+import {
+  AbortSettlement,
+  awaitWithAbort,
+  interruptOnAbortSettlement,
+  withAbortDrain,
+} from "../core/settlement.js";
+import { SuspendInstruction } from "../core/instructions.js";
 import { createRunContext } from "../core/runtime.js";
 import { UnhandledException } from "../errors.js";
 import { Result } from "../result.js";

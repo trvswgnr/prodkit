@@ -1,8 +1,8 @@
 import { TimeoutError, UnhandledException } from "../errors.js";
 import { Result } from "../result.js";
 import { sleepWithSignal } from "@prodkit/shared/runtime";
-import { SuspendInstruction, withAbortDrain } from "../core/instructions.js";
-import { RegisterExitFinalizerInstruction } from "../core/instructions.js";
+import { SuspendInstruction, RegisterExitFinalizerInstruction } from "../core/instructions.js";
+import { interruptOnAbortSettlement, withAbortDrain } from "../core/settlement.js";
 import { createRunContext } from "../core/runtime.js";
 import { normalizeRetryPolicy, type NormalizedRetryPolicy } from "./retry-policy.js";
 import { validateTimeoutMs } from "./validate.js";
@@ -12,7 +12,6 @@ import {
   createPlan,
   createUnaryPlan,
   executePlan,
-  interruptOnAbortSettlement,
   type Plan,
   type PlanRewriter,
 } from "../core/plan/base.js";

@@ -1,7 +1,12 @@
+import { abortReason } from "@prodkit/shared/runtime";
+
 /**
- * Abort settlement for suspend interruption, DI lazy resolve, and nested-plan drain.
+ * Abort settlement for suspend interruption, nested-plan execution, and DI lazy resolve.
  *
- * Call sites declare settlement intent here instead of threading booleans through the driver.
+ * Call sites declare intent here instead of threading booleans through the driver.
+ * Suspend work wrapped with {@link withAbortDrain} maps to
+ * {@link AbortSettlement.interruptAndDrainOnAbort} when the enclosing suspend uses
+ * {@link AbortSettlement.interruptOnAbort} (see {@link settlementForSuspendedWork}).
  */
 
 export type AbortSettlement =
@@ -25,6 +30,44 @@ export const AbortSettlement = {
     return { kind: "interruptAndDrainOnAbort", getAbortReason };
   },
 };
+
+const ABORT_DRAINED_WORK = Symbol("prodkit.op.abort-drained-work");
+
+type AbortDrainedWork<T> = {
+  readonly [ABORT_DRAINED_WORK]: true;
+  readonly promise: PromiseLike<T>;
+};
+
+/** Suspend callback return type: plain promise or drain-on-abort wrapped work. */
+export type SuspendWork<T> = PromiseLike<T> | AbortDrainedWork<T>;
+
+export function withAbortDrain<T>(promise: PromiseLike<T>): AbortDrainedWork<T> {
+  return { [ABORT_DRAINED_WORK]: true, promise };
+}
+
+export function isAbortDrainedWork<T>(work: SuspendWork<T>): work is AbortDrainedWork<T> {
+  return typeof work === "object" && work !== null && ABORT_DRAINED_WORK in work;
+}
+
+export function interruptOnAbortSettlement(signal: AbortSignal): AbortSettlement {
+  return AbortSettlement.interruptOnAbort(() => abortReason(signal));
+}
+
+export function settlementForSuspendedWork(
+  driveSettlement: AbortSettlement,
+  suspendWork: SuspendWork<unknown>,
+): {
+  readonly settlement: AbortSettlement;
+  readonly suspended: PromiseLike<unknown>;
+} {
+  const shouldDrainOnAbort = isAbortDrainedWork(suspendWork);
+  const settlement =
+    driveSettlement.kind === "interruptOnAbort" && shouldDrainOnAbort
+      ? AbortSettlement.interruptAndDrainOnAbort(driveSettlement.getAbortReason)
+      : driveSettlement;
+  const suspended = shouldDrainOnAbort ? suspendWork.promise : suspendWork;
+  return { settlement, suspended };
+}
 
 export function awaitWithAbort<T>(
   suspended: PromiseLike<T>,

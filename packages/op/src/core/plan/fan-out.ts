@@ -2,7 +2,8 @@ import { ErrorGroup, UnhandledException } from "../../errors.js";
 import { Result, type Err } from "../../result.js";
 import { createRunContext } from "../runtime.js";
 import type { RunContext } from "../runtime.js";
-import { executePlan, interruptOnAbortSettlement, type Plan } from "./base.js";
+import { executePlan, type Plan } from "./base.js";
+import { interruptOnAbortSettlement } from "../settlement.js";
 import { unsafeCoerce } from "@prodkit/shared/runtime";
 
 type FanOut<T, E> = {

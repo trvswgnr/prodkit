@@ -1,15 +1,19 @@
 import { UnhandledException } from "../errors.js";
-import { AbortSettlement, awaitWithAbort, drainInFlightWork } from "./abort.js";
 import { Result } from "../result.js";
 import {
   CUSTOM_INSTRUCTION_META,
-  isAbortDrainedWork,
   isErrInstruction,
   RegisterExitFinalizerInstruction,
   SuspendInstruction,
   type CustomInstruction,
   type Instruction,
 } from "./instructions.js";
+import {
+  AbortSettlement,
+  awaitWithAbort,
+  drainInFlightWork,
+  settlementForSuspendedWork,
+} from "./settlement.js";
 import type { Op } from "../index.js";
 import { EMPTY_TUPLE } from "../shared.js";
 import { closeGenerator, runFinalizersSafely, type ExitFinalizer } from "./cleanup.js";
@@ -69,12 +73,7 @@ async function resumeSuspendedInstruction<T, E, M>(
   driveSettlement: AbortSettlement,
 ): Promise<IteratorResult<Instruction<E, M>, T>> {
   const suspendWork = instruction.suspend(context);
-  const shouldDrainOnAbort = isAbortDrainedWork(suspendWork);
-  const settlement =
-    driveSettlement.kind === "interruptOnAbort" && shouldDrainOnAbort
-      ? AbortSettlement.interruptAndDrainOnAbort(driveSettlement.getAbortReason)
-      : driveSettlement;
-  const suspended = shouldDrainOnAbort ? suspendWork.promise : suspendWork;
+  const { settlement, suspended } = settlementForSuspendedWork(driveSettlement, suspendWork);
   try {
     return iterator.next(await awaitWithAbort(suspended, context.signal, settlement));
   } catch (cause) {

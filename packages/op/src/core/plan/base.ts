@@ -1,9 +1,9 @@
 import { UnhandledException } from "../../errors.js";
 import type { Op } from "../../index.js";
 import { Result } from "../../result.js";
-import { abortReason, unsafeCoerce } from "@prodkit/shared/runtime";
+import { unsafeCoerce } from "@prodkit/shared/runtime";
 import { isIterableOp } from "../../shared.js";
-import { AbortSettlement } from "../abort.js";
+import { AbortSettlement } from "../settlement.js";
 import { driveIterator } from "../runtime.js";
 import type { AsArgs, OpInterface, TrackedErr } from "./surface.js";
 import type { RunContext } from "../runtime.js";
@@ -163,10 +163,6 @@ export function splitLeadingUnaryWraps(plan: ErasedPlan): {
 function rewritePlanStackSafe(source: ErasedPlan, rewriter: PlanRewriter): ErasedPlan {
   const walk = walkUnaryWraps(source);
   return rebuildUnaryWraps(walk.base, walk.rebuilds, (base) => base.rewrite(rewriter));
-}
-
-export function interruptOnAbortSettlement(signal: AbortSignal): AbortSettlement {
-  return AbortSettlement.interruptOnAbort(() => abortReason(signal));
 }
 
 let activePlanExecutionCount = 0;
