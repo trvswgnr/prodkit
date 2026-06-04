@@ -172,6 +172,23 @@ complete before `.run()` settles. Throws from `return` are swallowed on purpose
 Combinator contracts live in `packages/op/src/core/plan/combinators.ts` and
 `packages/op/src/core/plan/fan-out.ts` alongside the fuller comment block in `combinators.ts`.
 
+### Fan-out scheduling modes
+
+Two execution shapes in `packages/op/src/core/plan/fan-out.ts`:
+
+- **First-settler** (`driveFirstSettlerFanOutPlans`): used by `Op.race`, `Op.any`, and unbounded
+  fail-fast `Op.all`. Every child starts under one outer abort umbrella. The first branch that
+  matches the combinator claim rule wins, aborts siblings, and `.run()` waits until every child
+  promise settles (including loser cleanup).
+- **Bounded pool** (`driveBoundedPoolPlans`): used when `Op.all` or `Op.allSettled` receive a
+  concurrency limit below the child count. At most N children run at once. Fail-fast `Op.all`
+  stops scheduling new work after the first `Err` and aborts in-flight siblings.
+
+Representative regression tests:
+
+- `packages/op/tests/unit/fan-out-regression.test.ts` (`caps concurrent children and aborts in-flight siblings on first Err`)
+- `packages/op/tests/unit/fan-out-regression.test.ts` (`Op.race waits for loser defer cleanup before run() settles`)
+
 `Op.all` fails fast on the first child error, aborts siblings, and waits for every active branch
 to settle before returning. Fan-out children run through `executePlan(..., interruptOnAbortSettlement)`
 so aborted losers unwind even when they ignore `AbortSignal`. Combinator plans wrap their returned work
