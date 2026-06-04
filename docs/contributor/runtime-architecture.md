@@ -25,7 +25,23 @@ packages/op/src/index.ts          (Op factory, Op.run, re-exports)
   |-- core/instructions.ts        (Suspend, RegisterExitFinalizer, CustomInstruction protocol)
 
 packages/op/src/di/                 (DI.provide, DI.inject via CustomInstruction + extensions)
-  '-- imports core/runtime, core/instructions, core/plan/surface, core/plan/shell (internal)
+  '-- internal.ts imports core/runtime, core/instructions, core/abort, core/plan/shell,
+      core/plan/surface (type-only), errors, result, index (type-only), @prodkit/shared/runtime
+
+Verified import edges (checked by `pnpm --filter @prodkit/tools run architecture:check`):
+
+- `packages/op/src/di/internal.ts` imports `packages/op/src/core/plan/base.ts`
+- `packages/op/src/di/internal.ts` imports `packages/op/src/core/plan/surface.ts`
+- `packages/op/src/di/internal.ts` imports `packages/op/src/core/plan/shell.ts`
+- `packages/op/src/di/internal.ts` imports `packages/op/src/core/abort.ts`
+- `packages/op/src/di/internal.ts` imports `packages/op/src/core/instructions.ts`
+- `packages/op/src/di/internal.ts` imports `packages/op/src/core/runtime.ts`
+- `packages/op/src/di/internal.ts` imports `packages/op/src/core/meta.ts`
+- `packages/op/src/di/internal.ts` imports `packages/op/src/errors.ts`
+- `packages/op/src/di/internal.ts` imports `packages/op/src/result.ts`
+- `packages/op/src/di/internal.ts` imports `packages/op/src/index.ts`
+- `packages/op/src/di/internal.ts` imports `packages/op/src/di/index.ts`
+- `packages/op/src/di/internal.ts` imports `@prodkit/shared/runtime`
 
 packages/std/src/                   (reserved runtime-agnostic utility subpaths)
 ```

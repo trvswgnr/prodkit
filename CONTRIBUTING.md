@@ -68,6 +68,9 @@ CI runs `pnpm -r exec npm audit signatures` so dependency signature verification
 workspace package, not just the private root manifest.
 An `invariants:check` gate step fails when `docs/contributor/op-invariants.md` references source symbols or test
 file paths that no longer exist in the repo.
+An `architecture:check` gate step fails when verified import edges in
+[`docs/contributor/runtime-architecture.md`](docs/contributor/runtime-architecture.md) disagree with
+`packages/op` source imports for the covered modules.
 A `changelog:api:check` gate step fails when `packages/op/src/index.ts`,
 `packages/op/src/di/index.ts`, `packages/op/src/policy/index.ts`, or `packages/op/src/hkt.ts`
 public export names change without an update to that package's `CHANGELOG.md` under
