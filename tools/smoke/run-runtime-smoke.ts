@@ -3,13 +3,12 @@ import { existsSync, mkdirSync } from "node:fs";
 import { cp, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { Miniflare } from "miniflare";
-import { createLogger } from "./logger.ts";
+import { createLogger, readRepoRoot } from "../lib/utils.ts";
 
 type Runtime = "bun" | "deno" | "edge";
 
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const REPO_ROOT = readRepoRoot();
 const RUNTIME_SMOKE_STATE_DIR = path.join(REPO_ROOT, "var", "runtime-smoke");
 const PNPM_RUNTIME_STORE_DIR = path.join(RUNTIME_SMOKE_STATE_DIR, "store");
 const PACK_OUTPUT_PREVIEW = 4000;

@@ -25,6 +25,8 @@ export function releaseTag(id: ReleasePackageId, version: string): string {
   return `${RELEASE_PACKAGES[id].tagPrefix}-v${version}`;
 }
 
-export const RELEASE_CUT_USAGE = "usage: node ./tools/release-cut.ts <op|std> <patch|minor|major>";
+export const RELEASE_CUT_USAGE =
+  "usage: node ./tools/release/release-cut.ts <op|std> <patch|minor|major>";
 
-export const CHANGELOG_CHECK_USAGE = "usage: node ./tools/check-changelog-version.ts <op|std>";
+export const CHANGELOG_CHECK_USAGE =
+  "usage: node ./tools/release/check-changelog-version.ts <op|std>";

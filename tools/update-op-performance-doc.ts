@@ -1,8 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { createLogger } from "./logger.ts";
-import { readRepoRoot } from "./utils.ts";
+import { createLogger, readRepoRoot } from "./lib/utils.ts";
 
 const logger = createLogger(import.meta.url);
 

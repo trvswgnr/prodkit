@@ -11,7 +11,7 @@ import {
   ParseError,
   readPackageJson,
   readFile,
-} from "./utils.ts";
+} from "../lib/utils.ts";
 
 const logger = createLogger();
 

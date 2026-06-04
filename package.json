@@ -14,7 +14,7 @@
     "lint": "turbo run lint --log-order=grouped",
     "fmt": "turbo run fmt --log-order=grouped",
     "fmt:check": "turbo run fmt:check --log-order=grouped",
-    "gate": "TURBO_PRINT_VERSION_DISABLED=1 turbo run build typecheck test lint fmt:check --log-order=grouped && pnpm --filter @prodkit/tools run adr:check && pnpm --filter @prodkit/tools run changelog:api:check && pnpm --filter @prodkit/tools run invariants:check && pnpm --filter @prodkit/tools run architecture:check && pnpm --filter @prodkit/tools run runnable-gating:check && TURBO_PRINT_VERSION_DISABLED=1 turbo run smoke --filter=@prodkit/tools --log-order=grouped",
+    "gate": "pnpm --filter @prodkit/tools run gate",
     "bench": "turbo run codspeed:bench --filter=@prodkit/benchmarks --log-order=grouped",
     "build:size": "pnpm --filter @prodkit/op run build:size",
     "clean": "git clean -Xfd"

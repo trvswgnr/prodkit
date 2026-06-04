@@ -18,7 +18,7 @@ import {
   parseJson,
   readFile,
   writeFile,
-} from "./utils.ts";
+} from "../lib/utils.ts";
 
 const logger = createLogger();
 

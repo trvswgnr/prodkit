@@ -3,14 +3,14 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { readRepoRoot } from "../lib/utils.ts";
 import {
   assertContractMarkers,
   checkRunnableGatingContract,
 } from "./check-runnable-gating-contract.ts";
 
 void test("live repo satisfies runnable gating contract", () => {
-  const repoRoot = path.resolve(import.meta.dirname, "..");
-  checkRunnableGatingContract(repoRoot);
+  checkRunnableGatingContract(readRepoRoot());
 });
 
 void test("contract markers are found when concatenated across a temp tree", () => {

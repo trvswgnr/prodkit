@@ -9,7 +9,6 @@ import {
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { Op } from "@prodkit/op";
 import { Policy } from "@prodkit/op/policy";
 import * as v from "valibot";
@@ -21,7 +20,8 @@ import {
   parseJson,
   getOwnPropertyValue,
   readPackageJson,
-} from "./utils.ts";
+  readRepoRoot,
+} from "../lib/utils.ts";
 
 const logger = createLogger();
 
@@ -40,7 +40,7 @@ const DEFAULT_SMOKE_TIMEOUT_MS = 30_000; // 30 seconds
 const PACK_OUTPUT_PREVIEW = 4000;
 const UPSTREAM_REPO_URL = "https://github.com/trvswgnr/prodkit.git";
 const UPSTREAM_MAIN_REF = "refs/heads/main";
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const REPO_ROOT = readRepoRoot();
 /** Temp workspace layout: `pnpm-workspace.yaml` + this folder (copied from `examples/`). */
 const EXAMPLES_CONSUMER_DIR = "examples-consumer";
 const EXAMPLES_PACKAGE_NAME = "@prodkit/examples";

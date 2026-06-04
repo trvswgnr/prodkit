@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { createLogger, readRepoRoot } from "./utils.ts";
+import { createLogger, readRepoRoot } from "../lib/utils.ts";
 
 const logger = createLogger();
 
