@@ -28,8 +28,18 @@ packages/op/src/di/                 (DI.provide, DI.inject via CustomInstruction
   '-- internal.ts imports core/runtime, core/instructions, core/abort, core/plan/shell,
       core/plan/surface (type-only), errors, result, index (type-only), @prodkit/shared/runtime
 
-Verified import edges (checked by `pnpm --filter @prodkit/tools run architecture:check`):
+Verified import contracts (checked by `pnpm --filter @prodkit/tools run architecture:check`):
 
+**Closed modules** document every `packages/op/src` import from that file. Use for extension seams and
+small plan modules where surprise imports are regressions.
+
+<!-- architecture-check-closed: packages/op/src/di/internal.ts -->
+<!-- architecture-check-closed: packages/op/src/core/plan/factory-chain.ts -->
+
+**Partial edges** document specific architectural links. Each line must match source; hub modules
+(for example `shell.ts`) may import more than the list shows.
+
+- `packages/op/src/core/plan/shell.ts` imports `packages/op/src/core/plan/factory-chain.ts`
 - `packages/op/src/di/internal.ts` imports `packages/op/src/core/plan/base.ts`
 - `packages/op/src/di/internal.ts` imports `packages/op/src/core/plan/surface.ts`
 - `packages/op/src/di/internal.ts` imports `packages/op/src/core/plan/shell.ts`
@@ -42,6 +52,7 @@ Verified import edges (checked by `pnpm --filter @prodkit/tools run architecture
 - `packages/op/src/di/internal.ts` imports `packages/op/src/index.ts`
 - `packages/op/src/di/internal.ts` imports `packages/op/src/di/index.ts`
 - `packages/op/src/di/internal.ts` imports `@prodkit/shared/runtime`
+- `packages/op/src/core/plan/factory-chain.ts` imports `packages/op/src/core/plan/base.ts`
 
 packages/std/src/                   (reserved runtime-agnostic utility subpaths)
 ```

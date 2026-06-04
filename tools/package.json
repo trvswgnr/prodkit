@@ -17,7 +17,7 @@
     "adr:check": "node ./sync-adr-index.ts",
     "changelog:api:check": "node ./check-changelog-api.ts",
     "invariants:check": "node ./check-op-invariants-md.ts",
-    "architecture:check": "node ./check-runtime-architecture.ts",
+    "architecture:check": "node --test ./check-runtime-architecture.test.ts && node ./check-runtime-architecture.ts",
     "adr:sync": "node ./sync-adr-index.ts --write",
     "fmt": "oxfmt \"**/*.ts\"",
     "fmt:check": "oxfmt --check \"**/*.ts\"",
