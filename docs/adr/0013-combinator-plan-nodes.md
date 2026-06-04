@@ -7,22 +7,25 @@ packages:
 
 # Combinator concurrent composition as plan nodes
 
-Public combinators (`Op.all`, `Op.race`, `Op.any`, `Op.allSettled`) are plan-backed ops that
-delegate to combinator plan nodes in `packages/op/src/core/plan/combinators.ts`. Shared fan-out
-lives in `packages/op/src/core/plan/fan-out.ts`. `.with(Policy.*)` pushes through to child plans
-structurally via `PlanRewriter` hooks ([ADR 0007](0007-op-execution-plan-ast.md)).
+Public combinators (`Op.all`, `Op.race`, `Op.any`, `Op.allSettled`, `Op.settle`) are plan-backed
+ops that delegate to combinator plan nodes in `packages/op/src/core/plan/combinators.ts`. Shared
+fan-out lives in `packages/op/src/core/plan/fan-out.ts`. `.with(Policy.*)` pushes through to child
+plans structurally via `PlanRewriter` hooks ([ADR 0007](0007-op-execution-plan-ast.md)).
 
 ## Decision
 
-**Each public combinator is a plan node** with the same `createPlan` + optional `rewrite` pattern as
-fluent transforms (`mapPlan`, `onEnterPlan`, policy plans):
+**Each public combinator is a plan node.** Multi-child combinators (`allPlan`, `racePlan`,
+`anyPlan`, `allSettledPlan`) use `createPlan` with `rewrite` that maps each child plan. Unary
+`settlePlan` uses `createUnaryPlan` like `mapPlan` and policy wrappers: one child via
+`source.execute`, rebuilt with `(inner) => settlePlan(inner)`.
 
-| Plan node | Public op | Child drive settlement | Loser wait |
+| Plan node | Public op | Child cancel settlement | Loser wait |
 | --- | --- | --- | --- |
 | `allPlan` | `Op.all` | `interruptOnAbort` | yes (first error or all ok) |
 | `racePlan` | `Op.race` | `interruptOnAbort` | yes ([ADR 0004](0004-combinators-wait-for-loser-finalization.md)) |
 | `anyPlan` | `Op.any` | `interruptOnAbort` | yes (ADR 0004) |
 | `allSettledPlan` | `Op.allSettled` | `passThrough` | all branches finish |
+| `settlePlan` | `Op.settle` | `passThrough` | single child finishes |
 
 Public factories bind `OP_PLAN_BIND` and delegate to these nodes. Imperative fan-out was removed
 from the public combinator module; concurrency runs through `core/plan/fan-out.ts`.

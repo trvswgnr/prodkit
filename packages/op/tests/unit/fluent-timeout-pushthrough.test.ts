@@ -43,6 +43,17 @@ describe("Policy.timeout push-through matrix", () => {
       },
     },
     {
+      combinator: "settle",
+      run: async () => {
+        const result = await runWithFakeTimeout(
+          Op.settle(hangingOp()).with(Policy.timeout(TIMEOUT_MS)),
+        );
+        assert(result.isOk(), "settle keeps faults on the ok channel");
+        assert(result.value.isErr(), "inner run should time out");
+        expect(result.value.error).toBeInstanceOf(TimeoutError);
+      },
+    },
+    {
       combinator: "mapErr",
       run: async () => {
         const result = await runWithFakeTimeout(

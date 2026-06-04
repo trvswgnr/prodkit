@@ -14,7 +14,7 @@ nullary core ops and always settle through the same driver:
 ```text
 packages/op/src/index.ts          (Op factory, Op.run, re-exports)
   |-- builders.ts                 (Op.of, Op.try, fromGenFn, Op.defer, ...)
-  |-- combinators.ts              (Op.all, Op.any, Op.race, ...)
+  |-- combinators.ts              (Op.all, Op.any, Op.race, Op.allSettled, Op.settle, ...)
   |-- policy/                     (Policy.* constructors, retry-policy, plan rewriters)
   |-- hkt.ts                      (@prodkit/op/hkt entry)
   |-- core/runtime.ts             (createRunContext, drive, runOp, RunContext, ExitContext)
@@ -164,8 +164,9 @@ Import extension helpers from `@prodkit/op/internal` (for example `Blocking`, `w
 
 `packages/op/src/core/plan/combinators.ts` and `packages/op/src/core/plan/fan-out.ts` run combinator
 child plans through `Plan.execute` / `executePlan` (often with per-child `AbortController` signals)
-and enforce ordering contracts documented in `op-invariants.md`. `Op.all`, `Op.any`, and `Op.race` wait
-for aborted sibling finalization before the parent `run()` settles
+and enforce ordering contracts documented in `op-invariants.md`. `Op.settle` is a unary
+`settlePlan` wrapper with `passThrough` settlement. `Op.all`, `Op.any`, and `Op.race` wait for
+aborted sibling finalization before the parent `run()` settles
 ([ADR 0004](../adr/0004-combinators-wait-for-loser-finalization.md)). Interrupt-on-abort fan-out
 uses `executePlan(..., interruptOnAbortMode)` so aborted losers still unwind when they never observe
 the signal. Fan-out and provision suspends pass `SuspendResume.drainAfterAbort` so outer

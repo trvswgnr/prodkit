@@ -12,7 +12,7 @@ It focuses on semantics that should remain stable across refactors.
 
 `Op.run()` is driven by `drive()` in `packages/op/src/core/runtime.ts`.
 That runtime executes generator instructions, tracks registered exit finalizers, and settles to a single `Result`.
-Combinators (`Op.all`, `Op.allSettled`, `Op.any`, `Op.race`) compose multiple `drive()` calls in `packages/op/src/combinators.ts`.
+Public combinators in `packages/op/src/combinators.ts` are plan-backed; child work runs through `Plan.execute` / `executePlan` in `packages/op/src/core/plan/`, not combinator-local `drive()` calls.
 
 ## Invariant 1: cleanup ordering is deterministic and LIFO
 

@@ -1,16 +1,12 @@
 import type { AnyNullaryOp, InferOpMeta, InferOpOk, InferOpErr } from "./core/plan/surface.js";
 import type { Op } from "./index.js";
-import { allPlan, allSettledPlan, anyPlan, racePlan } from "./core/plan/combinators.js";
+import { allPlan, allSettledPlan, anyPlan, racePlan, settlePlan } from "./core/plan/combinators.js";
 import { getPlan } from "./core/plan/base.js";
 import { makePlanOp } from "./core/plan/shell.js";
-import { makeCoreOp } from "./core/fluent.js";
-import { SuspendInstruction, SuspendResume } from "./core/instructions.js";
-import { drive } from "./core/runtime.js";
 import { Result } from "./result.js";
 import type { EmptyMeta, MergeMeta } from "./core/meta.js";
 import { unsafeCoerce } from "@prodkit/shared/runtime";
 import { EMPTY_TUPLE } from "./shared.js";
-import type { Instruction } from "./core/instructions.js";
 import { ErrorGroup, UnhandledException } from "./errors.js";
 
 type MergeOpsMeta<Ops extends readonly AnyNullaryOp[]> = Ops extends readonly [
@@ -19,15 +15,6 @@ type MergeOpsMeta<Ops extends readonly AnyNullaryOp[]> = Ops extends readonly [
 ]
   ? MergeMeta<InferOpMeta<Head>, MergeOpsMeta<Tail>>
   : EmptyMeta;
-
-function makeCombinatorOp<T, E, M = EmptyMeta>(
-  gen: () => Generator<Instruction<E>, T, unknown>,
-): Op<T, E, [], M> {
-  return makeCoreOp<T, E, M>(
-    // SAFETY: makeCoreOp expects Instruction<E>[]; combinator body yields the same instruction union at runtime.
-    () => unsafeCoerce(gen()),
-  );
-}
 
 type AllOpOk<Ops extends readonly AnyNullaryOp[]> = { [K in keyof Ops]: InferOpOk<Ops[K]> };
 type AllOpErr<Ops extends readonly AnyNullaryOp[]> = InferOpErr<Ops[number]>;
@@ -68,12 +55,10 @@ export function allSettledOp<const Ops extends readonly AnyNullaryOp[]>(
 export function settleOp<T, E, M>(
   op: Op<T, E, [], M>,
 ): Op<Result<T, E | UnhandledException>, never, [], M> {
-  return makeCombinatorOp(function* () {
-    return yield* new SuspendInstruction(
-      (outerContext) => drive(op, outerContext),
-      SuspendResume.passThrough,
-    );
-  });
+  const bindSettlePlan = () => settlePlan(getPlan(op, EMPTY_TUPLE));
+
+  // SAFETY: makePlanOp omits metadata in its return; bindSettlePlan was built from the typed source op.
+  return unsafeCoerce(makePlanOp(bindSettlePlan, bindSettlePlan, true));
 }
 
 /**

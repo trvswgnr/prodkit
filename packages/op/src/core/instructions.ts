@@ -38,10 +38,9 @@ export type InferInstructionErr<Y> = ExtractResultErr<Y>;
 export type SuspendFn = (ctx: RunContext<readonly unknown[]>) => PromiseLike<unknown>;
 
 export const SuspendResume = {
-  passThrough: "pass-through",
-  drainAfterAbort: "drain-after-abort",
+  passThrough: "passThrough",
+  drainAfterAbort: "drainAfterAbort",
 } as const;
-
 export type SuspendResume = (typeof SuspendResume)[keyof typeof SuspendResume];
 
 export class SuspendInstruction extends Tagged("SuspendInstruction") {

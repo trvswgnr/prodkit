@@ -14,7 +14,7 @@ siblings, and still keep `.run()` pending until every aborted branch finishes te
 
 **Winner selection is eager; return is not.** Plan-backed `racePlan` and `anyPlan` (see
 [ADR 0013](0013-combinator-plan-nodes.md)) abort losing child controllers when a winner is chosen,
-then wait for every child drive to finish before the combinator settles. The caller gets the
+then wait for every child plan run to finish before the combinator settles. The caller gets the
 winner's value or error only after loser runs complete exit finalizers and generator finalization.
 
 **Winner outcome keeps precedence.** A loser failing while reacting to abort does not override an
@@ -35,17 +35,18 @@ HTTP requests, file handles, or defer hooks still execute.
 Early return would make finalizer ordering depend on scheduler timing outside the combinator.
 
 **Consistency with the single-op contract.** A lone `Op` does not resolve until `drive` finishes
-finalizers for that invocation. Combinators compose multiple drives; dropping the loser wait would
-make `Op.race([a, b])` weaker than `Promise.race` wrapped in defer hooks on each branch.
+finalizers for that invocation. `Op.any` and `Op.race` fan out to multiple child plans through
+`Plan.execute`; dropping the loser wait would make `Op.race([a, b])` weaker than `Promise.race`
+wrapped in defer hooks on each branch.
 
 ## Considered options
 
 **Return the winner immediately and detach losers.** Rejected: violates the settlement guarantee
 above and reintroduces the "background branch still running" failure mode `Op` targets.
 
-**Fire-and-forget abort without awaiting loser drives.** Rejected: abort signals cooperative
-cancellation but does not wait for teardown; finalizers and suspending cleanup still need the
-loser drive to finish.
+**Fire-and-forget abort without awaiting loser child plans.** Rejected: abort signals cooperative
+cancellation but does not wait for teardown; finalizers and suspending cleanup still need each
+aborted child plan to finish.
 
 **Opt-in fast path (for example `.raceFast`).** Deferred: adds API surface for a trade-off callers
  rarely need in alpha; revisit only with explicit demand and documented leak semantics.
