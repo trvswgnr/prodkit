@@ -1,6 +1,5 @@
 import { assert, describe, expect, test } from "vitest";
 import { Op } from "../../src/index.js";
-import { UnhandledException } from "../../src/errors.js";
 import { Policy } from "../../src/policy/index.js";
 
 /**
@@ -78,17 +77,16 @@ describe("deep composition stack safety", () => {
     expect(result.value).toBe(depth);
   });
 
-  test("run() resolves to a Result for a very deep chain instead of throwing", async () => {
+  test("flatMap chain returns the correct value at depth 20_000", async () => {
     const depth = 20_000;
     let op = Op.of(0);
     for (let i = 0; i < depth; i += 1) op = op.flatMap((x) => Op.of(x + 1));
 
-    // The contract is that runtime faults settle on the UnhandledException
-    // channel. Awaiting must not throw.
     const result = await op.run();
     assert(
-      result.isOk() || (result.isErr() && UnhandledException.is(result.error)),
-      "run() should resolve to a Result",
+      result.isOk(),
+      "deep flatMap chain should succeed via trampoline, not Err(UnhandledException) from stack overflow",
     );
+    expect(result.value).toBe(depth);
   });
 });
