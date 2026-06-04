@@ -70,11 +70,12 @@ export class SuspendInstruction extends Tagged("SuspendInstruction") {
 }
 
 type FinalizeFn = (ctx: ExitContext<unknown, unknown, readonly unknown[]>) => PromiseLike<void>;
+
 export class RegisterExitFinalizerInstruction extends Tagged("RegisterExitFinalizerInstruction") {
   readonly finalize: FinalizeFn;
   readonly args: readonly unknown[] | undefined;
 
-  constructor(finalize: FinalizeFn, args?: readonly unknown[]) {
+  constructor(finalize: FinalizeFn, args: readonly unknown[] | undefined) {
     super();
     this.finalize = finalize;
     this.args = args;

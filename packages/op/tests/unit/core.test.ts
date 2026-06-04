@@ -4,16 +4,14 @@ import { chainCleanupFaults, closeGenerator } from "../../src/core/cleanup.js";
 import { createRunContext, drive } from "../../src/core/runtime.js";
 import { makeCoreOp } from "../../src/core/fluent.js";
 import {
+  CUSTOM_INSTRUCTION_META,
   isErrInstruction,
+  type CustomInstruction,
+  type Instruction,
   RegisterExitFinalizerInstruction,
   SuspendInstruction,
 } from "../../src/core/instructions.js";
 import type { RunContext } from "../../src/core/runtime.js";
-import {
-  CUSTOM_INSTRUCTION_META,
-  type CustomInstruction,
-  type Instruction,
-} from "../../src/core/instructions.js";
 import type { EmptyMeta } from "../../src/core/meta.js";
 import { Op } from "../../src/index.js";
 import { UnhandledException } from "../../src/errors.js";
@@ -86,7 +84,7 @@ describe("core/cleanup helpers", () => {
 
   test("instruction type guards correctly classify values", () => {
     const suspended = new SuspendInstruction(async () => 1);
-    const finalizer = new RegisterExitFinalizerInstruction(async () => {});
+    const finalizer = new RegisterExitFinalizerInstruction(async () => {}, undefined);
     const typedErr = Result.err("typed");
     const typedOk = Result.ok("value");
 
@@ -172,12 +170,18 @@ describe("drive runtime behavior", () => {
   test("registerExitFinalizer runs all handlers in LIFO order", async () => {
     const seen: string[] = [];
     const op = makeRuntimeOp<number, never>(function* () {
-      yield new RegisterExitFinalizerInstruction(async (ctx) => {
-        seen.push(`first-${ctx.result.isOk() ? "ok" : "err"}`);
-      });
-      yield new RegisterExitFinalizerInstruction(async (ctx) => {
-        seen.push(`second-${ctx.result.isOk() ? "ok" : "err"}`);
-      });
+      yield new RegisterExitFinalizerInstruction(
+        async (ctx) => {
+          seen.push(`first-${ctx.result.isOk() ? "ok" : "err"}`);
+        },
+        undefined,
+      );
+      yield new RegisterExitFinalizerInstruction(
+        async (ctx) => {
+          seen.push(`second-${ctx.result.isOk() ? "ok" : "err"}`);
+        },
+        undefined,
+      );
       return 123;
     });
 
@@ -191,9 +195,12 @@ describe("drive runtime behavior", () => {
   test("finalizer throw after successful body converts to UnhandledException", async () => {
     const cleanupFault = new Error("cleanup-failed");
     const op = makeRuntimeOp<string, never>(function* () {
-      yield new RegisterExitFinalizerInstruction(async () => {
-        throw cleanupFault;
-      });
+      yield new RegisterExitFinalizerInstruction(
+        async () => {
+          throw cleanupFault;
+        },
+        undefined,
+      );
       return "ok";
     });
 
@@ -208,9 +215,12 @@ describe("drive runtime behavior", () => {
   test("cleanup fault takes precedence over typed body error", async () => {
     const cleanupFault = new Error("cleanup-failed");
     const op = makeRuntimeOp<never, string>(function* () {
-      yield new RegisterExitFinalizerInstruction(async () => {
-        throw cleanupFault;
-      });
+      yield new RegisterExitFinalizerInstruction(
+        async () => {
+          throw cleanupFault;
+        },
+        undefined,
+      );
       return yield* Result.err("typed-body-error");
     });
 
@@ -226,12 +236,18 @@ describe("drive runtime behavior", () => {
     const firstUnwindFault = new Error("second-registered-runs-first");
     const secondUnwindFault = "first-registered-runs-second";
     const op = makeRuntimeOp<string, never>(function* () {
-      yield new RegisterExitFinalizerInstruction(async () => {
-        throw secondUnwindFault;
-      });
-      yield new RegisterExitFinalizerInstruction(async () => {
-        throw firstUnwindFault;
-      });
+      yield new RegisterExitFinalizerInstruction(
+        async () => {
+          throw secondUnwindFault;
+        },
+        undefined,
+      );
+      yield new RegisterExitFinalizerInstruction(
+        async () => {
+          throw firstUnwindFault;
+        },
+        undefined,
+      );
       return "done";
     });
 

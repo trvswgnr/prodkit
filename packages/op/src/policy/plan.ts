@@ -2,10 +2,10 @@ import { TimeoutError, UnhandledException } from "../errors.js";
 import { Result } from "../result.js";
 import { sleepWithSignal } from "@prodkit/shared/runtime";
 import {
-  RegisterExitFinalizerInstruction,
   SuspendInstruction,
   withAbortDrain,
 } from "../core/instructions.js";
+import { RegisterExitFinalizerInstruction } from "../core/instructions.js";
 import { createRunContext } from "../core/runtime.js";
 import { normalizeRetryPolicy, type NormalizedRetryPolicy } from "./retry-policy.js";
 import { validateTimeoutMs } from "./validate.js";
@@ -33,8 +33,9 @@ export function releasePlan<T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T
 
       if (result.isErr()) return yield* result;
 
-      yield new RegisterExitFinalizerInstruction(() =>
-        Promise.resolve(release(result.value)).then(() => {}),
+      yield new RegisterExitFinalizerInstruction(
+        () => Promise.resolve(release(result.value)).then(() => {}),
+        undefined,
       );
 
       return result.value;

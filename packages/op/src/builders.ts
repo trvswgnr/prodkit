@@ -10,7 +10,10 @@ import type {
 } from "./core/instructions.js";
 import type { EmptyMeta } from "./core/meta.js";
 import type { Op } from "./index.js";
-import { RegisterExitFinalizerInstruction, SuspendInstruction } from "./core/instructions.js";
+import {
+  RegisterExitFinalizerInstruction,
+  SuspendInstruction,
+} from "./core/instructions.js";
 import { Result } from "./result.js";
 import { makeCoreOp } from "./core/fluent.js";
 import { isAwaited, sleepWithSignal, unsafeCoerce } from "@prodkit/shared/runtime";
@@ -34,8 +37,9 @@ export function fail<E>(value: E): Op<never, E, [], EmptyMeta> {
 
 export function defer(finalize: AnyExitFn): Op<void, never, [], EmptyMeta> {
   return makeCoreOp(function* () {
-    yield new RegisterExitFinalizerInstruction((ctx) =>
-      Promise.resolve(finalize(ctx)).then(() => {}),
+    yield new RegisterExitFinalizerInstruction(
+      (ctx) => Promise.resolve(finalize(ctx)).then(() => {}),
+      undefined,
     );
   });
 }
