@@ -2,7 +2,7 @@ import { ErrorGroup, UnhandledException } from "../../errors.js";
 import { Result, type Err } from "../../result.js";
 import { createRunContext } from "../runtime.js";
 import type { RunContext } from "../runtime.js";
-import { executePlan, interruptOnAbortMode, type Plan } from "./base.js";
+import { executePlan, interruptOnAbortSettlement, type Plan } from "./base.js";
 import { unsafeCoerce } from "@prodkit/shared/runtime";
 
 type FanOut<T, E> = {
@@ -160,7 +160,7 @@ export function collectAllOk<T, E>(
 }
 
 const executeInterruptingPlan: ExecuteChildPlan = (plan, context) =>
-  executePlan(plan, context, interruptOnAbortMode(context));
+  executePlan(plan, context, interruptOnAbortSettlement(context.signal));
 
 async function driveAllUnboundedPlans<T, E>(
   plans: readonly Plan<T, E, unknown>[],

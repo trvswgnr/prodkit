@@ -10,11 +10,7 @@ import type {
 } from "./core/instructions.js";
 import type { EmptyMeta } from "./core/meta.js";
 import type { Op } from "./index.js";
-import {
-  RegisterExitFinalizerInstruction,
-  SuspendInstruction,
-  SuspendResume,
-} from "./core/instructions.js";
+import { RegisterExitFinalizerInstruction, SuspendInstruction } from "./core/instructions.js";
 import { Result } from "./result.js";
 import { makeCoreOp } from "./core/fluent.js";
 import { isAwaited, sleepWithSignal, unsafeCoerce } from "@prodkit/shared/runtime";
@@ -62,19 +58,17 @@ export function _try<T, E = UnhandledException>(
     const result: Result<
       Awaited<T>,
       Awaited<E> | UnhandledException
-    > = yield* new SuspendInstruction(
-      async (context) =>
-        Promise.resolve()
-          .then(() => f(context.signal))
-          .then(
-            (a) => Result.ok(a),
-            async (cause) => {
-              if (!onError) return Result.err(new UnhandledException({ cause }));
-              const mapped = await onError(cause);
-              return Result.err(mapped);
-            },
-          ),
-      SuspendResume.passThrough,
+    > = yield* new SuspendInstruction(async (context) =>
+      Promise.resolve()
+        .then(() => f(context.signal))
+        .then(
+          (a) => Result.ok(a),
+          async (cause) => {
+            if (!onError) return Result.err(new UnhandledException({ cause }));
+            const mapped = await onError(cause);
+            return Result.err(mapped);
+          },
+        ),
     );
 
     if (result.isErr()) return yield* result;

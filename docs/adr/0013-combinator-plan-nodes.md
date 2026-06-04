@@ -32,11 +32,11 @@ from the public combinator module; concurrency runs through `core/plan/fan-out.t
 
 **Shared fan-out owns child wiring and settlement.** Per-child `AbortController` wiring, outer-signal
 cascade, `detach()` for parent abort listeners, unbounded fan-out, bounded worker pool, and child
-execution through `Plan.execute` with `CancelSettlement` (not ad hoc `drive*` at the combinator
+execution through `Plan.execute` with `AbortSettlement` (not ad hoc `drive*` at the combinator
 layer). Combinator plan nodes call fan-out with the settlement row from the table above. The outer
-`SuspendInstruction` for combinator plans sets `SuspendResume.drainAfterAbort` when interrupt
-settlement applies so timeout/cancel on a wrapped combinator still drains in-flight children ([ADR
-0004](0004-combinators-wait-for-loser-finalization.md)).
+`SuspendInstruction` for combinator plans wraps returned fan-out work with `withAbortDrain(...)` when
+interrupt settlement applies so timeout/cancel on a wrapped combinator still drains in-flight children
+([ADR 0004](0004-combinators-wait-for-loser-finalization.md)).
 
 **Rewrite contract.** Built-in policies supply `PlanRewriter.apply` only. Combinator and transform
 plan nodes rebuild after `child.rewrite(rewriter)` (or `rewriteUnaryPlan` for unary wrappers).
@@ -55,8 +55,7 @@ representation lives under `core/plan/`.
 timeout/retry/cancel could not participate in `PlanRewriter`, blocking the ADR 0007 goal.
 
 **Two execution ports duplicated settlement.** Combinators and plans previously exposed parallel
-interrupt-on-abort entry points. Nested work now routes through `executePlan` with
-`PlanExecutionMode` (`CancelSettlement`).
+interrupt-on-abort entry points. Nested work now routes through `executePlan` with `AbortSettlement`.
 
 ## Considered options
 
@@ -76,4 +75,4 @@ nodes still need explicit rewrite methods until ceremony is reduced.
 - `packages/op/src/combinators.ts` holds public op factories and type helpers; fan-out and plan
   shapes live under `core/plan/`.
 - Tests from ADR 0004 and op-invariants.md Invariant 3 are the behavioral contract.
-- Cancellation settlement uses `core/cancel-session.ts`.
+- Abort settlement uses `core/abort.ts`.

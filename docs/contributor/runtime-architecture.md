@@ -61,14 +61,14 @@ Each `yield` from an op generator produces an `Instruction` discriminant. `drive
 
 | Yielded value | Driver action |
 | --- | --- |
-| `SuspendInstruction` | Await `suspend(runContext)` (abort settlement follows the enclosing `executePlan` mode or suspend resume), resume generator with the settled value |
+| `SuspendInstruction` | Await `suspend(runContext)` (abort settlement follows the enclosing `executePlan`; work wrapped with `withAbortDrain(...)` drains if abort interrupts the await), resume generator with the settled value |
 | `RegisterExitFinalizerInstruction` | Push `finalize` onto a per-run LIFO stack (optional frozen `args` for arity-bound defers) |
 | `CustomInstruction` | Await `resolve(runContext)` and resume (extension hook; see DI below) |
 | `Result.err(...)` (`Err` instruction) | Short-circuit to `Err` and run exit finalizers |
 | Anything else | `Err(UnhandledException)` for invalid yields |
 
 Suspends are how policies and combinators nest work: they call `executePlan` (with a
-`PlanExecutionMode` when interrupt-on-abort applies) on child plans with child or merged
+`AbortSettlement` when interrupt-on-abort applies) on child plans with child or merged
 `RunContext` values rather than blocking the outer generator thread.
 
 ## Policy wrappers (retry, timeout, cancel)
@@ -79,7 +79,7 @@ Built-in policies attach through `.with(Policy.*)` on the op value (`packages/op
 - **Retry** (`retryPlan`): loops inner execution inside a `SuspendInstruction`, applies
   `RetryPolicy` delay via abortable sleep (`retries` is the post-failure budget; `delay(retry, cause)`
   uses a 0-based retry index), and stops on success, non-retryable `Err`, or abort.
-- **Timeout** (`timeoutPlan`): races inner `executePlan(..., interruptOnAbortMode)` against a timer;
+- **Timeout** (`timeoutPlan`): races inner `executePlan(..., interruptOnAbortSettlement)` against a timer;
   surfaces `TimeoutError` on the typed channel. Invalid `timeoutMs` (negative or non-finite) fails
   at run time as `Err(UnhandledException)`. Error-channel transforms compose through plan rewriters
   ([ADR 0007](../adr/0007-op-execution-plan-ast.md); historical hook detail in superseded
@@ -128,9 +128,9 @@ Extension-owned plan nodes (for example `providePlan` in `@prodkit/op/di`) use t
 1. **`DI.inject(dependency)`** yields an `InjectInstruction`, a `CustomInstruction` whose
    `resolve(context)` reads bindings from `context.extensions`.
 2. **`DI.provide(op, bindings)`** (`providePlan` / `provideOp` in `packages/op/src/di/internal.ts`)
-   is a plan-backed op (`makePlanOp`) whose `providePlan` node suspends with
-   `SuspendResume.drainAfterAbort`, runs the inner plan through `executePlan(..., interruptOnAbortMode)`,
-   and extends `context.extensions` with the binding `Map` under an internal extension key.
+   is a plan-backed op (`makePlanOp`) whose `providePlan` node returns
+   `withAbortDrain(executePlan(..., interruptOnAbortSettlement))` and extends `context.extensions`
+   with the binding `Map` under an internal extension key.
    Policy attach rewrites the inner source via `providePlan(source.rewrite(rewriter), bindings)`.
 3. **Metadata.** Provided dependencies block bare `.run()` until satisfied via `ProvidedMeta`
    / `withBlocking` on the op type surface.
@@ -165,11 +165,11 @@ Import extension helpers from `@prodkit/op/internal` (for example `Blocking`, `w
 `packages/op/src/core/plan/combinators.ts` and `packages/op/src/core/plan/fan-out.ts` run combinator
 child plans through `Plan.execute` / `executePlan` (often with per-child `AbortController` signals)
 and enforce ordering contracts documented in `op-invariants.md`. `Op.settle` is a unary
-`settlePlan` wrapper with `passThrough` settlement. `Op.all`, `Op.any`, and `Op.race` wait for
+`settlePlan` wrapper with `AbortSettlement.passThrough`. `Op.all`, `Op.any`, and `Op.race` wait for
 aborted sibling finalization before the parent `run()` settles
 ([ADR 0004](../adr/0004-combinators-wait-for-loser-finalization.md)). Interrupt-on-abort fan-out
-uses `executePlan(..., interruptOnAbortMode)` so aborted losers still unwind when they never observe
-the signal. Fan-out and provision suspends pass `SuspendResume.drainAfterAbort` so outer
+uses `executePlan(..., interruptOnAbortSettlement)` so aborted losers still unwind when they never observe
+the signal. Fan-out and provision suspends wrap their returned work with `withAbortDrain(...)` so outer
 `Policy.timeout` can drain in-flight nested work before returning `TimeoutError`.
 
 ## Driver loop (call flow)

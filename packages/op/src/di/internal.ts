@@ -2,13 +2,13 @@ import {
   getPlan,
   createUnaryPlan,
   executePlan,
-  interruptOnAbortMode,
+  interruptOnAbortSettlement,
   type Plan,
 } from "../core/plan/base.js";
 import type { AsArgs } from "../core/plan/surface.js";
 import { makePlanOp } from "../core/plan/shell.js";
-import { awaitWithSettlement, rejectOnAbortSettlement } from "../core/cancel-session.js";
-import { SuspendInstruction, SuspendResume } from "../core/instructions.js";
+import { AbortSettlement, awaitWithAbort } from "../core/abort.js";
+import { SuspendInstruction, withAbortDrain } from "../core/instructions.js";
 import { createRunContext } from "../core/runtime.js";
 import { UnhandledException } from "../errors.js";
 import { Result } from "../result.js";
@@ -21,7 +21,7 @@ import {
   type StripEmpty,
 } from "../core/meta.js";
 import type { RunContext } from "../core/runtime.js";
-import { NEVER, hasBrand, isPromiseLike, unsafeCoerce } from "@prodkit/shared/runtime";
+import { abortReason, NEVER, hasBrand, isPromiseLike, unsafeCoerce } from "@prodkit/shared/runtime";
 import type { Op } from "../index.js";
 import type { Dependency } from "./index.js";
 /** Binding failure when an injected dependency was not provided for the run. */
@@ -217,10 +217,6 @@ function readEnv(context: RunContext<readonly unknown[]>): Env {
   return new Map();
 }
 
-function abortReason(signal: AbortSignal): unknown {
-  return signal.reason ?? new Error("Aborted");
-}
-
 function resolveInjectedValue(
   env: Env,
   dependency: AnyDependency,
@@ -239,7 +235,11 @@ function resolveInjectedValue(
     return produced;
   }
 
-  const inflight = awaitWithSettlement(produced, signal, rejectOnAbortSettlement(signal)).then(
+  const inflight = awaitWithAbort(
+    produced,
+    signal,
+    AbortSettlement.rejectOnAbort(() => abortReason(signal)),
+  ).then(
     (resolved) => {
       env.set(matchedToken, resolved);
       return resolved;
@@ -278,12 +278,13 @@ export function providePlan<T, E, M>(
     function* () {
       const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
         (context: RunContext<readonly unknown[]>) =>
-          executePlan(
-            source,
-            extendContextWithBindings(context, snapshot),
-            interruptOnAbortMode(context),
+          withAbortDrain(
+            executePlan(
+              source,
+              extendContextWithBindings(context, snapshot),
+              interruptOnAbortSettlement(context.signal),
+            ),
           ),
-        SuspendResume.drainAfterAbort,
       );
 
       if (result.isErr()) return yield* result;

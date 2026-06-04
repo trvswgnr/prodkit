@@ -1,14 +1,9 @@
 import { UnhandledException } from "../errors.js";
-import {
-  CancelSettlement,
-  awaitWithSettlement,
-  drainInFlightWork,
-  settlementForSuspendResume,
-  type CancelSettlement as CancelSettlementType,
-} from "./cancel-session.js";
+import { AbortSettlement, awaitWithAbort, drainInFlightWork } from "./abort.js";
 import { Result } from "../result.js";
 import {
   CUSTOM_INSTRUCTION_META,
+  isAbortDrainedWork,
   isErrInstruction,
   RegisterExitFinalizerInstruction,
   SuspendInstruction,
@@ -64,29 +59,26 @@ export async function drive<T, E, M>(
   op: Op<T, E, [], M>,
   context: RunContext<readonly unknown[]>,
 ): Promise<Result<T, E | UnhandledException>> {
-  return driveInternal(op, context, CancelSettlement.passThrough);
-}
-
-function awaitSuspended<TValue>(
-  suspended: PromiseLike<TValue>,
-  signal: AbortSignal,
-  settlement: CancelSettlementType,
-): PromiseLike<TValue> {
-  return awaitWithSettlement(suspended, signal, settlement);
+  return driveInternal(op, context, AbortSettlement.passThrough);
 }
 
 async function resumeSuspendedInstruction<T, E, M>(
   instruction: SuspendInstruction,
   iterator: Iterator<Instruction<E, M>, T, unknown>,
   context: RunContext<readonly unknown[]>,
-  driveSettlement: CancelSettlementType,
+  driveSettlement: AbortSettlement,
 ): Promise<IteratorResult<Instruction<E, M>, T>> {
-  const settlement = settlementForSuspendResume(driveSettlement, instruction.resume);
-  const suspended = instruction.suspend(context);
+  const suspendWork = instruction.suspend(context);
+  const shouldDrainOnAbort = isAbortDrainedWork(suspendWork);
+  const settlement =
+    driveSettlement.kind === "interruptOnAbort" && shouldDrainOnAbort
+      ? AbortSettlement.interruptAndDrainOnAbort(driveSettlement.getAbortReason)
+      : driveSettlement;
+  const suspended = shouldDrainOnAbort ? suspendWork.promise : suspendWork;
   try {
-    return iterator.next(await awaitSuspended(suspended, context.signal, settlement));
+    return iterator.next(await awaitWithAbort(suspended, context.signal, settlement));
   } catch (cause) {
-    if (settlement.kind === "interruptOnAbort" && settlement.drainAfterAbort) {
+    if (settlement.kind === "interruptAndDrainOnAbort") {
       await drainInFlightWork(suspended);
     }
     throw cause;
@@ -97,10 +89,10 @@ async function resumeCustomInstruction<T, E, M>(
   instruction: CustomInstruction<unknown, unknown>,
   iterator: Iterator<Instruction<E, M>, T, unknown>,
   context: RunContext<readonly unknown[]>,
-  driveSettlement: CancelSettlementType,
+  driveSettlement: AbortSettlement,
 ): Promise<IteratorResult<Instruction<E, M>, T>> {
   return iterator.next(
-    await awaitSuspended(
+    await awaitWithAbort(
       Promise.resolve(instruction.resolve(context)),
       context.signal,
       driveSettlement,
@@ -147,7 +139,7 @@ async function settleIteratorWithCleanup<T, E, M>(
 export async function driveIterator<T, E, M>(
   iter: Iterator<Instruction<E, M>, T, unknown>,
   context: RunContext<readonly unknown[]>,
-  settlement: CancelSettlementType = CancelSettlement.passThrough,
+  settlement: AbortSettlement = AbortSettlement.passThrough,
 ): Promise<Result<T, E | UnhandledException>> {
   const finalizers: ExitFinalizer[] = [];
   const settle = (result: Result<T, E | UnhandledException>) =>
@@ -193,7 +185,7 @@ export async function driveIterator<T, E, M>(
 async function driveInternal<T, E, M>(
   op: Op<T, E, [], M>,
   context: RunContext<readonly unknown[]>,
-  settlement: CancelSettlementType,
+  settlement: AbortSettlement,
 ): Promise<Result<T, E | UnhandledException>> {
   try {
     const ef = typeof op === "function" ? op() : op;

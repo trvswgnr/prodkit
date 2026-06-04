@@ -7,7 +7,6 @@ import {
   isErrInstruction,
   RegisterExitFinalizerInstruction,
   SuspendInstruction,
-  SuspendResume,
 } from "../../src/core/instructions.js";
 import type { RunContext } from "../../src/core/runtime.js";
 import {
@@ -16,7 +15,7 @@ import {
   type Instruction,
 } from "../../src/core/instructions.js";
 import type { EmptyMeta } from "../../src/core/meta.js";
-import { Op, type Op as OpType } from "../../src/index.js";
+import { Op } from "../../src/index.js";
 import { UnhandledException } from "../../src/errors.js";
 import { Result } from "../../src/result.js";
 
@@ -46,7 +45,7 @@ class RejectingCustomInstruction implements CustomInstruction<never, EmptyMeta> 
   }
 }
 
-function makeRuntimeOp<T, E>(gen: () => Generator<Instruction<E>, T, unknown>): OpType<T, E, []> {
+function makeRuntimeOp<T, E>(gen: () => Generator<Instruction<E>, T, unknown>): Op<T, E, []> {
   return makeCoreOp(gen);
 }
 
@@ -86,7 +85,7 @@ describe("core/cleanup helpers", () => {
   });
 
   test("instruction type guards correctly classify values", () => {
-    const suspended = new SuspendInstruction(async () => 1, SuspendResume.passThrough);
+    const suspended = new SuspendInstruction(async () => 1);
     const finalizer = new RegisterExitFinalizerInstruction(async () => {});
     const typedErr = Result.err("typed");
     const typedOk = Result.ok("value");
@@ -111,7 +110,7 @@ describe("drive runtime behavior", () => {
       const value = yield new SuspendInstruction(async (context) => {
         seenSignal = context.signal;
         return 69;
-      }, SuspendResume.passThrough);
+      });
       // SAFETY: SuspendInstruction resume type matches the generator's declared success type.
       return unsafeCoerce<number>(value) + 1;
     });
@@ -125,7 +124,7 @@ describe("drive runtime behavior", () => {
   });
 
   test("resumeCustom converts a thrown resolve into Err(UnhandledException)", async () => {
-    const op: OpType<never, never, []> = Op(function* () {
+    const op: Op<never, never, []> = Op(function* () {
       return yield* new ThrowingCustomInstruction();
     });
 
@@ -141,7 +140,7 @@ describe("drive runtime behavior", () => {
   });
 
   test("resumeCustom converts a rejected resolve into Err(UnhandledException)", async () => {
-    const op: OpType<never, never, []> = Op(function* () {
+    const op: Op<never, never, []> = Op(function* () {
       return yield* new RejectingCustomInstruction();
     });
 

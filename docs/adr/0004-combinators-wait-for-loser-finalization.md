@@ -57,7 +57,7 @@ aborted child plan to finish.
   wait is part of the combinator contract (Invariant 3 in `op-invariants.md`).
 - New concurrent combinators that abort siblings should follow the shared fan-out settlement model
   unless there is a documented, narrower leak contract ([ADR 0013](0013-combinator-plan-nodes.md)).
-- `Op.all` uses the same interrupt-on-abort fan-out path. Outer `Policy.timeout` on fan-out or
-  `DI.provide` suspends sets `SuspendResume.drainAfterAbort` so in-flight child plans finish
-  teardown before the timeout result settles.
+- `Op.all` uses the same interrupt-on-abort fan-out path. Fan-out and `DI.provide` suspends wrap
+  nested work with `withAbortDrain(...)` so outer `Policy.timeout` drains in-flight child plans before
+  the timeout result settles.
 - `op-invariants.md` states the invariant and tests; this ADR records the latency/correctness trade-off.

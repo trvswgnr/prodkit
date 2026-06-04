@@ -2,7 +2,7 @@ import { Result } from "../../result.js";
 import { unsafeCoerce } from "@prodkit/shared/runtime";
 import { OP_BOUND_BRAND, OP_BRAND } from "../../shared.js";
 import { createRunContext } from "../runtime.js";
-import { SuspendInstruction, SuspendResume } from "../instructions.js";
+import { SuspendInstruction } from "../instructions.js";
 import type { UnhandledException } from "../../errors.js";
 import type { Op } from "../../index.js";
 import type { OpPolicy, OpPolicyInput, OpPolicySource } from "../../policy/types.js";
@@ -101,7 +101,6 @@ class PolicySourceImpl {
         return createPlan<TNext, ENext, MNext>(function* () {
           const result: Result<TNext, ENext | UnhandledException> = yield* new SuspendInstruction(
             (context) => run((nextContext) => typedPlan.execute(nextContext), context),
-            SuspendResume.passThrough,
           );
 
           if (result.isErr()) return yield* result;

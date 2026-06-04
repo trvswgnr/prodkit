@@ -1,13 +1,9 @@
 import { UnhandledException } from "../../errors.js";
 import type { Op } from "../../index.js";
 import { Result } from "../../result.js";
-import { unsafeCoerce } from "@prodkit/shared/runtime";
+import { abortReason, unsafeCoerce } from "@prodkit/shared/runtime";
 import { isIterableOp } from "../../shared.js";
-import {
-  CancelSettlement,
-  signalAbortReason,
-  type CancelSettlement as PlanExecutionMode,
-} from "../cancel-session.js";
+import { AbortSettlement } from "../abort.js";
 import { driveIterator } from "../runtime.js";
 import type { AsArgs, OpInterface, TrackedErr } from "./surface.js";
 import type { RunContext } from "../runtime.js";
@@ -27,17 +23,15 @@ type UnaryPlanRewrite = {
 type PlanExecutionJob = {
   readonly plan: ErasedPlan;
   readonly context: RunContext<readonly unknown[]>;
-  readonly mode: PlanExecutionMode;
+  readonly settlement: AbortSettlement;
   readonly resolve: (result: Result<unknown, unknown | UnhandledException>) => void;
   readonly reject: (cause: unknown) => void;
 };
 
-export type { PlanExecutionMode };
-
 export interface Plan<T, E, M = EmptyMeta> {
   readonly execute: (
     context: RunContext<readonly unknown[]>,
-    mode?: PlanExecutionMode,
+    settlement?: AbortSettlement,
   ) => Promise<Result<T, E | UnhandledException>>;
   readonly [PLAN_UNARY_REWRITE]?: UnaryPlanRewrite;
   readonly iterate: () => PlanIterator<T, E, M>;
@@ -87,7 +81,7 @@ export function createPlan<T, E, M>(
   overrides: PlanRewriteOverrides<T, E, M> = {},
 ): Plan<T, E, M> {
   const plan: Plan<T, E, M> = {
-    execute: (context, mode) => executePlan(plan, context, mode),
+    execute: (context, settlement) => executePlan(plan, context, settlement),
     iterate,
     rewrite: (rewriter) => {
       const rewritten = overrides.rewrite?.(plan, rewriter) ?? rewriter.apply(plan);
@@ -162,8 +156,8 @@ function rewritePlanStackSafe(source: ErasedPlan, rewriter: PlanRewriter): Erase
   return rewritten;
 }
 
-export function interruptOnAbortMode(context: RunContext<readonly unknown[]>): PlanExecutionMode {
-  return CancelSettlement.interruptOnAbort(() => signalAbortReason(context.signal));
+export function interruptOnAbortSettlement(signal: AbortSignal): AbortSettlement {
+  return AbortSettlement.interruptOnAbort(() => abortReason(signal));
 }
 
 let activePlanExecutionCount = 0;
@@ -174,24 +168,24 @@ const MAX_SYNC_PLAN_EXECUTION_DEPTH = 128;
 export function executePlan<T, E, M>(
   plan: Plan<T, E, M>,
   context: RunContext<readonly unknown[]>,
-  mode: PlanExecutionMode = CancelSettlement.passThrough,
+  settlement: AbortSettlement = AbortSettlement.passThrough,
 ): Promise<Result<T, E | UnhandledException>> {
   if (activePlanExecutionCount < MAX_SYNC_PLAN_EXECUTION_DEPTH) {
-    return executePlanDirect(plan, context, mode);
+    return executePlanDirect(plan, context, settlement);
   }
 
-  return enqueuePlanExecution(plan, context, mode);
+  return enqueuePlanExecution(plan, context, settlement);
 }
 
 async function executePlanDirect<T, E, M>(
   plan: Plan<T, E, M>,
   context: RunContext<readonly unknown[]>,
-  mode: PlanExecutionMode,
+  settlement: AbortSettlement,
 ): Promise<Result<T, E | UnhandledException>> {
   activePlanExecutionCount += 1;
   try {
     // SAFETY: driveIterator may return UnhandledException; executePlan widens E for settlement faults.
-    return unsafeCoerce(await driveIterator(plan.iterate(), context, mode));
+    return unsafeCoerce(await driveIterator(plan.iterate(), context, settlement));
   } finally {
     activePlanExecutionCount -= 1;
   }
@@ -200,7 +194,7 @@ async function executePlanDirect<T, E, M>(
 function enqueuePlanExecution<T, E, M>(
   plan: Plan<T, E, M>,
   context: RunContext<readonly unknown[]>,
-  mode: PlanExecutionMode,
+  settlement: AbortSettlement,
 ): Promise<Result<T, E | UnhandledException>> {
   return new Promise((resolve, reject) => {
     // SAFETY: queued jobs erase plan generics and restore them through the typed promise returned by executePlan.
@@ -210,7 +204,7 @@ function enqueuePlanExecution<T, E, M>(
     planExecutionQueue.push({
       plan: erasedPlan,
       context,
-      mode,
+      settlement,
       resolve: erasedResolve,
       reject,
     });
@@ -231,7 +225,7 @@ function pumpPlanExecutionQueue() {
     const job = planExecutionQueue.shift();
     if (job === undefined) return;
 
-    void executePlanDirect(job.plan, job.context, job.mode).then(job.resolve, job.reject);
+    void executePlanDirect(job.plan, job.context, job.settlement).then(job.resolve, job.reject);
   }
 }
 

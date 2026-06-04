@@ -81,7 +81,7 @@ Enforced by code paths:
 
 - `packages/op/src/core/plan/fan-out.ts` (`fanOutPlans`): isolates child cancellation and detaches
   parent abort listeners on settle; combinator child runs call `executePlan` with
-  `interruptOnAbortMode` so aborted losers unwind even when they ignore the signal
+  `interruptOnAbortSettlement` so aborted losers unwind even when they ignore the signal
 
 Representative tests:
 
@@ -173,15 +173,15 @@ Combinator contracts live in `packages/op/src/core/plan/combinators.ts` and
 `packages/op/src/core/plan/fan-out.ts` alongside the fuller comment block in `combinators.ts`.
 
 `Op.all` fails fast on the first child error, aborts siblings, and waits for every active branch
-to settle before returning. Fan-out children run through `executePlan(..., interruptOnAbortMode)`
-so aborted losers unwind even when they ignore `AbortSignal`. Combinator plans use
-`SuspendResume.drainAfterAbort` so an enclosing `Policy.timeout` can drain in-flight fan-out work
-before the timeout result settles.
+to settle before returning. Fan-out children run through `executePlan(..., interruptOnAbortSettlement)`
+so aborted losers unwind even when they ignore `AbortSignal`. Combinator plans wrap their returned work
+with `withAbortDrain(...)` so an enclosing `Policy.timeout` can drain in-flight fan-out work before the
+timeout result settles.
 
 `Op.any` runs children together under one outer abort umbrella. First success picks the winner and
 abort-signals the losers, but `.run()` still waits until those aborted branches finish so cleanup
 sticks ("waits for loser finalization before returning the winner"). Fan-out children use the same
-`executePlan` interrupt mode so losers that never observe `AbortSignal` still unwind. If everyone
+`executePlan` interrupt settlement so losers that never observe `AbortSignal` still unwind. If everyone
 fails you get an `ErrorGroup` listing errors in declaration order regardless of settle order
 ("preserves index order when failures settle out of order"). A loser failing while reacting to
 abort does not trump the winner's success ("winner success keeps precedence over loser abort-time
@@ -190,7 +190,7 @@ failures").
 `Op.race` is simpler: whoever settles first, ok or err, picks the outcome and triggers abort for
 everyone else, with the same promise that losers finish teardown before `.run()` returns ("waits
 for loser finalization before returning winner result"). Fan-out children use the same interrupt
-mode so losers that never observe `AbortSignal` still reject in-flight suspends and unwind. The
+settlement so losers that never observe `AbortSignal` still reject in-flight suspends and unwind. The
 losing branch still can't override the chosen error ("winner error keeps precedence over loser
 abort-time failures").
 
@@ -276,9 +276,11 @@ Cancellation and cooperative `AbortSignal` behavior show up wherever `SuspendIns
 signal, plus README's `Op.defer` / `.on("exit")` notes and checks in `packages/op/tests/unit/policy-retry.test.ts`,
 `packages/op/tests/unit/policy-timeout.test.ts`, and
 `packages/op/tests/unit/lifecycle-*.test.ts`. Settlement intent lives in
-`packages/op/src/core/cancel-session.ts`: DI lazy-resolve uses `rejectOnAbort`; Policy.cancel
-uses bound-abort session composition and macrotimer fallback; driveIterator suspend resume uses
-`interruptOnAbort`; combinator and DI provision drain use `drainAfterAbort` on suspend resume.
+`packages/op/src/core/abort.ts`: DI lazy-resolve uses `AbortSettlement.rejectOnAbort`;
+Policy.cancel owns bound-abort session composition and macrotimer fallback in `policy/plan.ts` and
+wraps its suspend with `withAbortDrain(...)`; driveIterator suspend resume uses
+`AbortSettlement.interruptOnAbort`; combinator and DI provision drains also mark suspend work with
+`withAbortDrain(...)`.
 Type-level contracts collected in
 `packages/op/tests/types/op.test.ts`, with custom policy spike coverage in
 `packages/op/tests/unit/policy-hkt.test.ts`.

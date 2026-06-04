@@ -1,6 +1,6 @@
 import { UnhandledException } from "../../errors.js";
 import { Result } from "../../result.js";
-import { SuspendInstruction, SuspendResume } from "../instructions.js";
+import { SuspendInstruction, withAbortDrain } from "../instructions.js";
 import type { RunContext } from "../runtime.js";
 import { createPlan, createUnaryPlan, type Plan } from "./base.js";
 import { driveAllPlans, driveAllSettledPlans, driveAnyPlans, driveRacePlans } from "./fan-out.js";
@@ -15,8 +15,7 @@ export function allPlan<T, E, M>(
     function* () {
       const result: Result<T[], E | UnhandledException> = yield* new SuspendInstruction(
         (outerContext: RunContext<readonly unknown[]>) =>
-          driveAllPlans(snapshot, outerContext, concurrency),
-        SuspendResume.drainAfterAbort,
+          withAbortDrain(driveAllPlans(snapshot, outerContext, concurrency)),
       );
 
       if (result.isErr()) return yield* result;
@@ -38,8 +37,8 @@ export function racePlan<T, E, M>(children: readonly Plan<T, E, M>[]): Plan<T, E
   return createPlan(
     function* () {
       const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
-        (outerContext: RunContext<readonly unknown[]>) => driveRacePlans(snapshot, outerContext),
-        SuspendResume.drainAfterAbort,
+        (outerContext: RunContext<readonly unknown[]>) =>
+          withAbortDrain(driveRacePlans(snapshot, outerContext)),
       );
 
       if (result.isErr()) return yield* result;
@@ -57,8 +56,8 @@ export function anyPlan<T, E, M>(children: readonly Plan<T, E, M>[]): Plan<T, E,
   return createPlan(
     function* () {
       const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
-        (outerContext: RunContext<readonly unknown[]>) => driveAnyPlans(snapshot, outerContext),
-        SuspendResume.drainAfterAbort,
+        (outerContext: RunContext<readonly unknown[]>) =>
+          withAbortDrain(driveAnyPlans(snapshot, outerContext)),
       );
 
       if (result.isErr()) return yield* result;
@@ -75,9 +74,8 @@ export function settlePlan<T, E, M>(
 ): Plan<Result<T, E | UnhandledException>, never, M> {
   return createUnaryPlan(
     function* () {
-      const child: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
-        (context) => source.execute(context),
-        SuspendResume.passThrough,
+      const child: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
+        source.execute(context),
       );
 
       return child;
@@ -96,10 +94,8 @@ export function allSettledPlan<T, E, M>(
   return createPlan(
     function* () {
       const result: Result<Result<T, E | UnhandledException>[], UnhandledException> =
-        yield* new SuspendInstruction(
-          (outerContext: RunContext<readonly unknown[]>) =>
-            driveAllSettledPlans(snapshot, outerContext, concurrency),
-          SuspendResume.passThrough,
+        yield* new SuspendInstruction((outerContext: RunContext<readonly unknown[]>) =>
+          driveAllSettledPlans(snapshot, outerContext, concurrency),
         );
 
       if (result.isErr()) return yield* result;

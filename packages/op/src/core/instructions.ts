@@ -35,26 +35,34 @@ type ExtractResultErr<Y> = Y extends Err<unknown, infer E> ? DropUnknown<E> : ne
 
 export type InferInstructionErr<Y> = ExtractResultErr<Y>;
 
-export type SuspendFn = (ctx: RunContext<readonly unknown[]>) => PromiseLike<unknown>;
+const ABORT_DRAINED_WORK = Symbol("prodkit.op.abort-drained-work");
 
-export const SuspendResume = {
-  passThrough: "passThrough",
-  drainAfterAbort: "drainAfterAbort",
-} as const;
-export type SuspendResume = (typeof SuspendResume)[keyof typeof SuspendResume];
+type AbortDrainedWork<T> = {
+  readonly [ABORT_DRAINED_WORK]: true;
+  readonly promise: PromiseLike<T>;
+};
+
+export type SuspendWork<T> = PromiseLike<T> | AbortDrainedWork<T>;
+
+export function withAbortDrain<T>(promise: PromiseLike<T>): AbortDrainedWork<T> {
+  return { [ABORT_DRAINED_WORK]: true, promise };
+}
+
+export function isAbortDrainedWork<T>(work: SuspendWork<T>): work is AbortDrainedWork<T> {
+  return typeof work === "object" && work !== null && ABORT_DRAINED_WORK in work;
+}
+
+export type SuspendFn = (ctx: RunContext<readonly unknown[]>) => SuspendWork<unknown>;
 
 export class SuspendInstruction extends Tagged("SuspendInstruction") {
   readonly suspend: SuspendFn;
-  readonly resume: SuspendResume;
 
-  constructor(suspend: SuspendFn, resume: SuspendResume) {
+  constructor(suspend: SuspendFn) {
     super();
     this.suspend = suspend;
-    this.resume = resume;
   }
 
   // SAFETY: SuspendInstruction yield type is call-site specific; one any avoids per-site coercion.
-  // we use a single `any` here to avoid casting at every call site
   // oxlint-disable-next-line typescript/no-explicit-any
   *[Symbol.iterator](): Generator<Instruction<never, any>, any, unknown> {
     return yield this;

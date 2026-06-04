@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, test } from "vitest";
 import type { HKT } from "../../src/hkt.js";
-import { Op, type Op as OpType } from "../../src/index.js";
+import { Op } from "../../src/index.js";
 import { Policy } from "../../src/policy/index.js";
 import { Result } from "../../src/result.js";
 
@@ -10,7 +10,7 @@ type PolicyRejected<Reason extends string> = {
 };
 
 interface RejectWhenPolicyType<Reason extends string> extends HKT {
-  readonly [HKT.TYPE]: OpType<
+  readonly [HKT.TYPE]: Op<
     HKT.Param<this, 0>,
     HKT.Param<this, 1> | PolicyRejected<Reason>,
     HKT.Param<this, 2>,
@@ -43,11 +43,11 @@ describe("policy HKT protocol", () => {
       return id.length;
     }).with(rejectWhen(false, "closed"));
 
-    expectTypeOf(guarded).toEqualTypeOf<OpType<number, PolicyRejected<"closed">, [id: string]>>();
+    expectTypeOf(guarded).toEqualTypeOf<Op<number, PolicyRejected<"closed">, [id: string]>>();
 
     const failed = Op.fail("bad" as const).with(rejectWhen(false, "closed"));
 
-    expectTypeOf(failed).toEqualTypeOf<OpType<never, "bad" | PolicyRejected<"closed">, []>>();
+    expectTypeOf(failed).toEqualTypeOf<Op<never, "bad" | PolicyRejected<"closed">, []>>();
   });
 
   test("release still contextually types the success value", () => {

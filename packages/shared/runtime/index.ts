@@ -19,6 +19,10 @@ export interface AbortSignalLike {
   removeEventListener(type: "abort", listener: () => void): void;
 }
 
+export function abortReason(signal: AbortSignalLike): unknown {
+  return signal.reason ?? new Error("Aborted");
+}
+
 export function sleepWithSignal(ms: number, signal: AbortSignalLike): Promise<void> {
   if (!Number.isFinite(ms)) {
     return Promise.reject(new RangeError("sleep duration must be a finite number"));

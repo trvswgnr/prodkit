@@ -1,11 +1,10 @@
 import { TimeoutError, UnhandledException } from "../errors.js";
-import { createBoundAbortSession, raceBoundCancelExecution } from "../core/cancel-session.js";
 import { Result } from "../result.js";
 import { sleepWithSignal } from "@prodkit/shared/runtime";
 import {
   RegisterExitFinalizerInstruction,
   SuspendInstruction,
-  SuspendResume,
+  withAbortDrain,
 } from "../core/instructions.js";
 import { createRunContext } from "../core/runtime.js";
 import { normalizeRetryPolicy, type NormalizedRetryPolicy } from "./retry-policy.js";
@@ -16,7 +15,7 @@ import {
   createPlan,
   createUnaryPlan,
   executePlan,
-  interruptOnAbortMode,
+  interruptOnAbortSettlement,
   type Plan,
   type PlanRewriter,
 } from "../core/plan/base.js";
@@ -28,9 +27,8 @@ function policyRewriter(apply: PlanRewriter["apply"]): PlanRewriter {
 export function releasePlan<T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T>): Plan<T, E, M> {
   return createUnaryPlan(
     function* () {
-      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
-        (context) => source.execute(context),
-        SuspendResume.passThrough,
+      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
+        source.execute(context),
       );
 
       if (result.isErr()) return yield* result;
@@ -61,10 +59,8 @@ function retryPlan<T, E, M>(
 
     while (true) {
       type AttemptStep = { result: Result<T, E | UnhandledException>; aborted: boolean };
-      const attemptStep: AttemptStep = yield* new SuspendInstruction(
-        (context) =>
-          source.execute(context).then((result) => ({ result, aborted: context.signal.aborted })),
-        SuspendResume.passThrough,
+      const attemptStep: AttemptStep = yield* new SuspendInstruction((context) =>
+        source.execute(context).then((result) => ({ result, aborted: context.signal.aborted })),
       );
 
       const result = attemptStep.result;
@@ -87,9 +83,8 @@ function retryPlan<T, E, M>(
       }
 
       if (delayMs > 0) {
-        const delayAborted: boolean = yield* new SuspendInstruction(
-          (context) => abortableDelay(delayMs, context.signal).then(() => context.signal.aborted),
-          SuspendResume.passThrough,
+        const delayAborted: boolean = yield* new SuspendInstruction((context) =>
+          abortableDelay(delayMs, context.signal).then(() => context.signal.aborted),
         );
 
         if (delayAborted) return yield* result;
@@ -114,11 +109,10 @@ function timeoutPlan<T, E, M>(
     const result: Result<T, E | UnhandledException | TimeoutError> = yield* new SuspendInstruction(
       (outerContext) =>
         raceTimeout(
-          (context) => executePlan(source, context, interruptOnAbortMode(context)),
+          (context) => executePlan(source, context, interruptOnAbortSettlement(context.signal)),
           timeoutMs,
           outerContext,
         ),
-      SuspendResume.passThrough,
     );
 
     if (result.isErr()) return yield* result;
@@ -129,8 +123,7 @@ function timeoutPlan<T, E, M>(
 function cancelPlan<T, E, M>(source: Plan<T, E, M>, abortSignal: AbortSignal): Plan<T, E, M> {
   return createPlan(function* () {
     const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
-      (outerContext) => raceBoundCancel(source, abortSignal, outerContext),
-      SuspendResume.drainAfterAbort,
+      (outerContext) => withAbortDrain(raceBoundCancel(source, abortSignal, outerContext)),
     );
 
     if (result.isErr()) return yield* result;
@@ -170,22 +163,67 @@ function nonCooperativeCancelFallback<T, E>(
   });
 }
 
+function createBoundCancelSession(boundSignal: AbortSignal, outerSignal: AbortSignal) {
+  const controller = new AbortController();
+
+  let boundAborted = false;
+  let notifyBoundAbort!: () => void;
+  const boundAbort = new Promise<void>((resolve) => {
+    notifyBoundAbort = resolve;
+  });
+
+  const onBoundAbort = () => {
+    if (boundAborted) return;
+    boundAborted = true;
+    controller.abort(boundSignal.reason);
+    notifyBoundAbort();
+  };
+
+  const onOuterAbort = () => controller.abort(outerSignal.reason);
+
+  if (boundSignal.aborted) onBoundAbort();
+  else boundSignal.addEventListener("abort", onBoundAbort, { once: true });
+
+  if (outerSignal.aborted) onOuterAbort();
+  else outerSignal.addEventListener("abort", onOuterAbort, { once: true });
+
+  return {
+    signal: controller.signal,
+    boundAbort,
+    detach: () => {
+      boundSignal.removeEventListener("abort", onBoundAbort);
+      outerSignal.removeEventListener("abort", onOuterAbort);
+    },
+  };
+}
+
 function raceBoundCancel<T, E, M>(
   source: Plan<T, E, M>,
   boundSignal: AbortSignal,
   outerContext: RunContext<readonly unknown[]>,
 ): Promise<Result<T, E | UnhandledException>> {
-  const session = createBoundAbortSession(boundSignal, outerContext.signal);
-  const runContext = createRunContext(
-    session.childSignal,
-    outerContext.args,
-    outerContext.extensions,
-  );
+  const session = createBoundCancelSession(boundSignal, outerContext.signal);
+  const runContext = createRunContext(session.signal, outerContext.args, outerContext.extensions);
   const runPromise = source.execute(runContext);
+  const firstSettlement = Promise.race([
+    runPromise.then(() => "run" as const),
+    session.boundAbort.then(() => "boundAbort" as const),
+  ]);
 
-  return raceBoundCancelExecution(runPromise, session, () =>
-    nonCooperativeCancelFallback(boundSignal.reason),
-  );
+  return firstSettlement
+    .then((winner) => {
+      if (winner === "run") return runPromise;
+
+      return new Promise<Result<T, E | UnhandledException>>((resolve, reject) => {
+        queueMicrotask(() => {
+          void Promise.race([
+            runPromise,
+            nonCooperativeCancelFallback<T, E>(boundSignal.reason),
+          ]).then(resolve, reject);
+        });
+      });
+    })
+    .finally(session.detach);
 }
 
 async function raceTimeout<T, E>(

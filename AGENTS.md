@@ -35,6 +35,7 @@ Read these before guessing repo structure or conventions:
 - Prefers file relocations to be done with move operations first (for example `mv`) followed by minimal targeted edits, not full-file rewrites.
 - Prefers hard-cutover transitions, not gradual deprecations and migrations (alpha stage; intentional breaking changes are acceptable).
 - Prefers normalization only when inputs have an obvious safe interpretation; invalid inputs should surface at run time as `Err(UnhandledException)` with the validation error as `cause`.
+- Dislikes boolean flags and optional one-field option bags; prefer explicit named constructs that make uncommon behavior visible at the call site.
 
 ## Workflow defaults
 
