@@ -1,7 +1,7 @@
 # prodkit monorepo
 
 This repository is the `prodkit` monorepo, managed with pnpm workspaces and Turborepo (`turbo`).
-It is organized for multiple publishable packages plus dedicated top-level workspaces for apps,
+It is organized for multiple publishable packages plus dedicated top-level workspaces for
 examples, benchmarks, and maintainer tooling.
 
 ## canonical package docs
@@ -30,7 +30,7 @@ Changelogs: [`packages/op/CHANGELOG.md`](packages/op/CHANGELOG.md), [`packages/s
 ## workspace layout
 
 - `packages/`: library packages
-- `apps/*`: runnable product/demo applications
+- `apps/*`: reserved pnpm workspace slot for runnable product/demo applications (no tree yet)
 - `examples`: consumer examples and smoke workspace (`@prodkit/examples`)
 - `benchmarks`: performance benchmark harnesses (`@prodkit/benchmarks`)
 - `tools`: maintainer tooling workspace (`@prodkit/tools`)

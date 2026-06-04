@@ -25,7 +25,7 @@ packages/op/src/index.ts          (Op factory, Op.run, re-exports)
   |-- core/instructions.ts        (Suspend, RegisterExitFinalizer, CustomInstruction protocol)
 
 packages/op/src/di/                 (DI.provide, DI.inject via CustomInstruction + extensions)
-  '-- imports core/runtime, core/instructions, core/meta, core/plan/surface, builders directly
+  '-- imports core/runtime, core/instructions, core/plan/surface, core/plan/shell (internal)
 
 packages/std/src/                   (reserved runtime-agnostic utility subpaths)
 ```
