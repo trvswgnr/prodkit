@@ -117,7 +117,8 @@ you add or rename a transform, keep these touch points in sync:
    `packages/op/src/core/plan/lifecycle.ts` for lifecycle hooks (`.on("enter")`, `.on("exit")`).
    For policy push-through, pass a `rewrite` override that rebuilds after `source.rewrite(rewriter)`
    (use `rewriteUnaryPlan` for single-child wrappers; combinator nodes map each child plan).
-2. **Fluent surface** in `packages/op/src/core/plan/shell.ts`:
+2. **Fluent surface** in `packages/op/src/core/plan/shell.ts` (bind-time transform ordering in
+   `packages/op/src/core/plan/factory-chain.ts`):
    - add the method on `fluentMethodsForContext`
    - add the method name to `createSyncValueFluentPrototype`'s `methodNames` list when sync-value
      ops should expose the same API
