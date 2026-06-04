@@ -6,6 +6,8 @@ export default mergeConfig(
   defineConfig({
     test: {
       coverage: {
+        // Compile-time runnable gating modules; line coverage is not the regression signal.
+        // Gate: pnpm --filter @prodkit/tools run runnable-gating:check
         exclude: [
           "tests/**",
           "@prodkit/shared/platform-globals",

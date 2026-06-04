@@ -214,6 +214,18 @@ Top-level `.run()` / `Op.run(...)` are typed only when operation metadata has no
   keys. Consumer-facing behavior is documented under `@prodkit/op/di` in
   [`packages/op/README.md`](../../packages/op/README.md).
 
+### CI contract (compile-time gating, not line coverage)
+
+`.run()` gating is enforced at type-check time, not inside `runOp`. Vitest coverage excludes the
+compile-time gating modules on purpose; line counts there are not a useful regression signal.
+
+`pnpm run gate` runs `runnable-gating:check` (`@prodkit/tools`), which verifies those coverage
+excludes stay in place and that stable Vitest describe/test titles for metadata merge,
+`Blocking` / `IsRunnable`, DI blocking on `Op.run`, and DI missing-dependency behavior still
+exist somewhere under `@prodkit/op` tests. The checker keys off titles, not file paths, so suites
+may move when titles are preserved. Do not treat adding those modules to coverage as a substitute
+for that check or for the op package Vitest run (including typecheck).
+
 Import extension helpers from `@prodkit/op/internal` (for example `Blocking`, `withBlocking`,
 `EmptyMeta`, `MergeMeta`, `InferOpMeta`, `CustomInstruction`, `BlockingOp`, `AbortSignalLike`,
 `unsafeCoerce`, `NEVER`). The main `@prodkit/op` entry keeps consumer-facing lifecycle types

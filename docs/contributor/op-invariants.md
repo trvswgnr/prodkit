@@ -300,7 +300,9 @@ wraps its suspend with `withAbortDrain(...)`; driveIterator suspend resume uses
 `withAbortDrain(...)`.
 Type-level contracts collected in
 `packages/op/tests/types/op.test.ts`, with custom policy spike coverage in
-`packages/op/tests/unit/policy-hkt.test.ts`.
+`packages/op/tests/unit/policy-hkt.test.ts`. Runnable metadata and args-only `.run()` gating are
+documented under Runnable metadata in `docs/contributor/runtime-architecture.md` and enforced
+by `runnable-gating:check` in gate.
 
 For structural rationale that complements these invariants, see [`docs/adr/`](../adr/):
 

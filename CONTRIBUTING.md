@@ -73,6 +73,10 @@ An `architecture:check` gate step fails when verified import contracts in
 `packages/op` source imports. **Closed modules** (HTML `architecture-check-closed` markers) must
 list every `packages/op/src` import from that file. **Partial edges** must exist in source but do
 not require exhaustiveness for hub modules such as `shell.ts`.
+A `runnable-gating:check` gate step fails when Vitest coverage excludes for compile-time runnable
+gating modules are removed or when stable describe/test titles for metadata blocking and DI provide
+behavior disappear from `@prodkit/op` tests (see Runnable metadata in
+[`docs/contributor/runtime-architecture.md`](docs/contributor/runtime-architecture.md)).
 A `changelog:api:check` gate step fails when `packages/op/src/index.ts`,
 `packages/op/src/di/index.ts`, `packages/op/src/policy/index.ts`, or `packages/op/src/hkt.ts`
 public export names change without an update to that package's `CHANGELOG.md` under

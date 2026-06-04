@@ -96,6 +96,11 @@ describe("metadata type contracts", () => {
     >;
   });
 
+  test("Blocking with never payload does not block run", () => {
+    type M = { demo: Blocking<never> };
+    type _ = Assert<IsEqual<IsRunnable<M>, true>>;
+  });
+
   test("blocking metadata merges payloads at shared keys", () => {
     type _ = Assert<
       IsEqual<

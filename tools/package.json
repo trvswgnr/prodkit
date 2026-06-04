@@ -18,6 +18,7 @@
     "changelog:api:check": "node ./check-changelog-api.ts",
     "invariants:check": "node ./check-op-invariants-md.ts",
     "architecture:check": "node --test ./check-runtime-architecture.test.ts && node ./check-runtime-architecture.ts",
+    "runnable-gating:check": "node --test ./check-runnable-gating-contract.test.ts && node ./check-runnable-gating-contract.ts",
     "adr:sync": "node ./sync-adr-index.ts --write",
     "fmt": "oxfmt \"**/*.ts\"",
     "fmt:check": "oxfmt --check \"**/*.ts\"",
