@@ -39,7 +39,7 @@ packages/std/src/                   (reserved runtime-agnostic utility subpaths)
    ([ADR 0006](../adr/0006-run-args-only-fluent-policy-composition.md)).
 2. **Arity binding.** For generator-defined ops, `fromGenFn` in `builders.ts` wraps the user
    generator in `makeCoreOp` once per `op(...args)` call, binds defer args via
-   `bindArityArgsToFinalizers`, and exposes the callable through `makePlanOp`
+   `bindArityArgsToFinalizers`, and exposes the callable through `makeUnboundPlanOp`
    ([ADR 0001](../adr/0001-core-nullary-vs-lifted-arity.md)).
 3. **Nullary execution.** `drive` only accepts `Op<T, E, [], M>`: a nullary op whose body is a
    generator function `() => Generator<Instruction, T>`. Everything that participates in `yield*`
@@ -128,7 +128,7 @@ Extension-owned plan nodes (for example `providePlan` in `@prodkit/op/di`) use t
 1. **`DI.inject(dependency)`** yields an `InjectInstruction`, a `CustomInstruction` whose
    `resolve(context)` reads bindings from `context.extensions`.
 2. **`DI.provide(op, bindings)`** (`providePlan` / `provideOp` in `packages/op/src/di/internal.ts`)
-   is a plan-backed op (`makePlanOp`) whose `providePlan` node returns
+   is a plan-backed op (`makeUnboundPlanOp`) whose `providePlan` node returns
    `withAbortDrain(executePlan(..., interruptOnAbortSettlement))` and extends `context.extensions`
    with the binding `Map` under an internal extension key.
    Policy attach rewrites the inner source via `providePlan(source.rewrite(rewriter), bindings)`.

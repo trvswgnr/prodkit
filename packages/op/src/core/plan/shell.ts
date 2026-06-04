@@ -33,7 +33,7 @@ import {
 
 type PlanShellContext<T, E, A, M> = {
   bindArgs: PlanBinder<T, E, A, M>;
-  makeIterable: (() => Plan<T, E, M>) | undefined;
+  makeIterable: () => Plan<T, E, M>;
   bound: boolean;
 };
 
@@ -117,12 +117,9 @@ function wrapPlanTransform<T, E, A, M, Yieldable extends boolean, TNext, ENext, 
   kind: TransformKind,
 ): OpInterface<TNext, ENext, A, MNext, Yieldable> {
   const bindArgs = appendPlanBinder(ctx.bindArgs, transform, kind);
-  const makeIterable =
-    ctx.makeIterable === undefined
-      ? undefined
-      : appendPlanProvider(ctx.makeIterable, transform, kind);
+  const makeIterable = appendPlanProvider(ctx.makeIterable, transform, kind);
 
-  return makePlanOp<TNext, ENext, A, MNext, Yieldable>(bindArgs, makeIterable, ctx.bound);
+  return planOpShell<TNext, ENext, A, MNext, Yieldable>(bindArgs, ctx.bound, makeIterable);
 }
 
 function appendPlanBinder<T, E, A, M, TNext, ENext, MNext>(
@@ -312,7 +309,7 @@ function createSyncValueFluentPrototype(): PropertyDescriptorMap {
   return Object.fromEntries(methodNames.map((name) => [name, bindMethod(name)]));
 }
 
-export function makePlanOp<
+function planOpShell<
   T,
   E,
   A,
@@ -320,32 +317,17 @@ export function makePlanOp<
   Yieldable extends boolean = A extends [] ? true : false,
 >(
   bindArgs: PlanBinder<T, E, A, M>,
-  makeIterable?: () => Plan<T, E, M>,
-  bound = false,
+  bound: boolean,
+  makeIterable: () => Plan<T, E, M>,
 ): OpInterface<T, E, A, M, Yieldable> {
   let self: OpInterface<T, E, A, M, Yieldable>;
   const invoke = bound
     ? () => self
-    : (...args: AsArgs<A>) =>
-        makePlanOp<T, E, [], M, true>(
-          () => bindArgs(...args),
-          () => bindArgs(...args),
-          true,
-        );
-
-  const iterable =
-    makeIterable ??
-    (bound
-      ? () =>
-          bindArgs(
-            // SAFETY: iterable branch is bound and nullary; invoke already fixed args so the binder expects [].
-            ...unsafeCoerce<AsArgs<A>>([]),
-          )
-      : undefined);
+    : (...args: AsArgs<A>) => makeBoundPlanOp(() => bindArgs(...args));
 
   const shellContext: PlanShellContext<T, E, A, M> = {
     bindArgs,
-    makeIterable: iterable,
+    makeIterable,
     bound,
   };
 
@@ -356,19 +338,29 @@ export function makePlanOp<
       run: (...args: AsArgs<A>) =>
         bindArgs(...args).execute(createRunContext(new AbortController().signal, args)),
       ...fluentMethodsForContext<T, E, A, M, Yieldable>(shellContext),
+      [Symbol.iterator]: () => makeIterable().iterate(),
       [OP_BRAND]: true,
       [OP_BOUND_BRAND]: bound,
       _tag: "Op" as const,
     }),
   );
 
-  if (iterable !== undefined) {
-    Object.assign(self, {
-      [Symbol.iterator]: () => iterable().iterate(),
-    });
-  }
-
   return self;
+}
+
+/** Builds a bound nullary Op shell backed by the internal plan model. */
+export function makeBoundPlanOp<T, E, M>(
+  bindArgs: PlanBinder<T, E, [], M>,
+): OpInterface<T, E, [], M, true> {
+  return planOpShell(bindArgs, true, () => bindArgs());
+}
+
+/** Builds an unbound Op shell with an explicit yield* iterable provider. */
+export function makeUnboundPlanOp<T, E, A, M = EmptyMeta>(
+  bindArgs: PlanBinder<T, E, A, M>,
+  makeIterable: () => Plan<T, E, M>,
+): OpInterface<T, E, A, M, A extends [] ? true : false> {
+  return planOpShell(bindArgs, false, makeIterable);
 }
 
 type SyncValueOpShell<T> = (() => SyncValueOpShell<T>) &
@@ -387,7 +379,7 @@ const SYNC_VALUE_OP_PROTOTYPE: SyncValueOpShell<unknown> = Object.create(
 /**
  * Builds a bound nullary Op for an already-awaited sync success value.
  *
- * Hot paths (`.run()`, `yield*`) skip `makePlanOp` and the full generator driver.
+ * Hot paths (`.run()`, `yield*`) skip the plan op shell and the full generator driver.
  * Fluent transforms upgrade through the normal plan shell on demand.
  */
 export function makeSyncValueOp<T>(value: T): OpInterface<T, never, [], EmptyMeta, true> {
@@ -399,7 +391,7 @@ export function makeSyncValueOp<T>(value: T): OpInterface<T, never, [], EmptyMet
   const invoke = () => self;
   let self: SyncValueOpShell<T>;
 
-  // SAFETY: Object.assign builds the same shell shape as makePlanOp; sync values skip generator drive only.
+  // SAFETY: Object.assign builds the same shell shape as makeBoundPlanOp; sync values skip generator drive only.
   self = unsafeCoerce(
     Object.assign(invoke, {
       [OP_PLAN_BIND]: bindPlan,

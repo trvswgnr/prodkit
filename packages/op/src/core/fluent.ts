@@ -1,5 +1,5 @@
 import { genPlan } from "./plan/base.js";
-import { makePlanOp } from "./plan/shell.js";
+import { makeBoundPlanOp } from "./plan/shell.js";
 import type { TrackedErr } from "./plan/surface.js";
 import type { Instruction } from "./instructions.js";
 import type { EmptyMeta } from "./meta.js";
@@ -9,9 +9,5 @@ import type { Op } from "../index.js";
 export function makeCoreOp<T, E, M = EmptyMeta>(
   gen: () => Generator<Instruction<E, M>, T, unknown>,
 ): Op<T, TrackedErr<E>, [], M> {
-  return makePlanOp(
-    () => genPlan(gen),
-    () => genPlan(gen),
-    true,
-  );
+  return makeBoundPlanOp(() => genPlan(gen));
 }

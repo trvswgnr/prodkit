@@ -1,5 +1,5 @@
 import { UnhandledException } from "./errors.js";
-import { makePlanOp, makeSyncValueOp } from "./core/plan/shell.js";
+import { makeUnboundPlanOp, makeSyncValueOp } from "./core/plan/shell.js";
 import { genPlan } from "./core/plan/base.js";
 import type { AnyExitFn } from "./core/plan/context.js";
 import type { AsArgs, OpInterface, TrackedErr } from "./core/plan/surface.js";
@@ -119,7 +119,7 @@ export function fromGenFn<Y extends Instruction<unknown, unknown>, T, A>(
       >(bindArityArgsToFinalizers(f(...args), args)),
     );
 
-  const op: OpInterface<T, InferInstructionErr<Y>, A, InferInstructionMeta<Y>> = makePlanOp(
+  const op: OpInterface<T, InferInstructionErr<Y>, A, InferInstructionMeta<Y>> = makeUnboundPlanOp(
     bindPlan,
     () =>
       bindPlan(

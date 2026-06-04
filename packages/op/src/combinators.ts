@@ -2,7 +2,7 @@ import type { AnyNullaryOp, InferOpMeta, InferOpOk, InferOpErr } from "./core/pl
 import type { Op } from "./index.js";
 import { allPlan, allSettledPlan, anyPlan, racePlan, settlePlan } from "./core/plan/combinators.js";
 import { getPlan } from "./core/plan/base.js";
-import { makePlanOp } from "./core/plan/shell.js";
+import { makeBoundPlanOp } from "./core/plan/shell.js";
 import { Result } from "./result.js";
 import type { EmptyMeta, MergeMeta } from "./core/meta.js";
 import { unsafeCoerce } from "@prodkit/shared/runtime";
@@ -30,8 +30,8 @@ export function allOp<const Ops extends readonly AnyNullaryOp[]>(
       concurrency,
     );
 
-  // SAFETY: makePlanOp omits merged metadata in its return; bindAllPlan was built from the typed snapshot ops.
-  return unsafeCoerce(makePlanOp(bindAllPlan, bindAllPlan, true));
+  // SAFETY: makeBoundPlanOp omits merged metadata in its return; bindAllPlan was built from the typed snapshot ops.
+  return unsafeCoerce(makeBoundPlanOp(bindAllPlan));
 }
 
 type AllSettledOpOk<Ops extends readonly AnyNullaryOp[]> = {
@@ -48,8 +48,8 @@ export function allSettledOp<const Ops extends readonly AnyNullaryOp[]>(
       concurrency,
     );
 
-  // SAFETY: makePlanOp omits merged metadata in its return; bindAllSettledPlan was built from the typed snapshot ops.
-  return unsafeCoerce(makePlanOp(bindAllSettledPlan, bindAllSettledPlan, true));
+  // SAFETY: makeBoundPlanOp omits merged metadata in its return; bindAllSettledPlan was built from the typed snapshot ops.
+  return unsafeCoerce(makeBoundPlanOp(bindAllSettledPlan));
 }
 
 export function settleOp<T, E, M>(
@@ -57,8 +57,8 @@ export function settleOp<T, E, M>(
 ): Op<Result<T, E | UnhandledException>, never, [], M> {
   const bindSettlePlan = () => settlePlan(getPlan(op, EMPTY_TUPLE));
 
-  // SAFETY: makePlanOp omits metadata in its return; bindSettlePlan was built from the typed source op.
-  return unsafeCoerce(makePlanOp(bindSettlePlan, bindSettlePlan, true));
+  // SAFETY: makeBoundPlanOp omits metadata in its return; bindSettlePlan was built from the typed source op.
+  return unsafeCoerce(makeBoundPlanOp(bindSettlePlan));
 }
 
 /**
@@ -83,8 +83,8 @@ export function anyOp<const Ops extends readonly AnyNullaryOp[]>(
   const snapshot = ops.slice();
   const bindAnyPlan = () => anyPlan(snapshot.map((op) => getPlan(op, EMPTY_TUPLE)));
 
-  // SAFETY: makePlanOp omits merged metadata in its return; bindAnyPlan was built from the typed snapshot ops.
-  return unsafeCoerce(makePlanOp(bindAnyPlan, bindAnyPlan, true));
+  // SAFETY: makeBoundPlanOp omits merged metadata in its return; bindAnyPlan was built from the typed snapshot ops.
+  return unsafeCoerce(makeBoundPlanOp(bindAnyPlan));
 }
 
 type RaceOpOk<Ops extends readonly AnyNullaryOp[]> = InferOpOk<Ops[number]>;
@@ -95,6 +95,6 @@ export function raceOp<const Ops extends readonly AnyNullaryOp[]>(
   const snapshot = ops.slice();
   const bindRacePlan = () => racePlan(snapshot.map((op) => getPlan(op, EMPTY_TUPLE)));
 
-  // SAFETY: makePlanOp omits merged metadata in its return; bindRacePlan was built from the typed snapshot ops.
-  return unsafeCoerce(makePlanOp(bindRacePlan, bindRacePlan, true));
+  // SAFETY: makeBoundPlanOp omits merged metadata in its return; bindRacePlan was built from the typed snapshot ops.
+  return unsafeCoerce(makeBoundPlanOp(bindRacePlan));
 }

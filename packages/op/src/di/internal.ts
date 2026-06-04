@@ -6,7 +6,7 @@ import {
   type Plan,
 } from "../core/plan/base.js";
 import type { AsArgs } from "../core/plan/surface.js";
-import { makePlanOp } from "../core/plan/shell.js";
+import { makeUnboundPlanOp } from "../core/plan/shell.js";
 import { AbortSettlement, awaitWithAbort } from "../core/abort.js";
 import { SuspendInstruction, withAbortDrain } from "../core/instructions.js";
 import { createRunContext } from "../core/runtime.js";
@@ -301,9 +301,9 @@ export function provideOp<T, E, A, M, const Bindings extends readonly AnyBinding
 ): Op<T, E, A, ProvidedMeta<M, Bindings>> {
   const bindProvidePlan = (...args: AsArgs<A>) => providePlan(getPlan(op, args), bindings);
 
-  // SAFETY: makePlanOp cannot express ProvidedMeta; bindings only change metadata, not T, E, or runtime behavior.
+  // SAFETY: makeUnboundPlanOp cannot express ProvidedMeta; bindings only change metadata, not T, E, or runtime behavior.
   return unsafeCoerce(
-    makePlanOp(bindProvidePlan, () =>
+    makeUnboundPlanOp(bindProvidePlan, () =>
       bindProvidePlan(
         // SAFETY: yield* iterable is nullary (A=[]); bindProvidePlan expects no runtime args on this surface.
         ...unsafeCoerce<AsArgs<A>>([]),
