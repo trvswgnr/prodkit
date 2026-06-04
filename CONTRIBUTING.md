@@ -53,6 +53,10 @@ Run the same checks used before publishing:
 pnpm run gate
 ```
 
+Gate orchestration lives in `@prodkit/tools` (`gate` runs turbo workspace tasks, `gate:checks`, then pack smoke). Add new doc or contract checks to `gate:checks` in `tools/package.json`, not the root manifest.
+
+`tools/` layout: `checks/` (gate doc and contract scripts), `smoke/` (pack, GitHub, npm, and alternate-runtime harnesses), `release/` (version cut and changelog checks), `lib/` (shared helpers). `update-op-performance-doc.ts` stays at the workspace root.
+
 The quality gate includes a consumer-level smoke test that installs `@prodkit/op` and `@prodkit/std`
 from `npm pack` tarballs via `examples/` in an isolated temp workspace. That harness still builds
 and packs `@prodkit/std` even though `packages/std/src/` is effectively empty today: it verifies

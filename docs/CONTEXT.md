@@ -27,6 +27,10 @@ exports, not separate npm packages or `@prodkit/std` modules. Full placement rul
 | `packages/shared/` | `@prodkit/shared` | Private presets and workspace primitives (not on npm) |
 | `examples/op/` | `@prodkit/examples` | Consumer samples and smoke for op and op/di |
 | `benchmarks/op/` | `@prodkit/benchmarks` | Performance and bundle-size harnesses for op |
+| `tools/checks/` | `@prodkit/tools` | Gate doc and contract checks |
+| `tools/smoke/` | `@prodkit/tools` | Consumer pack and alternate-runtime smoke harnesses |
+| `tools/release/` | `@prodkit/tools` | Release cut and per-package changelog checks |
+| `tools/lib/` | `@prodkit/tools` | Shared maintainer script helpers |
 
 ## Where new code lives
 
