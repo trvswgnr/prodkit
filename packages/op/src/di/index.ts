@@ -1,12 +1,13 @@
 import { NEVER } from "@prodkit/shared/runtime";
 import type { Op } from "../index.js";
+import { InjectInstruction, provideOp } from "./plan.js";
 import {
   DI_TAG,
   DI_TOKEN,
   DI_SINGLETON_BINDING,
   DI_LAZY_BINDING,
-  InjectInstruction,
-  provideOp,
+  MissingDependencyError,
+  DuplicateDependencyError,
   type AnyDependency,
   type SingletonBinding,
   type DependencyCtor,
@@ -17,10 +18,9 @@ import {
   type AnyBinding,
   type ValidProvideBindings,
   type RequiredDepsOfMeta,
-  ProvidedMeta,
-  MissingDependencyError,
-  DuplicateDependencyError,
-} from "./internal.js";
+  type ProvidedMeta,
+  type RequiredDeps,
+} from "./types.js";
 
 /**
  * Phantom-typed dependency token created with {@link Dependency}.
@@ -109,4 +109,4 @@ export const DI = {
   DuplicateDependencyError,
 } as const;
 
-export type { RequiredDeps } from "./internal.js";
+export type { RequiredDeps };

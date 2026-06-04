@@ -26,15 +26,18 @@ packages/op/src/index.ts          (Op factory, Op.run, re-exports)
   |-- core/instructions.ts        (Suspend, RegisterExitFinalizer, CustomInstruction protocol)
 
 packages/op/src/di/                 (DI.provide, DI.inject via CustomInstruction + extensions)
-  '-- internal.ts imports core/runtime, core/instructions, core/settlement, core/plan/shell,
-      core/plan/surface (type-only), errors, result, index (type-only), @prodkit/shared/runtime
+  '-- di/plan.ts imports di/env.ts, di/types.ts, core/plan, core/settlement, core/instructions
+  '-- di/env.ts imports di/types.ts, core/runtime, core/settlement, @prodkit/shared/runtime
+  '-- di/types.ts imports core/meta.ts, index.ts (type-only Op)
 
 Verified import contracts (checked by `pnpm --filter @prodkit/tools run architecture:check`):
 
 **Closed modules** document every `packages/op/src` import from that file. Use for extension seams and
 small plan modules where surprise imports are regressions.
 
-<!-- architecture-check-closed: packages/op/src/di/internal.ts -->
+<!-- architecture-check-closed: packages/op/src/di/types.ts -->
+<!-- architecture-check-closed: packages/op/src/di/env.ts -->
+<!-- architecture-check-closed: packages/op/src/di/plan.ts -->
 <!-- architecture-check-closed: packages/op/src/core/plan/factory-chain.ts -->
 <!-- architecture-check-closed: packages/op/src/core/settlement.ts -->
 
@@ -42,18 +45,26 @@ small plan modules where surprise imports are regressions.
 (for example `shell.ts`) may import more than the list shows.
 
 - `packages/op/src/core/plan/shell.ts` imports `packages/op/src/core/plan/factory-chain.ts`
-- `packages/op/src/di/internal.ts` imports `packages/op/src/core/plan/base.ts`
-- `packages/op/src/di/internal.ts` imports `packages/op/src/core/plan/surface.ts`
-- `packages/op/src/di/internal.ts` imports `packages/op/src/core/plan/shell.ts`
-- `packages/op/src/di/internal.ts` imports `packages/op/src/core/settlement.ts`
-- `packages/op/src/di/internal.ts` imports `packages/op/src/core/instructions.ts`
-- `packages/op/src/di/internal.ts` imports `packages/op/src/core/runtime.ts`
-- `packages/op/src/di/internal.ts` imports `packages/op/src/core/meta.ts`
-- `packages/op/src/di/internal.ts` imports `packages/op/src/errors.ts`
-- `packages/op/src/di/internal.ts` imports `packages/op/src/result.ts`
-- `packages/op/src/di/internal.ts` imports `packages/op/src/index.ts`
-- `packages/op/src/di/internal.ts` imports `packages/op/src/di/index.ts`
-- `packages/op/src/di/internal.ts` imports `@prodkit/shared/runtime`
+- `packages/op/src/di/types.ts` imports `packages/op/src/core/meta.ts`
+- `packages/op/src/di/types.ts` imports `packages/op/src/index.ts`
+- `packages/op/src/di/types.ts` imports `packages/op/src/di/index.ts`
+- `packages/op/src/di/env.ts` imports `packages/op/src/di/types.ts`
+- `packages/op/src/di/env.ts` imports `packages/op/src/core/runtime.ts`
+- `packages/op/src/di/env.ts` imports `packages/op/src/core/settlement.ts`
+- `packages/op/src/di/env.ts` imports `@prodkit/shared/runtime`
+- `packages/op/src/di/plan.ts` imports `packages/op/src/di/types.ts`
+- `packages/op/src/di/plan.ts` imports `packages/op/src/di/env.ts`
+- `packages/op/src/di/plan.ts` imports `packages/op/src/core/plan/base.ts`
+- `packages/op/src/di/plan.ts` imports `packages/op/src/core/plan/surface.ts`
+- `packages/op/src/di/plan.ts` imports `packages/op/src/core/plan/shell.ts`
+- `packages/op/src/di/plan.ts` imports `packages/op/src/core/settlement.ts`
+- `packages/op/src/di/plan.ts` imports `packages/op/src/core/instructions.ts`
+- `packages/op/src/di/plan.ts` imports `packages/op/src/core/runtime.ts`
+- `packages/op/src/di/plan.ts` imports `packages/op/src/core/meta.ts`
+- `packages/op/src/di/plan.ts` imports `packages/op/src/errors.ts`
+- `packages/op/src/di/plan.ts` imports `packages/op/src/result.ts`
+- `packages/op/src/di/plan.ts` imports `packages/op/src/index.ts`
+- `packages/op/src/di/plan.ts` imports `@prodkit/shared/runtime`
 - `packages/op/src/core/plan/factory-chain.ts` imports `packages/op/src/core/plan/base.ts`
 - `packages/op/src/core/settlement.ts` imports `@prodkit/shared/runtime`
 
@@ -175,7 +186,7 @@ Extension-owned plan nodes (for example `providePlan` in `@prodkit/op/di`) use t
 
 1. **`DI.inject(dependency)`** yields an `InjectInstruction`, a `CustomInstruction` whose
    `resolve(context)` reads bindings from `context.extensions`.
-2. **`DI.provide(op, bindings)`** (`providePlan` / `provideOp` in `packages/op/src/di/internal.ts`)
+2. **`DI.provide(op, bindings)`** (`providePlan` / `provideOp` in `packages/op/src/di/plan.ts`; env in `packages/op/src/di/env.ts`)
    is a plan-backed op (`makeUnboundPlanOp`) whose `providePlan` node returns
    `withAbortDrain(executePlan(..., interruptOnAbortSettlement))` and extends `context.extensions`
    with the binding `Map` under an internal extension key.

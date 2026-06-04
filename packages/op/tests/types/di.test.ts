@@ -11,7 +11,7 @@ import type {
   RemainingRequiredDeps,
   DepsOf,
   WithDIMeta,
-} from "../../src/di/internal.js";
+} from "../../src/di/types.js";
 import { Policy } from "../../src/policy/index.js";
 import type { Assert, IsEqual } from "@prodkit/shared/types/utils";
 

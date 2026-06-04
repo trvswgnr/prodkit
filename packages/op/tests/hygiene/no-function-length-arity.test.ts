@@ -19,7 +19,7 @@ const ARITY_GUARD_FILES = [
   "src/core/plan/shell.ts",
   "src/core/plan/transforms.ts",
   "src/core/fluent.ts",
-  "src/di/internal.ts",
+  "src/di/plan.ts",
 ] as const;
 
 function isFunctionLikeType(type: ts.Type, checker: ts.TypeChecker): boolean {
