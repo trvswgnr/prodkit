@@ -113,6 +113,39 @@ export function createUnaryPlan<T, E, M, TSource, ESource, MSource>(
   return plan;
 }
 
+type UnaryWrapWalk = {
+  readonly base: ErasedPlan;
+  /** innermost-first rebuild callbacks (fluent call order) */
+  readonly rebuilds: ReadonlyArray<UnaryPlanRewrite["rebuild"]>;
+};
+
+function walkUnaryWraps(plan: ErasedPlan): UnaryWrapWalk {
+  const collected: UnaryPlanRewrite["rebuild"][] = [];
+  let current = plan;
+
+  while (true) {
+    const unary = current[PLAN_UNARY_REWRITE];
+    if (unary === undefined) break;
+    collected.push(unary.rebuild);
+    current = unary.source;
+  }
+
+  collected.reverse();
+  return { base: current, rebuilds: collected };
+}
+
+function rebuildUnaryWraps(
+  base: ErasedPlan,
+  rebuilds: readonly UnaryPlanRewrite["rebuild"][],
+  rewriteBase: (plan: ErasedPlan) => ErasedPlan,
+): ErasedPlan {
+  let rebuilt = rewriteBase(base);
+  for (const rebuild of rebuilds) {
+    rebuilt = rebuild(rebuilt);
+  }
+  return rebuilt;
+}
+
 /**
  * Splits a plan's leading run of unary wrappers from its nearest non-unary node.
  *
@@ -123,37 +156,13 @@ export function splitLeadingUnaryWraps(plan: ErasedPlan): {
   readonly base: ErasedPlan;
   readonly wraps: ReadonlyArray<UnaryPlanRewrite["rebuild"]>;
 } {
-  const wraps: UnaryPlanRewrite["rebuild"][] = [];
-  let current = plan;
-
-  while (true) {
-    const unary = current[PLAN_UNARY_REWRITE];
-    if (unary === undefined) break;
-    wraps.push(unary.rebuild);
-    current = unary.source;
-  }
-
-  wraps.reverse();
-  return { base: current, wraps };
+  const walk = walkUnaryWraps(plan);
+  return { base: walk.base, wraps: walk.rebuilds };
 }
 
 function rewritePlanStackSafe(source: ErasedPlan, rewriter: PlanRewriter): ErasedPlan {
-  const rebuilds: UnaryPlanRewrite["rebuild"][] = [];
-  let current = source;
-
-  while (true) {
-    const unary = current[PLAN_UNARY_REWRITE];
-    if (unary === undefined) break;
-    rebuilds.push(unary.rebuild);
-    current = unary.source;
-  }
-
-  let rewritten = current.rewrite(rewriter);
-  for (let index = rebuilds.length - 1; index >= 0; index -= 1) {
-    const rebuild = rebuilds[index];
-    if (rebuild !== undefined) rewritten = rebuild(rewritten);
-  }
-  return rewritten;
+  const walk = walkUnaryWraps(source);
+  return rebuildUnaryWraps(walk.base, walk.rebuilds, (base) => base.rewrite(rewriter));
 }
 
 export function interruptOnAbortSettlement(signal: AbortSignal): AbortSettlement {
