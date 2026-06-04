@@ -9,11 +9,6 @@ See also [docs/comparison.md](docs/comparison.md) and [docs/performance.md](docs
 > [!WARNING]
 > This library is currently in alpha. The API will almost certainly change between releases while it stabilizes.
 
-> [!NOTE]
-> Subpath exports (`@prodkit/op/di`, `@prodkit/op/policy`, `@prodkit/op/hkt`, `@prodkit/op/internal`)
-> ship with the matching npm release. If a subpath or API is missing, upgrade `@prodkit/op` or
-> import only what your installed version's `package.json` `exports` lists.
-
 Compose steps top-to-bottom, attach retry, timeout, and cancellation as policy, and run parallel
 work without scattering reliability logic across your app.
 
