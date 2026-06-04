@@ -6,8 +6,10 @@ This README is the **hub**: installation, quick start, and core API reference. E
 subpaths, lifecycle, and cancellation live in [`docs/`](docs/README.md) and ship in the npm tarball.
 See also [docs/comparison.md](docs/comparison.md) and [docs/performance.md](docs/performance.md).
 
-> [!WARNING]
-> This library is currently in alpha. The API is mostly stable but there could be breaking changes between releases.
+> [!NOTE]
+> `@prodkit/op` is in **beta** starting at **0.2.0**. Published versions from 0.2.0 onward follow
+> [Semantic Versioning](https://semver.org/): **major** for incompatible API changes, **minor** for
+> backward-compatible features, **patch** for backward-compatible fixes.
 
 Compose steps top-to-bottom, attach retry, timeout, and cancellation as policy, and run parallel
 work without scattering reliability logic across your app.
@@ -16,6 +18,7 @@ work without scattering reliability logic across your app.
 
 - [Why this exists](#why-this-exists)
 - [Installation](#installation)
+- [Versioning](#versioning)
 - [Dependencies (`better-result`)](#dependencies-better-result)
 - [Subpath exports](#subpath-exports)
 - [Quick start](#quick-start)
@@ -41,6 +44,13 @@ npm i @prodkit/op
 Runtime support: any JavaScript runtime with `Promise` and `AbortController`. No Node-specific APIs
 are required by the public operation model.
 
+## Versioning
+
+- **0.2.0** is the first beta release.
+- From **0.2.0** onward, semver applies as defined above: plan major bumps for breaking public API
+  changes, minor bumps for backward-compatible additions, patch bumps for backward-compatible fixes.
+- Releases before 0.2.0 were pre-beta `0.1.x` lines without the post-0.2.0 compatibility contract.
+
 ## Dependencies (`better-result`)
 
 `@prodkit/op` declares `better-result` as a peer dependency so your app installs one copy and
@@ -53,7 +63,8 @@ TypeScript resolves the same `Result` types that `.run()` returns.
 Install it alongside `@prodkit/op` when your package manager does not install peers automatically.
 
 Most `better-result` symbols are part of the public contract but are **not** re-exported from
-`@prodkit/op`. Import them from `better-result`; import operation APIs from `@prodkit/op`.
+`@prodkit/op` (split imports by design). Import them from `better-result`; import operation APIs
+from `@prodkit/op`.
 
 From **`better-result`**: `Result`, `TaggedError`, `UnhandledException`, `TaggedErrorInstance`,
 and optional advanced helpers (`Err`, `Ok`, `InferErr`).

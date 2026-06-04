@@ -20,6 +20,12 @@ pnpm install
 - Package-scoped scripts stay in the owning workspace `package.json`; invoke them with `pnpm --filter <workspace> run <script>`.
 - When adding a feature, use the placement table in [`docs/CONTEXT.md`](docs/CONTEXT.md#where-new-code-lives) and [ADR 0008](docs/adr/0008-op-subpath-exports.md): op subpath for portable op-native code with only `better-result` beyond op; `@prodkit/std` for op-free utilities; new `packages/<name>/` for platform-specific or integration-SDK adapters.
 
+## Path to beta integration branch
+
+GitHub issues in the **Path to Beta** milestone land on branch **`beta/0.2.0`** (integration branch
+for the 0.2.0 beta cut). Open PRs against `beta/0.2.0` unless the maintainer directs otherwise;
+merge `beta/0.2.0` into `main` when the milestone closes with the beta release.
+
 ## Documentation
 
 `@prodkit/op` consumer docs (`packages/op/README.md`, `packages/op/docs/`) ship on npm. They cover

@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Declare `sideEffects: false` in `package.json` so bundlers can tree-shake unused exports.
+- Document beta status and strict SemVer from 0.2.0 in the README; record versioning and
+  split-`better-result` import policy in monorepo ADRs 0014 and 0015.
 
 ## [0.1.79] - 2026-06-03
 
