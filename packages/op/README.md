@@ -7,7 +7,7 @@ subpaths, lifecycle, and cancellation live in [`docs/`](docs/README.md) and ship
 See also [docs/comparison.md](docs/comparison.md) and [docs/performance.md](docs/performance.md).
 
 > [!WARNING]
-> This library is currently in alpha. The API will almost certainly change between releases while it stabilizes.
+> This library is currently in alpha. The API is mostly stable but there could be breaking changes between releases.
 
 Compose steps top-to-bottom, attach retry, timeout, and cancellation as policy, and run parallel
 work without scattering reliability logic across your app.
