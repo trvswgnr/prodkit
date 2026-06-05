@@ -5,6 +5,7 @@ Extended documentation for `@prodkit/op`. These files ship in the npm tarball al
 
 | Guide | Topic |
 | --- | --- |
+| [api-contract.md](api-contract.md) | Authoritative export inventory by tier (beta freeze) |
 | [comparison.md](comparison.md) | Tradeoffs vs Promise, neverthrow, fp-ts, Effect |
 | [performance.md](performance.md) | Benchmark snapshot, bundle size, regression tooling |
 | [di.md](di.md) | `@prodkit/op/di` tokens, provide/inject, token identity, runtime errors |

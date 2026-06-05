@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Publish `docs/api-contract.md`: authoritative `@prodkit/op` export inventory grouped by
+  application and extension-author tiers.
+
 ### Changed
 
 - Declare `sideEffects: false` in `package.json` so bundlers can tree-shake unused exports.
