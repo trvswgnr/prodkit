@@ -229,6 +229,35 @@ pnpm --filter @prodkit/op run test
 pnpm --filter @prodkit/std run test
 ```
 
+## Deprecation Policy
+
+Published package APIs follow strict SemVer from the first beta line documented by the owning
+package. For `@prodkit/op`, that baseline is `0.2.0` ([ADR 0014](docs/adr/0014-strict-semver-from-0-2-0-beta.md)).
+After that baseline, incompatible public API changes are major-version work.
+This policy applies to user-facing package APIs and behavior. Repo-internal implementation details,
+contributor-only tooling, tests, and private workspace contracts should use hard cutovers unless
+they affect a published package contract.
+
+Prefer a deprecation before removal when the old API can stay in place without hiding a security,
+correctness, or data-loss problem. A deprecation must include:
+
+- JSDoc `@deprecated` on the exported symbol, type, member, or option that callers touch.
+- A `### Deprecated` changelog entry under `## [Unreleased]` for the affected package.
+- A migration note in the changelog entry that names the replacement or explains the behavioral
+  change.
+
+User-facing deprecations do not emit runtime warnings. Signal them through TypeScript/JSDoc,
+package docs when relevant, and changelog migration notes.
+
+Deprecated APIs stay available for at least one minor release after the release that first marks
+them deprecated. Removal still requires the next major version because it is an incompatible change
+under strict SemVer. If an unsafe behavior cannot remain for that long, document the exception and
+the migration path in the changelog entry for the breaking release.
+
+Every breaking change ships with a changelog migration note. Use the heading that matches the
+observable effect (`### Changed`, `### Removed`, or `### Deprecated`) and write the note for npm
+consumers, not for repo-internal implementation history.
+
 ## Release Workflow (Recommended)
 
 Publishable packages use package-scoped git tags (`op-vX.Y.Z`, `std-vX.Y.Z`).
@@ -252,6 +281,8 @@ are not used for new releases.
    - **Per release:** use at most one heading per type, in order: `Added`, `Changed`, `Deprecated`,
      `Removed`, `Fixed`, `Security`. Skip empty types. Use past tense; do not repeat the section
      name in every bullet ("Added X" under `### Added`).
+   - **Deprecations and breaking changes:** follow the [Deprecation Policy](#deprecation-policy) so
+     the changelog includes caller-facing migration guidance.
 
 2. Cut a release (this promotes `Unreleased`, bumps npm version in the package
    `package.json`, runs release checks, commits, and creates a package-scoped tag):

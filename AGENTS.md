@@ -33,7 +33,8 @@ Read these before guessing repo structure or conventions:
 - Requires ASCII-only in repo text (comments, docs, changelogs): no Unicode symbols or typographic punctuation (arrows, em dashes, etc.).
 - Forbids `--` as a markdown list-item separator between a term and description; write full sentences or use a colon after the term instead (shell passthrough `--` in commands is fine).
 - Prefers file relocations to be done with move operations first (for example `mv`) followed by minimal targeted edits, not full-file rewrites.
-- Prefers hard-cutover transitions, not gradual deprecations and migrations (alpha stage; intentional breaking changes are acceptable).
+- For published package APIs after their documented beta baseline, follow `CONTRIBUTING.md#deprecation-policy` and `docs/adr/0014-strict-semver-from-0-2-0-beta.md`; non-user-facing changes should hard-cutover.
+- Do not add runtime deprecation warnings for user-facing APIs; use JSDoc, docs, and changelog migration notes instead.
 - Prefers normalization only when inputs have an obvious safe interpretation; invalid inputs should surface at run time as `Err(UnhandledException)` with the validation error as `cause`.
 - Dislikes boolean flags and optional one-field option bags; prefer explicit named constructs that make uncommon behavior visible at the call site.
 
