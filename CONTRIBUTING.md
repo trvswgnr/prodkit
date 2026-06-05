@@ -80,6 +80,8 @@ and the current highest version matching the peer range. That matrix changes onl
 install so the committed lockfile remains the normal development baseline.
 CI runs `pnpm -r exec npm audit signatures` so dependency signature verification covers every
 workspace package, not just the private root manifest.
+The alternate-runtime smoke runner avoids importing `@prodkit/op` before its package build, so clean
+CI jobs can run from install-only workspaces.
 An `invariants:check` gate step fails when `docs/contributor/op-invariants.md` references source symbols or test
 file paths that no longer exist in the repo.
 An `architecture:check` gate step fails when verified import contracts in
@@ -313,6 +315,7 @@ pnpm --filter @prodkit/std run release:push
 4. The workflow (for tags like `op-v0.1.70` or `std-v0.1.1`) then:
 
    - validates the tag is the latest package-scoped tag on `main`
+   - verifies the `CI` workflow has passed for the tagged commit
    - installs with `pnpm install --frozen-lockfile`
    - publishes with npm trusted publishing (OIDC) and provenance
      (`pnpm --filter @prodkit/<package> publish --provenance --access public --no-git-checks`)
