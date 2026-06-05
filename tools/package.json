@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "gate": "TURBO_PRINT_VERSION_DISABLED=1 pnpm -w exec turbo run build typecheck test lint fmt:check --log-order=grouped && pnpm run gate:checks && TURBO_PRINT_VERSION_DISABLED=1 pnpm -w exec turbo run smoke --filter=@prodkit/tools --log-order=grouped",
-    "gate:checks": "pnpm run adr:check && pnpm run changelog:api:check && pnpm run invariants:check && pnpm run architecture:check && pnpm run runnable-gating:check",
+    "gate:checks": "pnpm run adr:check && pnpm run changelog:api:check && pnpm run api:manifest:check && pnpm run invariants:check && pnpm run architecture:check && pnpm run runnable-gating:check",
     "examples:smoke:pack": "node ./smoke/run-examples-smoke.ts pack",
     "examples:smoke:github": "node ./smoke/run-examples-smoke.ts github",
     "examples:smoke:npm": "node ./smoke/run-examples-smoke.ts npm",
@@ -18,6 +18,8 @@
     "performance:sync": "node ./update-op-performance-doc.ts",
     "adr:check": "node ./checks/sync-adr-index.ts",
     "changelog:api:check": "node ./checks/check-changelog-api.ts",
+    "api:manifest:check": "node --test ./checks/check-api-snapshot.test.ts && node ./checks/check-api-snapshot.ts",
+    "api:manifest:update": "node ./checks/check-api-snapshot.ts --write",
     "invariants:check": "node ./checks/check-op-invariants-md.ts",
     "architecture:check": "node --test ./checks/check-runtime-architecture.test.ts && node ./checks/check-runtime-architecture.ts",
     "runnable-gating:check": "node --test ./checks/check-runnable-gating-contract.test.ts && node ./checks/check-runnable-gating-contract.ts",
