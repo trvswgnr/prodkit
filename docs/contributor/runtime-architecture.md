@@ -227,9 +227,11 @@ may move when titles are preserved. Do not treat adding those modules to coverag
 for that check or for the op package Vitest run (including typecheck).
 
 Import extension helpers from `@prodkit/op/internal` (for example `Blocking`, `withBlocking`,
-`EmptyMeta`, `MergeMeta`, `InferOpMeta`, `CustomInstruction`, `BlockingOp`, `AbortSignalLike`,
-`unsafeCoerce`, `NEVER`). The main `@prodkit/op` entry keeps consumer-facing lifecycle types
-(`EnterContext`, `ExitContext`) and errors only.
+`EmptyMeta`, `MergeMeta`, `InferOpMeta`, `CustomInstruction`, `BlockingOp`, `RunContext`,
+`CUSTOM_INSTRUCTION_META`). Workspace-only runtime primitives (`AbortSignalLike`, `unsafeCoerce`,
+`NEVER`, and similar) live on `@prodkit/shared/runtime`, not on this subpath. The main
+`@prodkit/op` entry keeps consumer-facing lifecycle types (`EnterContext`, `ExitContext`) and
+errors only.
 
 ## Combinators and nested plan execution
 

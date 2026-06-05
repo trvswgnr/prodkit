@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Clarify the consumer runtime baseline as an ES2022 ESM environment with the platform APIs used
   by the operation runtime.
 
+### Removed
+
+- `@prodkit/op/internal` no longer exports `EnterFn` or `ExitFn`; use `EnterContext` and
+  `ExitContext` on the main entry for lifecycle typing.
+
 ## [0.1.79] - 2026-06-03
 
 ### Changed

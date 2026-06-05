@@ -3,7 +3,6 @@
  * Not intended for typical application code that imports `@prodkit/op`.
  */
 export { withBlocking, type BlockingOp } from "../blocking.js";
-export { type EnterFn, type ExitFn } from "../core/plan/context.js";
 export { type AnyNullaryOp, type InferOpMeta } from "../core/plan/surface.js";
 export {
   CUSTOM_INSTRUCTION_META,
