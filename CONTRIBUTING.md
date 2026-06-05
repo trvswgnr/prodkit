@@ -94,6 +94,11 @@ public export names change without an update to that package's `CHANGELOG.md` un
 requests via `CHANGELOG_API_BASE_REF`, the pre-push commit on pushes to `main`, or
 `CHANGELOG_API_BASE_REF` locally) and fails
 closed when no base ref can be resolved. Internal re-export paths do not count as API changes.
+An `api:manifest:check` gate step fails when serialized public export signatures for the
+application-tier source entrypoints (`packages/op/src/index.ts`, `di/index.ts`, `policy/index.ts`,
+`hkt.ts`) drift from the committed manifest at `packages/op/snapshots/public-api.manifest.json`.
+Refresh after an intentional API change with `pnpm --filter @prodkit/tools run api:manifest:update`.
+`@prodkit/op/internal` is not included in the manifest.
 A `bundle-size` job compares `@prodkit/op` lower and upper bundled size bounds (minified + gzip)
 on pull requests via `compressed-size-action`; runtime regressions are tracked separately by CodSpeed
 (see [`packages/op/docs/performance.md`](packages/op/docs/performance.md) and [`benchmarks/op/README.md`](benchmarks/op/README.md)).
