@@ -294,8 +294,8 @@ pnpm --filter @prodkit/std run release:patch
 
 *Note:* `release:minor` and `release:major` will be added when needed.
 
-If `Unreleased` is empty, the cut script writes a minimal
-"No user-facing changes" note for the new version.
+If `Unreleased` has no changelog bullets, the cut script aborts. Add release notes
+before cutting.
 The changelog/version updates must be committed before tag creation because
 release validation runs against the tagged commit.
 

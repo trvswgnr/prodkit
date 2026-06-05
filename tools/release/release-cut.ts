@@ -23,7 +23,6 @@ import {
 const logger = createLogger();
 
 const NO_ENTRIES_PLACEHOLDER = "- No entries yet.";
-const NO_CHANGES_SECTION = "### Changed\n\n- No user-facing changes in this release.";
 const UNRELEASED_HEADING = "## [Unreleased]";
 
 const BumpKind = v.union([v.literal("patch"), v.literal("minor"), v.literal("major")]);
@@ -158,10 +157,15 @@ const main = Op(function* (packageIdArg: string | undefined, bumpKindArg: string
     const releasedSections = changelog.slice(nextHeadingStart).trimStart();
 
     const unreleasedBody = unreleasedBodyRaw.replace(NO_ENTRIES_PLACEHOLDER, "").trim();
-    const releaseBody = /- /m.test(unreleasedBody) ? unreleasedBody : NO_CHANGES_SECTION;
+    if (!/- /m.test(unreleasedBody)) {
+      return yield* new ChangelogError({
+        message:
+          'CHANGELOG.md "## [Unreleased]" has no release notes. Add entries under Unreleased before cutting a release.',
+      });
+    }
 
     const newUnreleased = `${UNRELEASED_HEADING}\n\n### Added\n\n${NO_ENTRIES_PLACEHOLDER}`;
-    const newReleaseSection = `## [${nextVersion}] - ${releaseDate}\n\n${releaseBody}`;
+    const newReleaseSection = `## [${nextVersion}] - ${releaseDate}\n\n${unreleasedBodyRaw}`;
 
     return `${preamble}\n\n${newUnreleased}\n\n${newReleaseSection}\n\n${releasedSections}\n`;
   });
