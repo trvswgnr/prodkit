@@ -1,7 +1,7 @@
 import path from "node:path";
 import ts from "typescript";
 
-export const OP_PUBLIC_API_MANIFEST_REL = "packages/op/snapshots/public-api.manifest.json";
+export const OP_PUBLIC_API_MANIFEST_REL = "packages/op/public-api.manifest.json";
 export const MANIFEST_VERSION = 1 as const;
 
 export const PUBLIC_API_ENTRYPOINTS = [

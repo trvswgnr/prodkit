@@ -3,7 +3,7 @@
 Authoritative export inventory for the beta freeze. Signatures match the built declaration files
 under `dist/` after `pnpm --filter @prodkit/op run build`. Export names are verified against the
 source entrypoints monitored by `changelog:api:check` and `api:manifest:check`
-(`packages/op/snapshots/public-api.manifest.json`).
+(`packages/op/public-api.manifest.json`).
 
 `better-result` types (`Result`, `Err`, `Ok`, and related helpers) are a **peer dependency**.
 Import them from `better-result` directly; they are not re-exported from `@prodkit/op` (ADR 0015).
