@@ -41,8 +41,11 @@ Async TypeScript has two huge flaws: you can't see from a function's type what i
 npm i @prodkit/op
 ```
 
-Runtime support: any JavaScript runtime with `Promise` and `AbortController`. No Node-specific APIs
-are required by the public operation model.
+Runtime support: any ESM JavaScript runtime with ES2022 plus `Promise`, `AbortController` /
+`AbortSignal.reason`, `queueMicrotask`, `setTimeout` / `clearTimeout`, `AggregateError`, and
+`Error.cause`. No Node-specific APIs are required by the public operation model. For Node
+consumers, support follows current non-EOL LTS lines. Contributor tooling uses a separate Node
+`>=24.14.0` requirement.
 
 ## Versioning
 
@@ -323,4 +326,3 @@ apps are usually I/O-bound.
 ## Contributing
 
 Monorepo setup, gate, and release: [`CONTRIBUTING.md`](https://github.com/trvswgnr/prodkit/blob/main/CONTRIBUTING.md).
-Contributor requirement: Node `>=24.14.0` (24.x Active LTS).
