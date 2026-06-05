@@ -70,10 +70,14 @@ tarball layout, `exports` wiring, and publish plumbing for the second npm packag
 module coverage. When `@prodkit/std` subpaths ship real code, the same pack path exercises them
 without changing the gate shape.
 
-Pull requests and pushes to `main` run the same gate in `.github/workflows/ci.yml`.
+Pull requests and pushes to `main` and `beta/0.2.0` run the same gate in
+`.github/workflows/ci.yml`.
 CI also publishes a Vitest coverage report as a workflow artifact (`op-coverage`) so reviewers can
 audit unit, integration, type, and property-law coverage evidence from the run. `@prodkit/std`
 coverage is omitted until utility modules ship in `packages/std/src/`.
+CI runs an `@prodkit/op` compatibility matrix against the lowest supported `better-result` version
+and the current highest version matching the peer range. That matrix changes only the transient CI
+install so the committed lockfile remains the normal development baseline.
 CI runs `pnpm -r exec npm audit signatures` so dependency signature verification covers every
 workspace package, not just the private root manifest.
 An `invariants:check` gate step fails when `docs/contributor/op-invariants.md` references source symbols or test
@@ -91,8 +95,8 @@ A `changelog:api:check` gate step fails when `packages/op/src/index.ts`,
 `packages/op/src/di/index.ts`, `packages/op/src/policy/index.ts`, or `packages/op/src/hkt.ts`
 public export names change without an update to that package's `CHANGELOG.md` under
 `## [Unreleased]`. The check compares against an explicit base ref (`pull_request.base.sha` on pull
-requests via `CHANGELOG_API_BASE_REF`, the pre-push commit on pushes to `main`, or
-`CHANGELOG_API_BASE_REF` locally) and fails
+requests via `CHANGELOG_API_BASE_REF`, the pre-push commit on pushes to `main` or `beta/0.2.0`,
+or `CHANGELOG_API_BASE_REF` locally) and fails
 closed when no base ref can be resolved. Internal re-export paths do not count as API changes.
 An `api:manifest:check` gate step fails when serialized public export signatures for the
 application-tier source entrypoints (`packages/op/src/index.ts`, `di/index.ts`, `policy/index.ts`,

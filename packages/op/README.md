@@ -65,6 +65,11 @@ TypeScript resolves the same `Result` types that `.run()` returns.
 
 Install it alongside `@prodkit/op` when your package manager does not install peers automatically.
 
+The peer range is the compatibility contract. Each `@prodkit/op` release is tested against the
+lowest declared `better-result` version and the current highest version that satisfies the peer
+range. Raising the lower bound or changing the range is a user-facing compatibility change and is
+documented in the changelog.
+
 Most `better-result` symbols are part of the public contract but are **not** re-exported from
 `@prodkit/op` (split imports by design). Import them from `better-result`; import operation APIs
 from `@prodkit/op`.

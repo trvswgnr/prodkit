@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Declare `sideEffects: false` in `package.json` so bundlers can tree-shake unused exports.
 - Document beta status and strict SemVer from 0.2.0 in the README; record versioning and
   split-`better-result` import policy in monorepo ADRs 0014 and 0015.
+- Document the `better-result` compatibility policy and add CI coverage for the peer range floor
+  and current highest matching version.
 - Clarify the consumer runtime baseline as an ES2022 ESM environment with the platform APIs used
   by the operation runtime.
 
@@ -457,4 +459,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   paths, including generator finalization behavior.
 - Tightened combinator and policy behavior in edge cases (listener teardown,
   retry timing, and composed operation semantics).
-
