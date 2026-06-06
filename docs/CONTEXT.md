@@ -60,13 +60,13 @@ the boundary choice is not already covered by ADR 0008.
 | Term | Meaning |
 | --- | --- |
 | **Op** | Callable operation value; generator-defined work composes with `yield*`. Public tuple arity; internally nullary at the driver. |
-| **Plan** | Internal execution AST under `core/plan/`. Fluent methods, policies, combinators, and DI `provide` are plan nodes. |
+| **Plan** | Internal execution AST under `plan/`. Fluent methods, policies, combinators, and DI `provide` are plan nodes. |
 | **Instruction** | Yielded discriminant the driver dispatches (`Suspend`, exit finalizer registration, `CustomInstruction`, terminal `Err`). |
 | **Policy** | Retry, timeout, cancel, release, or custom attachment applied with `.with(Policy.*)` before `.run()`. |
 | **Blocking** | Metadata key marking an unsatisfied requirement (for example missing DI binding) that blocks `.run()` at the type level. |
 | **Settlement** | How a suspend or abort resolves (pass-through, interrupt-on-abort, drain-after-abort). |
 | **Settlement preset** | Contributor-only named launch/completion intent for nested plan work (`cooperative`, `rejecting`, `interrupting`, `interruptingAndDraining`). |
-| **Settlement scope** | Signal-bound compiled preset; call sites use `Settlement.*` in `core/settlement-scope.ts` instead of pairing `executePlan` settlement with `withAbortDrain`. |
+| **Settlement scope** | Signal-bound compiled preset; call sites use `Settlement.*` in `execution/settlement-scope.ts` instead of pairing `executePlan` settlement with `withAbortDrain`. |
 | **Child run session** | Contributor-only scoped child `AbortSignal` derived from a parent run context (or bound plus outer signals), with guaranteed parent-listener detach. Also owns bound-cancel and timeout race orchestration for Policy plans. Distinct from settlement scope: propagation wiring and first-settler races, not launch/completion preset compilation. |
 | **UnhandledException** | Non-recoverable runtime channel from `better-result`; wraps invalid yields, cleanup faults, and validation failures. |
 

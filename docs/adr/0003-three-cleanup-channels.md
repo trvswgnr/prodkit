@@ -13,7 +13,7 @@ different roles in the runtime. They are not three implementations of one abstra
 ## Decision
 
 **Generator finalization (`closeGenerator`).** When `drive` finishes or short-circuits, it calls
-`iterator.return()` through `closeGenerator` in `packages/op/src/core/cleanup.ts`. This runs
+`iterator.return()` through `closeGenerator` in `packages/op/src/execution/cleanup.ts`. This runs
 synchronous native `finally` blocks in the generator body. Faults from `return()` are swallowed so
 the body result already chosen by `drive` is preserved. Yielded or async work inside `finally` is
 not driven after early exit.
@@ -24,7 +24,8 @@ Every registered handler runs even when a sibling throws. Once the body has sett
 fault wins the observable outcome as `Err(UnhandledException)` (with nested `cause` links when
 several throw).
 
-**Success-gated release (`.with(Policy.release(...))`).** `withReleasePlan` in `packages/op/src/core/plan/lifecycle.ts`
+**Success-gated release (`.with(Policy.release(...))`).** `releasePlan` in
+`packages/op/src/policy/plan.ts`
 drives the inner op first. On typed failure it returns without scheduling release. On success it
 registers a single exit finalizer that runs the release hook. Primary domain errors stay intact;
 release is for acquired resources after successful completion, not for every exit path.

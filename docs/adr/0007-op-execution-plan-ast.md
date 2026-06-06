@@ -12,7 +12,7 @@ supersedes [ADR 0002](0002-ophooks-rebuild-and-timeout-asymmetry.md).
 
 ## Decision
 
-**Internal execution is a `Plan<T, E>` AST** under `packages/op/src/core/plan/`. Composed work,
+**Internal execution is a `Plan<T, E>` AST** under `packages/op/src/plan/`. Composed work,
 fluent transforms, policies, and combinators are plan nodes. Public `Op<T, E, A, M>` remains the
 callable facade; tuple args bind at the shell, then `Plan.execute` drives the tree.
 

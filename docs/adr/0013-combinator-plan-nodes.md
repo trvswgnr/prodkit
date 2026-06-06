@@ -8,8 +8,8 @@ packages:
 # Combinator concurrent composition as plan nodes
 
 Public combinators (`Op.all`, `Op.race`, `Op.any`, `Op.allSettled`, `Op.settle`) are plan-backed
-ops that delegate to combinator plan nodes in `packages/op/src/core/plan/combinators.ts`. Shared
-fan-out lives in `packages/op/src/core/plan/fan-out.ts`. `.with(Policy.*)` pushes through to child
+ops that delegate to combinator plan nodes in `packages/op/src/plan/combinators.ts`. Shared
+fan-out lives in `packages/op/src/execution/fan-out.ts`. `.with(Policy.*)` pushes through to child
 plans structurally via `PlanRewriter` hooks ([ADR 0007](0007-op-execution-plan-ast.md)).
 
 ## Decision
@@ -28,7 +28,7 @@ plans structurally via `PlanRewriter` hooks ([ADR 0007](0007-op-execution-plan-a
 | `settlePlan` | `Op.settle` | `passThrough` | single child finishes |
 
 Public factories bind `OP_PLAN_BIND` and delegate to these nodes. Imperative fan-out was removed
-from the public combinator module; concurrency runs through `core/plan/fan-out.ts`.
+from the public combinator module; concurrency runs through `execution/fan-out.ts`.
 
 **Shared fan-out owns child wiring and settlement.** Per-child `AbortController` wiring, outer-signal
 cascade, `detach()` for parent abort listeners, unbounded fan-out, bounded worker pool, and child
@@ -45,7 +45,7 @@ Policy push-through is structural: `.with(Policy.timeout(ms))` on `Op.all([child
 
 **Public API unchanged.** Tuple inference, meta merge, `ErrorGroup` on `Op.any`, input-order
 results on `Op.all` / `Op.allSettled`, and empty-input errors are unchanged; only the internal
-representation lives under `core/plan/`.
+representation lives under `plan/`.
 
 **`DI.provide` is plan-backed** with the same local `source.rewrite(rewriter)` rebuild pattern.
 
@@ -72,7 +72,7 @@ nodes still need explicit rewrite methods until ceremony is reduced.
 
 - New combinator plan nodes follow CONTRIBUTING "Adding a fluent plan transform" touch points until
   generic rewrite reduces ceremony.
-- `packages/op/src/combinators.ts` holds public op factories and type helpers; fan-out and plan
-  shapes live under `core/plan/`.
+- `packages/op/src/core/combinators.ts` holds public op factories and type helpers; fan-out and plan
+  shapes live under `plan/`.
 - Tests from ADR 0004 and op-invariants.md Invariant 3 are the behavioral contract.
-- Abort settlement uses `core/abort.ts`.
+- Abort settlement uses `packages/op/src/execution/settlement.ts`.

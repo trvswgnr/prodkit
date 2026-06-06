@@ -16,7 +16,7 @@ timeout, cancel, and release. The args-only `.run()` decision here still holds.
 
 ## Decision
 
-**Args-only `.run()`.** `runOp` in `packages/op/src/core/run-op.ts` binds a fresh
+**Args-only `.run()`.** `runOp` in `packages/op/src/execution/runtime.ts` binds a fresh
 `AbortController` signal when no cancel policy was composed. Tuple arguments flow from
 `op(...args)` into `createRunContext(..., args)` for lifecycle hooks; they are not a general
 options bag.

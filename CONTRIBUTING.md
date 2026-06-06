@@ -181,7 +181,7 @@ For module-to-test placement, start with [`docs/contributor/runtime-architecture
 
 **`@prodkit/op/di`** runtime tests live under `packages/op/tests/unit/di/` (for example
 `index.test.ts`); compile-time DI contracts live in `packages/op/tests/types/di.test.ts`. Run
-`pnpm --filter @prodkit/op run coverage` locally to reproduce CI coverage for DI and the core runtime.
+`pnpm --filter @prodkit/op run coverage` locally to reproduce CI coverage for DI and the Op runtime.
 
 ## Source Layout (`@prodkit/op`)
 
@@ -192,34 +192,33 @@ For module-to-test placement, start with [`docs/contributor/runtime-architecture
 - The branded `Op` type alias stays on that entry (merged with the `Op` factory const). Internal modules use `import type { Op } from "../index.js"` when they need the alias; do not duplicate `Op` elsewhere ([ADR 0012](docs/adr/0012-op-type-alias-on-main-entry.md)).
 - Re-exports from dependencies must be explicit named exports in `packages/op/src/index.ts` (never `export *`).
 - Internal runtime concerns are split into focused modules under `packages/op/src/`:
-  - `core/` (execution runtime, plan AST, settlement, child-run session, lifecycle, instructions)
-  - `builders.ts` (primitive operation constructors)
+  - `core/` (callable Op surface, builders, combinator factories, lifecycle contracts, identity, and metadata)
+  - `plan/` (Plan model, Op bridge, execution scheduling, rewrite chain, and transform/combinator nodes)
+  - `execution/` (generator driver, instructions, cleanup, settlement, child-run sessions, and fan-out)
   - `policy/` (retry, timeout, cancel, release policies and `Delay` helpers)
+  - `di/` (dependency tokens, bindings, plan integration, and run-context environment)
   - `hkt.ts` (reusable HKT primitives for `@prodkit/op/hkt`)
-  - `combinators.ts` (all/any/race combinators)
   - `errors.ts`, `result.ts`, `tagged.ts` (shared domain contracts)
-  - `shared.ts` (Op brands and `isOp` helpers only; workspace primitives import `@prodkit/shared/runtime` directly)
 - `@prodkit/shared` (`packages/shared`, private): workspace globals, publishable tsconfig/vitest presets, and runtime primitives (`@prodkit/shared/runtime`). Publishable packages declare `"@prodkit/shared": "workspace:*"` and extend `@prodkit/shared/tsconfig/publishable`.
 - Test layout under `packages/op/tests/` mirrors runtime modules (see [`docs/contributor/runtime-architecture.md`](docs/contributor/runtime-architecture.md)):
   - `integration/index.test.ts` for public API contract coverage
-  - `unit/core.test.ts`, `unit/core/plan/plan.test.ts` for execution runtime and plan AST
-  - `unit/settlement*.test.ts`, `unit/settlement-scope.test.ts`, `unit/child-run-session.test.ts` for settlement and child-run propagation
-  - `unit/lifecycle-*.test.ts` for lifecycle and finalizer behavior
-  - `unit/combinator-*.test.ts`, `unit/fan-out-regression.test.ts` for combinators and fan-out
-  - `unit/policy-*.test.ts` for retry, timeout, cancel, release, and abort-signal policies
-  - `unit/builders.test.ts`, `unit/fluent*.test.ts`, `unit/errors.test.ts`, `unit/stack-safety.test.ts` for builders, fluent shell, errors, and stack safety
+  - `unit/core/` for builders, fluent methods, lifecycle hooks, and public combinator behavior
+  - `unit/plan/` for Plan binding, execution equivalence, and deep transform stack safety
+  - `unit/execution/` for the driver, instructions, cleanup, settlement, child sessions, and fan-out
+  - `unit/policy/` for retry, timeout, cancel, release, abort-signal, and policy HKT behavior
   - `unit/di/` for DI runtime behavior; `types/di.test.ts` for DI compile-time contracts
+  - `unit/errors.test.ts` for shared error contracts
   - `property/` for algebraic and combinator law checks
   - `types/op.test.ts`, `types/hkt.test.ts`, `types/metadata.test.ts` for compile-time contracts
   - `hygiene/` for API docs and arity hygiene checks
 - Runtime invariants and execution semantics are documented in `docs/contributor/op-invariants.md`.
-- Structural rationale for core/fluent choices (why separate paths exist) lives in `docs/adr/`.
+- Structural rationale for the nullary driver, plan AST, and fluent policy model lives in `docs/adr/`.
   Each ADR declares `title`, `status`, and `packages` in YAML frontmatter; run
   `pnpm --filter @prodkit/tools run adr:sync` after adding or editing one. Superseding and
   immutability rules: [`docs/adr/README.md`](docs/adr/README.md#updating-and-superseding).
 - Implementation work is tracked in GitHub issues, not in ADR bodies or ad hoc docs under `docs/`.
 
-## Core runtime architecture (`@prodkit/op`)
+## Op runtime architecture (`@prodkit/op`)
 
 Execution-level maps (module graph, instruction lifecycle, policy wrappers, fluent transform
 cookbook, DI integration, driver loop) live in
