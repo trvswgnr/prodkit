@@ -7,7 +7,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 
-let cachedRepoRoot: string | undefined = undefined;
+let cachedRepoRoot: string | undefined;
 
 export class RepoRootNotFoundError extends Error {
   readonly path: string;
@@ -19,7 +19,8 @@ export class RepoRootNotFoundError extends Error {
   }
 }
 
-function resolveGitRepoRoot(): string {
+export function readRepoRoot(): string {
+  if (cachedRepoRoot) return cachedRepoRoot;
   const output = execFileSync("git", ["rev-parse", "--path-format=absolute", "--show-toplevel"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
@@ -27,12 +28,6 @@ function resolveGitRepoRoot(): string {
   if (!output) {
     throw new Error("Expected to get the repo root from git, but got an empty output");
   }
-  return output;
-}
-
-export function readRepoRoot(): string {
-  if (cachedRepoRoot) return cachedRepoRoot;
-  const output = resolveGitRepoRoot();
   if (!existsSync(output)) {
     throw new RepoRootNotFoundError(output);
   }

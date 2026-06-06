@@ -230,10 +230,6 @@ async function smokeDeno(workspaceDir: string) {
   );
 }
 
-function rewriteBetterResultImports(content: string): string {
-  return content.replaceAll(/(from\s*["'])better-result(["'])/g, "$1./better-result.mjs$2");
-}
-
 async function copyDistMjsFiles(sourceDir: string, targetDir: string): Promise<void> {
   mkdirSync(targetDir, { recursive: true });
   for (const entry of await readdir(sourceDir, { withFileTypes: true })) {
@@ -245,7 +241,11 @@ async function copyDistMjsFiles(sourceDir: string, targetDir: string): Promise<v
     }
     if (!entry.name.endsWith(".mjs")) continue;
     const content = await readFile(sourcePath, "utf8");
-    await writeFile(targetPath, rewriteBetterResultImports(content), "utf8");
+    const rewritten = content.replaceAll(
+      /(from\s*["'])better-result(["'])/g,
+      "$1./better-result.mjs$2",
+    );
+    await writeFile(targetPath, rewritten, "utf8");
   }
 }
 
@@ -318,10 +318,20 @@ async function main() {
     for (const runtime of runtimes) {
       const workspaceDir = await createRuntimeWorkspace(tarballPath);
       try {
-        if (runtime === "bun") await smokeBun(workspaceDir);
-        if (runtime === "node") await smokeNode(workspaceDir);
-        if (runtime === "deno") await smokeDeno(workspaceDir);
-        if (runtime === "edge") await smokeEdge(workspaceDir);
+        switch (runtime) {
+          case "bun":
+            await smokeBun(workspaceDir);
+            break;
+          case "node":
+            await smokeNode(workspaceDir);
+            break;
+          case "deno":
+            await smokeDeno(workspaceDir);
+            break;
+          case "edge":
+            await smokeEdge(workspaceDir);
+            break;
+        }
         logger.info(`${runtime} completed successfully`);
       } finally {
         await rm(workspaceDir, { recursive: true, force: true });
