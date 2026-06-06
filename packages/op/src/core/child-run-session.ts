@@ -1,5 +1,12 @@
 import { abortReason } from "@prodkit/shared/runtime";
+import { TimeoutError, UnhandledException } from "../errors.js";
+import { Result } from "../result.js";
+import { raceInFlightAfterInterrupt } from "./settlement.js";
 import { createRunContext, type RunContext } from "./runtime.js";
+
+type ChildPlanRun<T, E> = (
+  context: RunContext<readonly unknown[]>,
+) => Promise<Result<T, E | UnhandledException>>;
 
 type Detachable = { detach(): void };
 
@@ -150,9 +157,64 @@ function boundCancel(
   };
 }
 
+function raceBoundCancel<T, E>(
+  run: ChildPlanRun<T, E>,
+  boundSignal: AbortSignal,
+  outerContext: RunContext<readonly unknown[]>,
+): Promise<Result<T, E | UnhandledException>> {
+  const session = boundCancel(boundSignal, outerContext);
+  const runPromise = run(session.context());
+  const firstSettlement = Promise.race([
+    runPromise.then(() => "run" as const),
+    session.boundAbort.then(() => "boundAbort" as const),
+  ]);
+
+  return firstSettlement
+    .then((winner) => {
+      if (winner === "run") return runPromise;
+
+      return raceInFlightAfterInterrupt(runPromise, boundSignal.reason).catch((reason) =>
+        Result.err(new UnhandledException({ cause: reason })),
+      );
+    })
+    .finally(session.detach);
+}
+
+async function raceTimeout<T, E>(
+  run: (context: RunContext<readonly unknown[]>) => PromiseLike<Result<T, E>>,
+  timeoutMs: number,
+  outerContext: RunContext<readonly unknown[]>,
+): Promise<Result<T, E | TimeoutError>> {
+  const session = isolated(outerContext);
+  const runPromise = run(session.context());
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  let timeoutError: TimeoutError | undefined;
+  const timeout = new Promise<Result<T, E | TimeoutError>>((resolve) => {
+    timeoutId = setTimeout(() => {
+      timeoutError = new TimeoutError({ timeoutMs });
+      session.abort(timeoutError);
+      resolve(Result.err(timeoutError));
+    }, timeoutMs);
+  });
+
+  const firstResult = await Promise.race([runPromise, timeout]).finally(() => {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+    session.detach();
+  });
+
+  if (timeoutError === undefined) {
+    return firstResult;
+  }
+
+  await runPromise;
+  return Result.err(timeoutError);
+}
+
 /** Contributor-only child AbortSignal sessions derived from a parent run context. */
 export const ChildRunSession = {
   isolated,
   pool,
   boundCancel,
+  raceBoundCancel,
+  raceTimeout,
 } as const;

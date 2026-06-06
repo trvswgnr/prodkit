@@ -63,6 +63,24 @@ export function settlementForSuspendedWork(
   return { settlement, suspended };
 }
 
+function scheduleInterruptFallback(abortReason: unknown): Promise<never> {
+  return new Promise((_, reject) => {
+    setTimeout(() => reject(abortReason), 0);
+  });
+}
+
+/** Race in-flight work against a macrotimer fallback after the cooperative interrupt window. */
+export function raceInFlightAfterInterrupt<T>(
+  inFlight: PromiseLike<T>,
+  abortReason: unknown,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    queueMicrotask(() => {
+      void Promise.race([inFlight, scheduleInterruptFallback(abortReason)]).then(resolve, reject);
+    });
+  });
+}
+
 export function awaitWithAbort<T>(
   suspended: PromiseLike<T>,
   signal: AbortSignal,
@@ -96,13 +114,10 @@ export function awaitWithAbort<T>(
         return;
       }
 
-      queueMicrotask(() => {
-        if (settled) return;
-        const abortFallback = new Promise<never>((_, rejectAbort) => {
-          setTimeout(() => rejectAbort(settlement.getAbortReason()), 0);
-        });
-        void Promise.race([suspended, abortFallback]).then(settleResolve, settleReject);
-      });
+      void raceInFlightAfterInterrupt(suspended, settlement.getAbortReason()).then(
+        settleResolve,
+        settleReject,
+      );
     };
 
     signal.addEventListener("abort", onAbort, { once: true });
