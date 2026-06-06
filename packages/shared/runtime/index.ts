@@ -1,21 +1,8 @@
-/**
- * Runtime-agnostic primitives for publishable workspace packages (no DOM `lib`).
- * Import via `@prodkit/shared/runtime`; bundled into `@prodkit/op` at build time.
- */
-
-/**
- * Structural abort signal. Compatible with `AbortSignal` from `@prodkit/shared` platform
- * globals and userland stand-ins.
- */
+/** Structural abort signal compatible with platform globals and userland stand-ins. */
 export interface AbortSignalLike {
   readonly aborted: boolean;
   readonly reason: unknown;
-  addEventListener(
-    type: "abort",
-    /** Installations invoke this with zero args when the signal fires. */
-    listener: () => void,
-    options?: { once?: boolean },
-  ): void;
+  addEventListener(type: "abort", listener: () => void, options?: { once?: boolean }): void;
   removeEventListener(type: "abort", listener: () => void): void;
 }
 
