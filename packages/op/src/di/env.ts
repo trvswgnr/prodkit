@@ -1,5 +1,5 @@
-import { createRunContext, type RunContext } from "../core/runtime.js";
-import { Settlement } from "../core/settlement-scope.js";
+import { createRunContext, type RunContext } from "../execution/runtime.js";
+import { Settlement } from "../execution/settlement-scope.js";
 import { hasBrand, isPromiseLike } from "@prodkit/shared/runtime";
 import {
   DI_LAZY_BINDING,

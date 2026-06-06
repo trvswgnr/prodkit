@@ -54,4 +54,4 @@ subpath does not re-export these symbols.
 Runnable walkthrough:
 [`examples/op/custom-policy.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/custom-policy.ts).
 Type-level coverage lives in
-[`policy-hkt.test.ts`](https://github.com/trvswgnr/prodkit/blob/main/packages/op/tests/unit/policy-hkt.test.ts).
+[`policy/hkt.test.ts`](https://github.com/trvswgnr/prodkit/blob/main/packages/op/tests/unit/policy/hkt.test.ts).

@@ -1,38 +1,57 @@
-# Core runtime architecture (`@prodkit/op`)
+# Op runtime architecture (`@prodkit/op`)
 
 Execution-level map of how a single `Op` run moves through the codebase. Correctness invariants
 (cleanup ordering, combinator semantics, settlement rules) live in
 [`op-invariants.md`](op-invariants.md). ADRs under [`docs/adr/`](../adr/) explain
-why the core/fluent split and policy hooks are shaped the way they are. Domain vocabulary and
-documentation roles: [`docs/CONTEXT.md`](../CONTEXT.md).
+why the nullary driver, plan AST, and policy hooks are shaped the way they are. Domain vocabulary
+and documentation roles: [`docs/CONTEXT.md`](../CONTEXT.md).
 
 ## Module dependency graph
 
-At a high level, public entrypoints fan into builders and combinators, both of which compose
-nullary core ops and always settle through the same driver:
+The internal layout names three distinct responsibilities:
+
+- `core/`: callable `Op` surface, construction, lifecycle types, identity, and metadata
+- `plan/`: execution AST model, Op bridge, execution scheduling, rewrite chain, and plan nodes
+- `execution/`: generator driver, instructions, cleanup, settlement, child sessions, and fan-out
+
+Public entrypoints fan into core builders and combinators. Those construct plan nodes, and all plan
+execution settles through the same execution driver:
 
 ```text
 packages/op/src/index.ts          (Op factory, Op.run, re-exports)
-  |-- builders.ts                 (Op.of, Op.try, fromGenFn, Op.defer, ...)
-  |-- combinators.ts              (Op.all, Op.any, Op.race, Op.allSettled, Op.settle, ...)
+  |-- core/
+  |   |-- builders.ts             (Op.of, Op.try, fromGenFn, Op.defer, ...)
+  |   |-- combinators.ts          (Op.all, Op.any, Op.race, Op.allSettled, Op.settle, ...)
+  |   |-- shell.ts                (callable Op object and fluent methods)
+  |   |-- surface.ts              (Op interfaces and inference helpers)
+  |   |-- generator.ts            (makeCoreOp: nullary generator leaf adapter)
+  |   |-- identity.ts             (brands, isOp, nullary coercion)
+  |   |-- lifecycle.ts            (enter, exit, and release callback contracts)
+  |   '-- metadata.ts             (EmptyMeta, Blocking, MergeMeta, IsRunnable)
+  |-- plan/
+  |   |-- model.ts                (Plan interface, construction, unary rewrite mechanics)
+  |   |-- bridge.ts               (Op-to-Plan binding and lookup)
+  |   |-- execute.ts              (stack-safe Plan execution scheduling)
+  |   |-- factory-chain.ts        (stack-safe fluent transform materialization)
+  |   |-- transforms.ts           (map, flatMap, tap, mapErr, tapErr, recover)
+  |   |-- lifecycle.ts            (enter and exit plan nodes)
+  |   '-- combinators.ts          (all, any, race, allSettled, settle plan nodes)
+  |-- execution/
+  |   |-- runtime.ts              (createRunContext, drive, runOp, RunContext, ExitContext)
+  |   |-- instructions.ts         (Suspend, exit finalizer, CustomInstruction protocol)
+  |   |-- cleanup.ts              (generator close and registered finalizers)
+  |   |-- settlement.ts           (low-level abort settlement primitives)
+  |   |-- settlement-scope.ts     (nested plan and suspend settlement presets)
+  |   |-- child-run-session.ts    (parent-to-child AbortSignal sessions)
+  |   '-- fan-out.ts              (bounded and unbounded combinator child scheduling)
   |-- policy/                     (Policy.* constructors, retry-policy, plan rewriters)
+  |-- di/                         (DI.provide, DI.inject, run-context environment)
   |-- hkt.ts                      (@prodkit/op/hkt entry)
-  |-- core/runtime.ts             (createRunContext, drive, runOp, RunContext, ExitContext)
-  |-- core/settlement.ts          (AbortSettlement, withAbortDrain, awaitWithAbort, settlementForSuspendedWork)
-  |-- core/settlement-scope.ts    (Settlement presets/scopes for nested plan and suspend choreography)
-  |-- core/child-run-session.ts   (ChildRunSession factories for parent-to-child AbortSignal cascade)
-  |-- core/cleanup.ts             (ADR-0003 cleanup helpers: closeGenerator, runFinalizersSafely, chainCleanupFaults)
-  |-- core/meta.ts                (EmptyMeta, Blocking, MergeMeta, IsRunnable)
-  |-- core/fluent.ts              (makeCoreOp: nullary generator leaf factory)
-  |-- core/plan/                  (Plan AST, fluent shell, lifecycle, transforms)
-  |-- core/instructions.ts        (Suspend, RegisterExitFinalizer, CustomInstruction protocol)
+  '-- errors.ts, result.ts, tagged.ts (shared contracts)
+```
 
-packages/op/src/di/                 (DI.provide, DI.inject via CustomInstruction + extensions)
-  '-- di/plan.ts imports di/env.ts, di/types.ts, core/plan, core/settlement-scope, core/instructions
-  '-- di/env.ts imports di/types.ts, core/runtime, core/settlement-scope, @prodkit/shared/runtime
-  '-- di/types.ts imports core/meta.ts, index.ts (type-only Op)
-
-Verified import contracts (checked by `pnpm --filter @prodkit/tools run architecture:check`):
+Verified import contracts are checked by
+`pnpm --filter @prodkit/tools run architecture:check`.
 
 **Closed modules** document every `packages/op/src` import from that file. Use for extension seams and
 small plan modules where surprise imports are regressions.
@@ -40,64 +59,76 @@ small plan modules where surprise imports are regressions.
 <!-- architecture-check-closed: packages/op/src/di/types.ts -->
 <!-- architecture-check-closed: packages/op/src/di/env.ts -->
 <!-- architecture-check-closed: packages/op/src/di/plan.ts -->
-<!-- architecture-check-closed: packages/op/src/core/plan/factory-chain.ts -->
-<!-- architecture-check-closed: packages/op/src/core/settlement-scope.ts -->
-<!-- architecture-check-closed: packages/op/src/core/child-run-session.ts -->
+<!-- architecture-check-closed: packages/op/src/plan/bridge.ts -->
+<!-- architecture-check-closed: packages/op/src/plan/execute.ts -->
+<!-- architecture-check-closed: packages/op/src/plan/factory-chain.ts -->
+<!-- architecture-check-closed: packages/op/src/execution/settlement-scope.ts -->
+<!-- architecture-check-closed: packages/op/src/execution/child-run-session.ts -->
 
 **Partial edges** document specific architectural links. Each line must match source; hub modules
 (for example `shell.ts`) may import more than the list shows.
 
-- `packages/op/src/core/plan/shell.ts` imports `packages/op/src/core/plan/factory-chain.ts`
-- `packages/op/src/di/types.ts` imports `packages/op/src/core/meta.ts`
+- `packages/op/src/core/shell.ts` imports `packages/op/src/plan/factory-chain.ts`
+- `packages/op/src/di/types.ts` imports `packages/op/src/core/metadata.ts`
 - `packages/op/src/di/types.ts` imports `packages/op/src/index.ts`
 - `packages/op/src/di/types.ts` imports `packages/op/src/di/index.ts`
 - `packages/op/src/di/env.ts` imports `packages/op/src/di/types.ts`
-- `packages/op/src/di/env.ts` imports `packages/op/src/core/runtime.ts`
+- `packages/op/src/di/env.ts` imports `packages/op/src/execution/runtime.ts`
 - `packages/op/src/di/env.ts` imports `@prodkit/shared/runtime`
 - `packages/op/src/di/plan.ts` imports `packages/op/src/di/types.ts`
 - `packages/op/src/di/plan.ts` imports `packages/op/src/di/env.ts`
-- `packages/op/src/di/plan.ts` imports `packages/op/src/core/plan/base.ts`
-- `packages/op/src/di/plan.ts` imports `packages/op/src/core/plan/surface.ts`
-- `packages/op/src/di/plan.ts` imports `packages/op/src/core/plan/shell.ts`
-- `packages/op/src/di/plan.ts` imports `packages/op/src/core/instructions.ts`
-- `packages/op/src/di/plan.ts` imports `packages/op/src/core/runtime.ts`
-- `packages/op/src/di/plan.ts` imports `packages/op/src/core/meta.ts`
+- `packages/op/src/di/plan.ts` imports `packages/op/src/plan/bridge.ts`
+- `packages/op/src/di/plan.ts` imports `packages/op/src/plan/model.ts`
+- `packages/op/src/di/plan.ts` imports `packages/op/src/core/surface.ts`
+- `packages/op/src/di/plan.ts` imports `packages/op/src/core/shell.ts`
+- `packages/op/src/di/plan.ts` imports `packages/op/src/execution/instructions.ts`
+- `packages/op/src/di/plan.ts` imports `packages/op/src/execution/runtime.ts`
+- `packages/op/src/di/plan.ts` imports `packages/op/src/core/metadata.ts`
 - `packages/op/src/di/plan.ts` imports `packages/op/src/errors.ts`
 - `packages/op/src/di/plan.ts` imports `packages/op/src/result.ts`
 - `packages/op/src/di/plan.ts` imports `packages/op/src/index.ts`
 - `packages/op/src/di/plan.ts` imports `@prodkit/shared/runtime`
-- `packages/op/src/core/plan/factory-chain.ts` imports `packages/op/src/core/plan/base.ts`
-- `packages/op/src/core/settlement-scope.ts` imports `packages/op/src/core/instructions.ts`
-- `packages/op/src/core/settlement-scope.ts` imports `packages/op/src/core/plan/base.ts`
-- `packages/op/src/core/settlement-scope.ts` imports `packages/op/src/core/runtime.ts`
-- `packages/op/src/core/settlement-scope.ts` imports `packages/op/src/core/settlement.ts`
-- `packages/op/src/core/settlement-scope.ts` imports `packages/op/src/errors.ts`
-- `packages/op/src/core/settlement-scope.ts` imports `packages/op/src/result.ts`
-- `packages/op/src/core/settlement-scope.ts` imports `@prodkit/shared/runtime`
-- `packages/op/src/core/child-run-session.ts` imports `packages/op/src/core/runtime.ts`
-- `packages/op/src/core/child-run-session.ts` imports `packages/op/src/core/settlement.ts`
-- `packages/op/src/core/child-run-session.ts` imports `packages/op/src/errors.ts`
-- `packages/op/src/core/child-run-session.ts` imports `packages/op/src/result.ts`
-- `packages/op/src/core/child-run-session.ts` imports `@prodkit/shared/runtime`
-- `packages/op/src/core/plan/combinators.ts` imports `packages/op/src/core/settlement-scope.ts`
-- `packages/op/src/core/plan/fan-out.ts` imports `packages/op/src/core/child-run-session.ts`
-- `packages/op/src/core/plan/fan-out.ts` imports `packages/op/src/core/settlement-scope.ts`
-- `packages/op/src/di/env.ts` imports `packages/op/src/core/settlement-scope.ts`
-- `packages/op/src/di/plan.ts` imports `packages/op/src/core/settlement-scope.ts`
-- `packages/op/src/policy/plan.ts` imports `packages/op/src/core/child-run-session.ts`
-- `packages/op/src/policy/plan.ts` imports `packages/op/src/core/settlement-scope.ts`
-
-packages/std/src/                   (reserved runtime-agnostic utility subpaths)
-```
+- `packages/op/src/plan/bridge.ts` imports `packages/op/src/index.ts`
+- `packages/op/src/plan/bridge.ts` imports `packages/op/src/core/identity.ts`
+- `packages/op/src/plan/bridge.ts` imports `packages/op/src/core/surface.ts`
+- `packages/op/src/plan/bridge.ts` imports `packages/op/src/plan/model.ts`
+- `packages/op/src/plan/bridge.ts` imports `@prodkit/shared/runtime`
+- `packages/op/src/plan/execute.ts` imports `packages/op/src/errors.ts`
+- `packages/op/src/plan/execute.ts` imports `packages/op/src/result.ts`
+- `packages/op/src/plan/execute.ts` imports `packages/op/src/execution/runtime.ts`
+- `packages/op/src/plan/execute.ts` imports `packages/op/src/execution/settlement.ts`
+- `packages/op/src/plan/execute.ts` imports `packages/op/src/plan/model.ts`
+- `packages/op/src/plan/execute.ts` imports `@prodkit/shared/runtime`
+- `packages/op/src/plan/factory-chain.ts` imports `packages/op/src/plan/model.ts`
+- `packages/op/src/execution/settlement-scope.ts` imports `packages/op/src/execution/instructions.ts`
+- `packages/op/src/execution/settlement-scope.ts` imports `packages/op/src/plan/model.ts`
+- `packages/op/src/execution/settlement-scope.ts` imports `packages/op/src/plan/execute.ts`
+- `packages/op/src/execution/settlement-scope.ts` imports `packages/op/src/execution/runtime.ts`
+- `packages/op/src/execution/settlement-scope.ts` imports `packages/op/src/execution/settlement.ts`
+- `packages/op/src/execution/settlement-scope.ts` imports `packages/op/src/errors.ts`
+- `packages/op/src/execution/settlement-scope.ts` imports `packages/op/src/result.ts`
+- `packages/op/src/execution/settlement-scope.ts` imports `@prodkit/shared/runtime`
+- `packages/op/src/execution/child-run-session.ts` imports `packages/op/src/execution/runtime.ts`
+- `packages/op/src/execution/child-run-session.ts` imports `packages/op/src/execution/settlement.ts`
+- `packages/op/src/execution/child-run-session.ts` imports `packages/op/src/errors.ts`
+- `packages/op/src/execution/child-run-session.ts` imports `packages/op/src/result.ts`
+- `packages/op/src/execution/child-run-session.ts` imports `@prodkit/shared/runtime`
+- `packages/op/src/plan/combinators.ts` imports `packages/op/src/execution/settlement-scope.ts`
+- `packages/op/src/execution/fan-out.ts` imports `packages/op/src/execution/child-run-session.ts`
+- `packages/op/src/execution/fan-out.ts` imports `packages/op/src/execution/settlement-scope.ts`
+- `packages/op/src/di/env.ts` imports `packages/op/src/execution/settlement-scope.ts`
+- `packages/op/src/di/plan.ts` imports `packages/op/src/execution/settlement-scope.ts`
+- `packages/op/src/policy/plan.ts` imports `packages/op/src/execution/child-run-session.ts`
+- `packages/op/src/policy/plan.ts` imports `packages/op/src/execution/settlement-scope.ts`
 
 ## From `Op.run()` to `drive()`
 
 1. **Call site.** `await op.run(...args)` or `await Op.run(op, ...args)` both end in
-   `runOp` (`packages/op/src/core/runtime.ts`), which calls
+   `runOp` (`packages/op/src/execution/runtime.ts`), which calls
    `drive(op, createRunContext(signal, args))`. Tuple args flow into `RunContext.args` for
    enter/exit hooks; they are not an options bag
    ([ADR 0006](../adr/0006-run-args-only-fluent-policy-composition.md)).
-2. **Arity binding.** For generator-defined ops, `fromGenFn` in `builders.ts` wraps the user
+2. **Arity binding.** For generator-defined ops, `fromGenFn` in `core/builders.ts` wraps the user
    generator in `makeCoreOp` once per `op(...args)` call, binds defer args via
    `bindArityArgsToFinalizers`, and exposes the callable through `makeUnboundPlanOp`
    ([ADR 0001](../adr/0001-core-nullary-vs-lifted-arity.md)).
@@ -116,13 +147,13 @@ Built-in policies (retry, timeout, cancel) attach on the op value **before** `.r
 
 ## Abort settlement
 
-Low-level primitives live in `packages/op/src/core/settlement.ts`, including
+Low-level primitives live in `packages/op/src/execution/settlement.ts`, including
 `raceInFlightAfterInterrupt` for the cooperative-interrupt then macrotimer-fallback window.
 Parent-to-child signal cascade and Policy race orchestration use `ChildRunSession` in
-`packages/op/src/core/child-run-session.ts` (`isolated`, `pool`, `boundCancel`, `raceTimeout`,
+`packages/op/src/execution/child-run-session.ts` (`isolated`, `pool`, `boundCancel`, `raceTimeout`,
 `raceBoundCancel`). Combinator fan-out drives children through `driveFanOutPlans` in
-`packages/op/src/core/plan/fan-out.ts`. Nested plan and suspend choreography uses `Settlement` presets in
-`packages/op/src/core/settlement-scope.ts` so call sites declare one intent instead of pairing
+`packages/op/src/execution/fan-out.ts`. Nested plan and suspend choreography uses `Settlement` presets in
+`packages/op/src/execution/settlement-scope.ts` so call sites declare one intent instead of pairing
 `executePlan` settlement args with `withAbortDrain`.
 
 | Preset | Typical use | Notes |
@@ -139,7 +170,7 @@ suspend callback returns drain-marked work. Combinators still wait for loser fin
 ## Instruction lifecycle
 
 Each `yield` from an op generator produces an `Instruction` discriminant. `drive` in
-`packages/op/src/core/runtime.ts` dispatches on the yielded value:
+`packages/op/src/execution/runtime.ts` dispatches on the yielded value:
 
 | Yielded value | Driver action |
 | --- | --- |
@@ -155,7 +186,7 @@ Suspends are how policies and combinators nest work: they call `executePlan` (wi
 
 ## Policy wrappers (retry, timeout, cancel)
 
-Built-in policies attach through `.with(Policy.*)` on the op value (`packages/op/src/core/plan/shell.ts`,
+Built-in policies attach through `.with(Policy.*)` on the op value (`packages/op/src/core/shell.ts`,
 `packages/op/src/policy/index.ts`) and compose as plan wrappers:
 
 - **Retry** (`retryPlan`): loops inner execution inside a `SuspendInstruction`, applies
@@ -175,20 +206,20 @@ the chain). See policy ordering notes in `op-invariants.md`.
 ## Adding a fluent plan transform
 
 Public fluent methods (`.map`, `.flatMap`, `.on("enter")`, `.with(Policy.*)`, and so on) are
-plan AST nodes built in `packages/op/src/core/plan/` and rewritten when a policy attaches. When
+plan AST nodes built in `packages/op/src/plan/` and rewritten when a policy attaches. When
 you add or rename a transform, keep these touch points in sync:
 
-1. **Plan constructor** in `packages/op/src/core/plan/transforms.ts` for value/error transforms
+1. **Plan constructor** in `packages/op/src/plan/transforms.ts` for value/error transforms
    (`map`, `flatMap`, `tap`, `mapErr`, `tapErr`, `recover`) or
-   `packages/op/src/core/plan/lifecycle.ts` for lifecycle hooks (`.on("enter")`, `.on("exit")`).
+   `packages/op/src/plan/lifecycle.ts` for lifecycle hooks (`.on("enter")`, `.on("exit")`).
    For policy push-through, pass a `rewrite` override that rebuilds after `source.rewrite(rewriter)`
    (use `rewriteUnaryPlan` for single-child wrappers; combinator nodes map each child plan).
-2. **Fluent surface** in `packages/op/src/core/plan/shell.ts` (bind-time transform ordering in
-   `packages/op/src/core/plan/factory-chain.ts`):
+2. **Fluent surface** in `packages/op/src/core/shell.ts` (bind-time transform ordering in
+   `packages/op/src/plan/factory-chain.ts`):
    - add the method on `fluentMethodsForContext`
    - add the method name to `createSyncValueFluentPrototype`'s `methodNames` list when sync-value
      ops should expose the same API
-3. **Tests**: extend `packages/op/tests/unit/fluent.test.ts` for fluent behavior; add or extend
+3. **Tests**: extend `packages/op/tests/unit/core/fluent.test.ts` for fluent behavior; add or extend
    policy rewrite coverage when `.with(Policy.*)` must preserve the transform.
 
 Built-in policies only extend `PlanRewriter.apply` (`policy/plan.ts`). Wrapper nodes own structural
@@ -198,7 +229,7 @@ rewrite; no per-transform methods on the rewriter protocol.
 `rewriter.apply`; `flatMap` composes a second plan inside the first at run time. Policy retry
 therefore re-executes the whole composition including the bind callback (see the
 `flatMap + Policy.retry retries the whole composition including bind` test in
-`packages/op/tests/unit/fluent.test.ts`). Rewriting only the `source` child would change that
+`packages/op/tests/unit/core/fluent.test.ts`). Rewriting only the `source` child would change that
 contract.
 
 Extension-owned plan nodes (for example `providePlan` in `@prodkit/op/di`) use the same pattern:
@@ -211,9 +242,9 @@ Extension-owned plan nodes (for example `providePlan` in `@prodkit/op/di`) use t
 1. **`DI.inject(dependency)`** yields an `InjectInstruction`, a `CustomInstruction` whose
    `resolve(context)` reads bindings from `context.extensions`.
 2. **`DI.provide(op, bindings)`** (`providePlan` / `provideOp` in `packages/op/src/di/plan.ts`; env in `packages/op/src/di/env.ts`)
-   is a plan-backed op (`makeUnboundPlanOp`) whose `providePlan` node returns
-   `withAbortDrain(executePlan(..., interruptOnAbortSettlement))` and extends `context.extensions`
-   with the binding `Map` under an internal extension key.
+   is a plan-backed op (`makeUnboundPlanOp`) whose `providePlan` node executes through
+   `Settlement.suspendPlan(SettlementPresets.interruptingAndDraining, ...)` and extends
+   `context.extensions` with the binding `Map` under an internal extension key.
    Policy attach rewrites the inner source via `providePlan(source.rewrite(rewriter), bindings)`.
 3. **Metadata.** Provided dependencies block bare `.run()` until satisfied via `ProvidedMeta`
    / `withBlocking` on the op type surface.
@@ -228,7 +259,7 @@ state visible inside `SuspendInstruction` and `CustomInstruction.resolve` callba
 ## Runnable metadata (`Blocking`, `withBlocking`)
 
 Top-level `.run()` / `Op.run(...)` are typed only when operation metadata has no unsatisfied
-`Blocking<T>` entries (`IsRunnable<M>` in `packages/op/src/core/meta.ts`).
+`Blocking<T>` entries (`IsRunnable<M>` in `packages/op/src/core/metadata.ts`).
 
 - **`Blocking<T>`** is branded metadata; merge at a key unions payloads with other `Blocking`
   values at that key.
@@ -259,7 +290,7 @@ errors only.
 
 ## Combinators and nested plan execution
 
-`packages/op/src/core/plan/combinators.ts` and `packages/op/src/core/plan/fan-out.ts` run combinator
+`packages/op/src/plan/combinators.ts` and `packages/op/src/execution/fan-out.ts` run combinator
 child plans through `Plan.execute` / `executePlan` (often with per-child `AbortController` signals)
 and enforce ordering contracts documented in `op-invariants.md`. `Op.settle` is a unary
 `settlePlan` wrapper with `AbortSettlement.passThrough`. `Op.all`, `Op.any`, and `Op.race` wait for
@@ -298,4 +329,4 @@ flowchart TD
 ```
 
 For a traced example, start from [`examples/op/`](../../examples/op/) (especially defer, signal, and
-combinator samples) and follow imports into `core/runtime.ts`.
+combinator samples) and follow imports into `execution/runtime.ts`.

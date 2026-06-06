@@ -31,14 +31,14 @@ void test("partial edge requires documented import only", () => {
   const root = mkdtempSync(path.join(tmpdir(), "arch-check-"));
   writeModule(
     root,
-    "packages/op/src/core/plan/hub.ts",
+    "packages/op/src/plan/hub.ts",
     `import { x } from "./leaf.js";\nimport { y } from "../../extra.js";\nexport const hub = x + y;\n`,
   );
-  writeModule(root, "packages/op/src/core/plan/leaf.ts", `export const x = 1;\n`);
+  writeModule(root, "packages/op/src/plan/leaf.ts", `export const x = 1;\n`);
   writeModule(root, "packages/op/src/extra.ts", `export const y = 2;\n`);
 
   const edges = collectDocumentedEdges(
-    "- `packages/op/src/core/plan/hub.ts` imports `packages/op/src/core/plan/leaf.ts`\n",
+    "- `packages/op/src/plan/hub.ts` imports `packages/op/src/plan/leaf.ts`\n",
   );
 
   assert.doesNotThrow(() => assertEdgesMatchSources(root, edges, new Set()));

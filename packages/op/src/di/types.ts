@@ -1,6 +1,11 @@
 import type { Op } from "../index.js";
 import type { Dependency } from "./index.js";
-import { type Blocking, type NormalizeMeta, type Simplify, type StripEmpty } from "../core/meta.js";
+import {
+  type Blocking,
+  type NormalizeMeta,
+  type Simplify,
+  type StripEmpty,
+} from "../core/metadata.js";
 
 /** Binding failure when an injected dependency was not provided for the run. */
 export class MissingDependencyError extends Error {

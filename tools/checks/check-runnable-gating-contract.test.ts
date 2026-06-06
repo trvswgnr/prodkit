@@ -18,7 +18,7 @@ void test("contract markers are found when concatenated across a temp tree", () 
   mkdirSync(path.join(root, "packages/op/tests/nested"), { recursive: true });
   writeFileSync(
     path.join(root, "packages/op/vitest.config.ts"),
-    `exclude: ["src/core/meta.ts", "src/core/plan/surface.ts"]`,
+    `exclude: ["src/core/metadata.ts", "src/core/surface.ts"]`,
     "utf8",
   );
   writeFileSync(

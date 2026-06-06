@@ -11,8 +11,8 @@ export default mergeConfig(
         exclude: [
           "tests/**",
           "@prodkit/shared/platform-globals",
-          "src/core/meta.ts",
-          "src/core/plan/surface.ts",
+          "src/core/metadata.ts",
+          "src/core/surface.ts",
           "src/result.ts",
         ],
       },

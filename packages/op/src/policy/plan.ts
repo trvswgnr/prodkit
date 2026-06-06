@@ -1,13 +1,13 @@
 import { TimeoutError, UnhandledException } from "../errors.js";
 import { Result } from "../result.js";
 import { sleepWithSignal } from "@prodkit/shared/runtime";
-import { SuspendInstruction, RegisterExitFinalizerInstruction } from "../core/instructions.js";
-import { ChildRunSession } from "../core/child-run-session.js";
-import { Settlement, SettlementPresets } from "../core/settlement-scope.js";
+import { SuspendInstruction, RegisterExitFinalizerInstruction } from "../execution/instructions.js";
+import { ChildRunSession } from "../execution/child-run-session.js";
+import { Settlement, SettlementPresets } from "../execution/settlement-scope.js";
 import { normalizeRetryPolicy, type NormalizedRetryPolicy } from "./retry-policy.js";
 import { validateTimeoutMs } from "./validate.js";
-import type { ReleaseFn } from "../core/plan/context.js";
-import { createPlan, createUnaryPlan, type Plan, type PlanRewriter } from "../core/plan/base.js";
+import type { ReleaseFn } from "../core/lifecycle.js";
+import { createPlan, createUnaryPlan, type Plan, type PlanRewriter } from "../plan/model.js";
 
 export function releasePlan<T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T>): Plan<T, E, M> {
   return createUnaryPlan(

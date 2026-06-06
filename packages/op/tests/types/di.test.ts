@@ -1,7 +1,7 @@
 import { describe, expectTypeOf, test } from "vitest";
 import { Op } from "../../src/index.js";
 import { type Blocking, type EmptyMeta, type InferOpMeta } from "../../src/internal/index.js";
-import { type IsRunnable } from "../../src/core/meta.js";
+import { type IsRunnable } from "../../src/core/metadata.js";
 import { DI, type Dependency } from "../../src/di/index.js";
 import type {
   Deps,
