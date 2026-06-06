@@ -41,7 +41,7 @@ reports go through
 
 ## Is it production ready?
 
-Judge from what ships in the repo and CI, not from adjectives.
+`@prodkit/op` is in beta. Strictly follows SemVer from v0.2.0 onward. What runs on every merge:
 
 - **Property-based law tests** exercise combinator and monad contracts with fast-check (`tests/property/`).
 - **Cross-runtime smoke** runs consumer installs on Bun, Deno, edge (Miniflare), and current
@@ -54,9 +54,6 @@ Judge from what ships in the repo and CI, not from adjectives.
 - **Consumer pack smoke** installs `@prodkit/op` from an `npm pack` tarball in an isolated workspace
   before publish.
 - **Hardened publish pipeline:** package-scoped tags trigger trusted publishing with npm provenance.
-
-Beta from `0.2.0` follows strict SemVer (see the README beta note). Pre-0.2.0 `0.1.x` history does
-not define post-beta compatibility.
 
 `@prodkit/op` is ESM-only, runtime-agnostic at the public API, and ships with no runtime npm
 dependencies beyond the `better-result` peer you install explicitly.
