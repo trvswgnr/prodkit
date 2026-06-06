@@ -2,8 +2,8 @@ import { TimeoutError, UnhandledException } from "../errors.js";
 import { Result } from "../result.js";
 import { sleepWithSignal } from "@prodkit/shared/runtime";
 import { SuspendInstruction, RegisterExitFinalizerInstruction } from "../core/instructions.js";
+import { ChildRunSession } from "../core/child-run-session.js";
 import { Settlement, SettlementPresets } from "../core/settlement-scope.js";
-import { createRunContext } from "../core/runtime.js";
 import { normalizeRetryPolicy, type NormalizedRetryPolicy } from "./retry-policy.js";
 import { validateTimeoutMs } from "./validate.js";
 import type { ReleaseFn } from "../core/plan/context.js";
@@ -155,48 +155,13 @@ function nonCooperativeCancelFallback<T, E>(
   });
 }
 
-function createBoundCancelSession(boundSignal: AbortSignal, outerSignal: AbortSignal) {
-  const controller = new AbortController();
-
-  let boundAborted = false;
-  let notifyBoundAbort!: () => void;
-  const boundAbort = new Promise<void>((resolve) => {
-    notifyBoundAbort = resolve;
-  });
-
-  const onBoundAbort = () => {
-    if (boundAborted) return;
-    boundAborted = true;
-    controller.abort(boundSignal.reason);
-    notifyBoundAbort();
-  };
-
-  const onOuterAbort = () => controller.abort(outerSignal.reason);
-
-  if (boundSignal.aborted) onBoundAbort();
-  else boundSignal.addEventListener("abort", onBoundAbort, { once: true });
-
-  if (outerSignal.aborted) onOuterAbort();
-  else outerSignal.addEventListener("abort", onOuterAbort, { once: true });
-
-  return {
-    signal: controller.signal,
-    boundAbort,
-    detach: () => {
-      boundSignal.removeEventListener("abort", onBoundAbort);
-      outerSignal.removeEventListener("abort", onOuterAbort);
-    },
-  };
-}
-
 function raceBoundCancel<T, E, M>(
   source: Plan<T, E, M>,
   boundSignal: AbortSignal,
   outerContext: RunContext<readonly unknown[]>,
 ): Promise<Result<T, E | UnhandledException>> {
-  const session = createBoundCancelSession(boundSignal, outerContext.signal);
-  const runContext = createRunContext(session.signal, outerContext.args, outerContext.extensions);
-  const runPromise = source.execute(runContext);
+  const session = ChildRunSession.boundCancel(boundSignal, outerContext);
+  const runPromise = source.execute(session.context());
   const firstSettlement = Promise.race([
     runPromise.then(() => "run" as const),
     session.boundAbort.then(() => "boundAbort" as const),
@@ -223,31 +188,21 @@ async function raceTimeout<T, E>(
   timeoutMs: number,
   outerContext: RunContext<readonly unknown[]>,
 ): Promise<Result<T, E | TimeoutError>> {
-  const controller = new AbortController();
-  const runContext = createRunContext(
-    controller.signal,
-    outerContext.args,
-    outerContext.extensions,
-  );
-  const cascade = () => controller.abort(outerContext.signal.reason);
-
-  if (outerContext.signal.aborted) cascade();
-  else outerContext.signal.addEventListener("abort", cascade, { once: true });
-
-  const runPromise = run(runContext);
+  const session = ChildRunSession.isolated(outerContext);
+  const runPromise = run(session.context());
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   let timeoutError: TimeoutError | undefined;
   const timeout = new Promise<Result<T, E | TimeoutError>>((resolve) => {
     timeoutId = setTimeout(() => {
       timeoutError = new TimeoutError({ timeoutMs });
-      controller.abort(timeoutError);
+      session.abort(timeoutError);
       resolve(Result.err(timeoutError));
     }, timeoutMs);
   });
 
   const firstResult = await Promise.race([runPromise, timeout]).finally(() => {
     if (timeoutId !== undefined) clearTimeout(timeoutId);
-    outerContext.signal.removeEventListener("abort", cascade);
+    session.detach();
   });
 
   if (timeoutError === undefined) {
