@@ -1,10 +1,10 @@
-import { execFileSync, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import { cp, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Miniflare } from "miniflare";
-import { createLogger } from "../lib/logger.ts";
+import { createLogger, readRepoRoot } from "../lib/utils.ts";
 
 type Runtime = "bun" | "deno" | "edge" | "node";
 
@@ -13,16 +13,6 @@ const RUNTIME_SMOKE_STATE_DIR = path.join(REPO_ROOT, "var", "runtime-smoke");
 const PNPM_RUNTIME_STORE_DIR = path.join(RUNTIME_SMOKE_STATE_DIR, "store");
 const PACK_OUTPUT_PREVIEW = 4000;
 const logger = createLogger(import.meta.url);
-
-function readRepoRoot(): string {
-  const output = execFileSync("git", ["rev-parse", "--path-format=absolute", "--show-toplevel"], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"],
-  }).trim();
-  if (!output) throw new Error("Expected to get the repo root from git, but got an empty output");
-  if (!existsSync(output)) throw new Error(`Repository root does not exist: ${output}`);
-  return output;
-}
 
 function commandEnv(): NodeJS.ProcessEnv {
   const nextEnv: NodeJS.ProcessEnv = { ...process.env };
@@ -185,16 +175,20 @@ async function createRuntimeWorkspace(tarballPath: string) {
   return workspaceDir;
 }
 
-async function smokeScriptedRuntime(
-  workspaceDir: string,
-  command: string,
-  args: readonly string[],
-): Promise<void> {
+async function writeSmokeScript(workspaceDir: string): Promise<void> {
   await writeFile(
     path.join(workspaceDir, "runtime-smoke.mjs"),
     `${smokeSource("@prodkit/op", "@prodkit/op/policy", "better-result")}\nawait runRuntimeSmoke();\n`,
     "utf8",
   );
+}
+
+async function smokeScriptedRuntime(
+  workspaceDir: string,
+  command: string,
+  args: readonly string[],
+): Promise<void> {
+  await writeSmokeScript(workspaceDir);
   await run(command, args, workspaceDir);
 }
 
@@ -207,11 +201,7 @@ async function smokeNode(workspaceDir: string) {
 }
 
 async function smokeDeno(workspaceDir: string) {
-  await writeFile(
-    path.join(workspaceDir, "runtime-smoke.mjs"),
-    `${smokeSource("@prodkit/op", "@prodkit/op/policy", "better-result")}\nawait runRuntimeSmoke();\n`,
-    "utf8",
-  );
+  await writeSmokeScript(workspaceDir);
   await writeFile(
     path.join(workspaceDir, "import-map.json"),
     `${JSON.stringify(

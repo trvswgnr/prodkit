@@ -166,10 +166,6 @@ function parsePnpmPackFilename(packOutput: string): string | undefined {
   return undefined;
 }
 
-function formatSmokeExecInvocation(command: string, args: readonly string[]): string {
-  return [command, ...args].map((word) => JSON.stringify(word)).join(" ");
-}
-
 function buildCommandEnv(): NodeJS.ProcessEnv {
   const nextEnv: NodeJS.ProcessEnv = { ...process.env };
   for (const key of Object.keys(nextEnv)) {
@@ -236,12 +232,6 @@ function runCommand(
   });
 }
 
-function toTextOutput(value: unknown): string | undefined {
-  if (typeof value === "string") return value;
-  if (Buffer.isBuffer(value)) return value.toString("utf8");
-  return undefined;
-}
-
 function normalizeExecCause(cause: unknown): {
   message: string;
   name?: string;
@@ -251,6 +241,12 @@ function normalizeExecCause(cause: unknown): {
   stdout?: string;
   stderr?: string;
 } {
+  const asText = (value: unknown): string | undefined => {
+    if (typeof value === "string") return value;
+    if (Buffer.isBuffer(value)) return value.toString("utf8");
+    return undefined;
+  };
+
   if (SmokeCommandExitError.is(cause)) {
     return {
       message: cause.message,
@@ -274,8 +270,8 @@ function normalizeExecCause(cause: unknown): {
       code: typeof code === "string" ? code : undefined,
       signal: typeof signal === "string" ? signal : undefined,
       status: typeof status === "number" ? status : undefined,
-      stdout: toTextOutput(stdout),
-      stderr: toTextOutput(stderr),
+      stdout: asText(stdout),
+      stderr: asText(stderr),
     };
   }
   return { message: String(cause) };
@@ -513,10 +509,18 @@ const installAndSmoke = Op(function* (
   yield* execOp("pnpm", ["--filter", EXAMPLES_PACKAGE_NAME, "run", "smoke"], smokeWorkspaceDir);
 });
 
-async function cleanupPackOutput(tarballPath: string) {
-  logger.info(`pack - cleaning up tarball: ${tarballPath}`);
-  await rm(tarballPath, { force: true });
-}
+const getEnvInt = (key: string, defaultValue?: number): number => {
+  if (defaultValue !== undefined) {
+    const schema = v.pipe(
+      v.optional(v.string()),
+      v.transform((value) => (value === undefined ? defaultValue : Number(value))),
+      v.integer(),
+    );
+    return v.parse(schema, process.env[key]);
+  }
+  const schema = v.pipe(v.string(), v.toNumber(), v.integer());
+  return v.parse(schema, process.env[key]);
+};
 
 const installFromPack = Op(function* () {
   const repoRoot = yield* fromRepoRoot(".");
@@ -554,7 +558,7 @@ const installFromPack = Op(function* () {
   const opTarballPath = path.isAbsolute(opFilename)
     ? opFilename
     : path.resolve(repoRoot, opFilename);
-  yield* Op.defer(() => cleanupPackOutput(opTarballPath));
+  yield* Op.defer(() => rm(opTarballPath, { force: true }));
 
   const opRelativeToRepoRoot = path.relative(path.resolve(repoRoot), opTarballPath);
   if (opRelativeToRepoRoot.startsWith("..") || path.isAbsolute(opRelativeToRepoRoot)) {
@@ -585,7 +589,7 @@ const installFromPack = Op(function* () {
   const stdTarballPath = path.isAbsolute(stdFilename)
     ? stdFilename
     : path.resolve(repoRoot, stdFilename);
-  yield* Op.defer(() => cleanupPackOutput(stdTarballPath));
+  yield* Op.defer(() => rm(stdTarballPath, { force: true }));
 
   const stdRelativeToRepoRoot = path.relative(path.resolve(repoRoot), stdTarballPath);
   if (stdRelativeToRepoRoot.startsWith("..") || path.isAbsolute(stdRelativeToRepoRoot)) {
@@ -659,17 +663,16 @@ async function main() {
   const signals: NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
 
   let shuttingDown = false;
-  const handlers = new Map<NodeJS.Signals, (signalName: NodeJS.Signals) => Promise<void>>();
+  const handlers = new Map<NodeJS.Signals, () => void>();
   for (const sig of signals) {
-    const handler = async (signalName: NodeJS.Signals) => {
+    const handler = () => {
       if (shuttingDown) return;
       shuttingDown = true;
       controller.abort();
-      process.exitCode = signalName === "SIGINT" ? 130 : 143;
+      process.exitCode = sig === "SIGINT" ? 130 : 143;
       logger.warn(`Received ${sig}; cancelling in-flight command(s)`);
     };
     process.on(sig, handler);
-
     handlers.set(sig, handler);
   }
 
@@ -680,19 +683,6 @@ async function main() {
       process.off(sig, handler);
     }
   });
-
-  const getEnvInt = (key: string, defaultValue?: number): number => {
-    if (defaultValue !== undefined) {
-      const schema = v.pipe(
-        v.optional(v.string()),
-        v.transform((value) => (value === undefined ? defaultValue : Number(value))),
-        v.integer(),
-      );
-      return v.parse(schema, process.env[key]);
-    }
-    const schema = v.pipe(v.string(), v.toNumber(), v.integer());
-    return v.parse(schema, process.env[key]);
-  };
 
   const smokeResult = await smoke
     .with(Policy.timeout(getEnvInt(SMOKE_TIMEOUT_MS_ENV, DEFAULT_SMOKE_TIMEOUT_MS)))
@@ -706,7 +696,8 @@ async function main() {
         error,
         {
           SmokeExecError: (e) => {
-            logger.error(`exec - ${formatSmokeExecInvocation(e.command, e.args)} (cwd: ${e.cwd})`);
+            const invocation = [e.command, ...e.args].map((word) => JSON.stringify(word)).join(" ");
+            logger.error(`exec - ${invocation} (cwd: ${e.cwd})`);
             logger.error("Command failed", {
               message: e.cause.message,
               name: e.cause.name,
