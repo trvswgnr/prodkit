@@ -26,6 +26,8 @@
     "runnable-gating:check": "node --test ./checks/check-runnable-gating-contract.test.ts && node ./checks/check-runnable-gating-contract.ts",
     "docs:check": "node --test ./checks/check-public-docs.test.ts && node ./checks/check-public-docs.ts",
     "adr:sync": "node ./checks/sync-adr-index.ts --write",
+    "changelog:check": "node ./release/check-changelog-version.ts",
+    "release:cut": "node ./release/release-cut.ts",
     "fmt": "oxfmt \"**/*.ts\"",
     "fmt:check": "oxfmt --check \"**/*.ts\"",
     "lint": "pnpm -w exec oxlint --config oxlint.config.ts tools",
