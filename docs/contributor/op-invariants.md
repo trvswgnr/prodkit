@@ -81,7 +81,7 @@ Enforced by code paths:
 
 - `packages/op/src/core/plan/fan-out.ts` (`fanOutPlans`): isolates child cancellation and detaches
   parent abort listeners on settle; combinator child runs call `executePlan` with
-  `interruptOnAbortSettlement` so aborted losers unwind even when they ignore the signal
+  `Settlement.interrupting` so aborted losers unwind even when they ignore the signal
 
 Representative tests:
 
@@ -190,9 +190,8 @@ Representative regression tests:
 - `packages/op/tests/unit/fan-out-regression.test.ts` (`Op.race waits for loser defer cleanup before run() settles`)
 
 `Op.all` fails fast on the first child error, aborts siblings, and waits for every active branch
-to settle before returning. Fan-out children run through `executePlan(..., interruptOnAbortSettlement)`
-so aborted losers unwind even when they ignore `AbortSignal`. Combinator plans wrap their returned work
-with `withAbortDrain(...)` so an enclosing `Policy.timeout` can drain in-flight fan-out work before the
+to settle before returning. Fan-out children run through `Settlement.interrupting`. Combinator plans use
+`Settlement.interruptingAndDraining` so an enclosing `Policy.timeout` can drain in-flight fan-out work before the
 timeout result settles.
 
 `Op.any` runs children together under one outer abort umbrella. First success picks the winner and
@@ -292,12 +291,12 @@ live under `packages/op/src/policy/`.
 Cancellation and cooperative `AbortSignal` behavior show up wherever `SuspendInstruction` binds a
 signal, plus README's `Op.defer` / `.on("exit")` notes and checks in `packages/op/tests/unit/policy-retry.test.ts`,
 `packages/op/tests/unit/policy-timeout.test.ts`, and
-`packages/op/tests/unit/lifecycle-*.test.ts`. Settlement intent lives in
-`packages/op/src/core/settlement.ts`: DI lazy-resolve uses `AbortSettlement.rejectOnAbort`;
+`packages/op/tests/unit/lifecycle-*.test.ts`. Settlement presets live in
+`packages/op/src/core/settlement-scope.ts`: DI lazy-resolve uses `Settlement.rejecting`;
 Policy.cancel owns bound-abort session composition and macrotimer fallback in `policy/plan.ts` and
-wraps its suspend with `withAbortDrain(...)`; driveIterator suspend resume uses
-`AbortSettlement.interruptOnAbort`; combinator and DI provision drains also mark suspend work with
-`withAbortDrain(...)`.
+uses `Settlement.interruptingAndDraining`; fan-out children use `Settlement.interrupting`; combinators
+and `DI.provide` use `Settlement.interruptingAndDraining`. Low-level `AbortSettlement` primitives
+remain in `packages/op/src/core/settlement.ts` for the driver.
 Type-level contracts collected in
 `packages/op/tests/types/op.test.ts`, with custom policy spike coverage in
 `packages/op/tests/unit/policy-hkt.test.ts`. Runnable metadata and args-only `.run()` gating are

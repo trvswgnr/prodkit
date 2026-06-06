@@ -65,6 +65,8 @@ the boundary choice is not already covered by ADR 0008.
 | **Policy** | Retry, timeout, cancel, release, or custom attachment applied with `.with(Policy.*)` before `.run()`. |
 | **Blocking** | Metadata key marking an unsatisfied requirement (for example missing DI binding) that blocks `.run()` at the type level. |
 | **Settlement** | How a suspend or abort resolves (pass-through, interrupt-on-abort, drain-after-abort). |
+| **Settlement preset** | Contributor-only named launch/completion intent for nested plan work (`cooperative`, `rejecting`, `interrupting`, `interruptingAndDraining`). |
+| **Settlement scope** | Signal-bound compiled preset; call sites use `Settlement.*` in `core/settlement-scope.ts` instead of pairing `executePlan` settlement with `withAbortDrain`. |
 | **UnhandledException** | Non-recoverable runtime channel from `better-result`; wraps invalid yields, cleanup faults, and validation failures. |
 
 ## Which doc to read

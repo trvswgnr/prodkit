@@ -19,6 +19,7 @@ packages/op/src/index.ts          (Op factory, Op.run, re-exports)
   |-- hkt.ts                      (@prodkit/op/hkt entry)
   |-- core/runtime.ts             (createRunContext, drive, runOp, RunContext, ExitContext)
   |-- core/settlement.ts          (AbortSettlement, withAbortDrain, awaitWithAbort, settlementForSuspendedWork)
+  |-- core/settlement-scope.ts    (Settlement presets/scopes for nested plan and suspend choreography)
   |-- core/cleanup.ts             (ADR-0003 cleanup helpers: closeGenerator, runFinalizersSafely, chainCleanupFaults)
   |-- core/meta.ts                (EmptyMeta, Blocking, MergeMeta, IsRunnable)
   |-- core/fluent.ts              (makeCoreOp: nullary generator leaf factory)
@@ -26,8 +27,8 @@ packages/op/src/index.ts          (Op factory, Op.run, re-exports)
   |-- core/instructions.ts        (Suspend, RegisterExitFinalizer, CustomInstruction protocol)
 
 packages/op/src/di/                 (DI.provide, DI.inject via CustomInstruction + extensions)
-  '-- di/plan.ts imports di/env.ts, di/types.ts, core/plan, core/settlement, core/instructions
-  '-- di/env.ts imports di/types.ts, core/runtime, core/settlement, @prodkit/shared/runtime
+  '-- di/plan.ts imports di/env.ts, di/types.ts, core/plan, core/settlement-scope, core/instructions
+  '-- di/env.ts imports di/types.ts, core/runtime, core/settlement-scope, @prodkit/shared/runtime
   '-- di/types.ts imports core/meta.ts, index.ts (type-only Op)
 
 Verified import contracts (checked by `pnpm --filter @prodkit/tools run architecture:check`):
@@ -39,7 +40,7 @@ small plan modules where surprise imports are regressions.
 <!-- architecture-check-closed: packages/op/src/di/env.ts -->
 <!-- architecture-check-closed: packages/op/src/di/plan.ts -->
 <!-- architecture-check-closed: packages/op/src/core/plan/factory-chain.ts -->
-<!-- architecture-check-closed: packages/op/src/core/settlement.ts -->
+<!-- architecture-check-closed: packages/op/src/core/settlement-scope.ts -->
 
 **Partial edges** document specific architectural links. Each line must match source; hub modules
 (for example `shell.ts`) may import more than the list shows.
@@ -50,14 +51,12 @@ small plan modules where surprise imports are regressions.
 - `packages/op/src/di/types.ts` imports `packages/op/src/di/index.ts`
 - `packages/op/src/di/env.ts` imports `packages/op/src/di/types.ts`
 - `packages/op/src/di/env.ts` imports `packages/op/src/core/runtime.ts`
-- `packages/op/src/di/env.ts` imports `packages/op/src/core/settlement.ts`
 - `packages/op/src/di/env.ts` imports `@prodkit/shared/runtime`
 - `packages/op/src/di/plan.ts` imports `packages/op/src/di/types.ts`
 - `packages/op/src/di/plan.ts` imports `packages/op/src/di/env.ts`
 - `packages/op/src/di/plan.ts` imports `packages/op/src/core/plan/base.ts`
 - `packages/op/src/di/plan.ts` imports `packages/op/src/core/plan/surface.ts`
 - `packages/op/src/di/plan.ts` imports `packages/op/src/core/plan/shell.ts`
-- `packages/op/src/di/plan.ts` imports `packages/op/src/core/settlement.ts`
 - `packages/op/src/di/plan.ts` imports `packages/op/src/core/instructions.ts`
 - `packages/op/src/di/plan.ts` imports `packages/op/src/core/runtime.ts`
 - `packages/op/src/di/plan.ts` imports `packages/op/src/core/meta.ts`
@@ -66,7 +65,18 @@ small plan modules where surprise imports are regressions.
 - `packages/op/src/di/plan.ts` imports `packages/op/src/index.ts`
 - `packages/op/src/di/plan.ts` imports `@prodkit/shared/runtime`
 - `packages/op/src/core/plan/factory-chain.ts` imports `packages/op/src/core/plan/base.ts`
-- `packages/op/src/core/settlement.ts` imports `@prodkit/shared/runtime`
+- `packages/op/src/core/settlement-scope.ts` imports `packages/op/src/core/instructions.ts`
+- `packages/op/src/core/settlement-scope.ts` imports `packages/op/src/core/plan/base.ts`
+- `packages/op/src/core/settlement-scope.ts` imports `packages/op/src/core/runtime.ts`
+- `packages/op/src/core/settlement-scope.ts` imports `packages/op/src/core/settlement.ts`
+- `packages/op/src/core/settlement-scope.ts` imports `packages/op/src/errors.ts`
+- `packages/op/src/core/settlement-scope.ts` imports `packages/op/src/result.ts`
+- `packages/op/src/core/settlement-scope.ts` imports `@prodkit/shared/runtime`
+- `packages/op/src/core/plan/combinators.ts` imports `packages/op/src/core/settlement-scope.ts`
+- `packages/op/src/core/plan/fan-out.ts` imports `packages/op/src/core/settlement-scope.ts`
+- `packages/op/src/di/env.ts` imports `packages/op/src/core/settlement-scope.ts`
+- `packages/op/src/di/plan.ts` imports `packages/op/src/core/settlement-scope.ts`
+- `packages/op/src/policy/plan.ts` imports `packages/op/src/core/settlement-scope.ts`
 
 packages/std/src/                   (reserved runtime-agnostic utility subpaths)
 ```
@@ -97,19 +107,19 @@ Built-in policies (retry, timeout, cancel) attach on the op value **before** `.r
 
 ## Abort settlement
 
-Types and helpers live in `packages/op/src/core/settlement.ts`. Import settlement from there when
-adding combinators, policies, DI suspends, or driver-adjacent code (not from scattered modules).
+Low-level primitives live in `packages/op/src/core/settlement.ts`. Nested plan and suspend
+choreography uses `Settlement` presets in `packages/op/src/core/settlement-scope.ts` so call sites
+declare one intent instead of pairing `executePlan` settlement args with `withAbortDrain`.
 
-| `AbortSettlement` | Typical use | Suspend return shape | Notes |
-| --- | --- | --- | --- |
-| `passThrough` | Top-level `drive`, `Op.settle`, retry/cancel policy loops | `Promise` | Abort does not race the suspend await |
-| `rejectOnAbort` | DI lazy factory resolve (`awaitWithAbort` on factory work) | `Promise` | Aborts reject the await with the run signal reason |
-| `interruptOnAbort` | Fan-out children, `Policy.timeout` inner `executePlan` | `Promise` | Aborts race the suspend; losers unwind without drain |
-| `interruptAndDrainOnAbort` | Combinator/provision/DI nodes that must drain in-flight work | `withAbortDrain(promise)` | Driver upgrades `interruptOnAbort` to this when the suspend returns drained work |
+| Preset | Typical use | Notes |
+| --- | --- | --- |
+| `cooperative` | `Op.allSettled` fan-out children | `passThrough` launch; no drain marker |
+| `rejecting` | DI lazy factory resolve | `awaitWork` rejects promptly on abort |
+| `interrupting` | Fan-out children, `Policy.timeout` inner nested plan | Interrupt launch; no drain marker |
+| `interruptingAndDraining` | Combinators, `DI.provide`, `Policy.cancel` suspend | Interrupt launch plus drain observation |
 
-`settlementForSuspendedWork` applies the `withAbortDrain` upgrade inside `drive` so call sites pass
-`interruptOnAbortSettlement(signal)` to `executePlan` and wrap fan-out/provision bodies with
-`withAbortDrain(...)`. Combinators still wait for loser finalization per
+`settlementForSuspendedWork` still upgrades `interruptOnAbort` to `interruptAndDrainOnAbort` when the
+suspend callback returns drain-marked work. Combinators still wait for loser finalization per
 [ADR 0004](../adr/0004-combinators-wait-for-loser-finalization.md) before parent `run()` settles.
 
 ## Instruction lifecycle
