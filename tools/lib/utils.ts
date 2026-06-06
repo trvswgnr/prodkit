@@ -1,12 +1,14 @@
-import { execFileSync } from "node:child_process";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { Op } from "@prodkit/op";
-import { TaggedError } from "better-result";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import * as v from "valibot";
-export { createLogger } from "./logger.ts";
+import { Op } from "@prodkit/op";
+import { TaggedError } from "better-result";
 import { unsafeCoerce } from "@prodkit/shared/runtime";
+import { readRepoRoot, RepoRootNotFoundError } from "./repo-root.ts";
+
+export { createLogger } from "./logger.ts";
+export { readRepoRoot };
 
 type OwnPropertyValue<T, K extends PropertyKey> =
   // if it's not an object, we don't know anything about the type
@@ -127,30 +129,8 @@ export const readPackageJson = Op(function* (filepath: string) {
   return yield* parse(PackageJson, parsedJson);
 });
 
-let cachedRepoRoot: string | undefined = undefined;
-
-function resolveGitRepoRoot(): string {
-  const output = execFileSync("git", ["rev-parse", "--path-format=absolute", "--show-toplevel"], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"],
-  }).trim();
-  if (!output) {
-    raise(new Error("Expected to get the repo root from git, but got an empty output"));
-  }
-  return output;
-}
-
-/** Synchronous repo root for maintainer scripts. */
-export function readRepoRoot(): string {
-  if (cachedRepoRoot) return cachedRepoRoot;
-  const output = resolveGitRepoRoot();
-  if (!existsSync(output)) throw new NoEntError({ path: output });
-  cachedRepoRoot = output;
-  return output;
-}
-
 export const getRepoRoot = Op.try(readRepoRoot, (cause) =>
-  cause instanceof NoEntError ? cause : raise(cause),
+  cause instanceof RepoRootNotFoundError ? new NoEntError({ path: cause.path }) : raise(cause),
 );
 
 export const fromRepoRoot = Op(function* (relativePath: string) {

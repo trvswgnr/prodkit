@@ -1,10 +1,17 @@
+/**
+ * Alternate-runtime smoke harness (Bun, Deno, edge, Node).
+ *
+ * IMPORTANT: Do not import `@prodkit/op` or `../lib/utils.ts` at module load. CI runs this job after
+ * install only; the harness builds and packs `@prodkit/op` before executing it.
+ */
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import { cp, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Miniflare } from "miniflare";
-import { createLogger, readRepoRoot } from "../lib/utils.ts";
+import { createLogger } from "../lib/logger.ts";
+import { readRepoRoot } from "../lib/repo-root.ts";
 
 type Runtime = "bun" | "deno" | "edge" | "node";
 
