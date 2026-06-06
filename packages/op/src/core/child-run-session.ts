@@ -115,13 +115,10 @@ function boundCancel(
     notifyBoundAbort();
   };
 
-  const onOuterAbort = () => controller.abort(abortReason(parent.signal));
+  const outerWatch = watchParentAbort(parent.signal, (reason) => controller.abort(reason));
 
   if (boundSignal.aborted) onBoundAbort();
   else boundSignal.addEventListener("abort", onBoundAbort, { once: true });
-
-  if (parent.signal.aborted) onOuterAbort();
-  else parent.signal.addEventListener("abort", onOuterAbort, { once: true });
 
   return {
     signal: controller.signal,
@@ -131,7 +128,7 @@ function boundCancel(
     },
     detach() {
       boundSignal.removeEventListener("abort", onBoundAbort);
-      parent.signal.removeEventListener("abort", onOuterAbort);
+      outerWatch.detach();
     },
   };
 }

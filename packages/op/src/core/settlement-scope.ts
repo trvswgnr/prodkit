@@ -55,12 +55,6 @@ type SettlementScope = {
     mapContext?: MapChildContext,
   ): Promise<Result<T, E | UnhandledException>>;
 
-  suspendPlan<T, E, M>(plan: Plan<T, E, M>, mapContext?: MapChildContext): SuspendInstruction;
-
-  suspendObservedWork<T>(
-    start: (context: RunContext<readonly unknown[]>) => PromiseLike<T>,
-  ): SuspendInstruction;
-
   observeWork<T>(work: PromiseLike<T>): SuspendWork<T>;
 
   awaitWork<T>(work: PromiseLike<T>): PromiseLike<T>;
@@ -90,14 +84,6 @@ function compileScope(profile: SettlementProfile, signal: AbortSignal): Settleme
     profile,
     runPlan,
     observeWork,
-    suspendPlan(plan, mapContext) {
-      return new SuspendInstruction((parentContext) =>
-        observeWork(runPlan(plan, parentContext, mapContext)),
-      );
-    },
-    suspendObservedWork(start) {
-      return new SuspendInstruction((parentContext) => observeWork(start(parentContext)));
-    },
     awaitWork(work) {
       if (profile.launch !== "reject") {
         return work;
@@ -133,9 +119,10 @@ export const Settlement = {
     profile: SettlementProfile,
     start: (context: RunContext<readonly unknown[]>) => PromiseLike<T>,
   ): SuspendInstruction {
-    return new SuspendInstruction((context) =>
-      compileScope(profile, context.signal).suspendObservedWork(start).suspend(context),
-    );
+    return new SuspendInstruction((context) => {
+      const scope = compileScope(profile, context.signal);
+      return scope.observeWork(start(context));
+    });
   },
 
   suspendPlan<T, E, M>(
@@ -143,8 +130,9 @@ export const Settlement = {
     plan: Plan<T, E, M>,
     mapContext?: MapChildContext,
   ): SuspendInstruction {
-    return new SuspendInstruction((context) =>
-      compileScope(profile, context.signal).suspendPlan(plan, mapContext).suspend(context),
-    );
+    return new SuspendInstruction((context) => {
+      const scope = compileScope(profile, context.signal);
+      return scope.observeWork(scope.runPlan(plan, context, mapContext));
+    });
   },
 } as const;
