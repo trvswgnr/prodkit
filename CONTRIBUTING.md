@@ -81,7 +81,9 @@ install so the committed lockfile remains the normal development baseline.
 CI runs `pnpm -r exec npm audit signatures` so dependency signature verification covers every
 workspace package, not just the private root manifest.
 The alternate-runtime smoke runner avoids importing `@prodkit/op` before its package build, so clean
-CI jobs can run from install-only workspaces.
+CI jobs can run from install-only workspaces. CI runs the harness on Bun, Deno, an edge worker
+(Miniflare), and current non-EOL Node LTS lines (22.x and 24.x via the `runtime-smoke` matrix).
+Contributor Node `>=24.14.0` is separate from the consumer runtime claim exercised by that matrix.
 An `invariants:check` gate step fails when `docs/contributor/op-invariants.md` references source symbols or test
 file paths that no longer exist in the repo.
 An `architecture:check` gate step fails when verified import contracts in

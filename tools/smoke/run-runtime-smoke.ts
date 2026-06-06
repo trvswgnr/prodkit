@@ -6,7 +6,7 @@ import path from "node:path";
 import { Miniflare } from "miniflare";
 import { createLogger } from "../lib/logger.ts";
 
-type Runtime = "bun" | "deno" | "edge";
+type Runtime = "bun" | "deno" | "edge" | "node";
 
 const REPO_ROOT = readRepoRoot();
 const RUNTIME_SMOKE_STATE_DIR = path.join(REPO_ROOT, "var", "runtime-smoke");
@@ -185,13 +185,25 @@ async function createRuntimeWorkspace(tarballPath: string) {
   return workspaceDir;
 }
 
-async function smokeBun(workspaceDir: string) {
+async function smokeScriptedRuntime(
+  workspaceDir: string,
+  command: string,
+  args: readonly string[],
+): Promise<void> {
   await writeFile(
     path.join(workspaceDir, "runtime-smoke.mjs"),
     `${smokeSource("@prodkit/op", "@prodkit/op/policy", "better-result")}\nawait runRuntimeSmoke();\n`,
     "utf8",
   );
-  await run("bun", ["./runtime-smoke.mjs"], workspaceDir);
+  await run(command, args, workspaceDir);
+}
+
+async function smokeBun(workspaceDir: string) {
+  await smokeScriptedRuntime(workspaceDir, "bun", ["./runtime-smoke.mjs"]);
+}
+
+async function smokeNode(workspaceDir: string) {
+  await smokeScriptedRuntime(workspaceDir, "node", ["./runtime-smoke.mjs"]);
 }
 
 async function smokeDeno(workspaceDir: string) {
@@ -290,8 +302,15 @@ export default {
 }
 
 function parseRuntime(rawRuntime: string | undefined): Runtime[] {
-  if (rawRuntime === undefined || rawRuntime === "all") return ["bun", "deno", "edge"];
-  if (rawRuntime === "bun" || rawRuntime === "deno" || rawRuntime === "edge") return [rawRuntime];
+  if (rawRuntime === undefined || rawRuntime === "all") return ["bun", "deno", "edge", "node"];
+  if (
+    rawRuntime === "bun" ||
+    rawRuntime === "deno" ||
+    rawRuntime === "edge" ||
+    rawRuntime === "node"
+  ) {
+    return [rawRuntime];
+  }
   throw new Error(`Unknown runtime smoke target: ${rawRuntime}`);
 }
 
@@ -303,6 +322,7 @@ async function main() {
       const workspaceDir = await createRuntimeWorkspace(tarballPath);
       try {
         if (runtime === "bun") await smokeBun(workspaceDir);
+        if (runtime === "node") await smokeNode(workspaceDir);
         if (runtime === "deno") await smokeDeno(workspaceDir);
         if (runtime === "edge") await smokeEdge(workspaceDir);
         logger.info(`${runtime} completed successfully`);

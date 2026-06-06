@@ -14,6 +14,7 @@
     "runtime:smoke:bun": "node ./smoke/run-runtime-smoke.ts bun",
     "runtime:smoke:deno": "node ./smoke/run-runtime-smoke.ts deno",
     "runtime:smoke:edge": "node ./smoke/run-runtime-smoke.ts edge",
+    "runtime:smoke:node": "node ./smoke/run-runtime-smoke.ts node",
     "smoke": "pnpm run examples:smoke:pack",
     "performance:sync": "node ./update-op-performance-doc.ts",
     "adr:check": "node ./checks/sync-adr-index.ts",
