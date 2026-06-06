@@ -1,7 +1,7 @@
 import { statSync } from "node:fs";
 import path from "node:path";
 import {
-  assertProfileOpFactory,
+  asBenchOp,
   BENCHMARK_ARTIFACTS_DIR,
   ensureBenchmarkArtifactsDir,
   findNewestProfileArtifact,
@@ -19,9 +19,9 @@ import {
   resolveOpPackageDir,
   runTinybenchVariant,
   writeJsonReport,
-  type ProfileOpFactory,
   type TinybenchRecord,
 } from "./harness.ts";
+import type { BenchOp } from "./scenarios.ts";
 import {
   runAsyncChain,
   runAsyncFnChain,
@@ -33,7 +33,7 @@ import {
 } from "./scenarios.ts";
 import { unsafeCoerce } from "@prodkit/shared/runtime";
 
-type AsyncProfileScenarioName =
+type AsyncScenarioName =
   | "baseline.asyncChain"
   | "baseline.asyncFnChain"
   | "compose.yieldChain"
@@ -47,9 +47,9 @@ type ProfileMode = "breakdown" | "cpu" | "heap";
 
 type AsyncScenarioSpec = {
   kind: "async";
-  name: AsyncProfileScenarioName;
+  name: AsyncScenarioName;
   description: string;
-  run: (Op: ProfileOpFactory, steps: number) => Promise<unknown>;
+  run: (Op: BenchOp, steps: number) => Promise<unknown>;
 };
 
 type SyncScenarioSpec = {
@@ -61,7 +61,7 @@ type SyncScenarioSpec = {
 
 type ScenarioSpec = AsyncScenarioSpec | SyncScenarioSpec;
 
-type ProfileScenarioRecord = TinybenchRecord & {
+type ScenarioRecord = TinybenchRecord & {
   description: string;
   ratioToBaseline: number | null;
 };
@@ -74,7 +74,7 @@ type ProfileReport = {
     packageVersion: string;
   };
   steps: number;
-  asyncScenarios: Record<AsyncProfileScenarioName, ProfileScenarioRecord>;
+  asyncScenarios: Record<AsyncScenarioName, ScenarioRecord>;
   syncReference: Record<
     SyncReferenceScenarioName,
     TinybenchRecord & {
@@ -168,7 +168,7 @@ function selectScenarios(filter: string | undefined): ScenarioSpec[] {
 }
 
 function printAsyncBreakdownTable(
-  rows: Array<ProfileScenarioRecord & { name: AsyncProfileScenarioName }>,
+  rows: Array<ScenarioRecord & { name: AsyncScenarioName }>,
   steps: number,
 ): void {
   logger.info("");
@@ -257,9 +257,9 @@ function printInterpretationGuide(): void {
 
 async function measureAsyncScenario(
   spec: AsyncScenarioSpec,
-  Op: ProfileOpFactory,
+  Op: BenchOp,
   steps: number,
-): Promise<ProfileScenarioRecord> {
+): Promise<ScenarioRecord> {
   const record = await runTinybenchVariant(spec.name, () => spec.run(Op, steps));
   return {
     ...record,
@@ -282,7 +282,7 @@ async function measureSyncScenario(
 
 async function runProfileLoop(
   spec: ScenarioSpec,
-  Op: ProfileOpFactory,
+  Op: BenchOp,
   steps: number,
   iterations: number,
 ): Promise<void> {
@@ -318,7 +318,7 @@ async function main(): Promise<void> {
         );
 
   const { Op: opModule } = await importOpModule(packageDir);
-  const Op = assertProfileOpFactory(opModule);
+  const Op = asBenchOp(opModule);
   const packageVersion = await readPackageVersion(packageDir);
   const selected = selectScenarios(scenarioFilter);
 
@@ -367,7 +367,7 @@ async function main(): Promise<void> {
     (scenario): scenario is SyncScenarioSpec => scenario.kind === "sync",
   );
 
-  const asyncRows: Array<ProfileScenarioRecord & { name: AsyncProfileScenarioName }> = [];
+  const asyncRows: Array<ScenarioRecord & { name: AsyncScenarioName }> = [];
   for (const spec of asyncSelected) {
     const record = await measureAsyncScenario(spec, Op, steps);
     asyncRows.push({ name: spec.name, ...record });

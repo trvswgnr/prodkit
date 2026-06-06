@@ -3,11 +3,10 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Bench } from "tinybench";
-import { COMPOSE_STEPS, type OpRunResult, type ProfileScenarioOpFactory } from "./scenarios.ts";
+import { COMPOSE_STEPS, type BenchOp, type RunResult } from "./scenarios.ts";
 
 export { COMPOSE_STEPS };
-export type { OpRunResult, ProfileScenarioOpFactory };
-export type ProfileOpFactory = ProfileScenarioOpFactory;
+export type { BenchOp, RunResult };
 
 export const OP_PACKAGE = "@prodkit/op";
 export const ENTRY_FALLBACK = "./dist/index.mjs";
@@ -154,12 +153,12 @@ export async function importOpModule(packageDir: string): Promise<{ Op: unknown 
   }
   const mod: unknown = await import(pathToFileURL(modulePath).href);
   if (!isRecord(mod) || !mod.Op) {
-    throw new Error(`Unable to import Op factory from ${modulePath}.`);
+    throw new Error(`Unable to import Op from ${modulePath}.`);
   }
   return { Op: mod.Op };
 }
 
-export function assertProfileOpFactory(input: unknown): ProfileScenarioOpFactory {
+export function asBenchOp(input: unknown): BenchOp {
   if (!isRecord(input)) {
     throw new Error("Imported Op value is invalid.");
   }

@@ -8,7 +8,7 @@ import {
   runEffectTimeout,
   runEffectYieldChain,
 } from "./effect-scenarios.ts";
-import { assertProfileOpFactory } from "./harness.ts";
+import { asBenchOp } from "./harness.ts";
 import {
   CONCURRENCY_CHILDREN,
   RETRY_ATTEMPTS,
@@ -72,7 +72,7 @@ export type ComparisonScenario = {
   implementations: Record<ImplementationId, ImplementationCell>;
 };
 
-const op = assertProfileOpFactory(Op);
+const op = asBenchOp(Op);
 
 async function handRolledFirstSettler(childCount: number): Promise<void> {
   let winner: number | undefined;
