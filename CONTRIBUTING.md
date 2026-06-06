@@ -323,6 +323,9 @@ pnpm --filter @prodkit/op run release:minor   # minor bump (for example 0.1.x ->
 pnpm --filter @prodkit/std run release:patch
 ```
 
+Publishable `release:*` and `changelog:check` scripts delegate to `@prodkit/tools`; `@prodkit/op`
+`build:size` delegates to `@prodkit/benchmarks` after the package build.
+
 `release:major` will be added when needed. Bump kind must match the changelog classification
 under strict SemVer ([ADR 0014](docs/adr/0014-strict-semver-from-0-2-0-beta.md)).
 
