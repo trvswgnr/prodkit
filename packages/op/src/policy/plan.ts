@@ -9,10 +9,6 @@ import { validateTimeoutMs } from "./validate.js";
 import type { ReleaseFn } from "../core/plan/context.js";
 import { createPlan, createUnaryPlan, type Plan, type PlanRewriter } from "../core/plan/base.js";
 
-function policyRewriter(apply: PlanRewriter["apply"]): PlanRewriter {
-  return { apply };
-}
-
 export function releasePlan<T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T>): Plan<T, E, M> {
   return createUnaryPlan(
     function* () {
@@ -129,15 +125,15 @@ function cancelPlan<T, E, M>(source: Plan<T, E, M>, abortSignal: AbortSignal): P
 
 export function retryRewriter(policy?: NormalizedRetryPolicy): PlanRewriter {
   const retryPolicy = policy ?? normalizeRetryPolicy();
-  return policyRewriter((source) => retryPlan(source, retryPolicy));
+  return { apply: (source) => retryPlan(source, retryPolicy) };
 }
 
 export function timeoutRewriter(timeoutMs: number): PlanRewriter {
-  return policyRewriter((source) => timeoutPlan(source, timeoutMs));
+  return { apply: (source) => timeoutPlan(source, timeoutMs) };
 }
 
 export function cancelRewriter(abortSignal: AbortSignal): PlanRewriter {
-  return policyRewriter((source) => cancelPlan(source, abortSignal));
+  return { apply: (source) => cancelPlan(source, abortSignal) };
 }
 
 async function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {

@@ -48,25 +48,6 @@ const DEFAULT_EXPONENTIAL_DELAY_OPTIONS = Object.freeze({
   jitter: 1,
 }) satisfies Required<ExponentialDelayOptions>;
 
-function normalizeExponentialDelayOptions(
-  options?: ExponentialDelayOptions,
-): Required<ExponentialDelayOptions> {
-  return {
-    baseMs: options?.baseMs ?? DEFAULT_EXPONENTIAL_DELAY_OPTIONS.baseMs,
-    maxMs: options?.maxMs ?? DEFAULT_EXPONENTIAL_DELAY_OPTIONS.maxMs,
-    jitter: options?.jitter ?? DEFAULT_EXPONENTIAL_DELAY_OPTIONS.jitter,
-  };
-}
-
-function validateExponentialDelayOptions(options: Required<ExponentialDelayOptions>): void {
-  assertPositiveNumber(options.baseMs, "baseMs");
-  assertFiniteNumber(options.maxMs, "maxMs");
-  if (options.maxMs < options.baseMs) {
-    throw new RangeError("maxMs must be greater than or equal to baseMs");
-  }
-  assertJitter(options.jitter);
-}
-
 type ValidatedDelay = ((retry: number, cause: unknown) => number) & {
   readonly [DELAY_VALIDATE]: () => void;
 };
@@ -102,8 +83,19 @@ const fixed = (ms: number) =>
   );
 
 const exponential = (options?: ExponentialDelayOptions) => {
-  const normalized = normalizeExponentialDelayOptions(options);
-  const validate = () => validateExponentialDelayOptions(normalized);
+  const normalized = {
+    baseMs: options?.baseMs ?? DEFAULT_EXPONENTIAL_DELAY_OPTIONS.baseMs,
+    maxMs: options?.maxMs ?? DEFAULT_EXPONENTIAL_DELAY_OPTIONS.maxMs,
+    jitter: options?.jitter ?? DEFAULT_EXPONENTIAL_DELAY_OPTIONS.jitter,
+  };
+  const validate = () => {
+    assertPositiveNumber(normalized.baseMs, "baseMs");
+    assertFiniteNumber(normalized.maxMs, "maxMs");
+    if (normalized.maxMs < normalized.baseMs) {
+      throw new RangeError("maxMs must be greater than or equal to baseMs");
+    }
+    assertJitter(normalized.jitter);
+  };
 
   return withDelayValidation((retry) => {
     const exp = Math.min(normalized.baseMs * Math.pow(2, retry), normalized.maxMs);
