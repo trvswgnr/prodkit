@@ -1,8 +1,7 @@
-import { getPlan, createUnaryPlan, executePlan, type Plan } from "../core/plan/base.js";
+import { getPlan, createUnaryPlan, type Plan } from "../core/plan/base.js";
 import type { AsArgs } from "../core/plan/surface.js";
 import { makeUnboundPlanOp } from "../core/plan/shell.js";
-import { interruptOnAbortSettlement, withAbortDrain } from "../core/settlement.js";
-import { SuspendInstruction } from "../core/instructions.js";
+import { Settlement, SettlementPresets } from "../core/settlement-scope.js";
 import { CUSTOM_INSTRUCTION_META, type CustomInstruction } from "../core/instructions.js";
 import type { RunContext } from "../core/runtime.js";
 import { UnhandledException } from "../errors.js";
@@ -74,15 +73,12 @@ export function providePlan<T, E, M>(
 
   return createUnaryPlan(
     function* () {
-      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
-        (context: RunContext<readonly unknown[]>) =>
-          withAbortDrain(
-            executePlan(
-              source,
-              extendContextWithBindings(context, snapshot),
-              interruptOnAbortSettlement(context.signal),
-            ),
-          ),
+      const result: Result<T, E | UnhandledException> = yield* Settlement.suspendPlan(
+        SettlementPresets.interruptingAndDraining,
+        source,
+        {
+          mapContext: (context) => extendContextWithBindings(context, snapshot),
+        },
       );
 
       if (result.isErr()) return yield* result;

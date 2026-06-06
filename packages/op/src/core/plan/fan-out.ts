@@ -2,8 +2,8 @@ import { ErrorGroup, UnhandledException } from "../../errors.js";
 import { Result, type Err } from "../../result.js";
 import { createRunContext } from "../runtime.js";
 import type { RunContext } from "../runtime.js";
-import { executePlan, type Plan } from "./base.js";
-import { interruptOnAbortSettlement } from "../settlement.js";
+import { type Plan } from "./base.js";
+import { Settlement } from "../settlement-scope.js";
 import { unsafeCoerce } from "@prodkit/shared/runtime";
 
 type FanOut<T, E> = {
@@ -161,7 +161,7 @@ export function collectAllOk<T, E>(
 }
 
 const executeInterruptingPlan: ExecuteChildPlan = (plan, context) =>
-  executePlan(plan, context, interruptOnAbortSettlement(context.signal));
+  Settlement.interrupting(context.signal).runPlan(plan, context);
 
 async function driveAllUnboundedPlans<T, E>(
   plans: readonly Plan<T, E, unknown>[],
@@ -217,7 +217,7 @@ export async function driveAllPlans<T, E>(
 }
 
 export const executeCooperativePlan: ExecuteChildPlan = (plan, context) =>
-  executePlan(plan, context);
+  Settlement.cooperative(context.signal).runPlan(plan, context);
 
 export function collectAllSettled<T, E>(
   results: ReadonlyArray<Result<T, E | UnhandledException> | undefined>,

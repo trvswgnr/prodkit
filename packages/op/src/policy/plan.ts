@@ -2,19 +2,13 @@ import { TimeoutError, UnhandledException } from "../errors.js";
 import { Result } from "../result.js";
 import { sleepWithSignal } from "@prodkit/shared/runtime";
 import { SuspendInstruction, RegisterExitFinalizerInstruction } from "../core/instructions.js";
-import { interruptOnAbortSettlement, withAbortDrain } from "../core/settlement.js";
+import { Settlement, SettlementPresets } from "../core/settlement-scope.js";
 import { createRunContext } from "../core/runtime.js";
 import { normalizeRetryPolicy, type NormalizedRetryPolicy } from "./retry-policy.js";
 import { validateTimeoutMs } from "./validate.js";
 import type { ReleaseFn } from "../core/plan/context.js";
 import type { RunContext } from "../core/runtime.js";
-import {
-  createPlan,
-  createUnaryPlan,
-  executePlan,
-  type Plan,
-  type PlanRewriter,
-} from "../core/plan/base.js";
+import { createPlan, createUnaryPlan, type Plan, type PlanRewriter } from "../core/plan/base.js";
 
 function policyRewriter(apply: PlanRewriter["apply"]): PlanRewriter {
   return { apply };
@@ -106,7 +100,7 @@ function timeoutPlan<T, E, M>(
     const result: Result<T, E | UnhandledException | TimeoutError> = yield* new SuspendInstruction(
       (outerContext) =>
         raceTimeout(
-          (context) => executePlan(source, context, interruptOnAbortSettlement(context.signal)),
+          (context) => Settlement.interrupting(context.signal).runPlan(source, context),
           timeoutMs,
           outerContext,
         ),
@@ -119,8 +113,9 @@ function timeoutPlan<T, E, M>(
 
 function cancelPlan<T, E, M>(source: Plan<T, E, M>, abortSignal: AbortSignal): Plan<T, E, M> {
   return createPlan(function* () {
-    const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
-      (outerContext) => withAbortDrain(raceBoundCancel(source, abortSignal, outerContext)),
+    const result: Result<T, E | UnhandledException> = yield* Settlement.suspendObservedWork(
+      SettlementPresets.interruptingAndDraining,
+      (outerContext) => raceBoundCancel(source, abortSignal, outerContext),
     );
 
     if (result.isErr()) return yield* result;

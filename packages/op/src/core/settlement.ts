@@ -1,5 +1,3 @@
-import { abortReason } from "@prodkit/shared/runtime";
-
 /**
  * Abort settlement for suspend interruption, nested-plan execution, and DI lazy resolve.
  *
@@ -47,10 +45,6 @@ export function withAbortDrain<T>(promise: PromiseLike<T>): AbortDrainedWork<T> 
 
 export function isAbortDrainedWork<T>(work: SuspendWork<T>): work is AbortDrainedWork<T> {
   return typeof work === "object" && work !== null && ABORT_DRAINED_WORK in work;
-}
-
-export function interruptOnAbortSettlement(signal: AbortSignal): AbortSettlement {
-  return AbortSettlement.interruptOnAbort(() => abortReason(signal));
 }
 
 export function settlementForSuspendedWork(
