@@ -314,11 +314,13 @@ are not used for new releases.
    `package.json`, runs release checks, commits, and creates a package-scoped tag):
 
 ```bash
-pnpm --filter @prodkit/op run release:patch
+pnpm --filter @prodkit/op run release:patch   # patch bump
+pnpm --filter @prodkit/op run release:minor   # minor bump (for example 0.1.x -> 0.2.0)
 pnpm --filter @prodkit/std run release:patch
 ```
 
-*Note:* `release:minor` and `release:major` will be added when needed.
+`release:major` will be added when needed. Bump kind must match the changelog classification
+under strict SemVer ([ADR 0014](docs/adr/0014-strict-semver-from-0-2-0-beta.md)).
 
 If `Unreleased` has no changelog bullets, the cut script aborts. Add release notes
 before cutting.

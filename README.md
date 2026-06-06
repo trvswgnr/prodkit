@@ -56,7 +56,7 @@ npm package with trusted publishing and provenance. Release helpers live on each
 package:
 
 ```bash
-pnpm --filter @prodkit/op run release:patch
+pnpm --filter @prodkit/op run release:patch   # or release:minor
 pnpm --filter @prodkit/op run release:push
 
 pnpm --filter @prodkit/std run release:patch

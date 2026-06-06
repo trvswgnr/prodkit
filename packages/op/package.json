@@ -68,6 +68,7 @@
     "prepublishOnly": "pnpm -C ../.. run gate && pnpm run changelog:check",
     "release:prepare": "pnpm -C ../.. run gate && pnpm run changelog:check && npm pack --dry-run",
     "release:patch": "node ../../tools/release/release-cut.ts op patch",
+    "release:minor": "node ../../tools/release/release-cut.ts op minor",
     "release:publish:manual": "npm publish --access public --provenance",
     "release:push": "git push && git push --tags",
     "coverage": "vitest run --coverage",
