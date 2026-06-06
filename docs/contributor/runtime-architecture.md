@@ -75,6 +75,9 @@ small plan modules where surprise imports are regressions.
 - `packages/op/src/core/settlement-scope.ts` imports `packages/op/src/result.ts`
 - `packages/op/src/core/settlement-scope.ts` imports `@prodkit/shared/runtime`
 - `packages/op/src/core/child-run-session.ts` imports `packages/op/src/core/runtime.ts`
+- `packages/op/src/core/child-run-session.ts` imports `packages/op/src/core/settlement.ts`
+- `packages/op/src/core/child-run-session.ts` imports `packages/op/src/errors.ts`
+- `packages/op/src/core/child-run-session.ts` imports `packages/op/src/result.ts`
 - `packages/op/src/core/child-run-session.ts` imports `@prodkit/shared/runtime`
 - `packages/op/src/core/plan/combinators.ts` imports `packages/op/src/core/settlement-scope.ts`
 - `packages/op/src/core/plan/fan-out.ts` imports `packages/op/src/core/child-run-session.ts`
@@ -113,9 +116,11 @@ Built-in policies (retry, timeout, cancel) attach on the op value **before** `.r
 
 ## Abort settlement
 
-Low-level primitives live in `packages/op/src/core/settlement.ts`. Parent-to-child signal cascade
-uses `ChildRunSession` in `packages/op/src/core/child-run-session.ts` (`isolated`, `pool`,
-`boundCancel`). Combinator fan-out drives children through `driveFanOutPlans` in
+Low-level primitives live in `packages/op/src/core/settlement.ts`, including
+`raceInFlightAfterInterrupt` for the cooperative-interrupt then macrotimer-fallback window.
+Parent-to-child signal cascade and Policy race orchestration use `ChildRunSession` in
+`packages/op/src/core/child-run-session.ts` (`isolated`, `pool`, `boundCancel`, `raceTimeout`,
+`raceBoundCancel`). Combinator fan-out drives children through `driveFanOutPlans` in
 `packages/op/src/core/plan/fan-out.ts`. Nested plan and suspend choreography uses `Settlement` presets in
 `packages/op/src/core/settlement-scope.ts` so call sites declare one intent instead of pairing
 `executePlan` settlement args with `withAbortDrain`.

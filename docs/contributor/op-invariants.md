@@ -292,8 +292,9 @@ signal, plus README's `Op.defer` / `.on("exit")` notes and checks in `packages/o
 `packages/op/tests/unit/lifecycle-*.test.ts`. Settlement presets live in
 `packages/op/src/core/settlement-scope.ts`: DI lazy-resolve uses `Settlement.rejecting`;
 `ChildRunSession` in `core/child-run-session.ts` owns parent-to-child signal cascade for fan-out,
-timeout inner runs, and bound-cancel merge; Policy.cancel keeps bound-abort race orchestration and
-macrotimer fallback in `policy/plan.ts` and uses `Settlement.interruptingAndDraining`; fan-out children
+`raceTimeout` / `raceBoundCancel` orchestration for Policy timeout and cancel, and bound-cancel merge;
+`raceInFlightAfterInterrupt` in `core/settlement.ts` is the shared macrotimer fallback primitive;
+Policy.cancel uses `Settlement.interruptingAndDraining`; fan-out children
 use `Settlement.interrupting`; combinators
 and `DI.provide` use `Settlement.interruptingAndDraining`. Low-level `AbortSettlement` primitives
 remain in `packages/op/src/core/settlement.ts` for the driver.
