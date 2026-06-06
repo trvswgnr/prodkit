@@ -20,6 +20,7 @@ packages/op/src/index.ts          (Op factory, Op.run, re-exports)
   |-- core/runtime.ts             (createRunContext, drive, runOp, RunContext, ExitContext)
   |-- core/settlement.ts          (AbortSettlement, withAbortDrain, awaitWithAbort, settlementForSuspendedWork)
   |-- core/settlement-scope.ts    (Settlement presets/scopes for nested plan and suspend choreography)
+  |-- core/child-run-session.ts   (ChildRunSession factories for parent-to-child AbortSignal cascade)
   |-- core/cleanup.ts             (ADR-0003 cleanup helpers: closeGenerator, runFinalizersSafely, chainCleanupFaults)
   |-- core/meta.ts                (EmptyMeta, Blocking, MergeMeta, IsRunnable)
   |-- core/fluent.ts              (makeCoreOp: nullary generator leaf factory)
@@ -41,6 +42,7 @@ small plan modules where surprise imports are regressions.
 <!-- architecture-check-closed: packages/op/src/di/plan.ts -->
 <!-- architecture-check-closed: packages/op/src/core/plan/factory-chain.ts -->
 <!-- architecture-check-closed: packages/op/src/core/settlement-scope.ts -->
+<!-- architecture-check-closed: packages/op/src/core/child-run-session.ts -->
 
 **Partial edges** document specific architectural links. Each line must match source; hub modules
 (for example `shell.ts`) may import more than the list shows.
@@ -72,10 +74,14 @@ small plan modules where surprise imports are regressions.
 - `packages/op/src/core/settlement-scope.ts` imports `packages/op/src/errors.ts`
 - `packages/op/src/core/settlement-scope.ts` imports `packages/op/src/result.ts`
 - `packages/op/src/core/settlement-scope.ts` imports `@prodkit/shared/runtime`
+- `packages/op/src/core/child-run-session.ts` imports `packages/op/src/core/runtime.ts`
+- `packages/op/src/core/child-run-session.ts` imports `@prodkit/shared/runtime`
 - `packages/op/src/core/plan/combinators.ts` imports `packages/op/src/core/settlement-scope.ts`
+- `packages/op/src/core/plan/fan-out.ts` imports `packages/op/src/core/child-run-session.ts`
 - `packages/op/src/core/plan/fan-out.ts` imports `packages/op/src/core/settlement-scope.ts`
 - `packages/op/src/di/env.ts` imports `packages/op/src/core/settlement-scope.ts`
 - `packages/op/src/di/plan.ts` imports `packages/op/src/core/settlement-scope.ts`
+- `packages/op/src/policy/plan.ts` imports `packages/op/src/core/child-run-session.ts`
 - `packages/op/src/policy/plan.ts` imports `packages/op/src/core/settlement-scope.ts`
 
 packages/std/src/                   (reserved runtime-agnostic utility subpaths)
@@ -107,9 +113,12 @@ Built-in policies (retry, timeout, cancel) attach on the op value **before** `.r
 
 ## Abort settlement
 
-Low-level primitives live in `packages/op/src/core/settlement.ts`. Nested plan and suspend
-choreography uses `Settlement` presets in `packages/op/src/core/settlement-scope.ts` so call sites
-declare one intent instead of pairing `executePlan` settlement args with `withAbortDrain`.
+Low-level primitives live in `packages/op/src/core/settlement.ts`. Parent-to-child signal cascade
+uses `ChildRunSession` in `packages/op/src/core/child-run-session.ts` (`isolated`, `pool`,
+`boundCancel`). Combinator fan-out drives children through `driveFanOutPlans` in
+`packages/op/src/core/plan/fan-out.ts`. Nested plan and suspend choreography uses `Settlement` presets in
+`packages/op/src/core/settlement-scope.ts` so call sites declare one intent instead of pairing
+`executePlan` settlement args with `withAbortDrain`.
 
 | Preset | Typical use | Notes |
 | --- | --- | --- |

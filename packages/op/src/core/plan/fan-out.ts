@@ -1,26 +1,105 @@
 import { ErrorGroup, UnhandledException } from "../../errors.js";
 import { Result, type Err } from "../../result.js";
-import { createRunContext } from "../runtime.js";
 import type { RunContext } from "../runtime.js";
+import { ChildRunSession } from "../child-run-session.js";
 import { type Plan } from "./base.js";
 import { Settlement } from "../settlement-scope.js";
 import { unsafeCoerce } from "@prodkit/shared/runtime";
-
-type FanOut<T, E> = {
-  runs: readonly PromiseLike<Result<T, E | UnhandledException>>[];
-  controllers: readonly AbortController[];
-  detach: () => void;
-};
 
 type ExecuteChildPlan = (
   plan: Plan<unknown, unknown, unknown>,
   context: RunContext<readonly unknown[]>,
 ) => Promise<Result<unknown, unknown | UnhandledException>>;
 
-type FirstSettlerClaim<T, E> = (
-  result: Result<T, E | UnhandledException>,
-  hasWinner: boolean,
-) => boolean;
+type FanOutSettleControls = {
+  abortSiblingsExcept(keepIndex: number): void;
+  abortActive(): void;
+};
+
+type DriveFanOutConfig<T, E> = {
+  executeChild: ExecuteChildPlan;
+  poolSize: number;
+  shouldScheduleMore: () => boolean;
+  onChildSettled?: (
+    result: Result<T, E | UnhandledException>,
+    index: number,
+    controls: FanOutSettleControls,
+  ) => void;
+};
+
+async function driveFanOutPlans<T, E>(
+  plans: readonly Plan<T, E, unknown>[],
+  outerContext: RunContext<readonly unknown[]>,
+  config: DriveFanOutConfig<T, E>,
+): Promise<Array<Result<T, E | UnhandledException> | undefined>> {
+  const session = ChildRunSession.pool(outerContext);
+  const results: Array<Result<T, E | UnhandledException> | undefined> = Array(plans.length);
+  const runningByIndex = new Map<number, AbortController>();
+
+  const abortSiblingsExcept = (keepIndex: number) => {
+    for (const [index, controller] of runningByIndex) {
+      if (index !== keepIndex) controller.abort();
+    }
+  };
+
+  const abortActive = () => {
+    for (const controller of session.activeControllers()) controller.abort();
+  };
+
+  const controls = { abortSiblingsExcept, abortActive };
+  const settleChild = (
+    res: Result<T, E | UnhandledException>,
+    index: number,
+    slot: { release(): void },
+  ) => {
+    runningByIndex.delete(index);
+    slot.release();
+    results[index] = res;
+    config.onChildSettled?.(res, index, controls);
+  };
+
+  try {
+    if (config.poolSize >= plans.length) {
+      const runs = plans.map((plan, index) => {
+        const slot = session.spawn();
+        runningByIndex.set(index, slot.controller);
+        return config.executeChild(plan, slot.context()).then((result) => {
+          // SAFETY: ExecuteChildPlan types results as unknown; every plan here is Plan<T, E, ...> at this site.
+          const res: Result<T, E | UnhandledException> = unsafeCoerce(result);
+          settleChild(res, index, slot);
+          return res;
+        });
+      });
+
+      await Promise.all(runs);
+      return results;
+    }
+
+    let nextIndex = 0;
+    const workerCount = Math.min(config.poolSize, plans.length);
+    const worker = async () => {
+      while (config.shouldScheduleMore()) {
+        const i = nextIndex;
+        nextIndex += 1;
+        const plan = plans[i];
+        if (plan === undefined) return;
+
+        const slot = session.spawn();
+        runningByIndex.set(i, slot.controller);
+        // SAFETY: ExecuteChildPlan types results as unknown; every plan here is Plan<T, E, ...> at this site.
+        const res: Result<T, E | UnhandledException> = unsafeCoerce(
+          await config.executeChild(plan, slot.context()),
+        );
+        settleChild(res, i, slot);
+      }
+    };
+
+    await Promise.all(Array.from({ length: workerCount }, worker));
+    return results;
+  } finally {
+    session.detach();
+  }
+}
 
 export function concurrencyLimit(
   concurrency: number | undefined,
@@ -34,111 +113,6 @@ export function concurrencyLimit(
   }
 
   return Result.ok(Math.min(concurrency, size));
-}
-
-function fanOutPlans(
-  plans: readonly Plan<unknown, unknown, unknown>[],
-  outerContext: RunContext<readonly unknown[]>,
-  executeChild: ExecuteChildPlan,
-): FanOut<unknown, unknown> {
-  const entries = plans.map((plan) => ({ plan, controller: new AbortController() }));
-  const cascade = () => entries.forEach((e) => e.controller.abort(outerContext.signal.reason));
-
-  if (outerContext.signal.aborted) cascade();
-  else outerContext.signal.addEventListener("abort", cascade, { once: true });
-
-  const detach = () => outerContext.signal.removeEventListener("abort", cascade);
-  const controllers = entries.map((e) => e.controller);
-  const runs = entries.map((e) =>
-    executeChild(
-      e.plan,
-      createRunContext(e.controller.signal, outerContext.args, outerContext.extensions),
-    ),
-  );
-
-  return { runs, controllers, detach };
-}
-
-async function driveFirstSettlerFanOutPlans<T, E>(
-  plans: readonly Plan<T, E, unknown>[],
-  outerContext: RunContext<readonly unknown[]>,
-  executeChild: ExecuteChildPlan,
-  shouldClaim: FirstSettlerClaim<T, E>,
-): Promise<Result<T, E | UnhandledException>[]> {
-  const fan = fanOutPlans(plans, outerContext, executeChild);
-  let winnerClaimed = false;
-
-  const results = await Promise.all(
-    fan.runs.map((run, index) =>
-      run.then((result) => {
-        // SAFETY: ExecuteChildPlan types results as unknown; every plan here is Plan<T, E, ...> at this site.
-        const typed: Result<T, E | UnhandledException> = unsafeCoerce(result);
-        if (!winnerClaimed && shouldClaim(typed, winnerClaimed)) {
-          winnerClaimed = true;
-          fan.controllers.forEach((controller, controllerIndex) => {
-            if (controllerIndex !== index) controller.abort();
-          });
-        }
-        return typed;
-      }),
-    ),
-  );
-
-  fan.detach();
-  return results;
-}
-
-type BoundedPoolConfig<T, E> = {
-  continueScheduling: () => boolean;
-  executeChild: ExecuteChildPlan;
-  onResult?: (
-    result: Result<T, E | UnhandledException>,
-    activeControllers: ReadonlySet<AbortController>,
-  ) => void;
-};
-
-async function driveBoundedPoolPlans<T, E>(
-  plans: readonly Plan<T, E, unknown>[],
-  outerContext: RunContext<readonly unknown[]>,
-  poolSize: number,
-  config: BoundedPoolConfig<T, E>,
-): Promise<Array<Result<T, E | UnhandledException> | undefined>> {
-  const controllers = new Set<AbortController>();
-  const cascade = () => controllers.forEach((c) => c.abort(outerContext.signal.reason));
-
-  if (outerContext.signal.aborted) cascade();
-  else outerContext.signal.addEventListener("abort", cascade, { once: true });
-
-  const results = Array<Result<T, E | UnhandledException> | undefined>(plans.length);
-  let nextIndex = 0;
-
-  const worker = async () => {
-    while (config.continueScheduling()) {
-      const i = nextIndex;
-      nextIndex += 1;
-      const plan = plans[i];
-      if (plan === undefined) return;
-      const controller = new AbortController();
-      controllers.add(controller);
-      if (outerContext.signal.aborted) controller.abort(outerContext.signal.reason);
-      // SAFETY: ExecuteChildPlan types results as unknown; every plan here is Plan<T, E, ...> at this site.
-      const res: Result<T, E | UnhandledException> = unsafeCoerce(
-        await config.executeChild(
-          plan,
-          createRunContext(controller.signal, outerContext.args, outerContext.extensions),
-        ),
-      );
-      controllers.delete(controller);
-      results[i] = res;
-      config.onResult?.(res, controllers);
-    }
-  };
-
-  const detach = () => outerContext.signal.removeEventListener("abort", cascade);
-
-  await Promise.all(Array(poolSize).fill(undefined).map(worker)).finally(detach);
-
-  return results;
 }
 
 export function collectAllOk<T, E>(
@@ -168,18 +142,17 @@ async function driveAllUnboundedPlans<T, E>(
   outerContext: RunContext<readonly unknown[]>,
 ): Promise<Result<T[], E | UnhandledException>> {
   let firstErr: Err<T[], E | UnhandledException> | undefined;
-  const results = await driveFirstSettlerFanOutPlans(
-    plans,
-    outerContext,
-    executeInterruptingPlan,
-    (result) => {
+  const results = await driveFanOutPlans(plans, outerContext, {
+    poolSize: plans.length,
+    executeChild: executeInterruptingPlan,
+    shouldScheduleMore: () => firstErr === undefined,
+    onChildSettled: (result, index, { abortSiblingsExcept }) => {
       if (result.isErr() && firstErr === undefined) {
         firstErr = result;
-        return true;
+        abortSiblingsExcept(index);
       }
-      return false;
     },
-  );
+  });
 
   if (firstErr !== undefined) return firstErr;
 
@@ -200,13 +173,14 @@ export async function driveAllPlans<T, E>(
   if (limit.value >= plans.length) return driveAllUnboundedPlans(plans, outerContext);
 
   let firstErr: Err<T, E | UnhandledException> | undefined;
-  const results = await driveBoundedPoolPlans(plans, outerContext, limit.value, {
-    continueScheduling: () => firstErr === undefined,
+  const results = await driveFanOutPlans(plans, outerContext, {
+    poolSize: limit.value,
     executeChild: executeInterruptingPlan,
-    onResult: (res, activeControllers) => {
-      if (res.isErr() && firstErr === undefined) {
-        firstErr = res;
-        for (const c of activeControllers) c.abort();
+    shouldScheduleMore: () => firstErr === undefined,
+    onChildSettled: (result, _index, { abortActive }) => {
+      if (result.isErr() && firstErr === undefined) {
+        firstErr = result;
+        abortActive();
       }
     },
   });
@@ -241,10 +215,13 @@ async function driveAllSettledUnboundedPlans<T, E>(
   plans: readonly Plan<T, E, unknown>[],
   outerContext: RunContext<readonly unknown[]>,
 ): Promise<Result<T, E | UnhandledException>[]> {
-  const fan = fanOutPlans(plans, outerContext, executeCooperativePlan);
-  const results = await Promise.all(fan.runs);
-  fan.detach();
-  // SAFETY: fanOutPlans types runs as Result<unknown, ...>; every child plan matches T and E at this site.
+  const results = await driveFanOutPlans(plans, outerContext, {
+    poolSize: plans.length,
+    executeChild: executeCooperativePlan,
+    shouldScheduleMore: () => true,
+  });
+
+  // SAFETY: driveFanOutPlans types results as unknown; every child plan matches T and E at this site.
   return unsafeCoerce(results);
 }
 
@@ -264,9 +241,10 @@ export async function driveAllSettledPlans<T, E>(
     return Result.ok(results);
   }
 
-  const results = await driveBoundedPoolPlans(plans, outerContext, limit.value, {
-    continueScheduling: () => true,
+  const results = await driveFanOutPlans(plans, outerContext, {
+    poolSize: limit.value,
     executeChild: executeCooperativePlan,
+    shouldScheduleMore: () => true,
   });
 
   return collectAllSettled(results);
@@ -281,19 +259,20 @@ export async function driveRacePlans<T, E>(
     return Promise.resolve(Result.err(new UnhandledException({ cause })));
   }
 
+  let winnerClaimed = false;
   let winner: Result<T, E | UnhandledException> | undefined;
-  await driveFirstSettlerFanOutPlans(
-    plans,
-    outerContext,
-    executeInterruptingPlan,
-    (result, hasWinner) => {
-      if (!hasWinner) {
+  await driveFanOutPlans(plans, outerContext, {
+    poolSize: plans.length,
+    executeChild: executeInterruptingPlan,
+    shouldScheduleMore: () => true,
+    onChildSettled: (result, index, { abortSiblingsExcept }) => {
+      if (!winnerClaimed) {
+        winnerClaimed = true;
         winner = result;
-        return true;
+        abortSiblingsExcept(index);
       }
-      return false;
     },
-  );
+  });
 
   if (winner !== undefined) return winner;
 
@@ -311,24 +290,25 @@ export async function driveAnyPlans<T, E>(
     );
   }
 
+  let winnerClaimed = false;
   let winner: { value: T } | undefined;
-  const results = await driveFirstSettlerFanOutPlans(
-    plans,
-    outerContext,
-    executeInterruptingPlan,
-    (result) => {
-      if (result.isOk() && winner === undefined) {
+  const results = await driveFanOutPlans(plans, outerContext, {
+    poolSize: plans.length,
+    executeChild: executeInterruptingPlan,
+    shouldScheduleMore: () => true,
+    onChildSettled: (result, index, { abortSiblingsExcept }) => {
+      if (!winnerClaimed && result.isOk()) {
+        winnerClaimed = true;
         winner = { value: result.value };
-        return true;
+        abortSiblingsExcept(index);
       }
-      return false;
     },
-  );
+  });
 
   if (winner !== undefined) return Result.ok(winner.value);
 
-  const errors = results.filter(Result.isError).map((r) => r.error);
+  const errors = results.flatMap((result) =>
+    result !== undefined && Result.isError(result) ? [result.error] : [],
+  );
   return Result.err(new ErrorGroup(errors, "Op.any failed because all operations failed"));
 }
-
-export { fanOutPlans, driveFirstSettlerFanOutPlans, driveBoundedPoolPlans };

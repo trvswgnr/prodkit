@@ -79,9 +79,9 @@ Why this matters:
 
 Enforced by code paths:
 
-- `packages/op/src/core/plan/fan-out.ts` (`fanOutPlans`): isolates child cancellation and detaches
-  parent abort listeners on settle; combinator child runs call `executePlan` with
-  `Settlement.interrupting` so aborted losers unwind even when they ignore the signal
+- `packages/op/src/core/plan/fan-out.ts` (`driveFanOutPlans`): uses `ChildRunSession.pool` to isolate
+  child cancellation and detach parent abort listeners on settle; combinator child runs call
+  `executePlan` with `Settlement.interrupting` so aborted losers unwind even when they ignore the signal
 
 Representative tests:
 
@@ -172,17 +172,15 @@ complete before `.run()` settles. Throws from `return` are swallowed on purpose
 Combinator contracts live in `packages/op/src/core/plan/combinators.ts` and
 `packages/op/src/core/plan/fan-out.ts` alongside the fuller comment block in `combinators.ts`.
 
-### Fan-out scheduling modes
+### Fan-out scheduling
 
-Two execution shapes in `packages/op/src/core/plan/fan-out.ts`:
-
-- **First-settler** (`driveFirstSettlerFanOutPlans`): used by `Op.race`, `Op.any`, and unbounded
-  fail-fast `Op.all`. Every child starts under one outer abort umbrella. The first branch that
-  matches the combinator claim rule wins, aborts siblings, and `.run()` waits until every child
-  promise settles (including loser cleanup).
-- **Bounded pool** (`driveBoundedPoolPlans`): used when `Op.all` or `Op.allSettled` receive a
-  concurrency limit below the child count. At most N children run at once. Fail-fast `Op.all`
-  stops scheduling new work after the first `Err` and aborts in-flight siblings.
+Combinator fan-out runs through one driver in `packages/op/src/core/plan/fan-out.ts`
+(`driveFanOutPlans`) backed by `ChildRunSession.pool`. `poolSize` caps concurrent children; when it
+is at least the child count, every branch starts under one outer abort umbrella (first-settler
+behavior for `Op.race`, `Op.any`, and unbounded fail-fast `Op.all`). Below the child count, at most N
+children run at once. Fail-fast `Op.all` stops scheduling after the first `Err` and aborts in-flight
+siblings. First-settler combinators abort siblings by index and wait until every started child promise
+settles (including loser cleanup).
 
 Representative regression tests:
 
@@ -293,8 +291,10 @@ signal, plus README's `Op.defer` / `.on("exit")` notes and checks in `packages/o
 `packages/op/tests/unit/policy-timeout.test.ts`, and
 `packages/op/tests/unit/lifecycle-*.test.ts`. Settlement presets live in
 `packages/op/src/core/settlement-scope.ts`: DI lazy-resolve uses `Settlement.rejecting`;
-Policy.cancel owns bound-abort session composition and macrotimer fallback in `policy/plan.ts` and
-uses `Settlement.interruptingAndDraining`; fan-out children use `Settlement.interrupting`; combinators
+`ChildRunSession` in `core/child-run-session.ts` owns parent-to-child signal cascade for fan-out,
+timeout inner runs, and bound-cancel merge; Policy.cancel keeps bound-abort race orchestration and
+macrotimer fallback in `policy/plan.ts` and uses `Settlement.interruptingAndDraining`; fan-out children
+use `Settlement.interrupting`; combinators
 and `DI.provide` use `Settlement.interruptingAndDraining`. Low-level `AbortSettlement` primitives
 remain in `packages/op/src/core/settlement.ts` for the driver.
 Type-level contracts collected in

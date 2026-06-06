@@ -5,11 +5,11 @@ import { deferredPromise, neverSettling } from "../support/utils.js";
 /**
  * Focused regression harness for fan-out scheduling invariants.
  *
- * Bounded-pool and first-settler paths live in `packages/op/src/core/plan/fan-out.ts`.
- * Contributor outcome notes: `docs/contributor/op-invariants.md` (Fan-out scheduling modes).
+ * Fan-out scheduling lives in `packages/op/src/core/plan/fan-out.ts` (`driveFanOutPlans`).
+ * Contributor outcome notes: `docs/contributor/op-invariants.md` (Fan-out scheduling).
  */
 describe("fan-out regression harness", () => {
-  describe("bounded pool", () => {
+  describe("bounded concurrency", () => {
     test("caps concurrent children and aborts in-flight siblings on first Err", async () => {
       let slowObservedAbort = false;
       let queuedStarted = false;
@@ -37,7 +37,7 @@ describe("fan-out regression harness", () => {
     });
   });
 
-  describe("first settler", () => {
+  describe("first-settler", () => {
     test("Op.race waits for loser defer cleanup before run() settles", async () => {
       const loserCleanupGate = deferredPromise<void>();
       let loserCleanupStarted = false;
