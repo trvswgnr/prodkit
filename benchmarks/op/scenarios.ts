@@ -41,10 +41,7 @@ export async function runAsyncFnChain(steps: number = COMPOSE_STEPS): Promise<nu
 }
 
 /** Full sequential compose path: yield* Op.of per step. */
-export async function runOpYieldChain(
-  Op: BenchOp,
-  steps: number = COMPOSE_STEPS,
-): Promise<number> {
+export async function runOpYieldChain(Op: BenchOp, steps: number = COMPOSE_STEPS): Promise<number> {
   const program = Op(function* () {
     let value = 1;
     for (let step = 0; step < steps; step += 1) {
@@ -60,10 +57,7 @@ export async function runOpYieldChain(
 }
 
 /** Single Op, inline loop (one genPlan / one driveIterator, no nested yield*). */
-export async function runOpFlatLoop(
-  Op: BenchOp,
-  steps: number = COMPOSE_STEPS,
-): Promise<number> {
+export async function runOpFlatLoop(Op: BenchOp, steps: number = COMPOSE_STEPS): Promise<number> {
   const program = Op(function* () {
     let value = 1;
     for (let step = 0; step < steps; step += 1) {
