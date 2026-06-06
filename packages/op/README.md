@@ -81,6 +81,9 @@ if (result.isOk()) {
 npm i @prodkit/op better-result
 ```
 
+**ESM only.** `@prodkit/op` ships ES modules only. There is no CommonJS entry; use `import` syntax
+or dynamic `import()` in ESM projects.
+
 Runtime support: any ESM JavaScript runtime with ES2022 plus `Promise`, `AbortController` /
 `AbortSignal.reason`, `queueMicrotask`, `setTimeout` / `clearTimeout`, `AggregateError`, and
 `Error.cause`. No Node-specific APIs are required by the public operation model. For Node
