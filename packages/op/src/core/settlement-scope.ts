@@ -14,8 +14,7 @@ import {
 type AbortMode = "passThrough" | "reject" | "interrupt";
 type AbortCompletion = "return" | "drain";
 
-/** Contributor-only launch/observe intent for nested plan and suspend work. */
-export type SettlementProfile = {
+type SettlementProfile = {
   readonly key: string;
   readonly launch: AbortMode;
   readonly completion: AbortCompletion;
@@ -46,8 +45,7 @@ export const SettlementPresets = {
 
 type MapChildContext = (parent: RunContext<readonly unknown[]>) => RunContext<readonly unknown[]>;
 
-/** Signal-bound compiled settlement preset for nested plan execution. */
-export type SettlementScope = {
+type SettlementScope = {
   readonly signal: AbortSignal;
   readonly profile: SettlementProfile;
 
@@ -136,7 +134,7 @@ export const Settlement = {
     start: (context: RunContext<readonly unknown[]>) => PromiseLike<T>,
   ): SuspendInstruction {
     return new SuspendInstruction((context) =>
-      compileScope(profile, context.signal).observeWork(start(context)),
+      compileScope(profile, context.signal).suspendObservedWork(start).suspend(context),
     );
   },
 
@@ -145,9 +143,8 @@ export const Settlement = {
     plan: Plan<T, E, M>,
     mapContext?: MapChildContext,
   ): SuspendInstruction {
-    return new SuspendInstruction((context) => {
-      const scope = compileScope(profile, context.signal);
-      return scope.observeWork(scope.runPlan(plan, context, mapContext));
-    });
+    return new SuspendInstruction((context) =>
+      compileScope(profile, context.signal).suspendPlan(plan, mapContext).suspend(context),
+    );
   },
 } as const;

@@ -4,10 +4,6 @@ import { Result } from "../result.js";
 import { raceInFlightAfterInterrupt } from "./settlement.js";
 import { createRunContext, type RunContext } from "./runtime.js";
 
-type ChildPlanRun<T, E> = (
-  context: RunContext<readonly unknown[]>,
-) => Promise<Result<T, E | UnhandledException>>;
-
 function watchParentAbort(
   parent: AbortSignal,
   onAbort: (reason: unknown) => void,
@@ -24,7 +20,7 @@ function watchParentAbort(
   };
 }
 
-export type IsolatedChildRunSession = {
+type IsolatedChildRunSession = {
   readonly signal: AbortSignal;
   context(): RunContext<readonly unknown[]>;
   abort(reason?: unknown): void;
@@ -49,14 +45,14 @@ function isolated(parent: RunContext<readonly unknown[]>): IsolatedChildRunSessi
   };
 }
 
-export type PoolChildSpawn = {
+type PoolChildSpawn = {
   readonly signal: AbortSignal;
   readonly controller: AbortController;
   context(): RunContext<readonly unknown[]>;
   release(): void;
 };
 
-export type PoolChildRunSession = {
+type PoolChildRunSession = {
   spawn(): PoolChildSpawn;
   activeControllers(): ReadonlySet<AbortController>;
   detach(): void;
@@ -93,7 +89,7 @@ function pool(parent: RunContext<readonly unknown[]>): PoolChildRunSession {
   };
 }
 
-export type BoundCancelChildRunSession = {
+type BoundCancelChildRunSession = {
   readonly signal: AbortSignal;
   readonly boundAbort: Promise<void>;
   context(): RunContext<readonly unknown[]>;
@@ -141,7 +137,7 @@ function boundCancel(
 }
 
 function raceBoundCancel<T, E>(
-  run: ChildPlanRun<T, E>,
+  run: (context: RunContext<readonly unknown[]>) => Promise<Result<T, E | UnhandledException>>,
   boundSignal: AbortSignal,
   outerContext: RunContext<readonly unknown[]>,
 ): Promise<Result<T, E | UnhandledException>> {
