@@ -37,7 +37,7 @@ See [Dependency security](CONTRIBUTING.md#dependency-security) in `CONTRIBUTING.
 Supported releases follow the deprecation policy in [`CONTRIBUTING.md`](CONTRIBUTING.md#deprecation-policy):
 the latest release on each supported major line receives security fixes.
 
-Pre-0.2.0 alpha releases of `@prodkit/op` are unsupported after the 0.2.0 beta ships.
+`@prodkit/op` releases before `0.2.0` (`0.1.x`) do not receive security fixes.
 
 ## Response and disclosure
 

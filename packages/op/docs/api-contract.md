@@ -15,7 +15,7 @@ Import them from `better-result` directly; they are not re-exported from `@prodk
 | Application | `@prodkit/op`, `@prodkit/op/di`, `@prodkit/op/policy`, `@prodkit/op/hkt` | Application and library code |
 | Extension-author | `@prodkit/op/internal` | Op extension authors only; not for application imports |
 
-All tiers are semver-governed from `0.2.0-beta`. Extension-author exports are stable but
+All tiers are semver-governed from `0.2.0`. Extension-author exports are stable but
 documented as a separate contract tier.
 
 ---
