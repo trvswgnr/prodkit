@@ -7,7 +7,6 @@ import type { RunContext } from "./runtime.js";
 import {
   type SuspendWork,
   withAbortDrain,
-  type AbortSettlement,
   AbortSettlement as AbortSettlementValues,
   awaitWithAbort,
 } from "./settlement.js";
@@ -45,13 +44,7 @@ export const SettlementPresets = {
   },
 } as const satisfies Record<string, SettlementProfile>;
 
-type SettlementPresetName = keyof typeof SettlementPresets;
-
 type MapChildContext = (parent: RunContext<readonly unknown[]>) => RunContext<readonly unknown[]>;
-
-type RunPlanOptions = {
-  readonly mapContext?: MapChildContext;
-};
 
 /** Signal-bound compiled settlement preset for nested plan execution. */
 export type SettlementScope = {
@@ -61,10 +54,10 @@ export type SettlementScope = {
   runPlan<T, E, M>(
     plan: Plan<T, E, M>,
     context: RunContext<readonly unknown[]>,
-    options?: RunPlanOptions,
+    mapContext?: MapChildContext,
   ): Promise<Result<T, E | UnhandledException>>;
 
-  suspendPlan<T, E, M>(plan: Plan<T, E, M>, options?: RunPlanOptions): SuspendInstruction;
+  suspendPlan<T, E, M>(plan: Plan<T, E, M>, mapContext?: MapChildContext): SuspendInstruction;
 
   suspendObservedWork<T>(
     start: (context: RunContext<readonly unknown[]>) => PromiseLike<T>,
@@ -75,17 +68,6 @@ export type SettlementScope = {
   awaitWork<T>(work: PromiseLike<T>): PromiseLike<T>;
 };
 
-function launchSettlement(mode: AbortMode, signal: AbortSignal): AbortSettlement {
-  switch (mode) {
-    case "passThrough":
-      return AbortSettlementValues.passThrough;
-    case "reject":
-      return AbortSettlementValues.rejectOnAbort(() => abortReason(signal));
-    case "interrupt":
-      return AbortSettlementValues.interruptOnAbort(() => abortReason(signal));
-  }
-}
-
 function compileScope(profile: SettlementProfile, signal: AbortSignal): SettlementScope {
   const observeWork = <T>(work: PromiseLike<T>): SuspendWork<T> =>
     profile.completion === "drain" ? withAbortDrain(work) : work;
@@ -93,10 +75,16 @@ function compileScope(profile: SettlementProfile, signal: AbortSignal): Settleme
   const runPlan = <T, E, M>(
     plan: Plan<T, E, M>,
     context: RunContext<readonly unknown[]>,
-    options?: RunPlanOptions,
+    mapContext?: MapChildContext,
   ): Promise<Result<T, E | UnhandledException>> => {
-    const mapped = options?.mapContext?.(context) ?? context;
-    return executePlan(plan, mapped, launchSettlement(profile.launch, mapped.signal));
+    const mapped = mapContext?.(context) ?? context;
+    const launch =
+      profile.launch === "passThrough"
+        ? AbortSettlementValues.passThrough
+        : profile.launch === "reject"
+          ? AbortSettlementValues.rejectOnAbort(() => abortReason(mapped.signal))
+          : AbortSettlementValues.interruptOnAbort(() => abortReason(mapped.signal));
+    return executePlan(plan, mapped, launch);
   };
 
   return {
@@ -104,9 +92,9 @@ function compileScope(profile: SettlementProfile, signal: AbortSignal): Settleme
     profile,
     runPlan,
     observeWork,
-    suspendPlan(plan, options) {
+    suspendPlan(plan, mapContext) {
       return new SuspendInstruction((parentContext) =>
-        observeWork(runPlan(plan, parentContext, options)),
+        observeWork(runPlan(plan, parentContext, mapContext)),
       );
     },
     suspendObservedWork(start) {
@@ -116,31 +104,31 @@ function compileScope(profile: SettlementProfile, signal: AbortSignal): Settleme
       if (profile.launch !== "reject") {
         return work;
       }
-      return awaitWithAbort(work, signal, launchSettlement("reject", signal));
+      return awaitWithAbort(
+        work,
+        signal,
+        AbortSettlementValues.rejectOnAbort(() => abortReason(signal)),
+      );
     },
   };
-}
-
-function scopeForPreset(preset: SettlementPresetName, signal: AbortSignal): SettlementScope {
-  return compileScope(SettlementPresets[preset], signal);
 }
 
 /** Contributor-only nested settlement presets compiled against a run signal. */
 export const Settlement = {
   cooperative(signal: AbortSignal): SettlementScope {
-    return scopeForPreset("cooperative", signal);
+    return compileScope(SettlementPresets.cooperative, signal);
   },
 
   rejecting(signal: AbortSignal): SettlementScope {
-    return scopeForPreset("rejecting", signal);
+    return compileScope(SettlementPresets.rejecting, signal);
   },
 
   interrupting(signal: AbortSignal): SettlementScope {
-    return scopeForPreset("interrupting", signal);
+    return compileScope(SettlementPresets.interrupting, signal);
   },
 
   interruptingAndDraining(signal: AbortSignal): SettlementScope {
-    return scopeForPreset("interruptingAndDraining", signal);
+    return compileScope(SettlementPresets.interruptingAndDraining, signal);
   },
 
   suspendObservedWork<T>(
@@ -155,11 +143,11 @@ export const Settlement = {
   suspendPlan<T, E, M>(
     profile: SettlementProfile,
     plan: Plan<T, E, M>,
-    options?: RunPlanOptions,
+    mapContext?: MapChildContext,
   ): SuspendInstruction {
     return new SuspendInstruction((context) => {
       const scope = compileScope(profile, context.signal);
-      return scope.observeWork(scope.runPlan(plan, context, options));
+      return scope.observeWork(scope.runPlan(plan, context, mapContext));
     });
   },
 } as const;

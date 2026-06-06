@@ -8,9 +8,10 @@ type ChildPlanRun<T, E> = (
   context: RunContext<readonly unknown[]>,
 ) => Promise<Result<T, E | UnhandledException>>;
 
-type Detachable = { detach(): void };
-
-function watchParentAbort(parent: AbortSignal, onAbort: (reason: unknown) => void): Detachable {
+function watchParentAbort(
+  parent: AbortSignal,
+  onAbort: (reason: unknown) => void,
+): { detach(): void } {
   const cascade = () => onAbort(abortReason(parent));
 
   if (parent.aborted) cascade();
@@ -19,22 +20,6 @@ function watchParentAbort(parent: AbortSignal, onAbort: (reason: unknown) => voi
   return {
     detach() {
       parent.removeEventListener("abort", cascade);
-    },
-  };
-}
-
-type ChildContextSlot = {
-  readonly signal: AbortSignal;
-  readonly controller: AbortController;
-  context(parent: RunContext<readonly unknown[]>): RunContext<readonly unknown[]>;
-};
-
-function childContextSlot(controller: AbortController): ChildContextSlot {
-  return {
-    signal: controller.signal,
-    controller,
-    context(parent) {
-      return createRunContext(controller.signal, parent.args, parent.extensions);
     },
   };
 }
@@ -48,13 +33,12 @@ export type IsolatedChildRunSession = {
 
 function isolated(parent: RunContext<readonly unknown[]>): IsolatedChildRunSession {
   const controller = new AbortController();
-  const slot = childContextSlot(controller);
   const watch = watchParentAbort(parent.signal, (reason) => controller.abort(reason));
 
   return {
-    signal: slot.signal,
+    signal: controller.signal,
     context() {
-      return slot.context(parent);
+      return createRunContext(controller.signal, parent.args, parent.extensions);
     },
     abort(reason) {
       controller.abort(reason);
@@ -89,12 +73,11 @@ function pool(parent: RunContext<readonly unknown[]>): PoolChildRunSession {
       const controller = new AbortController();
       active.add(controller);
       if (parent.signal.aborted) controller.abort(abortReason(parent.signal));
-      const slot = childContextSlot(controller);
       return {
-        signal: slot.signal,
-        controller: slot.controller,
+        signal: controller.signal,
+        controller,
         context() {
-          return slot.context(parent);
+          return createRunContext(controller.signal, parent.args, parent.extensions);
         },
         release() {
           active.delete(controller);

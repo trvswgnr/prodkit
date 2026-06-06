@@ -76,9 +76,7 @@ export function providePlan<T, E, M>(
       const result: Result<T, E | UnhandledException> = yield* Settlement.suspendPlan(
         SettlementPresets.interruptingAndDraining,
         source,
-        {
-          mapContext: (context) => extendContextWithBindings(context, snapshot),
-        },
+        (context) => extendContextWithBindings(context, snapshot),
       );
 
       if (result.isErr()) return yield* result;
