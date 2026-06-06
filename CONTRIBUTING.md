@@ -74,7 +74,7 @@ Run the same checks used before publishing:
 pnpm run gate
 ```
 
-Gate orchestration lives in `@prodkit/tools` (`gate` runs turbo workspace tasks, `gate:checks`, then pack smoke). Add new doc or contract checks to `gate:checks` in `tools/package.json`, not the root manifest.
+Gate orchestration lives in `@prodkit/tools` (`gate` runs turbo workspace tasks, `gate:checks`, then pack smoke). Add new doc or contract checks to `gate:checks` in `tools/package.json`, not the root manifest. Contract tests for those checks live under `tools/checks/*.test.ts` and run inside `gate:checks` via `node --test`, not via root `pnpm run test`.
 
 `tools/` layout: `checks/` (gate doc and contract scripts), `smoke/` (pack, GitHub, npm, and alternate-runtime harnesses), `release/` (version cut and changelog checks), `lib/` (shared helpers). `update-op-performance-doc.ts` stays at the workspace root.
 
@@ -136,7 +136,7 @@ examples/
   op/                 core Op samples (combinators, defer, webhook, ...)
   op/di/              @prodkit/op/di samples (onboarding, cancellation, HTTP handler)
   std/                reserved for future @prodkit/std utility samples
-  smoke.ts            runs op, di, and std smoke suites
+  smoke.ts            runs op and di smoke suites (std samples reserved under std/)
 ```
 
 ## Benchmarking
@@ -177,6 +177,8 @@ Published baseline interpretation lives in [`packages/op/docs/performance.md`](p
 
 If a behavior is an internal invariant of one module, keep it in unit; if it is a public composition/API contract, keep it in integration. Avoid duplicate assertions across tiers unless each tier validates meaningfully different risk.
 
+For module-to-test placement, start with [`docs/contributor/runtime-architecture.md`](docs/contributor/runtime-architecture.md) and add or extend the closest existing `packages/op/tests/` file before introducing a new category.
+
 **`@prodkit/op/di`** runtime tests live under `packages/op/tests/unit/di/` (for example
 `index.test.ts`); compile-time DI contracts live in `packages/op/tests/types/di.test.ts`. Run
 `pnpm --filter @prodkit/op run coverage` locally to reproduce CI coverage for DI and the core runtime.
@@ -190,7 +192,7 @@ If a behavior is an internal invariant of one module, keep it in unit; if it is 
 - The branded `Op` type alias stays on that entry (merged with the `Op` factory const). Internal modules use `import type { Op } from "../index.js"` when they need the alias; do not duplicate `Op` elsewhere ([ADR 0012](docs/adr/0012-op-type-alias-on-main-entry.md)).
 - Re-exports from dependencies must be explicit named exports in `packages/op/src/index.ts` (never `export *`).
 - Internal runtime concerns are split into focused modules under `packages/op/src/`:
-  - `core/` (core operation contracts and execution runtime pieces)
+  - `core/` (execution runtime, plan AST, settlement, child-run session, lifecycle, instructions)
   - `builders.ts` (primitive operation constructors)
   - `policy/` (retry, timeout, cancel, release policies and `Delay` helpers)
   - `hkt.ts` (reusable HKT primitives for `@prodkit/op/hkt`)
@@ -198,18 +200,18 @@ If a behavior is an internal invariant of one module, keep it in unit; if it is 
   - `errors.ts`, `result.ts`, `tagged.ts` (shared domain contracts)
   - `shared.ts` (Op brands and `isOp` helpers only; workspace primitives import `@prodkit/shared/runtime` directly)
 - `@prodkit/shared` (`packages/shared`, private): workspace globals, publishable tsconfig/vitest presets, and runtime primitives (`@prodkit/shared/runtime`). Publishable packages declare `"@prodkit/shared": "workspace:*"` and extend `@prodkit/shared/tsconfig/publishable`.
-- Test layout under `packages/op/tests/`:
+- Test layout under `packages/op/tests/` mirrors runtime modules (see [`docs/contributor/runtime-architecture.md`](docs/contributor/runtime-architecture.md)):
   - `integration/index.test.ts` for public API contract coverage
-  - `unit/errors.test.ts` for typed error contracts
-  - `unit/builders.test.ts` for operation builders, runtime composition, and builder type-inference contracts
-  - `unit/policy-*.test.ts` for retry, timeout, cancel, and abort-signal behavior
-  - `unit/core.test.ts` for core execution invariants
-  - `unit/lifecycle-*.test.ts` for lifecycle/finalizer behavior (release, enter/exit hooks, defer, generator finalization)
-  - `unit/fluent.test.ts` for fluent operator semantics
-  - `unit/di/index.test.ts` for DI runtime behavior
-  - `property/monad-laws.test.ts` for algebraic contract checks
-  - `types/op.test.ts` for compile-time type contracts
-  - `types/di.test.ts` for DI compile-time type contracts
+  - `unit/core.test.ts`, `unit/core/plan/plan.test.ts` for execution runtime and plan AST
+  - `unit/settlement*.test.ts`, `unit/settlement-scope.test.ts`, `unit/child-run-session.test.ts` for settlement and child-run propagation
+  - `unit/lifecycle-*.test.ts` for lifecycle and finalizer behavior
+  - `unit/combinator-*.test.ts`, `unit/fan-out-regression.test.ts` for combinators and fan-out
+  - `unit/policy-*.test.ts` for retry, timeout, cancel, release, and abort-signal policies
+  - `unit/builders.test.ts`, `unit/fluent*.test.ts`, `unit/errors.test.ts`, `unit/stack-safety.test.ts` for builders, fluent shell, errors, and stack safety
+  - `unit/di/` for DI runtime behavior; `types/di.test.ts` for DI compile-time contracts
+  - `property/` for algebraic and combinator law checks
+  - `types/op.test.ts`, `types/hkt.test.ts`, `types/metadata.test.ts` for compile-time contracts
+  - `hygiene/` for API docs and arity hygiene checks
 - Runtime invariants and execution semantics are documented in `docs/contributor/op-invariants.md`.
 - Structural rationale for core/fluent choices (why separate paths exist) lives in `docs/adr/`.
   Each ADR declares `title`, `status`, and `packages` in YAML frontmatter; run
@@ -243,6 +245,8 @@ which doc to open for a given question.
   [`docs/CONTEXT.md`](docs/CONTEXT.md#where-new-code-lives).
 - Platform-specific or integration-SDK modules (OpenTelemetry, Node CLI adapters) ship as new packages under
   `packages/`, not under std or op subpaths.
+- Tests colocate with source under `packages/std/src/**/*.test.ts` (see `packages/std/vitest.config.ts`).
+  `@prodkit/op` keeps an external `tests/` tree instead; that difference is intentional.
 - Package docs: [`packages/std/README.md`](packages/std/README.md). Ship changelog: [`packages/std/CHANGELOG.md`](packages/std/CHANGELOG.md).
 
 You can run consumer install path checks directly. Each mode builds a temporary mini-pnpm workspace (reusing `catalog:` and pnpm safety policy from `pnpm-workspace.yaml`), installs `@prodkit/op` and `@prodkit/std` from the chosen source, then runs `examples/` smoke:
