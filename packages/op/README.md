@@ -1,109 +1,47 @@
 # @prodkit/op
 
-A runtime-agnostic, composable, and predictable library for writing operations in TypeScript, built on top of [`better-result`](https://github.com/dmmulroy/better-result).
-
-This README is the **hub**: installation, quick start, and core API reference. Extended guides for
-subpaths, lifecycle, and cancellation live in [`docs/`](docs/README.md) and ship in the npm tarball.
-See also [docs/comparison.md](docs/comparison.md) and [docs/performance.md](docs/performance.md).
-
-> [!NOTE]
-> `@prodkit/op` is in **beta** starting at **0.2.0**. Published versions from 0.2.0 onward follow
-> [Semantic Versioning](https://semver.org/): **major** for incompatible API changes, **minor** for
-> backward-compatible features, **patch** for backward-compatible fixes.
-
-Compose steps top-to-bottom, attach retry, timeout, and cancellation as policy, and run parallel
-work without scattering reliability logic across your app.
-
-## Contents
-
-- [Why this exists](#why-this-exists)
-- [Installation](#installation)
-- [Versioning](#versioning)
-- [Dependencies (`better-result`)](#dependencies-better-result)
-- [Subpath exports](#subpath-exports)
-- [Quick start](#quick-start)
-- [Core API](#core-api)
-- [Typed errors](#typed-errors)
-- [Retry defaults](#retry-defaults)
-- [Built-in errors](#built-in-errors)
-- [Concurrent combinators](#concurrent-combinators)
-- [Examples](#examples)
-- [Performance](#performance)
-- [Contributing](#contributing)
-
-## Why this exists
-
-Async TypeScript has two huge flaws: you can't see from a function's type what it might fail with, and the standard concurrency helpers happily let sibling tasks keep running after one of them blows up. `@prodkit/op` fixes both. It builds on `better-result`'s `Result` model, generator composition, and typed error inference, then adds an async runtime with suspend/resume semantics, structured resource cleanup, cancellation-aware concurrency, and composable retry/timeout policies on top. Concurrency combinators thread cancellation through every child, so when one fails the rest actually stop instead of burning quota in the background. Retry, timeout, and external cancellation attach through `.with(Policy.*)` before `.run()`. Minimal runtime dependencies, a small footprint, and an API that's easy to learn and use.
-
-## Installation
+Typed async operations for TypeScript workflows that need predictable failure, cleanup,
+cancellation, retry, and timeout.
 
 ```bash
-npm i @prodkit/op
+npm i @prodkit/op better-result
 ```
 
-Runtime support: any ESM JavaScript runtime with ES2022 plus `Promise`, `AbortController` /
-`AbortSignal.reason`, `queueMicrotask`, `setTimeout` / `clearTimeout`, `AggregateError`, and
-`Error.cause`. No Node-specific APIs are required by the public operation model. For Node
-consumers, support follows current non-EOL LTS lines. Contributor tooling uses a separate Node
-`>=24.14.0` requirement.
-
-## Versioning
-
-- **0.2.0** is the first beta release.
-- From **0.2.0** onward, semver applies as defined above: plan major bumps for breaking public API
-  changes, minor bumps for backward-compatible additions, patch bumps for backward-compatible fixes.
-- Releases before 0.2.0 were pre-beta `0.1.x` lines without the post-0.2.0 compatibility contract.
-
-## Dependencies (`better-result`)
-
-`@prodkit/op` declares `better-result` as a peer dependency so your app installs one copy and
-TypeScript resolves the same `Result` types that `.run()` returns.
-
-```json
-"better-result": "^2.9.0"
-```
-
-Install it alongside `@prodkit/op` when your package manager does not install peers automatically.
-
-The peer range is the compatibility contract. Each `@prodkit/op` release is tested against the
-lowest declared `better-result` version and the current highest version that satisfies the peer
-range. Raising the lower bound or changing the range is a user-facing compatibility change and is
-documented in the changelog.
-
-Most `better-result` symbols are part of the public contract but are **not** re-exported from
-`@prodkit/op` (split imports by design). Import them from `better-result`; import operation APIs
-from `@prodkit/op`.
-
-From **`better-result`**: `Result`, `TaggedError`, `UnhandledException`, `TaggedErrorInstance`,
-and optional advanced helpers (`Err`, `Ok`, `InferErr`).
-
-From **`@prodkit/op`**: `TimeoutError` (from `.with(Policy.timeout(...))`), `ErrorGroup` (from
-`Op.any` when every branch fails).
-
-## Subpath exports
-
-Op-native extensions ship as separate subpath exports. The main `@prodkit/op` entry does not
-re-export them.
-
-| Subpath | Guide |
-| --- | --- |
-| `@prodkit/op/di` | [docs/di.md](docs/di.md) |
-| `@prodkit/op/policy` | [docs/policy.md](docs/policy.md) |
-| `@prodkit/op/hkt` | [docs/hkt.md](docs/hkt.md) |
-| `@prodkit/op/internal` | [docs/internal.md](docs/internal.md) |
-
-Also see [docs/lifecycle.md](docs/lifecycle.md) (defer, release, enter/exit) and
-[docs/cancellation.md](docs/cancellation.md) (cooperative abort contract). Full index:
-[docs/README.md](docs/README.md).
-
-Minimal policy attach:
+Use `Op` when async work needs typed failure and predictable execution, not just `await`.
 
 ```ts
 import { Op } from "@prodkit/op";
 import { Policy } from "@prodkit/op/policy";
 
-await Op.try(() => fetch("https://example.com")).with(Policy.timeout(1_000)).run();
+const onboardUser = Op(function* (id: string) {
+  const user = yield* loadUser(id);
+  yield* sendWelcomeEmail(user);
+  return user;
+}).with(Policy.timeout(1_500));
+
+const result = await onboardUser.run("user_123");
 ```
+
+That is the core shape: define named operations, compose them with `yield*`, and attach retry,
+timeout, or cancellation with `.with(...)`.
+
+> [!NOTE]
+> `@prodkit/op` is beta from `0.2.0` onward, with public APIs governed by
+> [Semantic Versioning](https://semver.org/).
+
+## Contents
+
+- [Quick start](#quick-start)
+- [Installation](#installation)
+- [Core API](#core-api)
+- [Typed errors](#typed-errors)
+- [Retry defaults](#retry-defaults)
+- [Built-in errors](#built-in-errors)
+- [Concurrent combinators](#concurrent-combinators)
+- [Guides and subpaths](#guides-and-subpaths)
+- [Examples](#examples)
+- [Performance](#performance)
+- [Contributing](#contributing)
 
 ## Quick start
 
@@ -136,6 +74,22 @@ if (result.isOk()) {
   console.error(result.error);
 }
 ```
+
+## Installation
+
+```bash
+npm i @prodkit/op better-result
+```
+
+Runtime support: any ESM JavaScript runtime with ES2022 plus `Promise`, `AbortController` /
+`AbortSignal.reason`, `queueMicrotask`, `setTimeout` / `clearTimeout`, `AggregateError`, and
+`Error.cause`. No Node-specific APIs are required by the public operation model. For Node
+consumers, support follows current non-EOL LTS lines. Contributor tooling uses a separate Node
+`>=24.14.0` requirement.
+
+`better-result` is a peer dependency. Import `Result`, `TaggedError`, `UnhandledException`, `Err`,
+`Ok`, and `InferErr` from `better-result`; import operation APIs from `@prodkit/op` and its
+subpaths. See [docs/better-result.md](docs/better-result.md) for the boundary and retry overlap.
 
 ## Core API
 
@@ -315,6 +269,23 @@ import { ErrorGroup } from "@prodkit/op";
 const r = await Op.any([Op.fail("a"), Op.of(69)]).run();
 if (r.isErr() && r.error instanceof ErrorGroup) console.log(r.error.errors);
 ```
+
+## Guides and subpaths
+
+Extended guides live in [`docs/`](docs/README.md) and ship in the npm tarball. Op-native
+extensions ship as subpath exports; the main `@prodkit/op` entry does not re-export them.
+
+| Import or guide | Topic |
+| --- | --- |
+| [`docs/better-result.md`](docs/better-result.md) | Result boundary, split imports, retry overlap |
+| [`@prodkit/op/di`](docs/di.md) | DI tokens, provide/inject, token identity, runtime errors |
+| [`@prodkit/op/policy`](docs/policy.md) | Policy attachments, retry delays, custom policy shape |
+| [`@prodkit/op/hkt`](docs/hkt.md) | HKT helpers for custom policies |
+| [`@prodkit/op/internal`](docs/internal.md) | Extension-author surface |
+| [`docs/lifecycle.md`](docs/lifecycle.md) | `Op.defer`, release, enter/exit hooks, finalizer ordering |
+| [`docs/cancellation.md`](docs/cancellation.md) | Cooperative cancellation and composed-run wiring |
+| [`docs/comparison.md`](docs/comparison.md) | Tradeoffs vs Promise, neverthrow, fp-ts, Effect |
+| [`docs/performance.md`](docs/performance.md) | Benchmark snapshot and bundle-size notes |
 
 ## Examples
 
