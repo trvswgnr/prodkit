@@ -180,6 +180,6 @@ should not have to invent that contract one call site at a time.
 The comparison above is based on each project's public documentation:
 [`Promise`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise),
 [`neverthrow`](https://github.com/supermacro/neverthrow),
-[`ResultAsync`](https://supermacro-neverthrow-22.mintlify.app/api/result-async/from-promise),
+[`ResultAsync`](https://github.com/supermacro/neverthrow#asynchronous-api-resultasync),
 [`fp-ts` `TaskEither`](https://gcanti.github.io/fp-ts/modules/TaskEither.ts.html), and
 [`Effect`](https://effect.website/).
