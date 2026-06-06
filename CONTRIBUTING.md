@@ -26,6 +26,21 @@ GitHub issues in the **Path to Beta** milestone land on branch **`beta/0.2.0`** 
 for the 0.2.0 beta cut). Open PRs against `beta/0.2.0` unless the maintainer directs otherwise;
 merge `beta/0.2.0` into `main` when the milestone closes with the beta release.
 
+## Security
+
+Report vulnerabilities in published packages per [`SECURITY.md`](SECURITY.md).
+
+### Dependency security
+
+Dependabot opens security-fix pull requests when GitHub advisories match the lockfile. Version-update
+Dependabot PRs are intentionally not enabled; the pnpm catalog and explicit pins stay authoritative.
+
+`minimumReleaseAge` in `pnpm-workspace.yaml` (24 hours, strict) may keep a fresh security-fix PR red
+in CI until the patched version ages. Retry or wait is expected.
+
+Maintainer flow: review the Dependabot security PR, run `pnpm run gate`, merge manually (no
+auto-merge).
+
 ## Documentation
 
 `@prodkit/op` consumer docs (`packages/op/README.md`, `packages/op/docs/`) ship on npm. They cover

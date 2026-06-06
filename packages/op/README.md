@@ -25,12 +25,37 @@ const result = await onboardUser.run("user_123");
 That is the core shape: define named operations, compose them with `yield*`, and attach retry,
 timeout, or cancellation with `.with(...)`.
 
-> [!NOTE]
-> `@prodkit/op` is beta from `0.2.0` onward, with public APIs governed by
-> [Semantic Versioning](https://semver.org/).
+## Project status
+
+`@prodkit/op` is a runtime-agnostic operation library: typed async composition, explicit failure,
+cooperative cancellation, lifecycle cleanup, and composable retry/timeout policy on a bounded public
+surface. It exists so production TypeScript services do not reinvent execution contracts one call
+site at a time.
+
+**Beta contract:** `0.2.0` is the first beta release. From `0.2.0` onward, public APIs follow strict
+[Semantic Versioning](https://semver.org/): patch for compatible fixes, minor for compatible
+features, major for breaking changes. Pre-0.2.0 `0.1.x` history does not define post-beta
+compatibility.
+
+**Maintenance:** Small enough that your team can own it if the maintainer ever gets hit by a bus.
+The API surface is intentionally bounded so a team can understand, fork, or maintain the runtime
+without platform-scale complexity. Led by a single maintainer today; contributions welcome via
+[`CONTRIBUTING.md`](https://github.com/trvswgnr/prodkit/blob/main/CONTRIBUTING.md); security
+reporting via
+[`SECURITY.md`](https://github.com/trvswgnr/prodkit/blob/main/SECURITY.md).
+
+**Near-term direction:**
+
+- Stabilize and document the frozen public API contract
+- Keep the `better-result` boundary explicit and tested in CI
+- Keep shipped consumer docs honest and link-checked in the gate
+
+Common objections (Effect overlap, `better-result` peer, maintenance, production readiness) are
+answered in [docs/faq.md](docs/faq.md).
 
 ## Contents
 
+- [Project status](#project-status)
 - [Quick start](#quick-start)
 - [Installation](#installation)
 - [Core API](#core-api)
@@ -288,6 +313,7 @@ extensions ship as subpath exports; the main `@prodkit/op` entry does not re-exp
 | [`docs/lifecycle.md`](docs/lifecycle.md) | `Op.defer`, release, enter/exit hooks, finalizer ordering |
 | [`docs/cancellation.md`](docs/cancellation.md) | Cooperative cancellation and composed-run wiring |
 | [`docs/comparison.md`](docs/comparison.md) | Tradeoffs vs Promise, neverthrow, fp-ts, Effect |
+| [`docs/faq.md`](docs/faq.md) | Objection-handling FAQ |
 | [`docs/performance.md`](docs/performance.md) | Benchmark snapshot and bundle-size notes |
 
 ## Examples
