@@ -14,8 +14,8 @@ import {
   sqrt,
   userProgram,
   exampleWithPoll,
-} from "./simple.ts";
-import { assert } from "../assert.ts";
+} from "./sample.ts";
+import { assert } from "../../support/assert.ts";
 import { Policy } from "@prodkit/op/policy";
 
 function isNamedUser(value: unknown): value is { name: string } {

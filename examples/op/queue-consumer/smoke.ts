@@ -2,10 +2,10 @@ import {
   BATCH_CONCURRENCY,
   ServiceCallError as ConsumerServiceCallError,
   createConsumerApp,
-} from "./queue-consumer.ts";
-import { assert } from "../assert.ts";
+} from "./sample.ts";
+import { assert } from "../../support/assert.ts";
 import { Policy } from "@prodkit/op/policy";
-import { waitUntilAbort } from "../helpers.ts";
+import { waitUntilAbort } from "../../support/helpers.ts";
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));

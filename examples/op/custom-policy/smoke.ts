@@ -1,5 +1,5 @@
-import { createApp as createCustomPolicyApp } from "./custom-policy.ts";
-import { assert } from "../assert.ts";
+import { createApp as createCustomPolicyApp } from "./sample.ts";
+import { assert } from "../../support/assert.ts";
 
 export async function runCustomPolicyExampleSmoke() {
   const app = createCustomPolicyApp();

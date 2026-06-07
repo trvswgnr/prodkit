@@ -1,6 +1,6 @@
 import { Op, TimeoutError } from "@prodkit/op";
 import { TaggedError, UnhandledException } from "better-result";
-import { assert } from "../assert.ts";
+import { assert } from "../../support/assert.ts";
 import { Policy } from "@prodkit/op/policy";
 
 export async function runCoreApiSmoke() {

@@ -5,8 +5,8 @@ import {
   InvalidWebhookError,
   ServiceCallError,
   createApp,
-} from "./webhook.ts";
-import { assert } from "../assert.ts";
+} from "./sample.ts";
+import { assert } from "../../support/assert.ts";
 
 class RetryableError extends Error {
   retryable = true;

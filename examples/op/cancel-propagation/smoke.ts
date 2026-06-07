@@ -1,7 +1,7 @@
-import { createCatalogApp, CatalogFetchError } from "./cancel-propagation.ts";
-import { assert } from "../assert.ts";
+import { createCatalogApp, CatalogFetchError } from "./sample.ts";
+import { assert } from "../../support/assert.ts";
 import { Policy } from "@prodkit/op/policy";
-import { waitUntilAbort } from "../helpers.ts";
+import { waitUntilAbort } from "../../support/helpers.ts";
 
 export async function runCancelPropagationExampleSmoke() {
   const happyPathApp = createCatalogApp({

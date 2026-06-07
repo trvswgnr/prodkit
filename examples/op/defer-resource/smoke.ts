@@ -1,5 +1,5 @@
-import { ConnectionError, QueryFailedError, createDbApp } from "./defer-resource.ts";
-import { assert } from "../assert.ts";
+import { ConnectionError, QueryFailedError, createDbApp } from "./sample.ts";
+import { assert } from "../../support/assert.ts";
 
 export async function runDeferResourceExampleSmoke() {
   let auditEnded = false;
