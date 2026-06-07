@@ -3,13 +3,13 @@ import { TaggedError } from "better-result";
 
 export class DivisionByZeroError extends TaggedError("DivisionByZeroError")() {}
 
+// TaggedError is optional, any discriminated error can be used
 export class NegativeError extends Error {
-  _tag: "NegativeError";
-  n: number;
+  readonly _tag = "NegativeError";
+  readonly n: number;
 
   constructor(n: number) {
     super();
-    this._tag = "NegativeError";
     this.n = n;
   }
 }
@@ -91,15 +91,11 @@ export const pollUntil = <T, E>(
 
 export const exampleWithPoll = Op(function* () {
   const o = { count: 0 };
-  const interval = setInterval(() => {
-    o.count++;
-  }, 50);
+  const interval = setInterval(() => o.count++, 50);
   yield* Op.defer(() => clearInterval(interval));
 
   const result = yield* pollUntil(Op.of(o), {
-    until: (v) => {
-      return v.count === 10;
-    },
+    until: (v) => v.count === 10,
     intervalMs: 10,
   });
 
