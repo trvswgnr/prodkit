@@ -25,7 +25,7 @@ exports, not separate npm packages or `@prodkit/std` modules. Full placement rul
 | `packages/op/` | `@prodkit/op` | Published operation runtime and subpaths |
 | `packages/std/` | `@prodkit/std` | Published utilities with no `@prodkit/op` dependency |
 | `packages/shared/` | `@prodkit/shared` | Private presets and workspace primitives (not on npm) |
-| `examples/op/` | `@prodkit/examples` | Consumer samples and smoke for op and op/di |
+| `examples/` | `@prodkit/examples` | Consumer samples and smoke; layout in `examples/README.md`, topic index in `examples/op/README.md` |
 | `benchmarks/op/` | `@prodkit/benchmarks` | Performance and bundle-size harnesses for op |
 | `tools/checks/` | `@prodkit/tools` | Gate doc and contract checks |
 | `tools/smoke/` | `@prodkit/tools` | Consumer pack and alternate-runtime smoke harnesses |
@@ -80,6 +80,7 @@ the boundary choice is not already covered by ADR 0008.
 | How does execution flow through modules? | [`docs/contributor/runtime-architecture.md`](contributor/runtime-architecture.md) |
 | What must stay true at run time? | [`docs/contributor/op-invariants.md`](contributor/op-invariants.md) |
 | Where should a new module live (op subpath, std, or new package)? | [Where new code lives](#where-new-code-lives), [ADR 0008](adr/0008-op-subpath-exports.md) |
+| Where are runnable consumer examples and smoke? | [`examples/README.md`](../examples/README.md), [`examples/op/README.md`](../examples/op/README.md) |
 | How do I set up, test, and release? | [`CONTRIBUTING.md`](../CONTRIBUTING.md) |
 | How should durable docs be written? | [Evergreen writing](#evergreen-writing) (this file) |
 | How does `@prodkit/op` compare to Effect / neverthrow? | [`packages/op/docs/comparison.md`](../packages/op/docs/comparison.md) (ships on npm) |

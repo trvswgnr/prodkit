@@ -133,10 +133,11 @@ All runnable consumer examples and smoke entrypoints live in the **`examples/`**
 
 ```text
 examples/
-  op/                 core Op samples (combinators, defer, webhook, ...)
-  op/di/              @prodkit/op/di samples (onboarding, cancellation, HTTP handler)
+  support/            shared assert and helpers for smoke runners
+  smoke.ts            runs op and di smoke suites
+  op/                 topic folders (sample.ts + smoke.ts per sample; see examples/op/README.md)
+  op/di/              @prodkit/op/di topic folders (see examples/op/di/README.md)
   std/                reserved for future @prodkit/std utility samples
-  smoke.ts            runs op and di smoke suites (std samples reserved under std/)
 ```
 
 ## Benchmarking

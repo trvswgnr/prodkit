@@ -11,7 +11,7 @@ Use each publishable package README under `packages/*/README.md` as the source o
 - [`@prodkit/op`](packages/op/README.md) (published to npm with the package)
 - [`@prodkit/std`](packages/std/README.md) (reserved; runtime-agnostic utilities planned)
 
-Other workspace roots are maintainer- or CI-oriented: [`examples`](examples/) (`@prodkit/examples`, with Op samples under `examples/op/` and DI under `examples/op/di/`), [`tools`](tools/) (`@prodkit/tools`), and [`benchmarks`](benchmarks/) (`@prodkit/benchmarks`).
+Other workspace roots are maintainer- or CI-oriented: [`examples`](examples/) (`@prodkit/examples`, topic folders under `examples/op/` and `examples/op/di/`), [`tools`](tools/) (`@prodkit/tools`), and [`benchmarks`](benchmarks/) (`@prodkit/benchmarks`).
 
 ## documentation map
 

@@ -52,6 +52,6 @@ subpath does not re-export these symbols.
 4. Attach with `.with(yourPolicy(...))` before `.run()`.
 
 Runnable walkthrough:
-[`examples/op/custom-policy.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/custom-policy.ts).
+[`examples/op/custom-policy/sample.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/custom-policy/sample.ts).
 Type-level coverage lives in
 [`policy/hkt.test.ts`](https://github.com/trvswgnr/prodkit/blob/main/packages/op/tests/unit/policy/hkt.test.ts).

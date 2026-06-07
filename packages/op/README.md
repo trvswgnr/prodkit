@@ -313,10 +313,10 @@ extensions ship as subpath exports; the main `@prodkit/op` entry does not re-exp
 
 ## Examples
 
-- [`examples/op/simple.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/simple.ts): minimal composition.
-- [`examples/op/webhook.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/webhook.ts): full pipeline (validation, `Op.all`/`Op.any`/`Op.race`, policies, abort).
+- [`examples/op/simple/sample.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/simple/sample.ts): minimal composition.
+- [`examples/op/webhook/sample.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/webhook/sample.ts): full pipeline (validation, `Op.all`/`Op.any`/`Op.race`, policies, abort).
 - [`examples/op/di/`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/di/): DI onboarding, cancellation, HTTP handler.
-- [`examples/op/custom-policy.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/custom-policy.ts): custom `Policy.define` with HKT.
+- [`examples/op/custom-policy/sample.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/custom-policy/sample.ts): custom `Policy.define` with HKT.
 
 ## Performance
 

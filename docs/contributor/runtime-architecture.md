@@ -328,5 +328,6 @@ flowchart TD
   settle --> ok
 ```
 
-For a traced example, start from [`examples/op/`](../../examples/op/) (especially defer, signal, and
-combinator samples) and follow imports into `execution/runtime.ts`.
+For a traced example, start from [`examples/op/`](../../examples/op/) (especially
+[`defer-resource/`](../../examples/op/defer-resource/), [`cancel-propagation/`](../../examples/op/cancel-propagation/),
+and [`webhook/`](../../examples/op/webhook/)) and follow imports into `execution/runtime.ts`.
