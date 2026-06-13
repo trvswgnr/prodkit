@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- No entries yet.
+
+## [0.2.0] - 2026-06-13
+
+### Added
+
 - Publish `docs/api-contract.md`: authoritative `@prodkit/op` export inventory grouped by
   application and extension-author tiers.
 - Publish `docs/faq.md` with answers to common adoption questions.
@@ -477,3 +483,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   paths, including generator finalization behavior.
 - Tightened combinator and policy behavior in edge cases (listener teardown,
   retry timing, and composed operation semantics).
+
