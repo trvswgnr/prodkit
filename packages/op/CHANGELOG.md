@@ -15,7 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Declare `sideEffects: false` in `package.json` so bundlers can tree-shake unused exports.
 - Rework the README opening around install and an idiomatic first operation example.
 - Expand the README **Project status** section with beta contract, maintenance model, and
   near-term direction.
@@ -38,6 +37,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `@prodkit/op/internal` no longer exports `EnterFn` or `ExitFn`; use `EnterContext` and
   `ExitContext` on the main entry for lifecycle typing.
+
+## [0.1.80] - 2026-06-04
+
+### Changed
+
+- Declare `sideEffects: false` in `package.json` so bundlers can tree-shake unused exports.
 
 ## [0.1.79] - 2026-06-03
 
