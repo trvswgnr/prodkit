@@ -11,7 +11,7 @@ in the picture.
 
 The harness in [`benchmarks/op`](https://github.com/trvswgnr/prodkit/blob/main/benchmarks/op)
 uses a shared [`comparison-matrix.ts`](https://github.com/trvswgnr/prodkit/blob/main/benchmarks/op/comparison-matrix.ts)
-for native baselines, `@prodkit/op`, and future competitor columns. Scenario definitions and
+for native baselines, `@prodkit/op`, and comparison libraries. Scenario definitions and
 contributor commands live in
 [`benchmarks/op/README.md`](https://github.com/trvswgnr/prodkit/blob/main/benchmarks/op/README.md).
 

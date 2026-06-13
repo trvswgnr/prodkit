@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and current highest matching version.
 - Clarify the consumer runtime baseline as an ES2022 ESM environment with the platform APIs used
   by the operation runtime.
+- Align the HKT and internal extension guides with the frozen public export contracts.
 
 ### Fixed
 

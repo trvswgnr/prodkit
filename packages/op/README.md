@@ -30,7 +30,7 @@ timeout, or cancellation with `.with(...)`.
 `@prodkit/op` is a runtime-agnostic operation library: typed async composition, explicit failure,
 cooperative cancellation, lifecycle cleanup, and composable retry/timeout policy on a bounded public
 surface. It exists so production TypeScript services do not reinvent execution contracts one call
-site at a time. Strictly follows SemVer from v0.2.0 onward.
+site at a time. The package is in beta and strictly follows SemVer from v0.2.0 onward.
 
 **Maintenance:** Small enough that your team can own it if the maintainer ever gets hit by a bus.
 The API surface is intentionally bounded so a team can understand, fork, or maintain the runtime
@@ -39,9 +39,9 @@ without platform-scale complexity. Led by a single maintainer today; contributio
 reporting via
 [`SECURITY.md`](https://github.com/trvswgnr/prodkit/blob/main/SECURITY.md).
 
-**Near-term direction:**
+**Ongoing commitments:**
 
-- Stabilize and document the frozen public API contract
+- Keep the public API contract bounded and documented
 - Keep the `better-result` boundary explicit and tested in CI
 - Keep shipped consumer docs honest and link-checked in the gate
 

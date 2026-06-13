@@ -36,7 +36,8 @@ Policy uses the same encoding: `[HKT.TYPE]` is `Op<...>`, args are `[T, E, A, M]
 ## Public export
 
 `HKT` (interface, namespace, and frozen `{ PARAMS, TYPE }` symbol constants). Namespace members:
-`HKT.Param`, `HKT.Apply`, `HKT.Compose`, `HKT.Flip`, `HKT.Fix1`, `HKT.Fix2`, and `HKT.Fix12`.
+`HKT.Parameterized`, `HKT.Param`, `HKT.Applied`, `HKT.Apply`, `HKT.Compose`, `HKT.Flip`,
+`HKT.Fix1`, `HKT.Fix2`, and `HKT.Fix12`.
 
 Import from here for custom `Policy.define(...)` attachments and other op extensions; the policy
 subpath does not re-export these symbols.
