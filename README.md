@@ -11,7 +11,7 @@ Use each publishable package README under `packages/*/README.md` as the source o
 - [`@prodkit/op`](packages/op/README.md) (published to npm with the package)
 - [`@prodkit/std`](packages/std/README.md) (reserved; runtime-agnostic utilities planned)
 
-Other workspace roots are maintainer- or CI-oriented: [`examples`](examples/) (`@prodkit/examples`, with Op samples under `examples/op/` and DI under `examples/op/di/`), [`tools`](tools/) (`@prodkit/tools`), and [`benchmarks`](benchmarks/) (`@prodkit/benchmarks`).
+Other workspace roots are maintainer- or CI-oriented: [`examples`](examples/) (`@prodkit/examples`, topic folders under `examples/op/` and `examples/op/di/`), [`tools`](tools/) (`@prodkit/tools`), and [`benchmarks`](benchmarks/) (`@prodkit/benchmarks`).
 
 ## documentation map
 
@@ -20,6 +20,7 @@ Other workspace roots are maintainer- or CI-oriented: [`examples`](examples/) (`
 | npm consumers | [`packages/op/README.md`](packages/op/README.md) | Hub, quick start, core API |
 | npm consumers | [`packages/op/docs/`](packages/op/docs/README.md) | Comparison, performance, subpaths, lifecycle (ships on npm) |
 | contributors | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Setup, gate, testing, release |
+| security | [`SECURITY.md`](SECURITY.md) | Vulnerability reporting and disclosure |
 | contributors | [`docs/CONTEXT.md`](docs/CONTEXT.md) | Domain vocabulary, doc roles, where new modules live |
 | contributors | [`docs/contributor/op-invariants.md`](docs/contributor/op-invariants.md) | Runtime invariants and enforcement map |
 | contributors | [`docs/contributor/runtime-architecture.md`](docs/contributor/runtime-architecture.md) | Module graph and execution flow |
@@ -55,7 +56,7 @@ npm package with trusted publishing and provenance. Release helpers live on each
 package:
 
 ```bash
-pnpm --filter @prodkit/op run release:patch
+pnpm --filter @prodkit/op run release:patch   # or release:minor
 pnpm --filter @prodkit/op run release:push
 
 pnpm --filter @prodkit/std run release:patch

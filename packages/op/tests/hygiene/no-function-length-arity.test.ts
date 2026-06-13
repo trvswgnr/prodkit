@@ -14,11 +14,11 @@ import {
  * parameterized arity from function reflection (for example `fn.length`).
  */
 const ARITY_GUARD_FILES = [
-  "src/builders.ts",
-  "src/shared.ts",
-  "src/core/plan/shell.ts",
-  "src/core/plan/transforms.ts",
-  "src/core/fluent.ts",
+  "src/core/builders.ts",
+  "src/core/identity.ts",
+  "src/core/shell.ts",
+  "src/plan/transforms.ts",
+  "src/core/generator.ts",
   "src/di/plan.ts",
 ] as const;
 

@@ -1,90 +1,67 @@
 # @prodkit/op
 
-A runtime-agnostic, composable, and predictable library for writing operations in TypeScript, built on top of [`better-result`](https://github.com/dmmulroy/better-result).
-
-This README is the **hub**: installation, quick start, and core API reference. Extended guides for
-subpaths, lifecycle, and cancellation live in [`docs/`](docs/README.md) and ship in the npm tarball.
-See also [docs/comparison.md](docs/comparison.md) and [docs/performance.md](docs/performance.md).
-
-> [!WARNING]
-> This library is currently in alpha. The API is mostly stable but there could be breaking changes between releases.
-
-Compose steps top-to-bottom, attach retry, timeout, and cancellation as policy, and run parallel
-work without scattering reliability logic across your app.
-
-## Contents
-
-- [Why this exists](#why-this-exists)
-- [Installation](#installation)
-- [Dependencies (`better-result`)](#dependencies-better-result)
-- [Subpath exports](#subpath-exports)
-- [Quick start](#quick-start)
-- [Core API](#core-api)
-- [Typed errors](#typed-errors)
-- [Retry defaults](#retry-defaults)
-- [Built-in errors](#built-in-errors)
-- [Concurrent combinators](#concurrent-combinators)
-- [Examples](#examples)
-- [Performance](#performance)
-- [Contributing](#contributing)
-
-## Why this exists
-
-Async TypeScript has two huge flaws: you can't see from a function's type what it might fail with, and the standard concurrency helpers happily let sibling tasks keep running after one of them blows up. `@prodkit/op` fixes both. It builds on `better-result`'s `Result` model, generator composition, and typed error inference, then adds an async runtime with suspend/resume semantics, structured resource cleanup, cancellation-aware concurrency, and composable retry/timeout policies on top. Concurrency combinators thread cancellation through every child, so when one fails the rest actually stop instead of burning quota in the background. Retry, timeout, and external cancellation attach through `.with(Policy.*)` before `.run()`. Minimal runtime dependencies, a small footprint, and an API that's easy to learn and use.
-
-## Installation
+Typed async operations for TypeScript workflows that need predictable failure, cleanup,
+cancellation, retry, and timeout.
 
 ```bash
-npm i @prodkit/op
+npm i @prodkit/op better-result
 ```
 
-Runtime support: any JavaScript runtime with `Promise` and `AbortController`. No Node-specific APIs
-are required by the public operation model.
-
-## Dependencies (`better-result`)
-
-`@prodkit/op` declares `better-result` as a peer dependency so your app installs one copy and
-TypeScript resolves the same `Result` types that `.run()` returns.
-
-```json
-"better-result": "^2.9.0"
-```
-
-Install it alongside `@prodkit/op` when your package manager does not install peers automatically.
-
-Most `better-result` symbols are part of the public contract but are **not** re-exported from
-`@prodkit/op`. Import them from `better-result`; import operation APIs from `@prodkit/op`.
-
-From **`better-result`**: `Result`, `TaggedError`, `UnhandledException`, `TaggedErrorInstance`,
-and optional advanced helpers (`Err`, `Ok`, `InferErr`).
-
-From **`@prodkit/op`**: `TimeoutError` (from `.with(Policy.timeout(...))`), `ErrorGroup` (from
-`Op.any` when every branch fails).
-
-## Subpath exports
-
-Op-native extensions ship as separate subpath exports. The main `@prodkit/op` entry does not
-re-export them.
-
-| Subpath | Guide |
-| --- | --- |
-| `@prodkit/op/di` | [docs/di.md](docs/di.md) |
-| `@prodkit/op/policy` | [docs/policy.md](docs/policy.md) |
-| `@prodkit/op/hkt` | [docs/hkt.md](docs/hkt.md) |
-| `@prodkit/op/internal` | [docs/internal.md](docs/internal.md) |
-
-Also see [docs/lifecycle.md](docs/lifecycle.md) (defer, release, enter/exit) and
-[docs/cancellation.md](docs/cancellation.md) (cooperative abort contract). Full index:
-[docs/README.md](docs/README.md).
-
-Minimal policy attach:
+Use `Op` when async work needs typed failure and predictable execution, not just `await`.
 
 ```ts
 import { Op } from "@prodkit/op";
 import { Policy } from "@prodkit/op/policy";
 
-await Op.try(() => fetch("https://example.com")).with(Policy.timeout(1_000)).run();
+const onboardUser = Op(function* (id: string) {
+  const user = yield* loadUser(id);
+  yield* sendWelcomeEmail(user);
+  return user;
+}).with(Policy.timeout(1_500));
+
+const result = await onboardUser.run("user_123");
 ```
+
+That is the core shape: define named operations, compose them with `yield*`, and attach retry,
+timeout, or cancellation with `.with(...)`.
+
+## Project status
+
+`@prodkit/op` is a runtime-agnostic operation library: typed async composition, explicit failure,
+cooperative cancellation, lifecycle cleanup, and composable retry/timeout policy on a bounded public
+surface. It exists so production TypeScript services do not reinvent execution contracts one call
+site at a time. The package is in beta and strictly follows SemVer from v0.2.0 onward.
+
+**Maintenance:** Small enough that your team can own it if the maintainer ever gets hit by a bus.
+The API surface is intentionally bounded so a team can understand, fork, or maintain the runtime
+without platform-scale complexity. Led by a single maintainer today; contributions welcome via
+[`CONTRIBUTING.md`](https://github.com/trvswgnr/prodkit/blob/main/CONTRIBUTING.md); security
+reporting via
+[`SECURITY.md`](https://github.com/trvswgnr/prodkit/blob/main/SECURITY.md).
+
+**Ongoing commitments:**
+
+- Keep the public API contract bounded and documented
+- Keep the `better-result` boundary explicit and tested in CI
+- Keep shipped consumer docs honest and link-checked in the gate
+
+Common objections (Effect overlap, `better-result` peer, maintenance, production readiness) are
+answered in [docs/faq.md](docs/faq.md).
+
+## Contents
+
+- [Project status](#project-status)
+- [Quick start](#quick-start)
+- [Installation](#installation)
+- [Core API](#core-api)
+- [Typed errors](#typed-errors)
+- [Retry defaults](#retry-defaults)
+- [Built-in errors](#built-in-errors)
+- [Concurrent combinators](#concurrent-combinators)
+- [Guides and subpaths](#guides-and-subpaths)
+- [Examples](#examples)
+- [Performance](#performance)
+- [Contributing](#contributing)
 
 ## Quick start
 
@@ -117,6 +94,25 @@ if (result.isOk()) {
   console.error(result.error);
 }
 ```
+
+## Installation
+
+```bash
+npm i @prodkit/op better-result
+```
+
+**ESM only.** `@prodkit/op` ships ES modules only. There is no CommonJS entry; use `import` syntax
+or dynamic `import()` in ESM projects.
+
+Runtime support: any ESM JavaScript runtime with ES2022 plus `Promise`, `AbortController` /
+`AbortSignal.reason`, `queueMicrotask`, `setTimeout` / `clearTimeout`, `AggregateError`, and
+`Error.cause`. No Node-specific APIs are required by the public operation model. For Node
+consumers, support follows current non-EOL LTS lines. Contributor tooling uses a separate Node
+`>=24.14.0` requirement.
+
+`better-result` is a peer dependency. Import `Result`, `TaggedError`, `UnhandledException`, `Err`,
+`Ok`, and `InferErr` from `better-result`; import operation APIs from `@prodkit/op` and its
+subpaths. See [docs/better-result.md](docs/better-result.md) for the boundary and retry overlap.
 
 ## Core API
 
@@ -263,8 +259,9 @@ callback receives a 0-based retry index (`0` after the first failure).
 
 - `UnhandledException`: unmapped throws/rejects and runtime faults.
 - `TimeoutError`: from `.with(Policy.timeout(timeoutMs))`.
-- `ErrorGroup`: from `Op.any` when all children fail (`errors` in input order).
-- Multiple finalizer faults fold into a nested `Error.cause` chain (LIFO unwind order).
+- `ErrorGroup`: preserves multiple failures from `Op.any` or cleanup settlement.
+- Cleanup failure returns `UnhandledException` with an `ErrorGroup` cause. A prior body error comes
+  first, followed by exact cleanup failures in LIFO execution order.
 
 ## Concurrent combinators
 
@@ -297,12 +294,30 @@ const r = await Op.any([Op.fail("a"), Op.of(69)]).run();
 if (r.isErr() && r.error instanceof ErrorGroup) console.log(r.error.errors);
 ```
 
+## Guides and subpaths
+
+Extended guides live in [`docs/`](docs/README.md) and ship in the npm tarball. Op-native
+extensions ship as subpath exports; the main `@prodkit/op` entry does not re-export them.
+
+| Import or guide | Topic |
+| --- | --- |
+| [`docs/better-result.md`](docs/better-result.md) | Result boundary, split imports, retry overlap |
+| [`@prodkit/op/di`](docs/di.md) | DI tokens, provide/inject, token identity, runtime errors |
+| [`@prodkit/op/policy`](docs/policy.md) | Policy attachments, retry delays, custom policy shape |
+| [`@prodkit/op/hkt`](docs/hkt.md) | HKT helpers for custom policies |
+| [`@prodkit/op/internal`](docs/internal.md) | Extension-author surface |
+| [`docs/lifecycle.md`](docs/lifecycle.md) | `Op.defer`, release, enter/exit hooks, finalizer ordering |
+| [`docs/cancellation.md`](docs/cancellation.md) | Cooperative cancellation and composed-run wiring |
+| [`docs/comparison.md`](docs/comparison.md) | Tradeoffs vs Promise, neverthrow, fp-ts, Effect |
+| [`docs/faq.md`](docs/faq.md) | Objection-handling FAQ |
+| [`docs/performance.md`](docs/performance.md) | Benchmark snapshot and bundle-size notes |
+
 ## Examples
 
-- [`examples/op/simple.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/simple.ts): minimal composition.
-- [`examples/op/webhook.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/webhook.ts): full pipeline (validation, `Op.all`/`Op.any`/`Op.race`, policies, abort).
+- [`examples/op/simple/sample.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/simple/sample.ts): minimal composition.
+- [`examples/op/webhook/sample.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/webhook/sample.ts): full pipeline (validation, `Op.all`/`Op.any`/`Op.race`, policies, abort).
 - [`examples/op/di/`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/di/): DI onboarding, cancellation, HTTP handler.
-- [`examples/op/custom-policy.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/custom-policy.ts): custom `Policy.define` with HKT.
+- [`examples/op/custom-policy/sample.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/custom-policy/sample.ts): custom `Policy.define` with HKT.
 
 ## Performance
 
@@ -312,4 +327,3 @@ apps are usually I/O-bound.
 ## Contributing
 
 Monorepo setup, gate, and release: [`CONTRIBUTING.md`](https://github.com/trvswgnr/prodkit/blob/main/CONTRIBUTING.md).
-Contributor requirement: Node `>=24.14.0` (24.x Active LTS).

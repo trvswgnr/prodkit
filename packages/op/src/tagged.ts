@@ -13,18 +13,12 @@ type TaggedConstructor<
     ? new (...args: ConstructorParameters<Base>) => InstanceType<Base> & Tagged<Tag>
     : never;
 
-type TaggedFactory = {
-  <Tag extends string>(tag: Tag): TaggedConstructor<Tag, undefined>;
-  <Tag extends string, Base extends AbstractCtor>(
-    tag: Tag,
-    Base: Base,
-  ): TaggedConstructor<Tag, Base>;
-};
-
-export const Tagged: TaggedFactory = <Tag extends string, Base extends AbstractCtor>(
+export function Tagged<Tag extends string>(tag: Tag): TaggedConstructor<Tag, undefined>;
+export function Tagged<Tag extends string, Base extends AbstractCtor>(
   tag: Tag,
-  Base?: Base,
-) => {
+  Base: Base,
+): TaggedConstructor<Tag, Base>;
+export function Tagged<Tag extends string, Base extends AbstractCtor>(tag: Tag, Base?: Base) {
   if (Base !== undefined) {
     // @ts-expect-error 2545: TS can't reconcile `class extends Base`
     // with `ConstructorParameters<Base>` and infers `readonly never[]`
@@ -36,4 +30,4 @@ export const Tagged: TaggedFactory = <Tag extends string, Base extends AbstractC
   return class implements Tagged<Tag> {
     readonly _tag = tag;
   };
-};
+}

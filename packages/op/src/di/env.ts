@@ -1,6 +1,6 @@
-import { createRunContext, type RunContext } from "../core/runtime.js";
-import { AbortSettlement, awaitWithAbort } from "../core/settlement.js";
-import { abortReason, hasBrand, isPromiseLike } from "@prodkit/shared/runtime";
+import { createRunContext, type RunContext } from "../execution/runtime.js";
+import { Settlement } from "../execution/settlement-scope.js";
+import { hasBrand, isPromiseLike } from "@prodkit/shared/runtime";
 import {
   DI_LAZY_BINDING,
   DI_SINGLETON_BINDING,
@@ -52,20 +52,18 @@ export function resolveInjectedValue(
     return produced;
   }
 
-  const inflight = awaitWithAbort(
-    produced,
-    signal,
-    AbortSettlement.rejectOnAbort(() => abortReason(signal)),
-  ).then(
-    (resolved) => {
-      env.set(dependency, resolved);
-      return resolved;
-    },
-    (error) => {
-      env.set(dependency, matchedValue);
-      return Promise.reject(error);
-    },
-  );
+  const inflight = Settlement.rejecting(signal)
+    .awaitWork(produced)
+    .then(
+      (resolved) => {
+        env.set(dependency, resolved);
+        return resolved;
+      },
+      (error) => {
+        env.set(dependency, matchedValue);
+        return Promise.reject(error);
+      },
+    );
 
   env.set(dependency, inflight);
   return inflight;

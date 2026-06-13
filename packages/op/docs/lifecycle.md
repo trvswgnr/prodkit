@@ -15,10 +15,12 @@ in **LIFO** order when the run unwinds (success, typed failure, `UnhandledExcept
 external cancellation). **All** scheduled finalizers run; even if one throws, the **remaining**
 callbacks in the stack **still run**.
 
-If a single finalizer throws, `.run()` returns `Err(UnhandledException)` with `cause` set to that
-fault. If **multiple** finalizers throw, `cause` is a nested **`Error` chain**: the outer error
-matches the **first** failure during teardown (last-registered callback runs first). Only **throwing**
-callbacks appear in the chain. `finalize` can be sync or async.
+If any finalizer throws, `.run()` returns `Err(UnhandledException)` with `cause` set to an
+`ErrorGroup` whose message is `Operation cleanup failed`. The group preserves exact thrown values
+without requiring them to be `Error` instances. If the body had already failed, its error is the
+first entry. Cleanup failures follow in finalizer execution order, which is LIFO registration order.
+A successful body contributes no entry. The same group shape is used for one or many cleanup
+failures. `finalize` can be sync or async.
 
 Use `Op.defer` / `.with(Policy.release(...))` / `.on("exit", ...)` for effectful cleanup. Native
 generator `finally` blocks are only best-effort synchronous finalization; yielded or async work

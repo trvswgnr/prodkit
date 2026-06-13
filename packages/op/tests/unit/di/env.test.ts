@@ -1,5 +1,5 @@
 import { assert, describe, expect, test } from "vitest";
-import { createRunContext } from "../../../src/core/runtime.js";
+import { createRunContext } from "../../../src/execution/runtime.js";
 import {
   extendContextWithBindings,
   isLazyBinding,

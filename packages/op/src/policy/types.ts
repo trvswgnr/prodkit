@@ -1,10 +1,10 @@
 import type { RetryPolicy } from "./retry-policy.js";
-import type { ReleaseFn } from "../core/plan/context.js";
-import type { RunContext } from "../core/runtime.js";
+import type { ReleaseFn } from "../core/lifecycle.js";
+import type { RunContext } from "../execution/runtime.js";
 import type { TimeoutError, UnhandledException } from "../errors.js";
 import type { HKT } from "../hkt.js";
 import type { Op } from "../index.js";
-import type { Plan, PlanRewriter } from "../core/plan/base.js";
+import type { Plan, PlanRewriter } from "../plan/model.js";
 import type { Result } from "../result.js";
 import { unsafeCoerce } from "@prodkit/shared/runtime";
 

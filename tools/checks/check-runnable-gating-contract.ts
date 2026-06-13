@@ -10,7 +10,7 @@ export const OP_VITEST_CONFIG = "packages/op/vitest.config.ts";
 export const OP_TESTS_DIR = "packages/op/tests";
 
 /** Coverage excludes for compile-time gating modules (paths must match vitest.config). */
-export const REQUIRED_COVERAGE_EXCLUDES = ["src/core/meta.ts", "src/core/plan/surface.ts"] as const;
+export const REQUIRED_COVERAGE_EXCLUDES = ["src/core/metadata.ts", "src/core/surface.ts"] as const;
 
 /**
  * Stable Vitest describe/test titles for runnable gating. Files may move; titles should not

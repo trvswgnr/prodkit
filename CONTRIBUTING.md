@@ -20,6 +20,27 @@ pnpm install
 - Package-scoped scripts stay in the owning workspace `package.json`; invoke them with `pnpm --filter <workspace> run <script>`.
 - When adding a feature, use the placement table in [`docs/CONTEXT.md`](docs/CONTEXT.md#where-new-code-lives) and [ADR 0008](docs/adr/0008-op-subpath-exports.md): op subpath for portable op-native code with only `better-result` beyond op; `@prodkit/std` for op-free utilities; new `packages/<name>/` for platform-specific or integration-SDK adapters.
 
+## Path to beta integration branch
+
+GitHub issues in the **Path to Beta** milestone land on branch **`beta/0.2.0`** (integration branch
+for the 0.2.0 beta cut). Open PRs against `beta/0.2.0` unless the maintainer directs otherwise;
+merge `beta/0.2.0` into `main` when the milestone closes with the beta release.
+
+## Security
+
+Report vulnerabilities in published packages per [`SECURITY.md`](SECURITY.md).
+
+### Dependency security
+
+Dependabot opens security-fix pull requests when GitHub advisories match the lockfile. Version-update
+Dependabot PRs are intentionally not enabled; the pnpm catalog and explicit pins stay authoritative.
+
+`minimumReleaseAge` in `pnpm-workspace.yaml` (24 hours, strict) may keep a fresh security-fix PR red
+in CI until the patched version ages. Retry or wait is expected.
+
+Maintainer flow: review the Dependabot security PR, run `pnpm run gate`, merge manually (no
+auto-merge).
+
 ## Documentation
 
 `@prodkit/op` consumer docs (`packages/op/README.md`, `packages/op/docs/`) ship on npm. They cover
@@ -53,7 +74,7 @@ Run the same checks used before publishing:
 pnpm run gate
 ```
 
-Gate orchestration lives in `@prodkit/tools` (`gate` runs turbo workspace tasks, `gate:checks`, then pack smoke). Add new doc or contract checks to `gate:checks` in `tools/package.json`, not the root manifest.
+Gate orchestration lives in `@prodkit/tools` (`gate` runs turbo workspace tasks, `gate:checks`, then pack smoke). Add new doc or contract checks to `gate:checks` in `tools/package.json`, not the root manifest. Contract tests for those checks live under `tools/checks/*.test.ts` and run inside `gate:checks` via `node --test`, not via root `pnpm run test`.
 
 `tools/` layout: `checks/` (gate doc and contract scripts), `smoke/` (pack, GitHub, npm, and alternate-runtime harnesses), `release/` (version cut and changelog checks), `lib/` (shared helpers). `update-op-performance-doc.ts` stays at the workspace root.
 
@@ -64,12 +85,20 @@ tarball layout, `exports` wiring, and publish plumbing for the second npm packag
 module coverage. When `@prodkit/std` subpaths ship real code, the same pack path exercises them
 without changing the gate shape.
 
-Pull requests and pushes to `main` run the same gate in `.github/workflows/ci.yml`.
+Pull requests and pushes to `main` and `beta/0.2.0` run the same gate in
+`.github/workflows/ci.yml`.
 CI also publishes a Vitest coverage report as a workflow artifact (`op-coverage`) so reviewers can
 audit unit, integration, type, and property-law coverage evidence from the run. `@prodkit/std`
 coverage is omitted until utility modules ship in `packages/std/src/`.
+CI runs an `@prodkit/op` compatibility matrix against the lowest supported `better-result` version
+and the current highest version matching the peer range. That matrix changes only the transient CI
+install so the committed lockfile remains the normal development baseline.
 CI runs `pnpm -r exec npm audit signatures` so dependency signature verification covers every
 workspace package, not just the private root manifest.
+The alternate-runtime smoke runner avoids importing `@prodkit/op` before its package build, so clean
+CI jobs can run from install-only workspaces. CI runs the harness on Bun, Deno, an edge worker
+(Miniflare), and current non-EOL Node LTS lines (22.x and 24.x via the `runtime-smoke` matrix).
+Contributor Node `>=24.14.0` is separate from the consumer runtime claim exercised by that matrix.
 An `invariants:check` gate step fails when `docs/contributor/op-invariants.md` references source symbols or test
 file paths that no longer exist in the repo.
 An `architecture:check` gate step fails when verified import contracts in
@@ -81,13 +110,21 @@ A `runnable-gating:check` gate step fails when Vitest coverage excludes for comp
 gating modules are removed or when stable describe/test titles for metadata blocking and DI provide
 behavior disappear from `@prodkit/op` tests (see Runnable metadata in
 [`docs/contributor/runtime-architecture.md`](docs/contributor/runtime-architecture.md)).
+A `docs:check` gate step fails when shipped consumer docs (`README.md`, `packages/op/README.md`,
+and `packages/op/docs/`) contain broken relative links, missing in-repo GitHub blob/tree targets, or
+stale heading anchors.
 A `changelog:api:check` gate step fails when `packages/op/src/index.ts`,
 `packages/op/src/di/index.ts`, `packages/op/src/policy/index.ts`, or `packages/op/src/hkt.ts`
 public export names change without an update to that package's `CHANGELOG.md` under
 `## [Unreleased]`. The check compares against an explicit base ref (`pull_request.base.sha` on pull
-requests via `CHANGELOG_API_BASE_REF`, the pre-push commit on pushes to `main`, or
-`CHANGELOG_API_BASE_REF` locally) and fails
+requests via `CHANGELOG_API_BASE_REF`, the pre-push commit on pushes to `main` or `beta/0.2.0`,
+or `CHANGELOG_API_BASE_REF` locally) and fails
 closed when no base ref can be resolved. Internal re-export paths do not count as API changes.
+An `api:manifest:check` gate step fails when serialized public export signatures for the
+application-tier source entrypoints (`packages/op/src/index.ts`, `di/index.ts`, `policy/index.ts`,
+`hkt.ts`) drift from the committed manifest at `packages/op/public-api.manifest.json`.
+Refresh after an intentional API change with `pnpm --filter @prodkit/tools run api:manifest:update`.
+`@prodkit/op/internal` is not included in the manifest.
 A `bundle-size` job compares `@prodkit/op` lower and upper bundled size bounds (minified + gzip)
 on pull requests via `compressed-size-action`; runtime regressions are tracked separately by CodSpeed
 (see [`packages/op/docs/performance.md`](packages/op/docs/performance.md) and [`benchmarks/op/README.md`](benchmarks/op/README.md)).
@@ -96,10 +133,11 @@ All runnable consumer examples and smoke entrypoints live in the **`examples/`**
 
 ```text
 examples/
-  op/                 core Op samples (combinators, defer, webhook, ...)
-  op/di/              @prodkit/op/di samples (onboarding, cancellation, HTTP handler)
+  support/            shared assert and helpers for smoke runners
+  smoke.ts            runs op and di smoke suites
+  op/                 topic folders (sample.ts + smoke.ts per sample; see examples/op/README.md)
+  op/di/              @prodkit/op/di topic folders (see examples/op/di/README.md)
   std/                reserved for future @prodkit/std utility samples
-  smoke.ts            runs op, di, and std smoke suites
 ```
 
 ## Benchmarking
@@ -140,9 +178,11 @@ Published baseline interpretation lives in [`packages/op/docs/performance.md`](p
 
 If a behavior is an internal invariant of one module, keep it in unit; if it is a public composition/API contract, keep it in integration. Avoid duplicate assertions across tiers unless each tier validates meaningfully different risk.
 
+For module-to-test placement, start with [`docs/contributor/runtime-architecture.md`](docs/contributor/runtime-architecture.md) and add or extend the closest existing `packages/op/tests/` file before introducing a new category.
+
 **`@prodkit/op/di`** runtime tests live under `packages/op/tests/unit/di/` (for example
 `index.test.ts`); compile-time DI contracts live in `packages/op/tests/types/di.test.ts`. Run
-`pnpm --filter @prodkit/op run coverage` locally to reproduce CI coverage for DI and the core runtime.
+`pnpm --filter @prodkit/op run coverage` locally to reproduce CI coverage for DI and the Op runtime.
 
 ## Source Layout (`@prodkit/op`)
 
@@ -153,34 +193,33 @@ If a behavior is an internal invariant of one module, keep it in unit; if it is 
 - The branded `Op` type alias stays on that entry (merged with the `Op` factory const). Internal modules use `import type { Op } from "../index.js"` when they need the alias; do not duplicate `Op` elsewhere ([ADR 0012](docs/adr/0012-op-type-alias-on-main-entry.md)).
 - Re-exports from dependencies must be explicit named exports in `packages/op/src/index.ts` (never `export *`).
 - Internal runtime concerns are split into focused modules under `packages/op/src/`:
-  - `core/` (core operation contracts and execution runtime pieces)
-  - `builders.ts` (primitive operation constructors)
+  - `core/` (callable Op surface, builders, combinator factories, lifecycle contracts, identity, and metadata)
+  - `plan/` (Plan model, Op bridge, execution scheduling, rewrite chain, and transform/combinator nodes)
+  - `execution/` (generator driver, instructions, cleanup, settlement, child-run sessions, and fan-out)
   - `policy/` (retry, timeout, cancel, release policies and `Delay` helpers)
+  - `di/` (dependency tokens, bindings, plan integration, and run-context environment)
   - `hkt.ts` (reusable HKT primitives for `@prodkit/op/hkt`)
-  - `combinators.ts` (all/any/race combinators)
   - `errors.ts`, `result.ts`, `tagged.ts` (shared domain contracts)
-  - `shared.ts` (Op brands and `isOp` helpers only; workspace primitives import `@prodkit/shared/runtime` directly)
 - `@prodkit/shared` (`packages/shared`, private): workspace globals, publishable tsconfig/vitest presets, and runtime primitives (`@prodkit/shared/runtime`). Publishable packages declare `"@prodkit/shared": "workspace:*"` and extend `@prodkit/shared/tsconfig/publishable`.
-- Test layout under `packages/op/tests/`:
+- Test layout under `packages/op/tests/` mirrors runtime modules (see [`docs/contributor/runtime-architecture.md`](docs/contributor/runtime-architecture.md)):
   - `integration/index.test.ts` for public API contract coverage
-  - `unit/errors.test.ts` for typed error contracts
-  - `unit/builders.test.ts` for operation builders, runtime composition, and builder type-inference contracts
-  - `unit/policy-*.test.ts` for retry, timeout, cancel, and abort-signal behavior
-  - `unit/core.test.ts` for core execution invariants
-  - `unit/lifecycle-*.test.ts` for lifecycle/finalizer behavior (release, enter/exit hooks, defer, generator finalization)
-  - `unit/fluent.test.ts` for fluent operator semantics
-  - `unit/di/index.test.ts` for DI runtime behavior
-  - `property/monad-laws.test.ts` for algebraic contract checks
-  - `types/op.test.ts` for compile-time type contracts
-  - `types/di.test.ts` for DI compile-time type contracts
+  - `unit/core/` for builders, fluent methods, lifecycle hooks, and public combinator behavior
+  - `unit/plan/` for Plan binding, execution equivalence, and deep transform stack safety
+  - `unit/execution/` for the driver, instructions, cleanup, settlement, child sessions, and fan-out
+  - `unit/policy/` for retry, timeout, cancel, release, abort-signal, and policy HKT behavior
+  - `unit/di/` for DI runtime behavior; `types/di.test.ts` for DI compile-time contracts
+  - `unit/errors.test.ts` for shared error contracts
+  - `property/` for algebraic and combinator law checks
+  - `types/op.test.ts`, `types/hkt.test.ts`, `types/metadata.test.ts` for compile-time contracts
+  - `hygiene/` for API docs and arity hygiene checks
 - Runtime invariants and execution semantics are documented in `docs/contributor/op-invariants.md`.
-- Structural rationale for core/fluent choices (why separate paths exist) lives in `docs/adr/`.
+- Structural rationale for the nullary driver, plan AST, and fluent policy model lives in `docs/adr/`.
   Each ADR declares `title`, `status`, and `packages` in YAML frontmatter; run
   `pnpm --filter @prodkit/tools run adr:sync` after adding or editing one. Superseding and
   immutability rules: [`docs/adr/README.md`](docs/adr/README.md#updating-and-superseding).
 - Implementation work is tracked in GitHub issues, not in ADR bodies or ad hoc docs under `docs/`.
 
-## Core runtime architecture (`@prodkit/op`)
+## Op runtime architecture (`@prodkit/op`)
 
 Execution-level maps (module graph, instruction lifecycle, policy wrappers, fluent transform
 cookbook, DI integration, driver loop) live in
@@ -206,6 +245,8 @@ which doc to open for a given question.
   [`docs/CONTEXT.md`](docs/CONTEXT.md#where-new-code-lives).
 - Platform-specific or integration-SDK modules (OpenTelemetry, Node CLI adapters) ship as new packages under
   `packages/`, not under std or op subpaths.
+- Tests colocate with source under `packages/std/src/**/*.test.ts` (see `packages/std/vitest.config.ts`).
+  `@prodkit/op` keeps an external `tests/` tree instead; that difference is intentional.
 - Package docs: [`packages/std/README.md`](packages/std/README.md). Ship changelog: [`packages/std/CHANGELOG.md`](packages/std/CHANGELOG.md).
 
 You can run consumer install path checks directly. Each mode builds a temporary mini-pnpm workspace (reusing `catalog:` and pnpm safety policy from `pnpm-workspace.yaml`), installs `@prodkit/op` and `@prodkit/std` from the chosen source, then runs `examples/` smoke:
@@ -217,6 +258,35 @@ pnpm --filter @prodkit/tools run examples:smoke:npm
 pnpm --filter @prodkit/op run test
 pnpm --filter @prodkit/std run test
 ```
+
+## Deprecation Policy
+
+Published package APIs follow strict SemVer from the first beta line documented by the owning
+package. For `@prodkit/op`, that baseline is `0.2.0` ([ADR 0014](docs/adr/0014-strict-semver-from-0-2-0-beta.md)).
+After that baseline, incompatible public API changes are major-version work.
+This policy applies to user-facing package APIs and behavior. Repo-internal implementation details,
+contributor-only tooling, tests, and private workspace contracts should use hard cutovers unless
+they affect a published package contract.
+
+Prefer a deprecation before removal when the old API can stay in place without hiding a security,
+correctness, or data-loss problem. A deprecation must include:
+
+- JSDoc `@deprecated` on the exported symbol, type, member, or option that callers touch.
+- A `### Deprecated` changelog entry under `## [Unreleased]` for the affected package.
+- A migration note in the changelog entry that names the replacement or explains the behavioral
+  change.
+
+User-facing deprecations do not emit runtime warnings. Signal them through TypeScript/JSDoc,
+package docs when relevant, and changelog migration notes.
+
+Deprecated APIs stay available for at least one minor release after the release that first marks
+them deprecated. Removal still requires the next major version because it is an incompatible change
+under strict SemVer. If an unsafe behavior cannot remain for that long, document the exception and
+the migration path in the changelog entry for the breaking release.
+
+Every breaking change ships with a changelog migration note. Use the heading that matches the
+observable effect (`### Changed`, `### Removed`, or `### Deprecated`) and write the note for npm
+consumers, not for repo-internal implementation history.
 
 ## Release Workflow (Recommended)
 
@@ -241,19 +311,26 @@ are not used for new releases.
    - **Per release:** use at most one heading per type, in order: `Added`, `Changed`, `Deprecated`,
      `Removed`, `Fixed`, `Security`. Skip empty types. Use past tense; do not repeat the section
      name in every bullet ("Added X" under `### Added`).
+   - **Deprecations and breaking changes:** follow the [Deprecation Policy](#deprecation-policy) so
+     the changelog includes caller-facing migration guidance.
 
 2. Cut a release (this promotes `Unreleased`, bumps npm version in the package
    `package.json`, runs release checks, commits, and creates a package-scoped tag):
 
 ```bash
-pnpm --filter @prodkit/op run release:patch
+pnpm --filter @prodkit/op run release:patch   # patch bump
+pnpm --filter @prodkit/op run release:minor   # minor bump (for example 0.1.x -> 0.2.0)
 pnpm --filter @prodkit/std run release:patch
 ```
 
-*Note:* `release:minor` and `release:major` will be added when needed.
+Publishable `release:*` and `changelog:check` scripts delegate to `@prodkit/tools`; `@prodkit/op`
+`build:size` delegates to `@prodkit/benchmarks` after the package build.
 
-If `Unreleased` is empty, the cut script writes a minimal
-"No user-facing changes" note for the new version.
+`release:major` will be added when needed. Bump kind must match the changelog classification
+under strict SemVer ([ADR 0014](docs/adr/0014-strict-semver-from-0-2-0-beta.md)).
+
+If `Unreleased` has no changelog bullets, the cut script aborts. Add release notes
+before cutting.
 The changelog/version updates must be committed before tag creation because
 release validation runs against the tagged commit.
 
@@ -267,6 +344,7 @@ pnpm --filter @prodkit/std run release:push
 4. The workflow (for tags like `op-v0.1.70` or `std-v0.1.1`) then:
 
    - validates the tag is the latest package-scoped tag on `main`
+   - verifies the `CI` workflow has passed for the tagged commit
    - installs with `pnpm install --frozen-lockfile`
    - publishes with npm trusted publishing (OIDC) and provenance
      (`pnpm --filter @prodkit/<package> publish --provenance --access public --no-git-checks`)

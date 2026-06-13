@@ -95,5 +95,7 @@ than growing ADRs into invariant checklists or issue trackers.
 | [0011](0011-fluent-callbacks-do-not-sequence-returned-ops.md) | accepted | `@prodkit/op` | Fluent callbacks do not sequence returned ops |
 | [0012](0012-op-type-alias-on-main-entry.md) | accepted | `@prodkit/op` | Op type alias stays on main entry for declaration emit |
 | [0013](0013-combinator-plan-nodes.md) | accepted | `@prodkit/op` | Combinator concurrent composition as plan nodes |
+| [0014](0014-strict-semver-from-0-2-0-beta.md) | accepted | `@prodkit/op` | Strict SemVer from 0.2.0 beta |
+| [0015](0015-better-result-peer-split-imports.md) | accepted | `@prodkit/op` | better-result stays a peer with split imports |
 
 <!-- adr-index:end -->

@@ -36,7 +36,8 @@ Policy uses the same encoding: `[HKT.TYPE]` is `Op<...>`, args are `[T, E, A, M]
 ## Public export
 
 `HKT` (interface, namespace, and frozen `{ PARAMS, TYPE }` symbol constants). Namespace members:
-`HKT.Param`, `HKT.Apply`, `HKT.Compose`, `HKT.Flip`, `HKT.Fix1`, `HKT.Fix2`, and `HKT.Fix12`.
+`HKT.Parameterized`, `HKT.Param`, `HKT.Applied`, `HKT.Apply`, `HKT.Compose`, `HKT.Flip`,
+`HKT.Fix1`, `HKT.Fix2`, and `HKT.Fix12`.
 
 Import from here for custom `Policy.define(...)` attachments and other op extensions; the policy
 subpath does not re-export these symbols.
@@ -52,6 +53,6 @@ subpath does not re-export these symbols.
 4. Attach with `.with(yourPolicy(...))` before `.run()`.
 
 Runnable walkthrough:
-[`examples/op/custom-policy.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/custom-policy.ts).
+[`examples/op/custom-policy/sample.ts`](https://github.com/trvswgnr/prodkit/blob/main/examples/op/custom-policy/sample.ts).
 Type-level coverage lives in
-[`policy-hkt.test.ts`](https://github.com/trvswgnr/prodkit/blob/main/packages/op/tests/unit/policy-hkt.test.ts).
+[`policy/hkt.test.ts`](https://github.com/trvswgnr/prodkit/blob/main/packages/op/tests/unit/policy/hkt.test.ts).

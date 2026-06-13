@@ -7,6 +7,7 @@ on:
       - "std-v*"
 
 permissions:
+  actions: read
   contents: read
   id-token: write
 
@@ -16,6 +17,7 @@ jobs:
     outputs:
       allow_publish: ${{ steps.validate.outputs.allow_publish }}
       package_id: ${{ steps.validate.outputs.package_id }}
+      tag_commit: ${{ steps.validate.outputs.tag_commit }}
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
@@ -52,7 +54,8 @@ jobs:
           fi
 
           git fetch --force --tags origin main
-          if ! git merge-base --is-ancestor "${GITHUB_SHA}" "origin/main"; then
+          tag_commit="$(git rev-list -n 1 "${tag}")"
+          if ! git merge-base --is-ancestor "${tag_commit}" "origin/main"; then
             echo "Tag ${tag} is not on main; skipping publish."
             echo "allow_publish=false" >> "$GITHUB_OUTPUT"
             exit 0
@@ -72,7 +75,65 @@ jobs:
           fi
 
           echo "package_id=${package_id}" >> "$GITHUB_OUTPUT"
+          echo "tag_commit=${tag_commit}" >> "$GITHUB_OUTPUT"
           echo "allow_publish=true" >> "$GITHUB_OUTPUT"
+
+      - name: Verify CI passed for tagged commit
+        if: steps.validate.outputs.allow_publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          tag_commit="${{ steps.validate.outputs.tag_commit }}"
+          deadline=$((SECONDS + 1800))
+          while true; do
+            runs_json="$(gh run list --workflow ci.yml --commit "$tag_commit" --event push --json databaseId,status,conclusion,url --limit 20)"
+            decision="$(
+              RUNS_JSON="$runs_json" node <<'JS'
+          const runs = JSON.parse(process.env.RUNS_JSON ?? "[]");
+          const running = runs.find((run) => run.status !== "completed");
+          if (running) {
+            console.log(`pending ${running.url}`);
+            process.exit(0);
+          }
+          const success = runs.find((run) => run.conclusion === "success");
+          if (success) {
+            console.log(`success ${success.url}`);
+            process.exit(0);
+          }
+          const failed = runs[0];
+          if (failed) {
+            console.log(`failure ${failed.conclusion ?? "unknown"} ${failed.url}`);
+            process.exit(0);
+          }
+          console.log("missing");
+          JS
+            )"
+
+            case "$decision" in
+              success\ *)
+                echo "CI passed for ${tag_commit}: ${decision#success }"
+                exit 0
+                ;;
+              failure\ *)
+                echo "CI did not pass for ${tag_commit}: ${decision#failure }"
+                exit 1
+                ;;
+              missing)
+                echo "No CI run found yet for ${tag_commit}."
+                ;;
+              pending\ *)
+                echo "Waiting for CI to complete for ${tag_commit}: ${decision#pending }"
+                ;;
+            esac
+
+            if (( SECONDS >= deadline )); then
+              echo "Timed out waiting for CI to pass for ${tag_commit}."
+              exit 1
+            fi
+            sleep 20
+          done
 
   publish:
     needs: validate-publish-source

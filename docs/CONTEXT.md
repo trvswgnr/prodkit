@@ -25,7 +25,7 @@ exports, not separate npm packages or `@prodkit/std` modules. Full placement rul
 | `packages/op/` | `@prodkit/op` | Published operation runtime and subpaths |
 | `packages/std/` | `@prodkit/std` | Published utilities with no `@prodkit/op` dependency |
 | `packages/shared/` | `@prodkit/shared` | Private presets and workspace primitives (not on npm) |
-| `examples/op/` | `@prodkit/examples` | Consumer samples and smoke for op and op/di |
+| `examples/` | `@prodkit/examples` | Consumer samples and smoke; layout in `examples/README.md`, topic index in `examples/op/README.md` |
 | `benchmarks/op/` | `@prodkit/benchmarks` | Performance and bundle-size harnesses for op |
 | `tools/checks/` | `@prodkit/tools` | Gate doc and contract checks |
 | `tools/smoke/` | `@prodkit/tools` | Consumer pack and alternate-runtime smoke harnesses |
@@ -60,12 +60,16 @@ the boundary choice is not already covered by ADR 0008.
 | Term | Meaning |
 | --- | --- |
 | **Op** | Callable operation value; generator-defined work composes with `yield*`. Public tuple arity; internally nullary at the driver. |
-| **Plan** | Internal execution AST under `core/plan/`. Fluent methods, policies, combinators, and DI `provide` are plan nodes. |
+| **Plan** | Internal execution AST under `plan/`. Fluent methods, policies, combinators, and DI `provide` are plan nodes. |
 | **Instruction** | Yielded discriminant the driver dispatches (`Suspend`, exit finalizer registration, `CustomInstruction`, terminal `Err`). |
 | **Policy** | Retry, timeout, cancel, release, or custom attachment applied with `.with(Policy.*)` before `.run()`. |
 | **Blocking** | Metadata key marking an unsatisfied requirement (for example missing DI binding) that blocks `.run()` at the type level. |
 | **Settlement** | How a suspend or abort resolves (pass-through, interrupt-on-abort, drain-after-abort). |
+| **Settlement preset** | Contributor-only named launch/completion intent for nested plan work (`cooperative`, `rejecting`, `interrupting`, `interruptingAndDraining`). |
+| **Settlement scope** | Signal-bound compiled preset; call sites use `Settlement.*` in `execution/settlement-scope.ts` instead of pairing `executePlan` settlement with `withAbortDrain`. |
+| **Child run session** | Contributor-only scoped child `AbortSignal` derived from a parent run context (or bound plus outer signals), with guaranteed parent-listener detach. Also owns bound-cancel and timeout race orchestration for Policy plans. Distinct from settlement scope: propagation wiring and first-settler races, not launch/completion preset compilation. |
 | **UnhandledException** | Non-recoverable runtime channel from `better-result`; wraps invalid yields, cleanup faults, and validation failures. |
+| **ErrorGroup** | Aggregate error preserving multiple failures (`Op.any` when all fail; cleanup settlement with message `Operation cleanup failed`). |
 
 ## Which doc to read
 
@@ -77,6 +81,7 @@ the boundary choice is not already covered by ADR 0008.
 | How does execution flow through modules? | [`docs/contributor/runtime-architecture.md`](contributor/runtime-architecture.md) |
 | What must stay true at run time? | [`docs/contributor/op-invariants.md`](contributor/op-invariants.md) |
 | Where should a new module live (op subpath, std, or new package)? | [Where new code lives](#where-new-code-lives), [ADR 0008](adr/0008-op-subpath-exports.md) |
+| Where are runnable consumer examples and smoke? | [`examples/README.md`](../examples/README.md), [`examples/op/README.md`](../examples/op/README.md) |
 | How do I set up, test, and release? | [`CONTRIBUTING.md`](../CONTRIBUTING.md) |
 | How should durable docs be written? | [Evergreen writing](#evergreen-writing) (this file) |
 | How does `@prodkit/op` compare to Effect / neverthrow? | [`packages/op/docs/comparison.md`](../packages/op/docs/comparison.md) (ships on npm) |

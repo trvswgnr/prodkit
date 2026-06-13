@@ -1,24 +1,13 @@
 import { TimeoutError, UnhandledException } from "../errors.js";
 import { Result } from "../result.js";
 import { sleepWithSignal } from "@prodkit/shared/runtime";
-import { SuspendInstruction, RegisterExitFinalizerInstruction } from "../core/instructions.js";
-import { interruptOnAbortSettlement, withAbortDrain } from "../core/settlement.js";
-import { createRunContext } from "../core/runtime.js";
+import { SuspendInstruction, RegisterExitFinalizerInstruction } from "../execution/instructions.js";
+import { ChildRunSession } from "../execution/child-run-session.js";
+import { Settlement, SettlementPresets } from "../execution/settlement-scope.js";
 import { normalizeRetryPolicy, type NormalizedRetryPolicy } from "./retry-policy.js";
 import { validateTimeoutMs } from "./validate.js";
-import type { ReleaseFn } from "../core/plan/context.js";
-import type { RunContext } from "../core/runtime.js";
-import {
-  createPlan,
-  createUnaryPlan,
-  executePlan,
-  type Plan,
-  type PlanRewriter,
-} from "../core/plan/base.js";
-
-function policyRewriter(apply: PlanRewriter["apply"]): PlanRewriter {
-  return { apply };
-}
+import type { ReleaseFn } from "../core/lifecycle.js";
+import { createPlan, createUnaryPlan, type Plan, type PlanRewriter } from "../plan/model.js";
 
 export function releasePlan<T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T>): Plan<T, E, M> {
   return createUnaryPlan(
@@ -105,8 +94,8 @@ function timeoutPlan<T, E, M>(
 
     const result: Result<T, E | UnhandledException | TimeoutError> = yield* new SuspendInstruction(
       (outerContext) =>
-        raceTimeout(
-          (context) => executePlan(source, context, interruptOnAbortSettlement(context.signal)),
+        ChildRunSession.raceTimeout(
+          (context) => Settlement.interrupting(context.signal).runPlan(source, context),
           timeoutMs,
           outerContext,
         ),
@@ -119,8 +108,14 @@ function timeoutPlan<T, E, M>(
 
 function cancelPlan<T, E, M>(source: Plan<T, E, M>, abortSignal: AbortSignal): Plan<T, E, M> {
   return createPlan(function* () {
-    const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
-      (outerContext) => withAbortDrain(raceBoundCancel(source, abortSignal, outerContext)),
+    const result: Result<T, E | UnhandledException> = yield* Settlement.suspendObservedWork(
+      SettlementPresets.interruptingAndDraining,
+      (outerContext) =>
+        ChildRunSession.raceBoundCancel(
+          (context) => source.execute(context),
+          abortSignal,
+          outerContext,
+        ),
     );
 
     if (result.isErr()) return yield* result;
@@ -130,15 +125,15 @@ function cancelPlan<T, E, M>(source: Plan<T, E, M>, abortSignal: AbortSignal): P
 
 export function retryRewriter(policy?: NormalizedRetryPolicy): PlanRewriter {
   const retryPolicy = policy ?? normalizeRetryPolicy();
-  return policyRewriter((source) => retryPlan(source, retryPolicy));
+  return { apply: (source) => retryPlan(source, retryPolicy) };
 }
 
 export function timeoutRewriter(timeoutMs: number): PlanRewriter {
-  return policyRewriter((source) => timeoutPlan(source, timeoutMs));
+  return { apply: (source) => timeoutPlan(source, timeoutMs) };
 }
 
 export function cancelRewriter(abortSignal: AbortSignal): PlanRewriter {
-  return policyRewriter((source) => cancelPlan(source, abortSignal));
+  return { apply: (source) => cancelPlan(source, abortSignal) };
 }
 
 async function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
@@ -147,118 +142,4 @@ async function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
   } catch {
     // intentionally ignored
   }
-}
-
-function nonCooperativeCancelFallback<T, E>(
-  abortReason: unknown,
-): Promise<Result<T, E | UnhandledException>> {
-  // schedule on demand after bound abort, not when Policy.cancel is entered
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve(Result.err(new UnhandledException({ cause: abortReason })));
-    }, 0);
-  });
-}
-
-function createBoundCancelSession(boundSignal: AbortSignal, outerSignal: AbortSignal) {
-  const controller = new AbortController();
-
-  let boundAborted = false;
-  let notifyBoundAbort!: () => void;
-  const boundAbort = new Promise<void>((resolve) => {
-    notifyBoundAbort = resolve;
-  });
-
-  const onBoundAbort = () => {
-    if (boundAborted) return;
-    boundAborted = true;
-    controller.abort(boundSignal.reason);
-    notifyBoundAbort();
-  };
-
-  const onOuterAbort = () => controller.abort(outerSignal.reason);
-
-  if (boundSignal.aborted) onBoundAbort();
-  else boundSignal.addEventListener("abort", onBoundAbort, { once: true });
-
-  if (outerSignal.aborted) onOuterAbort();
-  else outerSignal.addEventListener("abort", onOuterAbort, { once: true });
-
-  return {
-    signal: controller.signal,
-    boundAbort,
-    detach: () => {
-      boundSignal.removeEventListener("abort", onBoundAbort);
-      outerSignal.removeEventListener("abort", onOuterAbort);
-    },
-  };
-}
-
-function raceBoundCancel<T, E, M>(
-  source: Plan<T, E, M>,
-  boundSignal: AbortSignal,
-  outerContext: RunContext<readonly unknown[]>,
-): Promise<Result<T, E | UnhandledException>> {
-  const session = createBoundCancelSession(boundSignal, outerContext.signal);
-  const runContext = createRunContext(session.signal, outerContext.args, outerContext.extensions);
-  const runPromise = source.execute(runContext);
-  const firstSettlement = Promise.race([
-    runPromise.then(() => "run" as const),
-    session.boundAbort.then(() => "boundAbort" as const),
-  ]);
-
-  return firstSettlement
-    .then((winner) => {
-      if (winner === "run") return runPromise;
-
-      return new Promise<Result<T, E | UnhandledException>>((resolve, reject) => {
-        queueMicrotask(() => {
-          void Promise.race([
-            runPromise,
-            nonCooperativeCancelFallback<T, E>(boundSignal.reason),
-          ]).then(resolve, reject);
-        });
-      });
-    })
-    .finally(session.detach);
-}
-
-async function raceTimeout<T, E>(
-  run: (context: RunContext<readonly unknown[]>) => PromiseLike<Result<T, E>>,
-  timeoutMs: number,
-  outerContext: RunContext<readonly unknown[]>,
-): Promise<Result<T, E | TimeoutError>> {
-  const controller = new AbortController();
-  const runContext = createRunContext(
-    controller.signal,
-    outerContext.args,
-    outerContext.extensions,
-  );
-  const cascade = () => controller.abort(outerContext.signal.reason);
-
-  if (outerContext.signal.aborted) cascade();
-  else outerContext.signal.addEventListener("abort", cascade, { once: true });
-
-  const runPromise = run(runContext);
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  let timeoutError: TimeoutError | undefined;
-  const timeout = new Promise<Result<T, E | TimeoutError>>((resolve) => {
-    timeoutId = setTimeout(() => {
-      timeoutError = new TimeoutError({ timeoutMs });
-      controller.abort(timeoutError);
-      resolve(Result.err(timeoutError));
-    }, timeoutMs);
-  });
-
-  const firstResult = await Promise.race([runPromise, timeout]).finally(() => {
-    if (timeoutId !== undefined) clearTimeout(timeoutId);
-    outerContext.signal.removeEventListener("abort", cascade);
-  });
-
-  if (timeoutError === undefined) {
-    return firstResult;
-  }
-
-  await runPromise;
-  return Result.err(timeoutError);
 }

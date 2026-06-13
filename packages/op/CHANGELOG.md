@@ -9,7 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- No entries yet.
+- Publish `docs/api-contract.md`: authoritative `@prodkit/op` export inventory grouped by
+  application and extension-author tiers.
+- Publish `docs/faq.md` with answers to common adoption questions.
+
+### Changed
+
+- Rework the README opening around install and an idiomatic first operation example.
+- Expand the README **Project status** section with beta contract, maintenance model, and
+  near-term direction.
+- Document beta status and strict SemVer from 0.2.0 in the README; record versioning and
+  split-`better-result` import policy in monorepo ADRs 0014 and 0015.
+- Document the boundary between `better-result` result primitives and `@prodkit/op` execution
+  policy, including when to use operation-level retry.
+- Document the `better-result` compatibility policy and add CI coverage for the peer range floor
+  and current highest matching version.
+- Clarify the consumer runtime baseline as an ES2022 ESM environment with the platform APIs used
+  by the operation runtime.
+- Align the HKT and internal extension guides with the frozen public export contracts.
+
+### Fixed
+
+- Cleanup failures now preserve the prior body error and every exact thrown cleanup value in an
+  `ErrorGroup`, instead of cloning faults into a nested `Error.cause` chain or discarding the body
+  failure.
+
+### Removed
+
+- `@prodkit/op/internal` no longer exports `EnterFn` or `ExitFn`; use `EnterContext` and
+  `ExitContext` on the main entry for lifecycle typing.
 
 ## [0.1.80] - 2026-06-04
 
@@ -449,6 +477,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   paths, including generator finalization behavior.
 - Tightened combinator and policy behavior in edge cases (listener teardown,
   retry timing, and composed operation semantics).
-
-
-

@@ -14,7 +14,7 @@ import {
   type MergeMeta,
   type RunContext,
 } from "../../src/internal/index.js";
-import { type NormalizeMeta } from "../../src/core/meta.js";
+import { type NormalizeMeta } from "../../src/core/metadata.js";
 import type { Assert, IsEqual } from "@prodkit/shared/types/utils";
 import type { Result } from "../../src/result.js";
 import type { UnhandledException } from "../../src/errors.js";

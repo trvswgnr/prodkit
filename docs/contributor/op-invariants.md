@@ -10,9 +10,9 @@ It focuses on semantics that should remain stable across refactors.
 
 ## Scope and model
 
-`Op.run()` is driven by `drive()` in `packages/op/src/core/runtime.ts`.
+`Op.run()` is driven by `drive()` in `packages/op/src/execution/runtime.ts`.
 That runtime executes generator instructions, tracks registered exit finalizers, and settles to a single `Result`.
-Public combinators in `packages/op/src/combinators.ts` are plan-backed; child work runs through `Plan.execute` / `executePlan` in `packages/op/src/core/plan/`, not combinator-local `drive()` calls.
+Public combinators in `packages/op/src/core/combinators.ts` are plan-backed; child work runs through `Plan.execute` / `executePlan` in `packages/op/src/plan/`, not combinator-local `drive()` calls.
 
 ## Invariant 1: cleanup ordering is deterministic and LIFO
 
@@ -25,19 +25,22 @@ Why this matters:
 
 Enforced by code paths:
 
-- `packages/op/src/core/cleanup.ts` (`runFinalizersSafely`): iterates `finalizers` from tail to head and keeps unwinding after faults
-- `packages/op/src/core/cleanup.ts` (`chainCleanupFaults`): folds multiple cleanup faults into a nested `Error.cause` chain in unwind order
+- `packages/op/src/execution/cleanup.ts` (`runFinalizersSafely`): iterates `finalizers` from tail to head and keeps unwinding after faults
+- `packages/op/src/execution/cleanup.ts` (`runFinalizersSafely`): preserves exact thrown values in execution order, including `undefined`
 
 Representative tests:
 
-- `packages/op/tests/unit/core.test.ts` (`registerExitFinalizer runs all handlers in LIFO order`)
-- `packages/op/tests/unit/core.test.ts` (`multiple throwing finalizers are folded into a cause chain`)
-- `packages/op/tests/unit/lifecycle-defer.test.ts` (`runs multiple defers in LIFO order on success`)
-- `packages/op/tests/unit/lifecycle-defer.test.ts` (`shares LIFO stack with release policy (release runs before defer registered earlier)`)
+- `packages/op/tests/unit/execution/runtime.test.ts` (`registerExitFinalizer runs all handlers in LIFO order`)
+- `packages/op/tests/unit/execution/runtime.test.ts` (`cleanup ErrorGroup preserves custom errors and non-Error values in LIFO order`)
+- `packages/op/tests/unit/core/lifecycle-defer.test.ts` (`runs multiple defers in LIFO order on success`)
+- `packages/op/tests/unit/core/lifecycle-defer.test.ts` (`shares LIFO stack with release policy (release runs before defer registered earlier)`)
 
 ## Invariant 2: registered exit-finalizer faults take precedence at settlement
 
-After the body reaches a terminal `Result`, exit finalizers run. If any registered exit finalizer fails, the final outcome becomes `Err(UnhandledException)` with cleanup fault cause (or chained causes for multiple faults), regardless of prior body success/failure.
+After the body reaches a terminal `Result`, exit finalizers run. If any registered exit finalizer
+fails, the final outcome becomes `Err(UnhandledException)` with an `ErrorGroup` cause. A prior body
+error is the first group entry; exact cleanup failures follow in LIFO execution order. Successful
+bodies contribute no group entry.
 
 Why this matters:
 
@@ -46,23 +49,22 @@ Why this matters:
 
 Enforced by code paths:
 
-- `packages/op/src/core/runtime.ts` (`settleIteratorWithCleanup`): finalizer faults override settled body result
-- `packages/op/src/core/cleanup.ts` (`runFinalizersSafely`): returns first unwind fault (or cause chain) for wrapping
+- `packages/op/src/execution/runtime.ts` (`settleIteratorWithCleanup`): finalizer faults override settled body result
+- `packages/op/src/execution/cleanup.ts` (`runFinalizersSafely`): returns the exact cleanup fault array for grouping
 
 Representative tests:
 
-- `packages/op/tests/unit/core.test.ts` (`finalizer throw after successful body converts to UnhandledException`)
-- `packages/op/tests/unit/core.test.ts` (`cleanup fault takes precedence over typed body error`)
-- `packages/op/tests/unit/lifecycle-defer.test.ts` (`when op fails, cleanup throws: UnhandledException with cleanup error as cause`)
+- `packages/op/tests/unit/execution/runtime.test.ts` (the six body/cleanup settlement cases)
+- `packages/op/tests/unit/core/lifecycle-defer.test.ts` (`when op fails, cleanup throws: ErrorGroup preserves body and cleanup failures`)
 
 Important edge distinction:
 
-- generator finalization via `iter.return()` uses `closeGenerator()` in `packages/op/src/core/cleanup.ts`, which intentionally swallows `return()` cleanup faults to preserve the original body result/error
+- generator finalization via `iter.return()` uses `closeGenerator()` in `packages/op/src/execution/cleanup.ts`, which intentionally swallows `return()` cleanup faults to preserve the original body result/error
 - this behavior is separate from registered exit finalizers and is intentionally less intrusive
 
 Representative test:
 
-- `packages/op/tests/unit/lifecycle-generator-finalization.test.ts` (`preserves original Err result when cleanup throws during iter.return()`)
+- `packages/op/tests/unit/execution/generator-finalization.test.ts` (`preserves original Err result when cleanup throws during iter.return()`)
 
 ## Invariant 3: chain-order semantics in combinators are stable
 
@@ -79,21 +81,21 @@ Why this matters:
 
 Enforced by code paths:
 
-- `packages/op/src/core/plan/fan-out.ts` (`fanOutPlans`): isolates child cancellation and detaches
-  parent abort listeners on settle; combinator child runs call `executePlan` with
-  `interruptOnAbortSettlement` so aborted losers unwind even when they ignore the signal
+- `packages/op/src/execution/fan-out.ts` (`driveFanOutPlans`): uses `ChildRunSession.pool` to isolate
+  child cancellation and detach parent abort listeners on settle; combinator child runs call
+  `executePlan` with `Settlement.interrupting` so aborted losers unwind even when they ignore the signal
 
 Representative tests:
 
-- `packages/op/tests/unit/combinator-all.test.ts` (`tuple of successes in input order`)
-- `packages/op/tests/unit/combinator-all-settled.test.ts` (`returns tuple of Result in input order`)
-- `packages/op/tests/unit/combinator-any.test.ts` (`preserves index order when failures settle out of order`)
-- `packages/op/tests/unit/combinator-any.test.ts` (`waits for loser finalization before returning the winner`)
-- `packages/op/tests/unit/combinator-race.test.ts` (`waits for loser finalization before returning winner result`)
-- `packages/op/tests/unit/combinator-any.test.ts` (`settles when a winner succeeds and a loser ignores abort`)
-- `packages/op/tests/unit/lifecycle-defer.test.ts` (`Op.all([child]).with(Policy.timeout(...)) runs child Op.defer cleanup when child Op.try ignores abort`)
+- `packages/op/tests/unit/core/combinator-all.test.ts` (`tuple of successes in input order`)
+- `packages/op/tests/unit/core/combinator-all-settled.test.ts` (`returns tuple of Result in input order`)
+- `packages/op/tests/unit/core/combinator-any.test.ts` (`preserves index order when failures settle out of order`)
+- `packages/op/tests/unit/core/combinator-any.test.ts` (`waits for loser finalization before returning the winner`)
+- `packages/op/tests/unit/core/combinator-race.test.ts` (`waits for loser finalization before returning winner result`)
+- `packages/op/tests/unit/core/combinator-any.test.ts` (`settles when a winner succeeds and a loser ignores abort`)
+- `packages/op/tests/unit/core/lifecycle-defer.test.ts` (`Op.all([child]).with(Policy.timeout(...)) runs child Op.defer cleanup when child Op.try ignores abort`)
 - `packages/op/tests/unit/di/index.test.ts` (`DI.provide(inner).with(Policy.timeout(...)) runs inner Op.defer cleanup when inner Op.try ignores abort`)
-- `packages/op/tests/unit/combinator-race.test.ts` (`settles when the winner succeeds and a loser ignores abort`)
+- `packages/op/tests/unit/core/combinator-race.test.ts` (`settles when the winner succeeds and a loser ignores abort`)
 
 ## Guardrails for future changes
 
@@ -106,7 +108,9 @@ Before changing runtime/combinator internals, preserve these properties:
 
 Any intentional semantic change should include:
 
-- explicit test updates in `packages/op/tests/unit/core.test.ts`, `packages/op/tests/unit/lifecycle-*.test.ts`, and/or `packages/op/tests/unit/combinator-*.test.ts`
+- explicit test updates in `packages/op/tests/unit/execution/runtime.test.ts`,
+  `packages/op/tests/unit/core/lifecycle-*.test.ts`, and/or
+  `packages/op/tests/unit/core/combinator-*.test.ts`
 - an accompanying update to this document explaining the new invariant
 
 ## Operational notes and references
@@ -115,18 +119,18 @@ If you change the scheduler, combinators, or policy wrappers, these are the beha
 holding steady. Stuff that reads like a micro-optimization can still blow up determinism or
 what callers see when something fails.
 
-The references here are `packages/op/src/core/runtime.ts`, `packages/op/src/core/plan/`, and
-`packages/op/src/combinators.ts`, plus the tests named inline so regressions stay obvious.
+The references here are `packages/op/src/execution/runtime.ts`, `packages/op/src/plan/`, and
+`packages/op/src/core/combinators.ts`, plus the tests named inline so regressions stay obvious.
 
 ## Single-run driver (`drive`)
 
-Running an `Op` is walking an iterator over `Instruction`s. `drive` in `packages/op/src/core/runtime.ts`
-passes the same `AbortSignal` into suspended work (`packages/op/tests/unit/core.test.ts` "resumeSuspended path
+Running an `Op` is walking an iterator over `Instruction`s. `drive` in `packages/op/src/execution/runtime.ts`
+passes the same `AbortSignal` into suspended work (`packages/op/tests/unit/execution/runtime.test.ts` "resumeSuspended path
 passes the bound signal"). A typed shortcut via `yield* Result.err` settles to `Err` and still
 runs exit teardown along the usual path. Yield something that isn't a known instruction shape
 and you get `Err(UnhandledException(TypeError))` ("invalid yielded instructions...").
 
-`Op.try` mapper contract (`packages/op/src/builders.ts`): `onError` returns the mapped error value (or a
+`Op.try` mapper contract (`packages/op/src/core/builders.ts`): `onError` returns the mapped error value (or a
 `Promise` of it). If `onError` returns an `Op`/generator object, `Op.try` uses that object as the
 error value and does not execute it.
 
@@ -134,65 +138,62 @@ error value and does not execute it.
 
 Cleanup hooks go through `RegisterExitFinalizerInstruction`. For each `drive` invocation the
 registered finalizers unwind last-in-first-out: `runFinalizersSafely` walks the array from the
-tail (`packages/op/src/core/cleanup.ts`). In one generator body, multiple defers unwind in reverse yield order
+tail (`packages/op/src/execution/cleanup.ts`). In one generator body, multiple defers unwind in reverse yield order
 (second defer runs before the first).
 
 Chained `.on("exit", ...)` builds plan wrappers where the hand you attach first behaves like the
 inner scope, so at exit time the inner-most handler runs
-before the outer ones (`packages/op/tests/unit/lifecycle-exit.test.ts`, "chains `.on("exit")` in LIFO order with inner
+before the outer ones (`packages/op/tests/unit/core/lifecycle-exit.test.ts`, "chains `.on("exit")` in LIFO order with inner
 registration running first"). That matches how people think about stacking defer-like behavior.
 
-Every registered finalizer still runs after a sibling throws (`runFinalizersSafely`). Several throws
-collapse into nested `cause` links via `chainCleanupFaults` in LIFO order (`packages/op/tests/unit/core.test.ts`,
-"multiple throwing finalizers are folded into a cause chain").
+Every registered finalizer still runs after a sibling throws (`runFinalizersSafely`). Thrown values
+are preserved exactly in execution order, including values that are not `Error` instances
+(`packages/op/tests/unit/execution/runtime.test.ts`,
+"cleanup ErrorGroup preserves custom errors and non-Error values in LIFO order").
 
 Once the body has picked a settlement `Result`, a fault in exit finalizers wins the observable
-outcome as `Err(UnhandledException)`, including folded `cause` chains, even when the body had
-already settled to typed `Err` ("cleanup fault takes precedence over typed body error"). Same for
-successful bodies where a finalizer throws ("finalizer throw after successful body converts to
-`UnhandledException`").
+outcome as `Err(UnhandledException)` with an `ErrorGroup` cause. If the body already failed, that
+exact error is the first group entry. Cleanup failures follow in LIFO execution order. Successful
+bodies contribute no entry.
 
-`.with(Policy.release(...))` is different (`packages/op/src/core/plan/lifecycle.ts`). The release hook
+`.with(Policy.release(...))` is different (`packages/op/src/plan/lifecycle.ts`). The release hook
 arms only after a successful inner completion. Typed failure short-circuits without scheduling that
-release, so primary errors stay intact (`packages/op/tests/unit/lifecycle-release.test.ts`, "preserves primary error..." on
+release, so primary errors stay intact (`packages/op/tests/unit/core/lifecycle-release.test.ts`, "preserves primary error..." on
 `Op.fail` with release policy). That isn't swapping semantics with exit finalizers registered while
 the run is unwinding inside `drive`.
 
 ### Generator finalization (`closeGenerator`)
 
 `drive` touches `iterator.return` through `closeGenerator` so synchronous native `finally` code runs
-(`packages/op/src/core/cleanup.ts`). This is best-effort generator finalization, not the effectful
+(`packages/op/src/execution/cleanup.ts`). This is best-effort generator finalization, not the effectful
 cleanup path: yielded or async work inside a `finally` block is not driven after early exit. Use
 `Op.defer`, `.with(Policy.release(...))`, or `.on("exit", ...)` for cleanup that must suspend, fail explicitly, or
 complete before `.run()` settles. Throws from `return` are swallowed on purpose
-(`packages/op/tests/unit/lifecycle-generator-finalization.test.ts`, "preserves original Err result when cleanup throws during `iter.return()`").
+(`packages/op/tests/unit/execution/generator-finalization.test.ts`, "preserves original Err result when cleanup throws during `iter.return()`").
 
 ## Concurrency (`Op.all`, `Op.any`, `Op.race`)
 
-Combinator contracts live in `packages/op/src/core/plan/combinators.ts` and
-`packages/op/src/core/plan/fan-out.ts` alongside the fuller comment block in `combinators.ts`.
+Combinator contracts live in `packages/op/src/plan/combinators.ts` and
+`packages/op/src/execution/fan-out.ts` alongside the fuller comment block in `combinators.ts`.
 
-### Fan-out scheduling modes
+### Fan-out scheduling
 
-Two execution shapes in `packages/op/src/core/plan/fan-out.ts`:
-
-- **First-settler** (`driveFirstSettlerFanOutPlans`): used by `Op.race`, `Op.any`, and unbounded
-  fail-fast `Op.all`. Every child starts under one outer abort umbrella. The first branch that
-  matches the combinator claim rule wins, aborts siblings, and `.run()` waits until every child
-  promise settles (including loser cleanup).
-- **Bounded pool** (`driveBoundedPoolPlans`): used when `Op.all` or `Op.allSettled` receive a
-  concurrency limit below the child count. At most N children run at once. Fail-fast `Op.all`
-  stops scheduling new work after the first `Err` and aborts in-flight siblings.
+Combinator fan-out runs through one driver in `packages/op/src/execution/fan-out.ts`
+(`driveFanOutPlans`) backed by `ChildRunSession.pool`. `poolSize` caps concurrent children; when it
+is at least the child count, every branch starts under one outer abort umbrella (first-settler
+behavior for `Op.race`, `Op.any`, and unbounded fail-fast `Op.all`). Below the child count, at most N
+children run at once. Fail-fast `Op.all` stops scheduling after the first `Err` and aborts in-flight
+siblings. First-settler combinators abort siblings by index and wait until every started child promise
+settles (including loser cleanup).
 
 Representative regression tests:
 
-- `packages/op/tests/unit/fan-out-regression.test.ts` (`caps concurrent children and aborts in-flight siblings on first Err`)
-- `packages/op/tests/unit/fan-out-regression.test.ts` (`Op.race waits for loser defer cleanup before run() settles`)
+- `packages/op/tests/unit/execution/fan-out-regression.test.ts` (`caps concurrent children and aborts in-flight siblings on first Err`)
+- `packages/op/tests/unit/execution/fan-out-regression.test.ts` (`Op.race waits for loser defer cleanup before run() settles`)
 
 `Op.all` fails fast on the first child error, aborts siblings, and waits for every active branch
-to settle before returning. Fan-out children run through `executePlan(..., interruptOnAbortSettlement)`
-so aborted losers unwind even when they ignore `AbortSignal`. Combinator plans wrap their returned work
-with `withAbortDrain(...)` so an enclosing `Policy.timeout` can drain in-flight fan-out work before the
+to settle before returning. Fan-out children run through `Settlement.interrupting`. Combinator plans use
+`Settlement.interruptingAndDraining` so an enclosing `Policy.timeout` can drain in-flight fan-out work before the
 timeout result settles.
 
 `Op.any` runs children together under one outer abort umbrella. First success picks the winner and
@@ -232,14 +233,14 @@ Enforced by:
 
 - `packages/op/src/policy/plan.ts` (`retryPlan`, `timeoutPlan`)
 - `packages/op/src/policy/retry-policy.ts` and `packages/op/src/policy/validate.ts`
-- `@prodkit/shared/runtime` (`sleepWithSignal`) via `Op.sleep` in `packages/op/src/builders.ts`
+- `@prodkit/shared/runtime` (`sleepWithSignal`) via `Op.sleep` in `packages/op/src/core/builders.ts`
 
 Representative tests:
 
-- `packages/op/tests/unit/policy-retry.test.ts` and `packages/op/tests/unit/policy-timeout.test.ts`
+- `packages/op/tests/unit/policy/retry.test.ts` and `packages/op/tests/unit/policy/timeout.test.ts`
   (invalid retries, delay, when, timeout)
 - `packages/op/tests/property/retry-policy.test.ts` (invalid exponential delay options)
-- `packages/op/tests/unit/builders.test.ts` (sleep normalization and non-finite rejection)
+- `packages/op/tests/unit/core/builders.test.ts` (sleep normalization and non-finite rejection)
 
 ## Retry policy shape
 
@@ -256,8 +257,8 @@ Representative tests:
 `Policy.timeout(...)` second means one overall clock around the retry loop ("timeout wraps the
 entire retried run when chained outside retry"). Putting timeout inside retry means timeout
 applies independently per run inside the retry loop
-`packages/op/tests/unit/policy-timeout.test.ts` (`timeout applies per-attempt when chained inside retry`) and
-`packages/op/tests/unit/policy-timeout.test.ts` (`timeout wraps the entire retried run when chained outside retry`).
+`packages/op/tests/unit/policy/timeout.test.ts` (`timeout applies per-attempt when chained inside retry`) and
+`packages/op/tests/unit/policy/timeout.test.ts` (`timeout wraps the entire retried run when chained outside retry`).
 
 Retry delay and public `Op.sleep(ms)` share the same timer adapter, so timer cleanup and abort
 listener cleanup stay consistent. `Op.sleep` rejects on abort so cancellation flows through the
@@ -290,17 +291,21 @@ live under `packages/op/src/policy/`.
 ## Where else to read
 
 Cancellation and cooperative `AbortSignal` behavior show up wherever `SuspendInstruction` binds a
-signal, plus README's `Op.defer` / `.on("exit")` notes and checks in `packages/op/tests/unit/policy-retry.test.ts`,
-`packages/op/tests/unit/policy-timeout.test.ts`, and
-`packages/op/tests/unit/lifecycle-*.test.ts`. Settlement intent lives in
-`packages/op/src/core/settlement.ts`: DI lazy-resolve uses `AbortSettlement.rejectOnAbort`;
-Policy.cancel owns bound-abort session composition and macrotimer fallback in `policy/plan.ts` and
-wraps its suspend with `withAbortDrain(...)`; driveIterator suspend resume uses
-`AbortSettlement.interruptOnAbort`; combinator and DI provision drains also mark suspend work with
-`withAbortDrain(...)`.
+signal, plus README's `Op.defer` / `.on("exit")` notes and checks in
+`packages/op/tests/unit/policy/retry.test.ts`,
+`packages/op/tests/unit/policy/timeout.test.ts`, and
+`packages/op/tests/unit/core/lifecycle-*.test.ts`. Settlement presets live in
+`packages/op/src/execution/settlement-scope.ts`: DI lazy-resolve uses `Settlement.rejecting`;
+`ChildRunSession` in `execution/child-run-session.ts` owns parent-to-child signal cascade for fan-out,
+`raceTimeout` / `raceBoundCancel` orchestration for Policy timeout and cancel, and bound-cancel merge;
+`raceInFlightAfterInterrupt` in `execution/settlement.ts` is the shared macrotimer fallback primitive;
+Policy.cancel uses `Settlement.interruptingAndDraining`; fan-out children
+use `Settlement.interrupting`; combinators
+and `DI.provide` use `Settlement.interruptingAndDraining`. Low-level `AbortSettlement` primitives
+remain in `packages/op/src/execution/settlement.ts` for the driver.
 Type-level contracts collected in
 `packages/op/tests/types/op.test.ts`, with custom policy spike coverage in
-`packages/op/tests/unit/policy-hkt.test.ts`. Runnable metadata and args-only `.run()` gating are
+`packages/op/tests/unit/policy/hkt.test.ts`. Runnable metadata and args-only `.run()` gating are
 documented under Runnable metadata in `docs/contributor/runtime-architecture.md` and enforced
 by `runnable-gating:check` in gate.
 

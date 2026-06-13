@@ -1,14 +1,14 @@
-import { getPlan, createUnaryPlan, executePlan, type Plan } from "../core/plan/base.js";
-import type { AsArgs } from "../core/plan/surface.js";
-import { makeUnboundPlanOp } from "../core/plan/shell.js";
-import { interruptOnAbortSettlement, withAbortDrain } from "../core/settlement.js";
-import { SuspendInstruction } from "../core/instructions.js";
-import { CUSTOM_INSTRUCTION_META, type CustomInstruction } from "../core/instructions.js";
-import type { RunContext } from "../core/runtime.js";
+import { getPlan } from "../plan/bridge.js";
+import { createUnaryPlan, type Plan } from "../plan/model.js";
+import type { AsArgs } from "../core/surface.js";
+import { makeUnboundPlanOp } from "../core/shell.js";
+import { Settlement, SettlementPresets } from "../execution/settlement-scope.js";
+import { CUSTOM_INSTRUCTION_META, type CustomInstruction } from "../execution/instructions.js";
+import type { RunContext } from "../execution/runtime.js";
 import { UnhandledException } from "../errors.js";
 import { Result } from "../result.js";
 import { abortReason, NEVER, isPromiseLike, unsafeCoerce } from "@prodkit/shared/runtime";
-import type { EmptyMeta } from "../core/meta.js";
+import type { EmptyMeta } from "../core/metadata.js";
 import type { Op } from "../index.js";
 import {
   MISSING_DEPENDENCY,
@@ -74,15 +74,10 @@ export function providePlan<T, E, M>(
 
   return createUnaryPlan(
     function* () {
-      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
-        (context: RunContext<readonly unknown[]>) =>
-          withAbortDrain(
-            executePlan(
-              source,
-              extendContextWithBindings(context, snapshot),
-              interruptOnAbortSettlement(context.signal),
-            ),
-          ),
+      const result: Result<T, E | UnhandledException> = yield* Settlement.suspendPlan(
+        SettlementPresets.interruptingAndDraining,
+        source,
+        (context) => extendContextWithBindings(context, snapshot),
       );
 
       if (result.isErr()) return yield* result;

@@ -1,12 +1,19 @@
+/**
+ * Alternate-runtime smoke harness (Bun, Deno, edge, Node).
+ *
+ * IMPORTANT: Do not import `@prodkit/op` or `../lib/utils.ts` at module load. CI runs this job after
+ * install only; the harness builds and packs `@prodkit/op` before executing it.
+ */
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import { cp, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Miniflare } from "miniflare";
-import { createLogger, readRepoRoot } from "../lib/utils.ts";
+import { createLogger } from "../lib/logger.ts";
+import { readRepoRoot } from "../lib/repo-root.ts";
 
-type Runtime = "bun" | "deno" | "edge";
+type Runtime = "bun" | "deno" | "edge" | "node";
 
 const REPO_ROOT = readRepoRoot();
 const RUNTIME_SMOKE_STATE_DIR = path.join(REPO_ROOT, "var", "runtime-smoke");
@@ -175,21 +182,33 @@ async function createRuntimeWorkspace(tarballPath: string) {
   return workspaceDir;
 }
 
-async function smokeBun(workspaceDir: string) {
+async function writeSmokeScript(workspaceDir: string): Promise<void> {
   await writeFile(
     path.join(workspaceDir, "runtime-smoke.mjs"),
     `${smokeSource("@prodkit/op", "@prodkit/op/policy", "better-result")}\nawait runRuntimeSmoke();\n`,
     "utf8",
   );
-  await run("bun", ["./runtime-smoke.mjs"], workspaceDir);
+}
+
+async function smokeScriptedRuntime(
+  workspaceDir: string,
+  command: string,
+  args: readonly string[],
+): Promise<void> {
+  await writeSmokeScript(workspaceDir);
+  await run(command, args, workspaceDir);
+}
+
+async function smokeBun(workspaceDir: string) {
+  await smokeScriptedRuntime(workspaceDir, "bun", ["./runtime-smoke.mjs"]);
+}
+
+async function smokeNode(workspaceDir: string) {
+  await smokeScriptedRuntime(workspaceDir, "node", ["./runtime-smoke.mjs"]);
 }
 
 async function smokeDeno(workspaceDir: string) {
-  await writeFile(
-    path.join(workspaceDir, "runtime-smoke.mjs"),
-    `${smokeSource("@prodkit/op", "@prodkit/op/policy", "better-result")}\nawait runRuntimeSmoke();\n`,
-    "utf8",
-  );
+  await writeSmokeScript(workspaceDir);
   await writeFile(
     path.join(workspaceDir, "import-map.json"),
     `${JSON.stringify(
@@ -211,10 +230,6 @@ async function smokeDeno(workspaceDir: string) {
   );
 }
 
-function rewriteBetterResultImports(content: string): string {
-  return content.replaceAll(/(from\s*["'])better-result(["'])/g, "$1./better-result.mjs$2");
-}
-
 async function copyDistMjsFiles(sourceDir: string, targetDir: string): Promise<void> {
   mkdirSync(targetDir, { recursive: true });
   for (const entry of await readdir(sourceDir, { withFileTypes: true })) {
@@ -226,7 +241,11 @@ async function copyDistMjsFiles(sourceDir: string, targetDir: string): Promise<v
     }
     if (!entry.name.endsWith(".mjs")) continue;
     const content = await readFile(sourcePath, "utf8");
-    await writeFile(targetPath, rewriteBetterResultImports(content), "utf8");
+    const rewritten = content.replaceAll(
+      /(from\s*["'])better-result(["'])/g,
+      "$1./better-result.mjs$2",
+    );
+    await writeFile(targetPath, rewritten, "utf8");
   }
 }
 
@@ -280,8 +299,15 @@ export default {
 }
 
 function parseRuntime(rawRuntime: string | undefined): Runtime[] {
-  if (rawRuntime === undefined || rawRuntime === "all") return ["bun", "deno", "edge"];
-  if (rawRuntime === "bun" || rawRuntime === "deno" || rawRuntime === "edge") return [rawRuntime];
+  if (rawRuntime === undefined || rawRuntime === "all") return ["bun", "deno", "edge", "node"];
+  if (
+    rawRuntime === "bun" ||
+    rawRuntime === "deno" ||
+    rawRuntime === "edge" ||
+    rawRuntime === "node"
+  ) {
+    return [rawRuntime];
+  }
   throw new Error(`Unknown runtime smoke target: ${rawRuntime}`);
 }
 
@@ -292,9 +318,20 @@ async function main() {
     for (const runtime of runtimes) {
       const workspaceDir = await createRuntimeWorkspace(tarballPath);
       try {
-        if (runtime === "bun") await smokeBun(workspaceDir);
-        if (runtime === "deno") await smokeDeno(workspaceDir);
-        if (runtime === "edge") await smokeEdge(workspaceDir);
+        switch (runtime) {
+          case "bun":
+            await smokeBun(workspaceDir);
+            break;
+          case "node":
+            await smokeNode(workspaceDir);
+            break;
+          case "deno":
+            await smokeDeno(workspaceDir);
+            break;
+          case "edge":
+            await smokeEdge(workspaceDir);
+            break;
+        }
         logger.info(`${runtime} completed successfully`);
       } finally {
         await rm(workspaceDir, { recursive: true, force: true });

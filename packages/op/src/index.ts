@@ -1,11 +1,11 @@
-import { defer, fail, fromGenFn, sleep, succeed, _try } from "./builders.js";
-import { allOp, allSettledOp, anyOp, raceOp, settleOp } from "./combinators.js";
+import { defer, fail, fromGenFn, sleep, succeed, _try } from "./core/builders.js";
+import { allOp, allSettledOp, anyOp, raceOp, settleOp } from "./core/combinators.js";
 import { ErrorGroup, TimeoutError, type UnhandledException } from "./errors.js";
-import type { EnterContext, OpLifecycleHook } from "./core/plan/context.js";
-import type { OpInterface, AsArgs } from "./core/plan/surface.js";
-import type { EmptyMeta, IsRunnable } from "./core/meta.js";
-import type { ExitContext } from "./core/runtime.js";
-import { runOp } from "./core/runtime.js";
+import type { EnterContext, OpLifecycleHook } from "./core/lifecycle.js";
+import type { OpInterface, AsArgs } from "./core/surface.js";
+import type { EmptyMeta, IsRunnable } from "./core/metadata.js";
+import type { ExitContext } from "./execution/runtime.js";
+import { runOp } from "./execution/runtime.js";
 import { Tagged } from "./tagged.js";
 import { type Result } from "./result.js";
 
@@ -66,9 +66,10 @@ export const Op = Object.assign(fromGenFn, {
   /**
    * Registers an exit finalizer for the current run via `yield* Op.defer(...)`.
    *
-   * If several callbacks throw during the same unwind, `run` fails with {@link UnhandledException}
-   * whose `cause` is a nested {@link Error} chain (`.cause`) with the **first LIFO
-   * failure as the outermost error**.
+   * If any callback throws during unwind, `run` fails with {@link UnhandledException} whose `cause`
+   * is an {@link ErrorGroup} (message `Operation cleanup failed`). Cleanup failures are exact
+   * thrown values in LIFO execution order. When the body already failed, its error is the first
+   * group entry.
    *
    * **Important**: Op.defer *must* be `yield*`ed or it will do nothing
    *

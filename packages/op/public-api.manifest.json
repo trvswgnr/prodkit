@@ -1,0 +1,169 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "@prodkit/op",
+      "source": "src/index.ts",
+      "exports": [
+        {
+          "name": "EnterContext",
+          "kind": "type",
+          "signature": "EnterContext<A>"
+        },
+        {
+          "name": "ErrorGroup",
+          "kind": "value",
+          "signature": "typeof ErrorGroup"
+        },
+        {
+          "name": "ExitContext",
+          "kind": "type",
+          "signature": "ExitContext<T, E, A>"
+        },
+        {
+          "name": "Op",
+          "kind": "type",
+          "signature": "BaseOp<T, E, A, M> & FluentOp<T, E, A, M> & ((A extends [] ? true : false) extends true ? OpIterable<T, E, M> : {}) & Tagged<\"Op\">"
+        },
+        {
+          "name": "Op",
+          "kind": "value",
+          "signature": "(<Y extends Instruction<unknown, unknown>, T, A>(f: (...args: AsArgs<A>) => Generator<Y, T, unknown>) => Op<T, InferInstructionErr<Y>, A, InferInstructionMeta<Y>>) & { _tag: \"OpFactory\"; run: <T, E, A, M>(op: [IsRunnable<M>] extends [false] ? never : Op<T, E, A, M>, ...args: AsArgs<A>) => Promise<Result<T, E | UnhandledException>>; of: <T>(value: T | PromiseLike<T>) => Op<Awaited<T>, never, [], EmptyMeta>; fail: <E>(value: E) => Op<never, E, [], EmptyMeta>; defer: (finalize: AnyExitFn) => Op<void, never, [], EmptyMeta>; sleep: (ms: number) => Op<void, never, [], EmptyMeta>; try: <T, E = UnhandledException>(f: (signal: AbortSignal) => T, onError?: (e: unknown) => E | PromiseLike<E>) => Op<Awaited<T>, TrackedErr<Awaited<E>>, [], EmptyMeta>; all: <const Ops extends readonly AnyNullaryOp[]>(ops: Ops, concurrency?: number) => Op<{ [K in keyof Ops]: InferOpOk<Ops[K]>; }, InferOpErr<Ops[number]>, [], Ops extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, any> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta>; allSettled: <const Ops extends readonly AnyNullaryOp[]>(ops: Ops, concurrency?: number) => Op<{ [K in keyof Ops]: Result<InferOpOk<Ops[K]>, UnhandledException | InferOpErr<Ops[K]>>; }, never, [], Ops extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, any> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta>; settle: <T, E, M>(op: Op<T, E, [], M>) => Op<Result<T, E | UnhandledException>, never, [], M>; any: <const Ops extends readonly AnyNullaryOp[]>(ops: Ops) => Op<InferOpOk<Ops[number]>, (Ops extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? [InferOpErr<Head>] extends [never] ? true : Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? [InferOpErr<Head>] extends [never] ? true : Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? [InferOpErr<Head>] extends [never] ? true : Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? [InferOpErr<Head>] extends [never] ? true : Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? [InferOpErr<Head>] extends [never] ? true : Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? [InferOpErr<Head>] extends [never] ? true : Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? [InferOpErr<Head>] extends [never] ? true : Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? [InferOpErr<Head>] extends [never] ? true : Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? [InferOpErr<Head>] extends [never] ? true : Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? [InferOpErr<Head>] extends [never] ? true : Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? [InferOpErr<Head>] extends [never] ? true : any : false : false : false : false : false : false : false : false : false : false : false) extends true ? never : ErrorGroup<InferOpErr<Ops[number]>>, [], Ops extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, any> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta>; race: <const Ops extends readonly AnyNullaryOp[]>(ops: Ops) => Op<InferOpOk<Ops[number]>, InferOpErr<Ops[number]>, [], Ops extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, Tail extends readonly [infer Head extends AnyNullaryOp, ...infer Tail extends readonly AnyNullaryOp[]] ? MergeMeta<InferOpMeta<Head>, any> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta> : EmptyMeta>; empty: Op<void, never, [], EmptyMeta>; }"
+        },
+        {
+          "name": "OpLifecycleHook",
+          "kind": "type",
+          "signature": "\"enter\" | \"exit\""
+        },
+        {
+          "name": "TimeoutError",
+          "kind": "value",
+          "signature": "typeof TimeoutError"
+        }
+      ]
+    },
+    {
+      "id": "@prodkit/op/di",
+      "source": "src/di/index.ts",
+      "exports": [
+        {
+          "name": "Dependency",
+          "kind": "type",
+          "signature": "Dependency<T, Name>"
+        },
+        {
+          "name": "Dependency",
+          "kind": "value",
+          "signature": "<const Name extends string>(key: Name) => DependencyCtor<Name>"
+        },
+        {
+          "name": "DI",
+          "kind": "value",
+          "signature": "{ readonly Dependency: <const Name extends string>(key: Name) => DependencyCtor<Name>; readonly inject: <C extends AnyDependency>(dependency: C) => Generator<InjectInstruction<DependencyValue<C>, Deps<C>>, DependencyValue<C>, unknown>; readonly singleton: <C extends AnyDependency, V = unknown>(dependency: C, value: DependencyValue<C, V>) => SingletonBinding<C, V>; readonly scoped: <C extends AnyDependency>(dependency: C, resolve: LazyResolveFn<C>) => LazyBinding<C>; readonly provide: <T, E, A, M, const Bindings extends readonly AnyBinding[]>(op: Op<T, E, A, M>, bindings: ValidProvideBindings<Bindings, RequiredDepsOfMeta<M>>) => Op<T, E, A, ProvidedMeta<M, Bindings>>; readonly MissingDependencyError: typeof MissingDependencyError; readonly DuplicateDependencyError: typeof DuplicateDependencyError; }"
+        },
+        {
+          "name": "inject",
+          "kind": "value",
+          "signature": "<C extends AnyDependency>(dependency: C) => Generator<InjectInstruction<DependencyValue<C>, Deps<C>>, DependencyValue<C>, unknown>"
+        },
+        {
+          "name": "provide",
+          "kind": "value",
+          "signature": "<T, E, A, M, const Bindings extends readonly AnyBinding[]>(op: Op<T, E, A, M>, bindings: ValidProvideBindings<Bindings, RequiredDepsOfMeta<M>>) => Op<T, E, A, ProvidedMeta<M, Bindings>>"
+        },
+        {
+          "name": "RequiredDeps",
+          "kind": "type",
+          "signature": "C extends Op<infer _T, infer _E, infer _A, infer M> ? RequiredDepsOfMeta<M> : never"
+        },
+        {
+          "name": "scoped",
+          "kind": "value",
+          "signature": "<C extends AnyDependency>(dependency: C, resolve: LazyResolveFn<C>) => LazyBinding<C>"
+        },
+        {
+          "name": "singleton",
+          "kind": "value",
+          "signature": "<C extends AnyDependency, V = unknown>(dependency: C, value: DependencyValue<C, V>) => SingletonBinding<C, V>"
+        }
+      ]
+    },
+    {
+      "id": "@prodkit/op/policy",
+      "source": "src/policy/index.ts",
+      "exports": [
+        {
+          "name": "CancelPolicyAttachment",
+          "kind": "type",
+          "signature": "OpPolicy<unknown, OpPolicyType> & { readonly abortSignal: AbortSignal; }"
+        },
+        {
+          "name": "Delay",
+          "kind": "type",
+          "signature": "number | ((retry: number, cause: unknown) => number)"
+        },
+        {
+          "name": "Delay",
+          "kind": "value",
+          "signature": "{ readonly fixed: (ms: number) => ValidatedDelay; readonly exponential: (options?: ExponentialDelayOptions) => ValidatedDelay; readonly immediate: ValidatedDelay; readonly defaultRetry: ValidatedDelay; }"
+        },
+        {
+          "name": "ExponentialDelayOptions",
+          "kind": "type",
+          "signature": "ExponentialDelayOptions"
+        },
+        {
+          "name": "Policy",
+          "kind": "type",
+          "signature": "OpPolicy<Input, F>"
+        },
+        {
+          "name": "Policy",
+          "kind": "value",
+          "signature": "{ readonly retry: (policy?: RetryPolicy) => RetryPolicyAttachment; readonly timeout: (timeoutMs: number) => TimeoutPolicyAttachment; readonly cancel: (abortSignal: AbortSignal) => CancelPolicyAttachment; readonly release: <T>(releaseFn: ReleaseFn<T>) => ReleasePolicyAttachment<T>; readonly define: <Input, F extends HKT, Extras extends object = Record<never, never>>(definition: Extras & { apply<T, E, A, M>(source: OpPolicySource<T, E, A, M>): HKT.Apply<F, [T, E, A, M]>; }) => OpPolicy<Input, F> & Extras; }"
+        },
+        {
+          "name": "ReleasePolicyAttachment",
+          "kind": "type",
+          "signature": "OpPolicy<OpPolicyInput<T, unknown, unknown, unknown>, OpPolicyType> & { readonly release: ReleaseFn<T>; }"
+        },
+        {
+          "name": "RetryPolicy",
+          "kind": "type",
+          "signature": "RetryPolicy"
+        },
+        {
+          "name": "RetryPolicyAttachment",
+          "kind": "type",
+          "signature": "OpPolicy<unknown, OpPolicyType> & { readonly policy: RetryPolicy | undefined; }"
+        },
+        {
+          "name": "TimeoutPolicyAttachment",
+          "kind": "type",
+          "signature": "OpPolicy<unknown, TimeoutPolicyType> & { readonly timeoutMs: number; }"
+        },
+        {
+          "name": "TimeoutPolicyType",
+          "kind": "type",
+          "signature": "TimeoutPolicyType"
+        }
+      ]
+    },
+    {
+      "id": "@prodkit/op/hkt",
+      "source": "src/hkt.ts",
+      "exports": [
+        {
+          "name": "HKT",
+          "kind": "type",
+          "signature": "HKT"
+        },
+        {
+          "name": "HKT",
+          "kind": "value",
+          "signature": "{ readonly PARAMS: typeof PARAMS; readonly TYPE: typeof TYPE; }"
+        }
+      ]
+    }
+  ]
+}

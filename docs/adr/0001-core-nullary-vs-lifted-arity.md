@@ -7,19 +7,20 @@ packages:
 
 # Core driver uses nullary ops; public API preserves tuple arity
 
-The generator runtime (`drive` in `packages/op/src/core/runtime.ts`) executes
+The generator runtime (`drive` in `packages/op/src/execution/runtime.ts`) executes
 `Op<T, E, [], M>`: nullary ops whose iterator is the only execution entry point.
 User-facing ops are `Op<T, E, A, M>` where `A` is a tuple of call arguments. Those two shapes
 serve different consumers and stay as separate construction paths rather than one unified builder.
 
 ## Decision
 
-- **`makeCoreOp`** (`packages/op/src/core/fluent.ts`) builds nullary core ops from
+- **`makeCoreOp`** (`packages/op/src/core/generator.ts`) builds nullary core ops from
   generator leaves. Every leaf that participates in `yield*` / `drive()` still has a nullary
   iterator surface.
-- **`makePlanOp`** (`packages/op/src/core/plan/`) decorates a `bindArgs(...args) -> Plan<T, E>`
-  function with the callable-plus-methods surface (`op(args)` and `op.map(...)` on one object).
-  `fromGenFn` uses the same plan binder for generator-defined ops.
+- **Plan-backed Op shells** (`packages/op/src/core/shell.ts`) decorate a
+  `bindArgs(...args) -> Plan<T, E>` function with the callable-plus-methods surface
+  (`op(args)` and `op.map(...)` on one object). `fromGenFn` uses the same plan binder for
+  generator-defined ops.
 
 Policy and transform composition now rewrites internal plan nodes. Tuple arguments are bound at
 the public shell, while iterator bridging keeps nullary `yield*` interop intact.

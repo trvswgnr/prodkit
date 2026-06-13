@@ -1,10 +1,10 @@
 import { describe, expect, it, beforeAll } from "vitest";
 import {
-  assertProfileOpFactory,
+  asBenchOp,
   getRepoRoot,
   importOpModule,
   resolveOpPackageDir,
-  type ProfileScenarioOpFactory,
+  type BenchOp,
 } from "../harness.ts";
 import {
   COMPOSE_STEPS,
@@ -29,12 +29,12 @@ import {
 describe("profile scenarios", () => {
   const steps = 3;
   const expected = steps + 1;
-  let Op: ProfileScenarioOpFactory;
+  let Op: BenchOp;
 
   beforeAll(async () => {
     const packageDir = resolveOpPackageDir(getRepoRoot());
     const module = await importOpModule(packageDir);
-    Op = assertProfileOpFactory(module.Op);
+    Op = asBenchOp(module.Op);
   });
 
   it("runAsyncChain returns steps + 1", async () => {

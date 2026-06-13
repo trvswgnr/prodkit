@@ -5,11 +5,12 @@ export const CONCURRENCY_CHILDREN = 8;
 export const RETRY_ATTEMPTS = 3;
 export const TIMEOUT_BUDGET_MS = 250;
 
-export type OpRunResult = { isOk: () => boolean; value?: unknown };
+export type RunResult = { isOk: () => boolean; value?: unknown };
 
-export type ProfileScenarioOpFactory = {
-  (generator: () => Generator<unknown, unknown, unknown>): { run: () => Promise<OpRunResult> };
-  of: (value: unknown) => { run: () => Promise<OpRunResult> };
+/** Callable Op surface imported from the package under test. */
+export type BenchOp = {
+  (generator: () => Generator<unknown, unknown, unknown>): { run: () => Promise<RunResult> };
+  of: (value: unknown) => { run: () => Promise<RunResult> };
 };
 
 /** Native baseline: await Promise.resolve chain. */
@@ -40,10 +41,7 @@ export async function runAsyncFnChain(steps: number = COMPOSE_STEPS): Promise<nu
 }
 
 /** Full sequential compose path: yield* Op.of per step. */
-export async function runOpYieldChain(
-  Op: ProfileScenarioOpFactory,
-  steps: number = COMPOSE_STEPS,
-): Promise<number> {
+export async function runOpYieldChain(Op: BenchOp, steps: number = COMPOSE_STEPS): Promise<number> {
   const program = Op(function* () {
     let value = 1;
     for (let step = 0; step < steps; step += 1) {
@@ -59,10 +57,7 @@ export async function runOpYieldChain(
 }
 
 /** Single Op, inline loop (one genPlan / one driveIterator, no nested yield*). */
-export async function runOpFlatLoop(
-  Op: ProfileScenarioOpFactory,
-  steps: number = COMPOSE_STEPS,
-): Promise<number> {
+export async function runOpFlatLoop(Op: BenchOp, steps: number = COMPOSE_STEPS): Promise<number> {
   const program = Op(function* () {
     let value = 1;
     for (let step = 0; step < steps; step += 1) {
@@ -79,7 +74,7 @@ export async function runOpFlatLoop(
 
 /** Sequential Op.of(...).run() calls (per-step Op shell, no yield* delegation). */
 export async function runOpSequentialRuns(
-  Op: ProfileScenarioOpFactory,
+  Op: BenchOp,
   steps: number = COMPOSE_STEPS,
 ): Promise<number> {
   let value = 1;
@@ -97,7 +92,7 @@ export async function runOpSequentialRuns(
 }
 
 /** Single Op.of(x).run(). */
-export async function runSingleOpRun(Op: ProfileScenarioOpFactory): Promise<void> {
+export async function runSingleOpRun(Op: BenchOp): Promise<void> {
   const result = await Op.of(69).run();
   if (!result.isOk()) {
     throw new Error("runSingleOpRun failed unexpectedly.");

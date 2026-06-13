@@ -4,11 +4,11 @@ import {
   COMPARISON_SCENARIOS,
   runOverheadRatioBench,
 } from "./comparison-matrix.ts";
-import { assertProfileOpFactory } from "./harness.ts";
+import { asBenchOp } from "./harness.ts";
 import { Op } from "@prodkit/op";
 import { runOpFlatLoop, runOpSequentialRuns } from "./scenarios.ts";
 
-const op = assertProfileOpFactory(Op);
+const op = asBenchOp(Op);
 
 for (const scenario of COMPARISON_SCENARIOS) {
   describe(scenario.group, () => {

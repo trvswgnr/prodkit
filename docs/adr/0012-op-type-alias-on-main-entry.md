@@ -7,7 +7,7 @@ packages:
 
 # Op type alias stays on main entry for declaration emit
 
-Internal `@prodkit/op` modules (for example `core/plan/surface.ts`) reference the branded `Op` type in
+Internal `@prodkit/op` modules (for example `core/surface.ts`) reference the branded `Op` type in
 fluent interfaces and inference helpers. A natural refactor is to extract `Op` into a dedicated
 module so core stops importing from the package entry. That layout was explored and rejected after
 review because of declaration emit and const/type merge constraints (below).
