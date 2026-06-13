@@ -9,10 +9,10 @@ import type { Result } from "../result.js";
  *    generator `finally` runs. Swallows `return()` faults so the body settlement already chosen
  *    by `drive` is preserved.
  *
- * 2. **Registered exit finalizers** (`runFinalizersSafely`, `chainCleanupFaults`): effectful
- *    cleanup via `RegisterExitFinalizerInstruction` (`Op.defer`, `.on("exit")`, and release hooks
- *    registered after success). Unwind is LIFO; every handler runs; faults take precedence at
- *    settlement (see op-invariants.md Invariants 1 and 2).
+ * 2. **Registered exit finalizers** (`runFinalizersSafely`): effectful cleanup via
+ *    `RegisterExitFinalizerInstruction` (`Op.defer`, `.on("exit")`, and release hooks registered
+ *    after success). Unwind is LIFO; every handler runs; faults take precedence at settlement
+ *    (see op-invariants.md Invariants 1 and 2).
  *
  * 3. **Success-gated release** (`releasePlan` in `packages/op/src/policy/plan.ts`): drives the
  *    inner plan first, schedules a single exit finalizer only on success. Not implemented here;
@@ -38,27 +38,15 @@ export function closeGenerator(iterator: Iterator<unknown, unknown, unknown>) {
   }
 }
 
-/** Fold multiple teardown faults into a nested `Error.cause` chain (outer = first failure in LIFO unwind). */
-export function chainCleanupFaults(faults: readonly unknown[]): unknown {
-  if (faults.length === 0) return undefined;
-  if (faults.length === 1) return faults[0];
-  let chain = faults[faults.length - 1];
-  for (let i = faults.length - 2; i >= 0; i--) {
-    const f = faults[i];
-    const msg = f instanceof Error ? f.message : String(f);
-    const name = f instanceof Error ? f.name : "Error";
-    const layer = new Error(msg, { cause: chain });
-    layer.name = name;
-    chain = layer;
-  }
-  return chain;
-}
-
-/** Run every finalizer LIFO; collect faults from each (later-registered runs first; all still run even if one throws). */
+/**
+ * Run every finalizer LIFO and preserve each exact thrown value in execution order.
+ *
+ * The array shape distinguishes no fault from a finalizer that throws `undefined`.
+ */
 export async function runFinalizersSafely(
   finalizers: readonly ExitFinalizer[],
   ctx: ExitFinalizerContext,
-): Promise<unknown | void> {
+): Promise<readonly unknown[]> {
   const faults: unknown[] = [];
   for (let index = finalizers.length - 1; index >= 0; index -= 1) {
     const finalize = finalizers[index];
@@ -70,11 +58,5 @@ export async function runFinalizersSafely(
       }
     }
   }
-  if (faults.length === 0) {
-    return undefined;
-  }
-  if (faults.length === 1) {
-    return faults[0];
-  }
-  return chainCleanupFaults(faults);
+  return faults;
 }

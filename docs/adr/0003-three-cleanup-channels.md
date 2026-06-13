@@ -21,8 +21,9 @@ not driven after early exit.
 **Registered exit finalizers (`Op.defer`, `.on("exit", ...)`).** Effectful cleanup registers through
 `RegisterExitFinalizerInstruction`. Finalizers unwind last-in-first-out via `runFinalizersSafely`.
 Every registered handler runs even when a sibling throws. Once the body has settled, a finalizer
-fault wins the observable outcome as `Err(UnhandledException)` (with nested `cause` links when
-several throw).
+fault wins the observable outcome as `Err(UnhandledException)` with an `ErrorGroup` cause (message
+`Operation cleanup failed`; prior body error first when present, then cleanup failures in LIFO
+order).
 
 **Success-gated release (`.with(Policy.release(...))`).** `releasePlan` in
 `packages/op/src/policy/plan.ts`

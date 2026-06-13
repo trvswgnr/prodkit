@@ -69,6 +69,7 @@ the boundary choice is not already covered by ADR 0008.
 | **Settlement scope** | Signal-bound compiled preset; call sites use `Settlement.*` in `execution/settlement-scope.ts` instead of pairing `executePlan` settlement with `withAbortDrain`. |
 | **Child run session** | Contributor-only scoped child `AbortSignal` derived from a parent run context (or bound plus outer signals), with guaranteed parent-listener detach. Also owns bound-cancel and timeout race orchestration for Policy plans. Distinct from settlement scope: propagation wiring and first-settler races, not launch/completion preset compilation. |
 | **UnhandledException** | Non-recoverable runtime channel from `better-result`; wraps invalid yields, cleanup faults, and validation failures. |
+| **ErrorGroup** | Aggregate error preserving multiple failures (`Op.any` when all fail; cleanup settlement with message `Operation cleanup failed`). |
 
 ## Which doc to read
 

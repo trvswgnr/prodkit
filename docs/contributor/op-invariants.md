@@ -26,18 +26,21 @@ Why this matters:
 Enforced by code paths:
 
 - `packages/op/src/execution/cleanup.ts` (`runFinalizersSafely`): iterates `finalizers` from tail to head and keeps unwinding after faults
-- `packages/op/src/execution/cleanup.ts` (`chainCleanupFaults`): folds multiple cleanup faults into a nested `Error.cause` chain in unwind order
+- `packages/op/src/execution/cleanup.ts` (`runFinalizersSafely`): preserves exact thrown values in execution order, including `undefined`
 
 Representative tests:
 
 - `packages/op/tests/unit/execution/runtime.test.ts` (`registerExitFinalizer runs all handlers in LIFO order`)
-- `packages/op/tests/unit/execution/runtime.test.ts` (`multiple throwing finalizers are folded into a cause chain`)
+- `packages/op/tests/unit/execution/runtime.test.ts` (`cleanup ErrorGroup preserves custom errors and non-Error values in LIFO order`)
 - `packages/op/tests/unit/core/lifecycle-defer.test.ts` (`runs multiple defers in LIFO order on success`)
 - `packages/op/tests/unit/core/lifecycle-defer.test.ts` (`shares LIFO stack with release policy (release runs before defer registered earlier)`)
 
 ## Invariant 2: registered exit-finalizer faults take precedence at settlement
 
-After the body reaches a terminal `Result`, exit finalizers run. If any registered exit finalizer fails, the final outcome becomes `Err(UnhandledException)` with cleanup fault cause (or chained causes for multiple faults), regardless of prior body success/failure.
+After the body reaches a terminal `Result`, exit finalizers run. If any registered exit finalizer
+fails, the final outcome becomes `Err(UnhandledException)` with an `ErrorGroup` cause. A prior body
+error is the first group entry; exact cleanup failures follow in LIFO execution order. Successful
+bodies contribute no group entry.
 
 Why this matters:
 
@@ -47,13 +50,12 @@ Why this matters:
 Enforced by code paths:
 
 - `packages/op/src/execution/runtime.ts` (`settleIteratorWithCleanup`): finalizer faults override settled body result
-- `packages/op/src/execution/cleanup.ts` (`runFinalizersSafely`): returns first unwind fault (or cause chain) for wrapping
+- `packages/op/src/execution/cleanup.ts` (`runFinalizersSafely`): returns the exact cleanup fault array for grouping
 
 Representative tests:
 
-- `packages/op/tests/unit/execution/runtime.test.ts` (`finalizer throw after successful body converts to UnhandledException`)
-- `packages/op/tests/unit/execution/runtime.test.ts` (`cleanup fault takes precedence over typed body error`)
-- `packages/op/tests/unit/core/lifecycle-defer.test.ts` (`when op fails, cleanup throws: UnhandledException with cleanup error as cause`)
+- `packages/op/tests/unit/execution/runtime.test.ts` (the six body/cleanup settlement cases)
+- `packages/op/tests/unit/core/lifecycle-defer.test.ts` (`when op fails, cleanup throws: ErrorGroup preserves body and cleanup failures`)
 
 Important edge distinction:
 
@@ -144,15 +146,15 @@ inner scope, so at exit time the inner-most handler runs
 before the outer ones (`packages/op/tests/unit/core/lifecycle-exit.test.ts`, "chains `.on("exit")` in LIFO order with inner
 registration running first"). That matches how people think about stacking defer-like behavior.
 
-Every registered finalizer still runs after a sibling throws (`runFinalizersSafely`). Several throws
-collapse into nested `cause` links via `chainCleanupFaults` in LIFO order (`packages/op/tests/unit/execution/runtime.test.ts`,
-"multiple throwing finalizers are folded into a cause chain").
+Every registered finalizer still runs after a sibling throws (`runFinalizersSafely`). Thrown values
+are preserved exactly in execution order, including values that are not `Error` instances
+(`packages/op/tests/unit/execution/runtime.test.ts`,
+"cleanup ErrorGroup preserves custom errors and non-Error values in LIFO order").
 
 Once the body has picked a settlement `Result`, a fault in exit finalizers wins the observable
-outcome as `Err(UnhandledException)`, including folded `cause` chains, even when the body had
-already settled to typed `Err` ("cleanup fault takes precedence over typed body error"). Same for
-successful bodies where a finalizer throws ("finalizer throw after successful body converts to
-`UnhandledException`").
+outcome as `Err(UnhandledException)` with an `ErrorGroup` cause. If the body already failed, that
+exact error is the first group entry. Cleanup failures follow in LIFO execution order. Successful
+bodies contribute no entry.
 
 `.with(Policy.release(...))` is different (`packages/op/src/plan/lifecycle.ts`). The release hook
 arms only after a successful inner completion. Typed failure short-circuits without scheduling that

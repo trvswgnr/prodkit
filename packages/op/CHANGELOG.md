@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Clarify the consumer runtime baseline as an ES2022 ESM environment with the platform APIs used
   by the operation runtime.
 
+### Fixed
+
+- Cleanup failures now preserve the prior body error and every exact thrown cleanup value in an
+  `ErrorGroup`, instead of cloning faults into a nested `Error.cause` chain or discarding the body
+  failure.
+
 ### Removed
 
 - `@prodkit/op/internal` no longer exports `EnterFn` or `ExitFn`; use `EnterContext` and

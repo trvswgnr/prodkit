@@ -28,8 +28,10 @@ on typed `E`. Runtime faults and cleanup failures stay on the `UnhandledExceptio
 "handle all errors" helpers cannot accidentally swallow teardown corruption or unknown throws.
 
 **Cleanup faults use the same channel.** When registered exit finalizers throw after the body
-settles, the observable outcome becomes `Err(UnhandledException)` with the cleanup fault as
-`cause`, even if the body already returned typed `Err` (Invariant 2 in `op-invariants.md`).
+settles, the observable outcome becomes `Err(UnhandledException)` with an `ErrorGroup` cause
+(message `Operation cleanup failed`). The group preserves the prior body error as the first entry
+when present, then exact cleanup failures in LIFO execution order, even if the body already
+returned typed `Err` (Invariant 2 in `op-invariants.md`).
 
 ## Why not fold everything into E?
 

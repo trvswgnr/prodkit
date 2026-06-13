@@ -66,9 +66,10 @@ export const Op = Object.assign(fromGenFn, {
   /**
    * Registers an exit finalizer for the current run via `yield* Op.defer(...)`.
    *
-   * If several callbacks throw during the same unwind, `run` fails with {@link UnhandledException}
-   * whose `cause` is a nested {@link Error} chain (`.cause`) with the **first LIFO
-   * failure as the outermost error**.
+   * If any callback throws during unwind, `run` fails with {@link UnhandledException} whose `cause`
+   * is an {@link ErrorGroup} (message `Operation cleanup failed`). Cleanup failures are exact
+   * thrown values in LIFO execution order. When the body already failed, its error is the first
+   * group entry.
    *
    * **Important**: Op.defer *must* be `yield*`ed or it will do nothing
    *

@@ -17,9 +17,7 @@ export class TimeoutError extends TaggedError("TimeoutError")<{
   }
 }
 
-/**
- * A typed aggregate error used by combinators that need to preserve multiple failures
- */
+/** A typed aggregate error used when an operation must preserve multiple failures. */
 export class ErrorGroup<E> extends Tagged("ErrorGroup", AggregateError) {
   declare readonly errors: E[];
   constructor(errors: Iterable<E>, message: string) {

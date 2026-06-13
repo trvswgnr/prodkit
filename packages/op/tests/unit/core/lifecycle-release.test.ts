@@ -1,6 +1,6 @@
 import { assert, describe, expect, test, vi } from "vitest";
 import { Op, TimeoutError } from "../../../src/index.js";
-import { UnhandledException } from "../../../src/errors.js";
+import { ErrorGroup, UnhandledException } from "../../../src/errors.js";
 import { Policy } from "../../../src/policy/index.js";
 
 describe("op.with(Policy.release(...))", () => {
@@ -135,7 +135,9 @@ describe("op.with(Policy.release(...))", () => {
     assert(result.isErr(), "should be Err");
     expect(result.error).toBeInstanceOf(UnhandledException);
     if (result.error instanceof UnhandledException) {
-      expect(result.error.cause).toBe(cleanupFault);
+      expect(result.error.cause).toBeInstanceOf(ErrorGroup);
+      assert(result.error.cause instanceof ErrorGroup);
+      expect(result.error.cause.errors).toEqual([cleanupFault]);
     }
   });
 

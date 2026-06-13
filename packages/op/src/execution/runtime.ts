@@ -1,4 +1,4 @@
-import { UnhandledException } from "../errors.js";
+import { ErrorGroup, UnhandledException } from "../errors.js";
 import { Result } from "../result.js";
 import {
   CUSTOM_INSTRUCTION_META,
@@ -18,7 +18,7 @@ import type { Op } from "../index.js";
 import { EMPTY_TUPLE } from "../core/identity.js";
 import { closeGenerator, runFinalizersSafely, type ExitFinalizer } from "./cleanup.js";
 
-export { closeGenerator, chainCleanupFaults } from "./cleanup.js";
+export { closeGenerator } from "./cleanup.js";
 
 /** Runtime execution context threaded through internal driver/suspend boundaries. */
 export interface RunContext<A = []> {
@@ -128,9 +128,12 @@ async function settleIteratorWithCleanup<T, E, M>(
     args: context.args,
     result,
   };
-  const cleanupFault = await runFinalizersSafely(finalizers, exitCtx);
-  if (cleanupFault !== undefined) {
-    return Result.err(new UnhandledException({ cause: cleanupFault }));
+  const cleanupFaults = await runFinalizersSafely(finalizers, exitCtx);
+  if (cleanupFaults.length > 0) {
+    const failures = result.isErr() ? [result.error, ...cleanupFaults] : cleanupFaults;
+    const cause = new ErrorGroup(failures, "Operation cleanup failed");
+    const cleanupError = new UnhandledException({ cause });
+    return Result.err(cleanupError);
   }
   return result;
 }

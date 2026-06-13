@@ -259,8 +259,9 @@ callback receives a 0-based retry index (`0` after the first failure).
 
 - `UnhandledException`: unmapped throws/rejects and runtime faults.
 - `TimeoutError`: from `.with(Policy.timeout(timeoutMs))`.
-- `ErrorGroup`: from `Op.any` when all children fail (`errors` in input order).
-- Multiple finalizer faults fold into a nested `Error.cause` chain (LIFO unwind order).
+- `ErrorGroup`: preserves multiple failures from `Op.any` or cleanup settlement.
+- Cleanup failure returns `UnhandledException` with an `ErrorGroup` cause. A prior body error comes
+  first, followed by exact cleanup failures in LIFO execution order.
 
 ## Concurrent combinators
 

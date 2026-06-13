@@ -1,6 +1,6 @@
 import { NEVER, unsafeCoerce } from "@prodkit/shared/runtime";
 import { assert, describe, expect, test } from "vitest";
-import { chainCleanupFaults, closeGenerator } from "../../../src/execution/cleanup.js";
+import { closeGenerator, runFinalizersSafely } from "../../../src/execution/cleanup.js";
 import { createRunContext, drive } from "../../../src/execution/runtime.js";
 import { makeCoreOp } from "../../../src/core/generator.js";
 import {
@@ -14,7 +14,7 @@ import {
 import type { RunContext } from "../../../src/execution/runtime.js";
 import type { EmptyMeta } from "../../../src/core/metadata.js";
 import { Op } from "../../../src/index.js";
-import { UnhandledException } from "../../../src/errors.js";
+import { ErrorGroup, UnhandledException } from "../../../src/errors.js";
 import { Result } from "../../../src/result.js";
 
 class ThrowingCustomInstruction implements CustomInstruction<never, EmptyMeta> {
@@ -48,24 +48,29 @@ function makeRuntimeOp<T, E>(gen: () => Generator<Instruction<E>, T, unknown>): 
 }
 
 describe("execution cleanup helpers", () => {
-  test("chainCleanupFaults handles empty, single, and multi-fault chains", () => {
-    expect(chainCleanupFaults([])).toBeUndefined();
+  test("runFinalizersSafely preserves exact fault values in LIFO order", async () => {
+    const firstRegisteredFault = { source: "first" };
+    const lastRegisteredFault = new Error("last");
+    const faults = await runFinalizersSafely(
+      [
+        async () => {
+          throw firstRegisteredFault;
+        },
+        async () => {
+          throw undefined;
+        },
+        async () => {
+          throw lastRegisteredFault;
+        },
+      ],
+      {
+        signal: new AbortController().signal,
+        args: [],
+        result: Result.ok("done"),
+      },
+    );
 
-    const only = new Error("only");
-    expect(chainCleanupFaults([only])).toBe(only);
-
-    const first = new Error("first");
-    const second = "second-non-error";
-    const third = new Error("third");
-    const chain = chainCleanupFaults([first, second, third]);
-    expect(chain).toBeInstanceOf(Error);
-    assert(chain instanceof Error);
-    const outer = chain;
-    expect(outer.message).toBe("first");
-    assert(outer.cause instanceof Error);
-    expect(outer.cause.message).toBe("second-non-error");
-    assert(outer.cause.cause instanceof Error);
-    expect(outer.cause.cause.message).toBe("third");
+    expect(faults).toEqual([lastRegisteredFault, undefined, firstRegisteredFault]);
   });
 
   test("closeGenerator swallows iterator.return failures", () => {
@@ -186,7 +191,19 @@ describe("drive runtime behavior", () => {
     expect(seen).toEqual(["second-ok", "first-ok"]);
   });
 
-  test("finalizer throw after successful body converts to UnhandledException", async () => {
+  test("successful body with successful cleanup preserves Ok", async () => {
+    const op = makeRuntimeOp<string, never>(function* () {
+      yield new RegisterExitFinalizerInstruction(async () => {}, undefined);
+      return "ok";
+    });
+
+    const result = await drive(op, createRunContext(new AbortController().signal));
+
+    assert(result.isOk(), "result should be Ok");
+    expect(result.value).toBe("ok");
+  });
+
+  test("successful body with failed cleanup returns UnhandledException(ErrorGroup)", async () => {
     const cleanupFault = new Error("cleanup-failed");
     const op = makeRuntimeOp<string, never>(function* () {
       yield new RegisterExitFinalizerInstruction(async () => {
@@ -200,16 +217,33 @@ describe("drive runtime behavior", () => {
     assert(result.isErr(), "result should be Err");
     expect(result.error).toBeInstanceOf(UnhandledException);
     assert(result.error instanceof UnhandledException);
-    expect(result.error.cause).toBe(cleanupFault);
+    expect(result.error.cause).toBeInstanceOf(ErrorGroup);
+    assert(result.error.cause instanceof ErrorGroup);
+    expect(result.error.cause.message).toBe("Operation cleanup failed");
+    expect(result.error.cause.errors).toEqual([cleanupFault]);
   });
 
-  test("cleanup fault takes precedence over typed body error", async () => {
+  test("known body failure with successful cleanup preserves Err(E)", async () => {
+    const bodyFault = { type: "known" };
+    const op = makeRuntimeOp<never, typeof bodyFault>(function* () {
+      yield new RegisterExitFinalizerInstruction(async () => {}, undefined);
+      return yield* Result.err(bodyFault);
+    });
+
+    const result = await drive(op, createRunContext(new AbortController().signal));
+
+    assert(result.isErr(), "result should be Err");
+    expect(result.error).toBe(bodyFault);
+  });
+
+  test("known body failure with failed cleanup preserves both in ErrorGroup", async () => {
+    const bodyFault = { type: "known" };
     const cleanupFault = new Error("cleanup-failed");
-    const op = makeRuntimeOp<never, string>(function* () {
+    const op = makeRuntimeOp<never, typeof bodyFault>(function* () {
       yield new RegisterExitFinalizerInstruction(async () => {
         throw cleanupFault;
       }, undefined);
-      return yield* Result.err("typed-body-error");
+      return yield* Result.err(bodyFault);
     });
 
     const result = await drive(op, createRunContext(new AbortController().signal));
@@ -217,18 +251,90 @@ describe("drive runtime behavior", () => {
     assert(result.isErr(), "result should be Err");
     expect(result.error).toBeInstanceOf(UnhandledException);
     assert(result.error instanceof UnhandledException);
-    expect(result.error.cause).toBe(cleanupFault);
+    expect(result.error.cause).toBeInstanceOf(ErrorGroup);
+    assert(result.error.cause instanceof ErrorGroup);
+    expect(result.error.cause.errors).toEqual([bodyFault, cleanupFault]);
   });
 
-  test("multiple throwing finalizers are folded into a cause chain", async () => {
-    const firstUnwindFault = new Error("second-registered-runs-first");
-    const secondUnwindFault = "first-registered-runs-second";
+  test("unexpected body failure with successful cleanup preserves the original UnhandledException", async () => {
+    const bodyCause = new Error("body-failed");
+    let preCleanupFailure: unknown;
+    const op = makeRuntimeOp<never, never>(function* () {
+      yield new RegisterExitFinalizerInstruction(async (ctx) => {
+        assert(ctx.result.isErr(), "pre-cleanup result should be Err");
+        preCleanupFailure = ctx.result.error;
+      }, undefined);
+      throw bodyCause;
+    });
+
+    const result = await drive(op, createRunContext(new AbortController().signal));
+
+    assert(result.isErr(), "result should be Err");
+    expect(result.error).toBe(preCleanupFailure);
+    expect(result.error).toBeInstanceOf(UnhandledException);
+    assert(result.error instanceof UnhandledException);
+    expect(result.error.cause).toBe(bodyCause);
+  });
+
+  test("unexpected body failure with failed cleanup preserves both in ErrorGroup", async () => {
+    const bodyCause = new Error("body-failed");
+    const cleanupFault = { type: "cleanup" };
+    let preCleanupFailure: unknown;
+    const failsUnexpectedly = Op.try(() => {
+      throw bodyCause;
+    });
+    const op = Op(function* () {
+      yield new RegisterExitFinalizerInstruction(async (ctx) => {
+        if (ctx.result.isErr()) {
+          preCleanupFailure = ctx.result.error;
+        }
+        throw cleanupFault;
+      }, undefined);
+      return yield* failsUnexpectedly;
+    });
+
+    const result = await drive(op, createRunContext(new AbortController().signal));
+
+    if (!result.isErr()) throw new Error("result should be Err");
+    const outerError = result.error;
+    if (!(outerError instanceof UnhandledException)) {
+      throw new Error("result error should be UnhandledException");
+    }
+    if (outerError === preCleanupFailure) {
+      throw new Error("cleanup failure should produce a new UnhandledException");
+    }
+    const group = outerError.cause;
+    if (!(group instanceof ErrorGroup)) {
+      throw new Error("UnhandledException cause should be ErrorGroup");
+    }
+    if (group.errors.length !== 2) {
+      throw new Error("cleanup ErrorGroup should contain two failures");
+    }
+    if (group.errors[0] !== preCleanupFailure) {
+      throw new Error("first grouped failure should be the original UnhandledException");
+    }
+    if (group.errors[1] !== cleanupFault) {
+      throw new Error("second grouped failure should be the cleanup fault");
+    }
+  });
+
+  test("cleanup ErrorGroup preserves custom errors and non-Error values in LIFO order", async () => {
+    class CleanupError extends Error {
+      readonly code = "CLEANUP_FAILED";
+    }
+
+    const firstRegisteredFault = { type: "plain-value" };
+    const middleRegisteredFault = Object.assign(new Error("middle"), { resourceId: "db-1" });
+    const lastRegisteredFault = new CleanupError("last");
     const op = makeRuntimeOp<string, never>(function* () {
       yield new RegisterExitFinalizerInstruction(async () => {
-        throw secondUnwindFault;
+        throw firstRegisteredFault;
       }, undefined);
       yield new RegisterExitFinalizerInstruction(async () => {
-        throw firstUnwindFault;
+        throw middleRegisteredFault;
+      }, undefined);
+      yield new RegisterExitFinalizerInstruction(async () => {
+        throw lastRegisteredFault;
       }, undefined);
       return "done";
     });
@@ -238,9 +344,14 @@ describe("drive runtime behavior", () => {
     assert(result.isErr(), "result should be Err");
     expect(result.error).toBeInstanceOf(UnhandledException);
     assert(result.error instanceof UnhandledException);
-    assert(result.error.cause instanceof Error);
-    const outer = result.error.cause;
-    expect(outer.message).toBe("second-registered-runs-first");
-    expect(outer.cause).toBe("first-registered-runs-second");
+    expect(result.error.cause).toBeInstanceOf(ErrorGroup);
+    assert(result.error.cause instanceof ErrorGroup);
+    expect(result.error.cause.errors).toEqual([
+      lastRegisteredFault,
+      middleRegisteredFault,
+      firstRegisteredFault,
+    ]);
+    expect(result.error.cause.errors[0]).toBeInstanceOf(CleanupError);
+    expect(result.error.cause.errors[1]).toHaveProperty("resourceId", "db-1");
   });
 });

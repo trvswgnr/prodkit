@@ -1,11 +1,11 @@
 import { assert, describe, expect, test, vi } from "vitest";
 import { Op, TimeoutError, type ExitContext } from "../../../src/index.js";
-import { UnhandledException } from "../../../src/errors.js";
+import { ErrorGroup, UnhandledException } from "../../../src/errors.js";
 import { Policy } from "../../../src/policy/index.js";
 import { neverSettling } from "../../support/utils.js";
 
 describe("Op.defer error handling", () => {
-  test("when op succeeds, cleanup throws: UnhandledException with cleanup error as cause", async () => {
+  test("when op succeeds, cleanup throws: UnhandledException with cleanup ErrorGroup", async () => {
     const cleanupError = new Error("cleanup failed");
     const cleanup = () => {
       throw cleanupError;
@@ -20,11 +20,13 @@ describe("Op.defer error handling", () => {
     assert(r.isErr(), "should be Err");
     expect(r.error).toBeInstanceOf(UnhandledException);
     if (r.error instanceof UnhandledException) {
-      expect(r.error.cause).toBe(cleanupError);
+      expect(r.error.cause).toBeInstanceOf(ErrorGroup);
+      assert(r.error.cause instanceof ErrorGroup);
+      expect(r.error.cause.errors).toEqual([cleanupError]);
     }
   });
 
-  test("when op fails, cleanup throws: UnhandledException with cleanup error as cause", async () => {
+  test("when op fails, cleanup throws: ErrorGroup preserves body and cleanup failures", async () => {
     const cleanupError = new Error("cleanup failed");
     const cleanup = () => {
       throw cleanupError;
@@ -37,7 +39,9 @@ describe("Op.defer error handling", () => {
     const r = await op.run();
     assert(r.isErr(), "should be Err");
     assert(r.error instanceof UnhandledException, "should be UnhandledException");
-    expect(r.error.cause).toBe(cleanupError);
+    expect(r.error.cause).toBeInstanceOf(ErrorGroup);
+    assert(r.error.cause instanceof ErrorGroup);
+    expect(r.error.cause.errors).toEqual(["boom", cleanupError]);
   });
 
   test("when op fails, cleanup succeeds: failure is preserved", async () => {
@@ -155,11 +159,13 @@ describe("Op.defer ordering and policies", () => {
     expect(earlier).toHaveBeenCalledTimes(1);
     expect(r.error).toBeInstanceOf(UnhandledException);
     if (r.error instanceof UnhandledException) {
-      expect(r.error.cause).toBe(stop);
+      expect(r.error.cause).toBeInstanceOf(ErrorGroup);
+      assert(r.error.cause instanceof ErrorGroup);
+      expect(r.error.cause.errors).toEqual([stop]);
     }
   });
 
-  test("chains multiple cleanup throws via nested Error.cause", async () => {
+  test("groups multiple cleanup throws in LIFO execution order", async () => {
     const boomFourth = new Error("boom from defer fourth");
     const boomSecond = new Error("boom from defer second");
     const events: string[] = [];
@@ -184,14 +190,12 @@ describe("Op.defer ordering and policies", () => {
     assert(r.isErr(), "should be Err");
     expect(events).toEqual(["fourth", "third", "second", "first"]);
     assert(r.error instanceof UnhandledException);
-    const ue = r.error;
-    assert(ue.cause instanceof Error);
-    expect(ue.cause.message).toBe(boomFourth.message);
-    expect(ue.cause.name).toBe(boomFourth.name);
-    expect(ue.cause.cause).toBe(boomSecond);
+    expect(r.error.cause).toBeInstanceOf(ErrorGroup);
+    assert(r.error.cause instanceof ErrorGroup);
+    expect(r.error.cause.errors).toEqual([boomFourth, boomSecond]);
   });
 
-  test("chains three throws among five defers (only throwing cleanups in cause chain)", async () => {
+  test("groups only throwing cleanups among successful finalizers", async () => {
     const boomFifth = new Error("boom from defer fifth");
     const boomFourth = new Error("boom from defer fourth");
     const boomSecond = new Error("boom from defer second");
@@ -221,13 +225,9 @@ describe("Op.defer ordering and policies", () => {
     assert(r.isErr(), "should be Err");
     expect(events).toEqual(["fifth", "fourth", "third", "second", "first"]);
     assert(r.error instanceof UnhandledException);
-    const head = r.error.cause;
-    assert(head instanceof Error);
-    expect(head.message).toBe(boomFifth.message);
-    const mid = head.cause;
-    assert(mid instanceof Error);
-    expect(mid.message).toBe(boomFourth.message);
-    expect(mid.cause).toBe(boomSecond);
+    expect(r.error.cause).toBeInstanceOf(ErrorGroup);
+    assert(r.error.cause instanceof ErrorGroup);
+    expect(r.error.cause.errors).toEqual([boomFifth, boomFourth, boomSecond]);
   });
 
   test("shares LIFO stack with release policy (release runs before defer registered earlier)", async () => {
