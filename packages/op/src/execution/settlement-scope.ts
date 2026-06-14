@@ -3,8 +3,7 @@ import { UnhandledException } from "../errors.js";
 import { Result } from "../result.js";
 import { SuspendInstruction } from "./instructions.js";
 import type { Plan } from "../plan/model.js";
-import { executePlan } from "../plan/execute.js";
-import type { RunContext } from "./runtime.js";
+import { executePlan, type RunContext } from "./runtime.js";
 import {
   type SuspendWork,
   withAbortDrain,

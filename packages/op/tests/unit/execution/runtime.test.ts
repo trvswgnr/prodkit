@@ -355,3 +355,30 @@ describe("drive runtime behavior", () => {
     expect(result.error.cause.errors[1]).toHaveProperty("resourceId", "db-1");
   });
 });
+
+describe("execution depth", () => {
+  test("generator yield* loop returns the correct value at depth 50_000", async () => {
+    const depth = 50_000;
+    const op = Op(function* () {
+      let acc = 0;
+      for (let i = 0; i < depth; i += 1) acc += yield* Op.of(1);
+      return acc;
+    });
+
+    const result = await op.run();
+
+    assert(result.isOk(), "generator loop should succeed");
+    expect(result.value).toBe(depth);
+  });
+
+  test("flatMap chain returns the correct value at depth 20_000", async () => {
+    const depth = 20_000;
+    let op = Op.of(0);
+    for (let i = 0; i < depth; i += 1) op = op.flatMap((x) => Op.of(x + 1));
+
+    const result = await op.run();
+
+    assert(result.isOk(), "deep flatMap chain should succeed");
+    expect(result.value).toBe(depth);
+  });
+});

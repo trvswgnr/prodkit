@@ -29,6 +29,40 @@ class InspectContextInstruction implements CustomInstruction<void, EmptyMeta> {
 }
 
 describe("nested Op execution", () => {
+  test("recursively nested yield* returns the correct value at depth 20_000", async () => {
+    const depth = 20_000;
+    const nested = (remaining: number): Op<number, never, []> =>
+      Op(function* () {
+        if (remaining === 0) return 0;
+        return 1 + (yield* nested(remaining - 1));
+      });
+
+    const result = await nested(depth).run();
+
+    assert(result.isOk(), "deep nested yield* composition should succeed");
+    expect(result.value).toBe(depth);
+  });
+
+  test("recursively nested yield* stays stack-safe when every level suspends", async () => {
+    const depth = 20_000;
+    const nested = (remaining: number): Op<number, never, []> =>
+      Op(function* () {
+        if (remaining === 0) return 0;
+        yield* Op.try(
+          () =>
+            new Promise<void>((resolve) => {
+              queueMicrotask(resolve);
+            }),
+        );
+        return 1 + (yield* nested(remaining - 1));
+      });
+
+    const result = await nested(depth).run();
+
+    assert(result.isOk(), "deep async nested yield* composition should succeed");
+    expect(result.value).toBe(depth);
+  });
+
   test("deep child frames preserve the same run context", async () => {
     const depth = 20_000;
     const signal = new AbortController().signal;

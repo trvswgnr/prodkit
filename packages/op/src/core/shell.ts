@@ -15,14 +15,17 @@ import type { EnterFn, ExitFn, OpLifecycleHook } from "./lifecycle.js";
 import type { AnyNullaryOp, AsArgs, OpInterface, TrackedErr } from "./surface.js";
 import type { RunContext } from "../execution/runtime.js";
 import type { EmptyMeta } from "./metadata.js";
-import { createPlan, genPlan, type Plan, type PlanRewriter } from "../plan/model.js";
-import { OP_PLAN_BIND, type PlanBackedOp, type PlanBinder } from "../plan/bridge.js";
 import {
   appendPlanTransform,
+  createPlan,
+  genPlan,
   type ErasedPlanFactory,
   type ErasedPlanTransform,
+  type Plan,
+  type PlanRewriter,
   type TransformKind,
-} from "../plan/factory-chain.js";
+} from "../plan/model.js";
+import { OP_PLAN_BIND, type PlanBackedOp, type PlanBinder } from "../plan/bridge.js";
 import { onEnterPlan, onExitPlan } from "../plan/lifecycle.js";
 import {
   flatMapPlan,
