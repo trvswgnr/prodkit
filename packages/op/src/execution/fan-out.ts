@@ -1,7 +1,7 @@
 import { ErrorGroup, UnhandledException } from "../errors.js";
 import { Result, type Err } from "../result.js";
 import type { RunContext } from "./runtime.js";
-import { ChildRunSession } from "./child-run-session.js";
+import { createFanOutChildren } from "./child-run.js";
 import { type Plan } from "../plan/model.js";
 import { Settlement } from "./settlement.js";
 import { unsafeCoerce } from "@prodkit/shared/runtime";
@@ -32,18 +32,18 @@ async function driveFanOutPlans<T, E>(
   outerContext: RunContext<readonly unknown[]>,
   config: DriveFanOutConfig<T, E>,
 ): Promise<Array<Result<T, E | UnhandledException> | undefined>> {
-  const session = ChildRunSession.pool(outerContext);
+  const children = createFanOutChildren(outerContext);
   const results: Array<Result<T, E | UnhandledException> | undefined> = Array(plans.length);
-  const runningByIndex = new Map<number, AbortController>();
+  const runningByIndex = new Map<number, { abort(): void }>();
 
   const abortSiblingsExcept = (keepIndex: number) => {
-    for (const [index, controller] of runningByIndex) {
-      if (index !== keepIndex) controller.abort();
+    for (const [index, child] of runningByIndex) {
+      if (index !== keepIndex) child.abort();
     }
   };
 
   const abortActive = () => {
-    for (const controller of session.activeControllers()) controller.abort();
+    children.abortActive();
   };
 
   const controls = { abortSiblingsExcept, abortActive };
@@ -61,12 +61,12 @@ async function driveFanOutPlans<T, E>(
   try {
     if (config.poolSize >= plans.length) {
       const runs = plans.map((plan, index) => {
-        const slot = session.spawn();
-        runningByIndex.set(index, slot.controller);
-        return config.executeChild(plan, slot.context()).then((result) => {
+        const child = children.spawn();
+        runningByIndex.set(index, child);
+        return config.executeChild(plan, child.context).then((result) => {
           // SAFETY: ExecuteChildPlan types results as unknown; every plan here is Plan<T, E, ...> at this site.
           const res: Result<T, E | UnhandledException> = unsafeCoerce(result);
-          settleChild(res, index, slot);
+          settleChild(res, index, child);
           return res;
         });
       });
@@ -84,20 +84,20 @@ async function driveFanOutPlans<T, E>(
         const plan = plans[i];
         if (plan === undefined) return;
 
-        const slot = session.spawn();
-        runningByIndex.set(i, slot.controller);
+        const child = children.spawn();
+        runningByIndex.set(i, child);
         // SAFETY: ExecuteChildPlan types results as unknown; every plan here is Plan<T, E, ...> at this site.
         const res: Result<T, E | UnhandledException> = unsafeCoerce(
-          await config.executeChild(plan, slot.context()),
+          await config.executeChild(plan, child.context),
         );
-        settleChild(res, i, slot);
+        settleChild(res, i, child);
       }
     };
 
     await Promise.all(Array.from({ length: workerCount }, worker));
     return results;
   } finally {
-    session.detach();
+    children.detach();
   }
 }
 

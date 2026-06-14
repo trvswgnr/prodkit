@@ -25,22 +25,18 @@ function watchParentAbort(
   };
 }
 
-type IsolatedChildRunSession = {
-  readonly signal: AbortSignal;
-  context(): RunContext<readonly unknown[]>;
+type IsolatedChild = {
+  readonly context: RunContext<readonly unknown[]>;
   abort(reason?: unknown): void;
   detach(): void;
 };
 
-function isolated(parent: RunContext<readonly unknown[]>): IsolatedChildRunSession {
+function createIsolatedChild(parent: RunContext<readonly unknown[]>): IsolatedChild {
   const controller = new AbortController();
   const watch = watchParentAbort(parent.signal, (reason) => controller.abort(reason));
 
   return {
-    signal: controller.signal,
-    context() {
-      return createRunContext(controller.signal, parent.args, parent.extensions);
-    },
+    context: createRunContext(controller.signal, parent.args, parent.extensions),
     abort(reason) {
       controller.abort(reason);
     },
@@ -50,20 +46,19 @@ function isolated(parent: RunContext<readonly unknown[]>): IsolatedChildRunSessi
   };
 }
 
-type PoolChildSpawn = {
-  readonly signal: AbortSignal;
-  readonly controller: AbortController;
-  context(): RunContext<readonly unknown[]>;
+type FanOutChild = {
+  readonly context: RunContext<readonly unknown[]>;
+  abort(reason?: unknown): void;
   release(): void;
 };
 
-type PoolChildRunSession = {
-  spawn(): PoolChildSpawn;
-  activeControllers(): ReadonlySet<AbortController>;
+type FanOutChildren = {
+  spawn(): FanOutChild;
+  abortActive(reason?: unknown): void;
   detach(): void;
 };
 
-function pool(parent: RunContext<readonly unknown[]>): PoolChildRunSession {
+export function createFanOutChildren(parent: RunContext<readonly unknown[]>): FanOutChildren {
   const active = new Set<AbortController>();
   const watch = watchParentAbort(parent.signal, (reason) => {
     for (const controller of active) controller.abort(reason);
@@ -75,18 +70,17 @@ function pool(parent: RunContext<readonly unknown[]>): PoolChildRunSession {
       active.add(controller);
       if (parent.signal.aborted) controller.abort(abortReason(parent.signal));
       return {
-        signal: controller.signal,
-        controller,
-        context() {
-          return createRunContext(controller.signal, parent.args, parent.extensions);
+        context: createRunContext(controller.signal, parent.args, parent.extensions),
+        abort(reason) {
+          controller.abort(reason);
         },
         release() {
           active.delete(controller);
         },
       };
     },
-    activeControllers() {
-      return active;
+    abortActive(reason) {
+      for (const controller of active) controller.abort(reason);
     },
     detach() {
       watch.detach();
@@ -94,10 +88,9 @@ function pool(parent: RunContext<readonly unknown[]>): PoolChildRunSession {
   };
 }
 
-type BoundCancelChildRunSession = {
-  readonly signal: AbortSignal;
+type BoundCancelChild = {
+  readonly context: RunContext<readonly unknown[]>;
   readonly boundAbort: Promise<void>;
-  context(): RunContext<readonly unknown[]>;
   detach(): void;
 };
 
@@ -133,10 +126,10 @@ function preserveCleanupFailureAfterTimeout<T, E>(
   );
 }
 
-function boundCancel(
+function createBoundCancelChild(
   boundSignal: AbortSignal,
   parent: RunContext<readonly unknown[]>,
-): BoundCancelChildRunSession {
+): BoundCancelChild {
   const controller = new AbortController();
 
   let boundAborted = false;
@@ -158,11 +151,8 @@ function boundCancel(
   else boundSignal.addEventListener("abort", onBoundAbort, { once: true });
 
   return {
-    signal: controller.signal,
+    context: createRunContext(controller.signal, parent.args, parent.extensions),
     boundAbort,
-    context() {
-      return createRunContext(controller.signal, parent.args, parent.extensions);
-    },
     detach() {
       boundSignal.removeEventListener("abort", onBoundAbort);
       outerWatch.detach();
@@ -170,16 +160,16 @@ function boundCancel(
   };
 }
 
-function raceBoundCancel<T, E>(
+export function runWithBoundCancel<T, E>(
   run: (context: RunContext<readonly unknown[]>) => Promise<Result<T, E | UnhandledException>>,
   boundSignal: AbortSignal,
   outerContext: RunContext<readonly unknown[]>,
 ): Promise<Result<T, E | UnhandledException>> {
-  const session = boundCancel(boundSignal, outerContext);
-  const runPromise = run(session.context());
+  const child = createBoundCancelChild(boundSignal, outerContext);
+  const runPromise = run(child.context);
   const firstSettlement = Promise.race([
     runPromise.then(() => "run" as const),
-    session.boundAbort.then(() => "boundAbort" as const),
+    child.boundAbort.then(() => "boundAbort" as const),
   ]);
 
   return firstSettlement
@@ -190,29 +180,29 @@ function raceBoundCancel<T, E>(
         Result.err(new UnhandledException({ cause: reason })),
       );
     })
-    .finally(session.detach);
+    .finally(child.detach);
 }
 
-async function raceTimeout<T, E>(
+export async function runWithTimeout<T, E>(
   run: (context: RunContext<readonly unknown[]>) => PromiseLike<Result<T, E>>,
   timeoutMs: number,
   outerContext: RunContext<readonly unknown[]>,
 ): Promise<Result<T, E | TimeoutError | UnhandledException>> {
-  const session = isolated(outerContext);
-  const runPromise = run(session.context());
+  const child = createIsolatedChild(outerContext);
+  const runPromise = run(child.context);
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   let timeoutError: TimeoutError | undefined;
   const timeout = new Promise<Result<T, E | TimeoutError>>((resolve) => {
     timeoutId = setTimeout(() => {
       timeoutError = new TimeoutError({ timeoutMs });
-      session.abort(timeoutError);
+      child.abort(timeoutError);
       resolve(Result.err(timeoutError));
     }, timeoutMs);
   });
 
   const firstResult = await Promise.race([runPromise, timeout]).finally(() => {
     if (timeoutId !== undefined) clearTimeout(timeoutId);
-    session.detach();
+    child.detach();
   });
 
   if (timeoutError === undefined) {
@@ -224,12 +214,3 @@ async function raceTimeout<T, E>(
     preserveCleanupFailureAfterTimeout(drainedResult, timeoutError) ?? Result.err(timeoutError)
   );
 }
-
-/** Contributor-only child AbortSignal sessions derived from a parent run context. */
-export const ChildRunSession = {
-  isolated,
-  pool,
-  boundCancel,
-  raceBoundCancel,
-  raceTimeout,
-} as const;

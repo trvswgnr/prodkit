@@ -12,7 +12,7 @@ The internal layout names three distinct responsibilities:
 
 - `core/`: callable `Op` surface, construction, lifecycle types, identity, and metadata
 - `plan/`: execution AST model, iterative composition and rewrite, Op bridge, and plan nodes
-- `execution/`: Plan scheduling, generator driver, instructions, cleanup, settlement, child sessions, and fan-out
+- `execution/`: Plan scheduling, generator driver, instructions, cleanup, settlement, child signal wiring, and fan-out
 
 Public entrypoints fan into core builders and combinators. Those construct plan nodes, and all plan
 execution settles through the same execution driver:
@@ -40,7 +40,7 @@ packages/op/src/index.ts          (Op factory, Op.run, re-exports)
   |   |-- cleanup.ts              (generator close and registered finalizers)
   |   |-- abort-settlement.ts     (driver-level abort settlement mechanics)
   |   |-- settlement.ts           (named nested plan and suspend settlement operations)
-  |   |-- child-run-session.ts    (parent-to-child AbortSignal sessions)
+  |   |-- child-run.ts            (scenario-based child AbortSignal wiring)
   |   '-- fan-out.ts              (bounded and unbounded combinator child scheduling)
   |-- policy/                     (Policy.* constructors, retry-policy, plan rewriters)
   |-- di/                         (DI.provide, DI.inject, run-context environment)
@@ -59,7 +59,7 @@ small plan modules where surprise imports are regressions.
 <!-- architecture-check-closed: packages/op/src/di/plan.ts -->
 <!-- architecture-check-closed: packages/op/src/plan/bridge.ts -->
 <!-- architecture-check-closed: packages/op/src/execution/settlement.ts -->
-<!-- architecture-check-closed: packages/op/src/execution/child-run-session.ts -->
+<!-- architecture-check-closed: packages/op/src/execution/child-run.ts -->
 
 **Partial edges** document specific architectural links. Each line must match source; hub modules
 (for example `shell.ts`) may import more than the list shows.
@@ -97,17 +97,17 @@ small plan modules where surprise imports are regressions.
 - `packages/op/src/execution/settlement.ts` imports `packages/op/src/errors.ts`
 - `packages/op/src/execution/settlement.ts` imports `packages/op/src/result.ts`
 - `packages/op/src/execution/settlement.ts` imports `@prodkit/shared/runtime`
-- `packages/op/src/execution/child-run-session.ts` imports `packages/op/src/execution/runtime.ts`
-- `packages/op/src/execution/child-run-session.ts` imports `packages/op/src/execution/abort-settlement.ts`
-- `packages/op/src/execution/child-run-session.ts` imports `packages/op/src/errors.ts`
-- `packages/op/src/execution/child-run-session.ts` imports `packages/op/src/result.ts`
-- `packages/op/src/execution/child-run-session.ts` imports `@prodkit/shared/runtime`
+- `packages/op/src/execution/child-run.ts` imports `packages/op/src/execution/runtime.ts`
+- `packages/op/src/execution/child-run.ts` imports `packages/op/src/execution/abort-settlement.ts`
+- `packages/op/src/execution/child-run.ts` imports `packages/op/src/errors.ts`
+- `packages/op/src/execution/child-run.ts` imports `packages/op/src/result.ts`
+- `packages/op/src/execution/child-run.ts` imports `@prodkit/shared/runtime`
 - `packages/op/src/plan/combinators.ts` imports `packages/op/src/execution/settlement.ts`
-- `packages/op/src/execution/fan-out.ts` imports `packages/op/src/execution/child-run-session.ts`
+- `packages/op/src/execution/fan-out.ts` imports `packages/op/src/execution/child-run.ts`
 - `packages/op/src/execution/fan-out.ts` imports `packages/op/src/execution/settlement.ts`
 - `packages/op/src/di/env.ts` imports `packages/op/src/execution/settlement.ts`
 - `packages/op/src/di/plan.ts` imports `packages/op/src/execution/settlement.ts`
-- `packages/op/src/policy/plan.ts` imports `packages/op/src/execution/child-run-session.ts`
+- `packages/op/src/policy/plan.ts` imports `packages/op/src/execution/child-run.ts`
 - `packages/op/src/policy/plan.ts` imports `packages/op/src/execution/settlement.ts`
 - `packages/op/src/execution/runtime.ts` imports `packages/op/src/plan/model.ts`
 - `packages/op/src/execution/runtime.ts` imports `@prodkit/shared/runtime`
@@ -160,11 +160,12 @@ Built-in policies (retry, timeout, cancel) attach on the op value **before** `.r
 
 Driver-level primitives live in `packages/op/src/execution/abort-settlement.ts`, including
 `raceInFlightAfterInterrupt` for the cooperative-interrupt then macrotimer-fallback window.
-Parent-to-child signal cascade and Policy race orchestration use `ChildRunSession` in
-`packages/op/src/execution/child-run-session.ts` (`isolated`, `pool`, `boundCancel`, `raceTimeout`,
-`raceBoundCancel`). Combinator fan-out drives children through `driveFanOutPlans` in
-`packages/op/src/execution/fan-out.ts`. Contributor call sites use the named `Settlement` operations
-in `packages/op/src/execution/settlement.ts` instead of pairing runtime `executePlan` settlement
+Parent-to-child signal cascade uses scenario operations in
+`packages/op/src/execution/child-run.ts`: `createFanOutChildren`, `runWithTimeout`, and
+`runWithBoundCancel`. Controller construction and listener ownership stay private. Combinator
+fan-out drives children through `driveFanOutPlans` in `packages/op/src/execution/fan-out.ts`.
+Contributor call sites use the named `Settlement` operations in
+`packages/op/src/execution/settlement.ts` instead of pairing runtime `executePlan` settlement
 arguments with `withAbortDrain`.
 
 | Operation | Typical use | Notes |

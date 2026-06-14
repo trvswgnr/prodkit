@@ -71,8 +71,8 @@ Representative test:
 
 ## Invariant 2 (timeout composition): timeout-wins settlement preserves cleanup faults
 
-`Policy.timeout` runs the wrapped work in a child run session (`raceTimeout` in
-`packages/op/src/execution/child-run-session.ts`). When the timeout wins the race, the child run is
+`Policy.timeout` runs the wrapped work through `runWithTimeout` in
+`packages/op/src/execution/child-run.ts`. When the timeout wins the race, the child run is
 aborted and then awaited (drained) so its registered exit finalizers finish before the policy
 settles, including async cleanup. A clean teardown settles to the plain `TimeoutError`.
 
@@ -90,8 +90,8 @@ Why this matters:
 
 Enforced by code paths:
 
-- `packages/op/src/execution/child-run-session.ts` (`raceTimeout`): drains the aborted child run before settling
-- `packages/op/src/execution/child-run-session.ts` (`preserveCleanupFailureAfterTimeout`): prepends `TimeoutError` to any drained cleanup-failure `ErrorGroup`
+- `packages/op/src/execution/child-run.ts` (`runWithTimeout`): drains the aborted child run before settling
+- `packages/op/src/execution/child-run.ts` (`preserveCleanupFailureAfterTimeout`): prepends `TimeoutError` to any drained cleanup-failure `ErrorGroup`
 - `packages/op/src/errors.ts` (`CLEANUP_FAILURE_MESSAGE`): single marker shared by the `settleIteratorWithCleanup` producer and the timeout-race consumer
 
 Representative tests:
@@ -99,7 +99,7 @@ Representative tests:
 - `packages/op/tests/unit/core/lifecycle-defer.test.ts` (`preserves timeout and defer failure for ...`: cooperative and non-cooperative suspended work)
 - `packages/op/tests/unit/core/lifecycle-exit.test.ts` (`Policy.timeout preserves a throwing inner .on("exit") finalizer`)
 - `packages/op/tests/unit/core/lifecycle-release.test.ts` (`Policy.timeout preserves a throwing registered release cleanup`)
-- `packages/op/tests/unit/execution/child-run-session.test.ts` (`raceTimeout preserves cleanup failures from the drained child run`, `raceTimeout preserves cleanup failures when drained group lacks a timeout interruption`, `raceTimeout prepends TimeoutError when drained group leads with a non-timeout body error`)
+- `packages/op/tests/unit/execution/child-run.test.ts` (`runWithTimeout preserves cleanup failures from the drained child run`, `runWithTimeout preserves cleanup failures when drained group lacks a timeout interruption`, `runWithTimeout prepends TimeoutError when drained group leads with a non-timeout body error`)
 
 ## Invariant 3: chain-order semantics in combinators are stable
 
@@ -116,7 +116,7 @@ Why this matters:
 
 Enforced by code paths:
 
-- `packages/op/src/execution/fan-out.ts` (`driveFanOutPlans`): uses `ChildRunSession.pool` to isolate
+- `packages/op/src/execution/fan-out.ts` (`driveFanOutPlans`): uses `createFanOutChildren` to isolate
   child cancellation and detach parent abort listeners on settle; combinator child runs call
   `Settlement.interrupting.runPlan` so aborted losers unwind even when they ignore the signal
 
@@ -156,8 +156,8 @@ If a child iterator method throws synchronously, the driver pops that frame and 
 iterator's `throw(...)` method. This preserves native generator `try`/`catch` behavior while keeping
 the registered finalizers from every entered frame on the shared run-level stack.
 
-Plan nodes that intentionally launch isolated child execution keep their existing settlement scope
-and cleanup ownership. The depth invariant does not merge child runs or their finalizer registries.
+Plan nodes that intentionally launch isolated child execution keep their settlement and cleanup
+ownership. The depth invariant does not merge child runs or their finalizer registries.
 
 Representative tests:
 
@@ -258,12 +258,12 @@ Combinator contracts live in `packages/op/src/plan/combinators.ts` and
 ### Fan-out scheduling
 
 Combinator fan-out runs through one driver in `packages/op/src/execution/fan-out.ts`
-(`driveFanOutPlans`) backed by `ChildRunSession.pool`. `poolSize` caps concurrent children; when it
+(`driveFanOutPlans`) backed by `createFanOutChildren`. `poolSize` caps concurrent children; when it
 is at least the child count, every branch starts under one outer abort umbrella (first-settler
 behavior for `Op.race`, `Op.any`, and unbounded fail-fast `Op.all`). Below the child count, at most N
 children run at once. Fail-fast `Op.all` stops scheduling after the first `Err` and aborts in-flight
-siblings. First-settler combinators abort siblings by index and wait until every started child promise
-settles (including loser cleanup).
+siblings. First-settler combinators abort siblings by index and wait until every started child
+promise settles (including loser cleanup).
 
 Representative regression tests:
 
@@ -375,8 +375,7 @@ signal, plus README's `Op.defer` / `.on("exit")` notes and checks in
 `packages/op/tests/unit/policy/timeout.test.ts`, and
 `packages/op/tests/unit/core/lifecycle-*.test.ts`. Named settlement operations live in
 `packages/op/src/execution/settlement.ts`: DI lazy-resolve uses `Settlement.rejecting.awaitWork`;
-`ChildRunSession` in `execution/child-run-session.ts` owns parent-to-child signal cascade for fan-out,
-`raceTimeout` / `raceBoundCancel` orchestration for Policy timeout and cancel, and bound-cancel merge;
+`execution/child-run.ts` provides scenario operations for fan-out, timeout, and bound cancellation;
 `raceInFlightAfterInterrupt` in `execution/abort-settlement.ts` is the shared macrotimer fallback
 primitive; Policy.cancel and combinators use `Settlement.interruptingAndDraining.suspend`; fan-out
 children use `Settlement.interrupting.runPlan`; `DI.provide` uses

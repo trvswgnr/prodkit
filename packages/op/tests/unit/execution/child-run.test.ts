@@ -1,5 +1,9 @@
 import { assert, describe, expect, test, vi } from "vitest";
-import { ChildRunSession } from "../../../src/execution/child-run-session.js";
+import {
+  createFanOutChildren,
+  runWithBoundCancel,
+  runWithTimeout,
+} from "../../../src/execution/child-run.js";
 import { createRunContext } from "../../../src/execution/runtime.js";
 import {
   CLEANUP_FAILURE_MESSAGE,
@@ -10,106 +14,124 @@ import {
 import { Result } from "../../../src/result.js";
 import { neverSettling, settleOutcome } from "../../support/utils.js";
 
-describe("ChildRunSession", () => {
-  test("isolated cascades parent abort reason to the child signal", () => {
+describe("child runs", () => {
+  test("fan-out children cascade the parent abort reason", () => {
     const parent = new AbortController();
     const parentContext = createRunContext(parent.signal);
-    const session = ChildRunSession.isolated(parentContext);
+    const children = createFanOutChildren(parentContext);
+    const child = children.spawn();
     const onAbort = vi.fn();
 
-    session.signal.addEventListener("abort", onAbort);
+    child.context.signal.addEventListener("abort", onAbort);
     parent.abort("parent-cancelled");
 
     expect(onAbort).toHaveBeenCalledTimes(1);
-    expect(session.signal.reason).toBe("parent-cancelled");
+    expect(child.context.signal.reason).toBe("parent-cancelled");
+    child.release();
+    children.detach();
   });
 
-  test("isolated detach removes the parent abort listener", () => {
+  test("fan-out detach removes the parent abort listener", () => {
     const parent = new AbortController();
     const parentContext = createRunContext(parent.signal);
-    const session = ChildRunSession.isolated(parentContext);
+    const children = createFanOutChildren(parentContext);
+    const child = children.spawn();
     const onAbort = vi.fn();
 
-    session.signal.addEventListener("abort", onAbort);
-    session.detach();
+    child.context.signal.addEventListener("abort", onAbort);
+    children.detach();
     parent.abort("late");
 
     expect(onAbort).not.toHaveBeenCalled();
+    child.release();
   });
 
-  test("pool cascades parent abort to every active child controller", () => {
+  test("fan-out abortActive aborts every active child", () => {
     const parent = new AbortController();
     const parentContext = createRunContext(parent.signal);
-    const session = ChildRunSession.pool(parentContext);
-    const slots = Array.from({ length: 3 }, () => session.spawn());
-    const reasons = slots.map((slot) => {
+    const children = createFanOutChildren(parentContext);
+    const active = Array.from({ length: 3 }, () => children.spawn());
+    const reasons = active.map((child) => {
       const onAbort = vi.fn();
-      slot.signal.addEventListener("abort", onAbort);
-      return { onAbort, slot };
+      child.context.signal.addEventListener("abort", onAbort);
+      return { child, onAbort };
     });
 
-    parent.abort("fan-out-cancelled");
+    children.abortActive("fan-out-cancelled");
 
-    for (const { onAbort, slot } of reasons) {
+    for (const { child, onAbort } of reasons) {
       expect(onAbort).toHaveBeenCalledTimes(1);
-      expect(slot.signal.reason).toBe("fan-out-cancelled");
+      expect(child.context.signal.reason).toBe("fan-out-cancelled");
     }
 
-    for (const slot of slots) slot.release();
-    session.detach();
+    for (const child of active) child.release();
+    children.detach();
   });
 
-  test("pool spawn aborts immediately when the parent is already aborted", () => {
+  test("fan-out spawn aborts immediately when the parent is already aborted", () => {
     const parent = new AbortController();
     parent.abort("already-done");
     const parentContext = createRunContext(parent.signal);
-    const session = ChildRunSession.pool(parentContext);
+    const children = createFanOutChildren(parentContext);
 
-    const slot = session.spawn();
+    const child = children.spawn();
 
-    expect(slot.signal.aborted).toBe(true);
-    expect(slot.signal.reason).toBe("already-done");
-    slot.release();
-    session.detach();
+    expect(child.context.signal.aborted).toBe(true);
+    expect(child.context.signal.reason).toBe("already-done");
+    child.release();
+    children.detach();
   });
 
-  test("boundCancel merges bound and outer abort into one child signal", async () => {
+  test("runWithBoundCancel passes the bound abort reason to child work", async () => {
     const bound = new AbortController();
     const outer = new AbortController();
     const outerContext = createRunContext(outer.signal);
-    const session = ChildRunSession.boundCancel(bound.signal, outerContext);
-    const onAbort = vi.fn();
+    const runPromise = runWithBoundCancel(
+      (context) =>
+        new Promise<Result<unknown, never>>((resolve) => {
+          context.signal.addEventListener(
+            "abort",
+            () => resolve(Result.ok(context.signal.reason)),
+            { once: true },
+          );
+        }),
+      bound.signal,
+      outerContext,
+    );
 
-    session.signal.addEventListener("abort", onAbort);
     bound.abort("bound-cancelled");
 
-    expect(onAbort).toHaveBeenCalledTimes(1);
-    expect(session.signal.reason).toBe("bound-cancelled");
-    await expect(session.boundAbort).resolves.toBeUndefined();
-    session.detach();
+    await expect(runPromise).resolves.toEqual(Result.ok("bound-cancelled"));
   });
 
-  test("boundCancel cascades outer abort with the outer reason", () => {
+  test("runWithBoundCancel passes the outer abort reason to child work", async () => {
     const bound = new AbortController();
     const outer = new AbortController();
     const outerContext = createRunContext(outer.signal);
-    const session = ChildRunSession.boundCancel(bound.signal, outerContext);
-    const onAbort = vi.fn();
+    const runPromise = runWithBoundCancel(
+      (context) =>
+        new Promise<Result<unknown, never>>((resolve) => {
+          context.signal.addEventListener(
+            "abort",
+            () => resolve(Result.ok(context.signal.reason)),
+            { once: true },
+          );
+        }),
+      bound.signal,
+      outerContext,
+    );
 
-    session.signal.addEventListener("abort", onAbort);
     outer.abort("outer-cancelled");
 
-    expect(onAbort).toHaveBeenCalledTimes(1);
-    expect(session.signal.reason).toBe("outer-cancelled");
-    session.detach();
+    await expect(runPromise).resolves.toEqual(Result.ok("outer-cancelled"));
   });
 
-  test("raceBoundCancel settles when child work ignores abort", async () => {
+  test("runWithBoundCancel settles when child work ignores abort", async () => {
     const bound = new AbortController();
     const outerContext = createRunContext(new AbortController().signal);
     const abortReason = new Error("request cancelled");
 
-    const runPromise = ChildRunSession.raceBoundCancel(
+    const runPromise = runWithBoundCancel(
       async () => {
         await neverSettling();
         return Result.ok(69);
@@ -130,12 +152,33 @@ describe("ChildRunSession", () => {
     }
   });
 
-  test("raceTimeout returns TimeoutError after draining slower in-flight work", async () => {
+  test("runWithTimeout cascades outer abort to child work", async () => {
+    const outer = new AbortController();
+    const outerContext = createRunContext(outer.signal);
+    const runPromise = runWithTimeout(
+      (context) =>
+        new Promise<Result<unknown, never>>((resolve) => {
+          context.signal.addEventListener(
+            "abort",
+            () => resolve(Result.ok(context.signal.reason)),
+            { once: true },
+          );
+        }),
+      1_000,
+      outerContext,
+    );
+
+    outer.abort("outer-cancelled");
+
+    await expect(runPromise).resolves.toEqual(Result.ok("outer-cancelled"));
+  });
+
+  test("runWithTimeout returns TimeoutError after draining slower in-flight work", async () => {
     vi.useFakeTimers();
     try {
       const outerContext = createRunContext(new AbortController().signal);
 
-      const runPromise = ChildRunSession.raceTimeout(
+      const runPromise = runWithTimeout(
         async () => {
           await new Promise<number>((resolve) => {
             setTimeout(() => resolve(69), 100);
@@ -162,14 +205,14 @@ describe("ChildRunSession", () => {
     }
   });
 
-  test("raceTimeout preserves cleanup failures from the drained child run", async () => {
+  test("runWithTimeout preserves cleanup failures from the drained child run", async () => {
     vi.useFakeTimers();
     try {
       const laterCleanupFault = new Error("later cleanup failed");
       const earlierCleanupFault = new Error("earlier cleanup failed");
       const outerContext = createRunContext(new AbortController().signal);
 
-      const runPromise = ChildRunSession.raceTimeout(
+      const runPromise = runWithTimeout(
         (context) =>
           new Promise<Result<never, UnhandledException>>((resolve) => {
             context.signal.addEventListener(
@@ -214,13 +257,13 @@ describe("ChildRunSession", () => {
     }
   });
 
-  test("raceTimeout preserves cleanup failures when drained group lacks a timeout interruption", async () => {
+  test("runWithTimeout preserves cleanup failures when drained group lacks a timeout interruption", async () => {
     vi.useFakeTimers();
     try {
       const cleanupFault = new Error("cleanup failed");
       const outerContext = createRunContext(new AbortController().signal);
 
-      const runPromise = ChildRunSession.raceTimeout(
+      const runPromise = runWithTimeout(
         async () => {
           await new Promise<void>((resolve) => {
             setTimeout(() => resolve(), 100);
@@ -250,14 +293,14 @@ describe("ChildRunSession", () => {
     }
   });
 
-  test("raceTimeout prepends TimeoutError when drained group leads with a non-timeout body error", async () => {
+  test("runWithTimeout prepends TimeoutError when drained group leads with a non-timeout body error", async () => {
     vi.useFakeTimers();
     try {
       const domainError = "domain";
       const cleanupFault = new Error("cleanup failed");
       const outerContext = createRunContext(new AbortController().signal);
 
-      const runPromise = ChildRunSession.raceTimeout(
+      const runPromise = runWithTimeout(
         async () => {
           await new Promise<void>((resolve) => {
             setTimeout(() => resolve(), 100);

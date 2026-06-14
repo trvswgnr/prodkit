@@ -2,7 +2,7 @@ import { TimeoutError, UnhandledException } from "../errors.js";
 import { Result } from "../result.js";
 import { sleepWithSignal } from "@prodkit/shared/runtime";
 import { SuspendInstruction, RegisterExitFinalizerInstruction } from "../execution/instructions.js";
-import { ChildRunSession } from "../execution/child-run-session.js";
+import { runWithBoundCancel, runWithTimeout } from "../execution/child-run.js";
 import { Settlement } from "../execution/settlement.js";
 import { normalizeRetryPolicy, type NormalizedRetryPolicy } from "./retry-policy.js";
 import { validateTimeoutMs } from "./validate.js";
@@ -94,7 +94,7 @@ function timeoutPlan<T, E, M>(
 
     const result: Result<T, E | UnhandledException | TimeoutError> = yield* new SuspendInstruction(
       (outerContext) =>
-        ChildRunSession.raceTimeout(
+        runWithTimeout(
           (context) => Settlement.interrupting.runPlan(source, context),
           timeoutMs,
           outerContext,
@@ -110,11 +110,7 @@ function cancelPlan<T, E, M>(source: Plan<T, E, M>, abortSignal: AbortSignal): P
   return createPlan(function* () {
     const result: Result<T, E | UnhandledException> =
       yield* Settlement.interruptingAndDraining.suspend((outerContext) =>
-        ChildRunSession.raceBoundCancel(
-          (context) => source.execute(context),
-          abortSignal,
-          outerContext,
-        ),
+        runWithBoundCancel((context) => source.execute(context), abortSignal, outerContext),
       );
 
     if (result.isErr()) return yield* result;
