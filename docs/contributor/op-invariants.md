@@ -129,6 +129,34 @@ Representative tests:
 - `packages/op/tests/unit/di/index.test.ts` (`DI.provide(inner).with(Policy.timeout(...)) runs inner Op.defer cleanup when inner Op.try ignores abort`)
 - `packages/op/tests/unit/core/combinator-race.test.ts` (`settles when the winner succeeds and a loser ignores abort`)
 
+## Invariant 4: recursive yield* composition stays on one stack-safe run
+
+Direct `yield* childOp` composition does not delegate recursively through the host JavaScript call
+stack. Plan-backed Op shells yield a `NestedOpInstruction`, and `driveIterator` walks child
+iterators through an explicit frame stack. A completed child resumes its parent frame with the
+child value.
+
+Every frame shares the same `RunContext` and registered exit-finalizer array. A frame may also carry
+the nearest arity-bound finalizer args so nested parameterized ops keep their existing
+`Op.defer` context without replacing the outer `RunContext.args`. Run arguments, cancellation
+signal, runtime extensions, typed failures, and unhandled causes therefore keep the same settlement
+behavior as shallow `yield*` composition. Terminal settlement closes active generator frames from
+inner to outer, then runs registered finalizers in their existing LIFO order.
+
+If a child iterator method throws synchronously, the driver pops that frame and calls the parent
+iterator's `throw(...)` method. This preserves native generator `try`/`catch` behavior while keeping
+the registered finalizers from every entered frame on the shared run-level stack. Failures while
+resolving yielded suspend or custom instructions retain their existing runtime settlement behavior.
+
+Plan nodes that intentionally launch child execution through `SuspendInstruction` keep their
+existing settlement scopes and child-run behavior. The iterator-frame path applies to direct
+generator `yield*` composition only.
+
+Representative tests:
+
+- `packages/op/tests/unit/plan/stack-safety.test.ts` (`recursively nested yield* returns the correct value at depth 20_000`, `recursively nested yield* stays stack-safe when every level suspends`)
+- `packages/op/tests/unit/execution/nested-op.test.ts` (shared context, cleanup ordering and precedence, failure causes, policy and lifecycle behavior)
+
 ## Guardrails for future changes
 
 Before changing runtime/combinator internals, preserve these properties:
@@ -138,6 +166,7 @@ Before changing runtime/combinator internals, preserve these properties:
 3. Stable input-order semantics for combinator outputs and grouped errors.
 4. Wait-for-loser-finalization semantics after winner selection.
 5. Timeout-wins settlement preserves cleanup faults with `TimeoutError` as the primary `ErrorGroup` entry.
+6. Direct recursive `yield*` uses explicit iterator frames with one run context and finalizer stack.
 
 Any intentional semantic change should include:
 
@@ -157,11 +186,16 @@ The references here are `packages/op/src/execution/runtime.ts`, `packages/op/src
 
 ## Single-run driver (`drive`)
 
-Running an `Op` is walking an iterator over `Instruction`s. `drive` in `packages/op/src/execution/runtime.ts`
-passes the same `AbortSignal` into suspended work (`packages/op/tests/unit/execution/runtime.test.ts` "resumeSuspended path
-passes the bound signal"). A typed shortcut via `yield* Result.err` settles to `Err` and still
-runs exit teardown along the usual path. Yield something that isn't a known instruction shape
-and you get `Err(UnhandledException(TypeError))` ("invalid yielded instructions...").
+Running an `Op` is walking one or more iterators over `Instruction`s. Direct `yield* childOp`
+produces a `NestedOpInstruction`; `driveIterator` pushes the child iterator onto an explicit frame
+stack and resumes the parent when the child completes. All active frames use the same run context
+and finalizer registry.
+
+`drive` in `packages/op/src/execution/runtime.ts` passes the same `AbortSignal` into suspended work
+(`packages/op/tests/unit/execution/runtime.test.ts` "resumeSuspended path passes the bound signal").
+A typed shortcut via `yield* Result.err` settles to `Err` and still runs exit teardown along the
+usual path. Yield something that isn't a known instruction shape and you get
+`Err(UnhandledException(TypeError))` ("invalid yielded instructions...").
 
 `Op.try` mapper contract (`packages/op/src/core/builders.ts`): `onError` returns the mapped error value (or a
 `Promise` of it). If `onError` returns an `Op`/generator object, `Op.try` uses that object as the
@@ -197,11 +231,12 @@ the run is unwinding inside `drive`.
 
 ### Generator finalization (`closeGenerator`)
 
-`drive` touches `iterator.return` through `closeGenerator` so synchronous native `finally` code runs
-(`packages/op/src/execution/cleanup.ts`). This is best-effort generator finalization, not the effectful
-cleanup path: yielded or async work inside a `finally` block is not driven after early exit. Use
-`Op.defer`, `.with(Policy.release(...))`, or `.on("exit", ...)` for cleanup that must suspend, fail explicitly, or
-complete before `.run()` settles. Throws from `return` are swallowed on purpose
+`drive` touches each active `iterator.return` through `closeGenerator`, from the innermost nested
+frame to the root, so synchronous native `finally` code runs (`packages/op/src/execution/cleanup.ts`).
+This is best-effort generator finalization, not the effectful cleanup path: yielded or async work
+inside a `finally` block is not driven after early exit. Use `Op.defer`,
+`.with(Policy.release(...))`, or `.on("exit", ...)` for cleanup that must suspend, fail explicitly,
+or complete before `.run()` settles. Throws from `return` are swallowed on purpose
 (`packages/op/tests/unit/execution/generator-finalization.test.ts`, "preserves original Err result when cleanup throws during `iter.return()`").
 
 ## Concurrency (`Op.all`, `Op.any`, `Op.race`)

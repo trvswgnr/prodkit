@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Recursive `yield*` composition now remains stack-safe at deep nesting, including asynchronous
+  suspension, while preserving shared run context, finalizer ordering, policies, and failure
+  settlement.
 - Timeout settlement now preserves registered cleanup failures in an `ErrorGroup` after the timed
   child run unwinds. `TimeoutError` is always the primary entry; prior body errors and cleanup faults
   follow in their original order.
