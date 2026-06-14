@@ -14,7 +14,7 @@ import {
 import type { RunContext } from "../../../src/execution/runtime.js";
 import type { EmptyMeta } from "../../../src/core/metadata.js";
 import { Op } from "../../../src/index.js";
-import { ErrorGroup, UnhandledException } from "../../../src/errors.js";
+import { CLEANUP_FAILURE_MESSAGE, ErrorGroup, UnhandledException } from "../../../src/errors.js";
 import { Result } from "../../../src/result.js";
 
 class ThrowingCustomInstruction implements CustomInstruction<never, EmptyMeta> {
@@ -219,7 +219,7 @@ describe("drive runtime behavior", () => {
     assert(result.error instanceof UnhandledException);
     expect(result.error.cause).toBeInstanceOf(ErrorGroup);
     assert(result.error.cause instanceof ErrorGroup);
-    expect(result.error.cause.message).toBe("Operation cleanup failed");
+    expect(result.error.cause.message).toBe(CLEANUP_FAILURE_MESSAGE);
     expect(result.error.cause.errors).toEqual([cleanupFault]);
   });
 

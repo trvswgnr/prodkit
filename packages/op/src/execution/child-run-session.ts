@@ -1,5 +1,10 @@
 import { abortReason } from "@prodkit/shared/runtime";
-import { TimeoutError, UnhandledException } from "../errors.js";
+import {
+  CLEANUP_FAILURE_MESSAGE,
+  ErrorGroup,
+  TimeoutError,
+  UnhandledException,
+} from "../errors.js";
 import { Result } from "../result.js";
 import { raceInFlightAfterInterrupt } from "./settlement.js";
 import { createRunContext, type RunContext } from "./runtime.js";
@@ -96,6 +101,38 @@ type BoundCancelChildRunSession = {
   detach(): void;
 };
 
+function preserveCleanupFailureAfterTimeout<T, E>(
+  drainedResult: Result<T, E>,
+  timeoutError: TimeoutError,
+): Result<T, E | TimeoutError | UnhandledException> | undefined {
+  if (drainedResult.isOk()) return undefined;
+
+  const error = drainedResult.error;
+  if (
+    !UnhandledException.is(error) ||
+    !ErrorGroup.is(error.cause) ||
+    error.cause.message !== CLEANUP_FAILURE_MESSAGE
+  ) {
+    return undefined;
+  }
+
+  const { errors } = error.cause;
+  if (errors.length === 0) return undefined;
+
+  const [first, ...rest] = errors;
+  const isTimeoutInterruption =
+    first === timeoutError || (UnhandledException.is(first) && first.cause === timeoutError);
+  const preservedErrors = isTimeoutInterruption
+    ? [timeoutError, ...rest]
+    : [timeoutError, ...errors];
+
+  return Result.err(
+    new UnhandledException({
+      cause: new ErrorGroup(preservedErrors, error.cause.message),
+    }),
+  );
+}
+
 function boundCancel(
   boundSignal: AbortSignal,
   parent: RunContext<readonly unknown[]>,
@@ -160,7 +197,7 @@ async function raceTimeout<T, E>(
   run: (context: RunContext<readonly unknown[]>) => PromiseLike<Result<T, E>>,
   timeoutMs: number,
   outerContext: RunContext<readonly unknown[]>,
-): Promise<Result<T, E | TimeoutError>> {
+): Promise<Result<T, E | TimeoutError | UnhandledException>> {
   const session = isolated(outerContext);
   const runPromise = run(session.context());
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -182,8 +219,10 @@ async function raceTimeout<T, E>(
     return firstResult;
   }
 
-  await runPromise;
-  return Result.err(timeoutError);
+  const drainedResult = await runPromise;
+  return (
+    preserveCleanupFailureAfterTimeout(drainedResult, timeoutError) ?? Result.err(timeoutError)
+  );
 }
 
 /** Contributor-only child AbortSignal sessions derived from a parent run context. */

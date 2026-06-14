@@ -278,6 +278,80 @@ describe("Op.defer ordering and policies", () => {
     }
   });
 
+  test.each([
+    {
+      name: "cooperative suspended work",
+      suspend: (signal: AbortSignal) =>
+        new Promise<never>((_resolve, reject) => {
+          if (signal.aborted) {
+            reject(signal.reason);
+            return;
+          }
+          signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+        }),
+    },
+    {
+      name: "non-cooperative suspended work",
+      suspend: () => neverSettling(),
+    },
+  ])("preserves timeout and defer failure for $name", async ({ suspend }) => {
+    vi.useFakeTimers();
+    try {
+      const cleanupFault = new Error("cleanup failed");
+      const runPromise = Op(function* () {
+        yield* Op.defer(() => {
+          throw cleanupFault;
+        });
+        return yield* Op.try(suspend);
+      })
+        .with(Policy.timeout(10))
+        .run();
+
+      await vi.advanceTimersByTimeAsync(10);
+      await vi.runOnlyPendingTimersAsync();
+      const result = await runPromise;
+
+      assert(result.isErr(), "should be Err");
+      assert(result.error instanceof UnhandledException, "should be UnhandledException");
+      assert(result.error.cause instanceof ErrorGroup, "cause should be ErrorGroup");
+      expect(result.error.cause.errors[0]).toBeInstanceOf(TimeoutError);
+      expect(result.error.cause.errors[1]).toBe(cleanupFault);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("Policy.timeout awaits async cleanup before run settles", async () => {
+    vi.useFakeTimers();
+    try {
+      let cleaned = false;
+      const cleanupFault = new Error("cleanup failed");
+      const runPromise = Op(function* () {
+        yield* Op.defer(async () => {
+          await Promise.resolve();
+          cleaned = true;
+          throw cleanupFault;
+        });
+        return yield* Op.try(neverSettling);
+      })
+        .with(Policy.timeout(10))
+        .run();
+
+      await vi.advanceTimersByTimeAsync(10);
+      await vi.runOnlyPendingTimersAsync();
+      const result = await runPromise;
+
+      expect(cleaned).toBe(true);
+      assert(result.isErr(), "should be Err");
+      assert(result.error instanceof UnhandledException, "should be UnhandledException");
+      assert(result.error.cause instanceof ErrorGroup, "cause should be ErrorGroup");
+      expect(result.error.cause.errors[0]).toBeInstanceOf(TimeoutError);
+      expect(result.error.cause.errors[1]).toBe(cleanupFault);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("Op.all([child]).with(Policy.timeout(...)) runs child Op.defer cleanup when child Op.try ignores abort", async () => {
     vi.useFakeTimers();
     try {

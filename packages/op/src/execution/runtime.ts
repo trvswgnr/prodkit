@@ -1,4 +1,4 @@
-import { ErrorGroup, UnhandledException } from "../errors.js";
+import { CLEANUP_FAILURE_MESSAGE, ErrorGroup, UnhandledException } from "../errors.js";
 import { Result } from "../result.js";
 import {
   CUSTOM_INSTRUCTION_META,
@@ -131,7 +131,7 @@ async function settleIteratorWithCleanup<T, E, M>(
   const cleanupFaults = await runFinalizersSafely(finalizers, exitCtx);
   if (cleanupFaults.length > 0) {
     const failures = result.isErr() ? [result.error, ...cleanupFaults] : cleanupFaults;
-    const cause = new ErrorGroup(failures, "Operation cleanup failed");
+    const cause = new ErrorGroup(failures, CLEANUP_FAILURE_MESSAGE);
     const cleanupError = new UnhandledException({ cause });
     return Result.err(cleanupError);
   }

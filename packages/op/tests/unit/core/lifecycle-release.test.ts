@@ -122,6 +122,35 @@ describe("op.with(Policy.release(...))", () => {
     }
   });
 
+  test("Policy.timeout preserves a throwing registered release cleanup", async () => {
+    vi.useFakeTimers();
+    try {
+      const cleanupFault = new Error("cleanup failed");
+      const runPromise = Op(function* () {
+        yield* Op.of("resource").with(
+          Policy.release(() => {
+            throw cleanupFault;
+          }),
+        );
+        return yield* Op.try(() => new Promise<never>(() => {}));
+      })
+        .with(Policy.timeout(10))
+        .run();
+
+      await vi.advanceTimersByTimeAsync(10);
+      await vi.runOnlyPendingTimersAsync();
+      const result = await runPromise;
+
+      assert(result.isErr(), "should be Err");
+      assert(result.error instanceof UnhandledException, "should be UnhandledException");
+      assert(result.error.cause instanceof ErrorGroup, "cause should be ErrorGroup");
+      expect(result.error.cause.errors[0]).toBeInstanceOf(TimeoutError);
+      expect(result.error.cause.errors[1]).toBe(cleanupFault);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("fails with UnhandledException when cleanup throws after success", async () => {
     const cleanupFault = new Error("cleanup failed");
     const result = await Op.of(1)

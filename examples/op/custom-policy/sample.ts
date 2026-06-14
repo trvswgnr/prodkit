@@ -1,4 +1,4 @@
-import { Op, type Op as OpType } from "@prodkit/op";
+import { Op } from "@prodkit/op";
 import type { HKT } from "@prodkit/op/hkt";
 import { Policy } from "@prodkit/op/policy";
 import { Result } from "better-result";
@@ -11,7 +11,7 @@ export type MaintenanceBlocked<Mode extends MaintenanceMode = MaintenanceMode> =
 };
 
 interface MaintenanceGatePolicyType<Mode extends MaintenanceMode> extends HKT {
-  readonly [HKT.TYPE]: OpType<
+  readonly [HKT.TYPE]: Op<
     HKT.Param<this, 0>,
     HKT.Param<this, 1> | MaintenanceBlocked<Mode>,
     HKT.Param<this, 2>,

@@ -5,6 +5,8 @@ import { TaggedError, UnhandledException, type TaggedErrorInstance } from "bette
 
 export { TaggedError, UnhandledException, type TaggedErrorInstance };
 
+export const CLEANUP_FAILURE_MESSAGE = "Operation cleanup failed";
+
 /**
  * Built-in typed error emitted when an operation exceeds a timeout budget
  */

@@ -1,7 +1,12 @@
-import { describe, test, expect, vi } from "vitest";
+import { assert, describe, expect, test, vi } from "vitest";
 import { ChildRunSession } from "../../../src/execution/child-run-session.js";
 import { createRunContext } from "../../../src/execution/runtime.js";
-import { TimeoutError, UnhandledException } from "../../../src/errors.js";
+import {
+  CLEANUP_FAILURE_MESSAGE,
+  ErrorGroup,
+  TimeoutError,
+  UnhandledException,
+} from "../../../src/errors.js";
 import { Result } from "../../../src/result.js";
 import { neverSettling, settleOutcome } from "../../support/utils.js";
 
@@ -152,6 +157,132 @@ describe("ChildRunSession", () => {
           expect(result.error.timeoutMs).toBe(50);
         }
       }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("raceTimeout preserves cleanup failures from the drained child run", async () => {
+    vi.useFakeTimers();
+    try {
+      const laterCleanupFault = new Error("later cleanup failed");
+      const earlierCleanupFault = new Error("earlier cleanup failed");
+      const outerContext = createRunContext(new AbortController().signal);
+
+      const runPromise = ChildRunSession.raceTimeout(
+        (context) =>
+          new Promise<Result<never, UnhandledException>>((resolve) => {
+            context.signal.addEventListener(
+              "abort",
+              () => {
+                const interrupted = new UnhandledException({ cause: context.signal.reason });
+                resolve(
+                  Result.err(
+                    new UnhandledException({
+                      cause: new ErrorGroup(
+                        [interrupted, laterCleanupFault, earlierCleanupFault],
+                        CLEANUP_FAILURE_MESSAGE,
+                      ),
+                    }),
+                  ),
+                );
+              },
+              { once: true },
+            );
+          }),
+        50,
+        outerContext,
+      );
+
+      await vi.advanceTimersByTimeAsync(50);
+      const result = await runPromise;
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(UnhandledException);
+        if (result.error instanceof UnhandledException) {
+          expect(result.error.cause).toBeInstanceOf(ErrorGroup);
+          if (result.error.cause instanceof ErrorGroup) {
+            expect(result.error.cause.errors[0]).toBeInstanceOf(TimeoutError);
+            expect(result.error.cause.errors[1]).toBe(laterCleanupFault);
+            expect(result.error.cause.errors[2]).toBe(earlierCleanupFault);
+          }
+        }
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("raceTimeout preserves cleanup failures when drained group lacks a timeout interruption", async () => {
+    vi.useFakeTimers();
+    try {
+      const cleanupFault = new Error("cleanup failed");
+      const outerContext = createRunContext(new AbortController().signal);
+
+      const runPromise = ChildRunSession.raceTimeout(
+        async () => {
+          await new Promise<void>((resolve) => {
+            setTimeout(() => resolve(), 100);
+          });
+          return Result.err(
+            new UnhandledException({
+              cause: new ErrorGroup([cleanupFault], CLEANUP_FAILURE_MESSAGE),
+            }),
+          );
+        },
+        50,
+        outerContext,
+      );
+
+      await vi.advanceTimersByTimeAsync(50);
+      await vi.advanceTimersByTimeAsync(50);
+      await vi.runOnlyPendingTimersAsync();
+      const result = await runPromise;
+
+      assert(result.isErr(), "should be Err");
+      assert(result.error instanceof UnhandledException, "should be UnhandledException");
+      assert(result.error.cause instanceof ErrorGroup, "cause should be ErrorGroup");
+      expect(result.error.cause.errors[0]).toBeInstanceOf(TimeoutError);
+      expect(result.error.cause.errors[1]).toBe(cleanupFault);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("raceTimeout prepends TimeoutError when drained group leads with a non-timeout body error", async () => {
+    vi.useFakeTimers();
+    try {
+      const domainError = "domain";
+      const cleanupFault = new Error("cleanup failed");
+      const outerContext = createRunContext(new AbortController().signal);
+
+      const runPromise = ChildRunSession.raceTimeout(
+        async () => {
+          await new Promise<void>((resolve) => {
+            setTimeout(() => resolve(), 100);
+          });
+          return Result.err(
+            new UnhandledException({
+              cause: new ErrorGroup([domainError, cleanupFault], CLEANUP_FAILURE_MESSAGE),
+            }),
+          );
+        },
+        50,
+        outerContext,
+      );
+
+      await vi.advanceTimersByTimeAsync(50);
+      await vi.advanceTimersByTimeAsync(50);
+      await vi.runOnlyPendingTimersAsync();
+      const result = await runPromise;
+
+      assert(result.isErr(), "should be Err");
+      assert(result.error instanceof UnhandledException, "should be UnhandledException");
+      assert(result.error.cause instanceof ErrorGroup, "cause should be ErrorGroup");
+      expect(result.error.cause.errors[0]).toBeInstanceOf(TimeoutError);
+      expect(result.error.cause.errors[1]).toBe(domainError);
+      expect(result.error.cause.errors[2]).toBe(cleanupFault);
     } finally {
       vi.useRealTimers();
     }

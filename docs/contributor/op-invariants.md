@@ -66,6 +66,38 @@ Representative test:
 
 - `packages/op/tests/unit/execution/generator-finalization.test.ts` (`preserves original Err result when cleanup throws during iter.return()`)
 
+## Invariant 2 (timeout composition): timeout-wins settlement preserves cleanup faults
+
+`Policy.timeout` runs the wrapped work in a child run session (`raceTimeout` in
+`packages/op/src/execution/child-run-session.ts`). When the timeout wins the race, the child run is
+aborted and then awaited (drained) so its registered exit finalizers finish before the policy
+settles, including async cleanup. A clean teardown settles to the plain `TimeoutError`.
+
+If teardown throws while the timed-out run unwinds, the timeout does not erase those faults. Any
+drained cleanup-failure `ErrorGroup` is re-projected as `Err(UnhandledException)` whose cause keeps
+`TimeoutError` as the primary (first) entry. Prior body errors and exact cleanup faults follow in
+their original order. The raw `TimeoutError` replaces an interrupted body's
+`UnhandledException(TimeoutError)` wrapper when present so the primary failure reads the same as a
+clean timeout.
+
+Why this matters:
+
+- a deadline breach must not silently swallow teardown corruption
+- callers and observability boundaries see both the timeout and the exact cleanup faults
+
+Enforced by code paths:
+
+- `packages/op/src/execution/child-run-session.ts` (`raceTimeout`): drains the aborted child run before settling
+- `packages/op/src/execution/child-run-session.ts` (`preserveCleanupFailureAfterTimeout`): prepends `TimeoutError` to any drained cleanup-failure `ErrorGroup`
+- `packages/op/src/errors.ts` (`CLEANUP_FAILURE_MESSAGE`): single marker shared by the `settleIteratorWithCleanup` producer and the timeout-race consumer
+
+Representative tests:
+
+- `packages/op/tests/unit/core/lifecycle-defer.test.ts` (`preserves timeout and defer failure for ...`: cooperative and non-cooperative suspended work)
+- `packages/op/tests/unit/core/lifecycle-exit.test.ts` (`Policy.timeout preserves a throwing inner .on("exit") finalizer`)
+- `packages/op/tests/unit/core/lifecycle-release.test.ts` (`Policy.timeout preserves a throwing registered release cleanup`)
+- `packages/op/tests/unit/execution/child-run-session.test.ts` (`raceTimeout preserves cleanup failures from the drained child run`, `raceTimeout preserves cleanup failures when drained group lacks a timeout interruption`, `raceTimeout prepends TimeoutError when drained group leads with a non-timeout body error`)
+
 ## Invariant 3: chain-order semantics in combinators are stable
 
 Combinators preserve deterministic ordering guarantees while still using concurrency:
@@ -105,6 +137,7 @@ Before changing runtime/combinator internals, preserve these properties:
 2. Registered finalizer failure precedence at final settlement.
 3. Stable input-order semantics for combinator outputs and grouped errors.
 4. Wait-for-loser-finalization semantics after winner selection.
+5. Timeout-wins settlement preserves cleanup faults with `TimeoutError` as the primary `ErrorGroup` entry.
 
 Any intentional semantic change should include:
 

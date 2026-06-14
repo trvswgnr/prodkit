@@ -183,6 +183,31 @@ describe('op.on("exit")', () => {
     }
   });
 
+  test('Policy.timeout preserves a throwing inner .on("exit") finalizer', async () => {
+    vi.useFakeTimers();
+    try {
+      const cleanupFault = new Error("cleanup failed");
+      const runPromise = Op.try(() => new Promise<never>(() => {}))
+        .on("exit", () => {
+          throw cleanupFault;
+        })
+        .with(Policy.timeout(10))
+        .run();
+
+      await vi.advanceTimersByTimeAsync(10);
+      await vi.runOnlyPendingTimersAsync();
+      const result = await runPromise;
+
+      assert(result.isErr(), "should be Err");
+      assert(result.error instanceof UnhandledException, "should be UnhandledException");
+      assert(result.error.cause instanceof ErrorGroup, "cause should be ErrorGroup");
+      expect(result.error.cause.errors[0]).toBeInstanceOf(TimeoutError);
+      expect(result.error.cause.errors[1]).toBe(cleanupFault);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test('.on("exit") receives runtime args for arity ops', async () => {
     let seenCtx!: ExitContext<number, never, [string]>;
     const result = await Op(function* (name: string) {

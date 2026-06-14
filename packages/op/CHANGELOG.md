@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Fixed
 
-- No entries yet.
+- Timeout settlement now preserves registered cleanup failures in an `ErrorGroup` after the timed
+  child run unwinds. `TimeoutError` is always the primary entry; prior body errors and cleanup faults
+  follow in their original order.
 
 ## [0.2.0] - 2026-06-13
 
@@ -483,4 +485,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   paths, including generator finalization behavior.
 - Tightened combinator and policy behavior in edge cases (listener teardown,
   retry timing, and composed operation semantics).
-
