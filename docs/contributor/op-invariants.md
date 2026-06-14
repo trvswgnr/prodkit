@@ -278,7 +278,7 @@ can drain in-flight fan-out work before the timeout result settles.
 `Op.any` runs children together under one outer abort umbrella. First success picks the winner and
 abort-signals the losers, but `.run()` still waits until those aborted branches finish so cleanup
 sticks ("waits for loser finalization before returning the winner"). Fan-out children use the same
-`executePlan` interrupt settlement so losers that never observe `AbortSignal` still unwind. If everyone
+`Settlement.interrupting.runPlan` operation so losers that never observe `AbortSignal` still unwind. If everyone
 fails you get an `ErrorGroup` listing errors in declaration order regardless of settle order
 ("preserves index order when failures settle out of order"). A loser failing while reacting to
 abort does not trump the winner's success ("winner success keeps precedence over loser abort-time

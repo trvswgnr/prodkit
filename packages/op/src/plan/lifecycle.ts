@@ -2,6 +2,7 @@ import { UnhandledException } from "../errors.js";
 import { Result } from "../result.js";
 import { unsafeCoerce } from "@prodkit/shared/runtime";
 import { RegisterExitFinalizerInstruction, SuspendInstruction } from "../execution/instructions.js";
+import { Settlement } from "../execution/settlement.js";
 import type { EnterContext, EnterFn, ExitFn } from "../core/lifecycle.js";
 import type { ExitContext } from "../execution/runtime.js";
 import { createUnaryPlan, type Plan } from "./model.js";
@@ -21,9 +22,8 @@ export function onEnterPlan<T, E, A, M>(
         await Promise.resolve(initialize(enterCtx));
       });
 
-      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
-        source.execute(context),
-      );
+      const result: Result<T, E | UnhandledException> =
+        yield* Settlement.cooperative.suspendPlan(source);
 
       if (result.isErr()) return yield* result;
       return result.value;
@@ -50,9 +50,8 @@ export function onExitPlan<T, E, A, M>(
         await Promise.resolve(finalize(exitCtx));
       }, undefined);
 
-      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
-        source.execute(context),
-      );
+      const result: Result<T, E | UnhandledException> =
+        yield* Settlement.cooperative.suspendPlan(source);
 
       if (result.isErr()) return yield* result;
       return result.value;

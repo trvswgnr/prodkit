@@ -3,6 +3,7 @@ import { TimeoutError, UnhandledException } from "../errors.js";
 import { Result } from "../result.js";
 import { EMPTY_TUPLE } from "../core/identity.js";
 import { SuspendInstruction } from "../execution/instructions.js";
+import { Settlement } from "../execution/settlement.js";
 import type {
   AnyNullaryOp,
   BypassedErr,
@@ -25,9 +26,8 @@ export function mapPlan<T, E, U, M>(
 ): Plan<Awaited<U>, E, M> {
   return createUnaryPlan(
     function* () {
-      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
-        source.execute(context),
-      );
+      const result: Result<T, E | UnhandledException> =
+        yield* Settlement.cooperative.suspendPlan(source);
 
       if (result.isErr()) return yield* result;
 
@@ -51,18 +51,15 @@ export function flatMapPlan<T, E, R extends AnyNullaryOp, M>(
   bind: (value: T) => R,
 ): Plan<InferOpOk<R>, E | InferOpErr<R>, MergeMeta<M, InferOpMeta<R>>> {
   return createPlan(function* () {
-    const first: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
-      source.execute(context),
-    );
+    const first: Result<T, E | UnhandledException> =
+      yield* Settlement.cooperative.suspendPlan(source);
 
     if (first.isErr()) return yield* first;
 
     const second: Result<
       InferOpOk<R>,
       InferOpErr<R> | UnhandledException
-    > = yield* new SuspendInstruction((context) =>
-      getPlan(bind(first.value), EMPTY_TUPLE).execute(context),
-    );
+    > = yield* Settlement.cooperative.suspendPlan(getPlan(bind(first.value), EMPTY_TUPLE));
 
     if (second.isErr()) return yield* second;
     return second.value;
@@ -75,9 +72,8 @@ export function tapPlan<T, E, R, M>(
 ): Plan<T, E, M> {
   return createUnaryPlan(
     function* () {
-      const sourceResult: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
-        (context) => source.execute(context),
-      );
+      const sourceResult: Result<T, E | UnhandledException> =
+        yield* Settlement.cooperative.suspendPlan(source);
 
       if (sourceResult.isErr()) return yield* sourceResult;
 
@@ -95,9 +91,8 @@ export function mapErrPlan<T, E, E2, M>(
 ): Plan<T, E2 | BypassedErr<E>, M> {
   return createUnaryPlan(
     function* () {
-      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
-        source.execute(context),
-      );
+      const result: Result<T, E | UnhandledException> =
+        yield* Settlement.cooperative.suspendPlan(source);
 
       if (result.isOk()) return result.value;
 
@@ -124,9 +119,8 @@ export function tapErrPlan<T, E, R, M>(
 ): Plan<T, TrackedErr<E> | BypassedErr<E>, M> {
   return createUnaryPlan(
     function* () {
-      const sourceResult: Result<T, E | UnhandledException> = yield* new SuspendInstruction(
-        (context) => source.execute(context),
-      );
+      const sourceResult: Result<T, E | UnhandledException> =
+        yield* Settlement.cooperative.suspendPlan(source);
 
       if (sourceResult.isOk()) return sourceResult.value;
       const sourceError = sourceResult.error;
@@ -151,9 +145,8 @@ export function recoverPlan<T, E, ECaught extends TrackedErr<E>, R, M>(
 ): Plan<T | Awaited<R>, TrackedErr<E, ECaught> | BypassedErr<E>, M> {
   return createUnaryPlan(
     function* () {
-      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
-        source.execute(context),
-      );
+      const result: Result<T, E | UnhandledException> =
+        yield* Settlement.cooperative.suspendPlan(source);
 
       if (result.isOk()) return result.value;
 

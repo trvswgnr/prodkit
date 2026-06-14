@@ -80,9 +80,8 @@ export function settlePlan<T, E, M>(
 ): Plan<Result<T, E | UnhandledException>, never, M> {
   return createUnaryPlan(
     function* () {
-      const child: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
-        source.execute(context),
-      );
+      const child: Result<T, E | UnhandledException> =
+        yield* Settlement.cooperative.suspendPlan(source);
 
       return child;
     },

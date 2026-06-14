@@ -34,6 +34,12 @@ export const Settlement = {
     ): Promise<Result<T, E | UnhandledException>> {
       return runPlan(plan, context, AbortSettlement.passThrough);
     },
+
+    suspendPlan<T, E, M>(plan: Plan<T, E, M>): SuspendInstruction {
+      return new SuspendInstruction((context) =>
+        runPlan(plan, context, AbortSettlement.passThrough),
+      );
+    },
   },
 
   rejecting: {

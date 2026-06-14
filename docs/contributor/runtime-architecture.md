@@ -66,6 +66,7 @@ small plan modules where surprise imports are regressions.
 
 - `packages/op/src/core/shell.ts` imports `packages/op/src/plan/model.ts`
 - `packages/op/src/core/shell.ts` imports `packages/op/src/execution/instructions.ts`
+- `packages/op/src/core/shell.ts` imports `packages/op/src/execution/settlement.ts`
 - `packages/op/src/di/types.ts` imports `packages/op/src/core/metadata.ts`
 - `packages/op/src/di/types.ts` imports `packages/op/src/index.ts`
 - `packages/op/src/di/types.ts` imports `packages/op/src/di/index.ts`
@@ -171,6 +172,7 @@ arguments with `withAbortDrain`.
 | Operation | Typical use | Notes |
 | --- | --- | --- |
 | `Settlement.cooperative.runPlan` | `Op.allSettled` fan-out children | Pass-through launch |
+| `Settlement.cooperative.suspendPlan` | Plan transforms, lifecycle wrappers, release, `Op.settle` | Pass-through nested plan suspend |
 | `Settlement.rejecting.awaitWork` | DI lazy factory resolve | Rejects promptly on abort |
 | `Settlement.interrupting.runPlan` | Fan-out children, `Policy.timeout` inner nested plan | Interrupt launch |
 | `Settlement.interruptingAndDraining.suspend` | Combinators, `Policy.cancel` | Drain observed work after outer interrupt |
@@ -199,9 +201,10 @@ dispatches on the yielded value:
 Direct generator composition uses nested iterator frames so every `yield*` level shares one
 `RunContext` and exit-finalizer stack. Synchronous child iterator throws are passed to parent
 iterators through `throw(...)`, preserving generator `try`/`catch` behavior. Suspends are how
-policies and combinators intentionally launch separate plan execution: they call `executePlan`
-(with an `AbortSettlement` when interrupt-on-abort applies) on child plans with child or merged
-`RunContext` values rather than blocking the outer generator thread.
+policies and combinators intentionally launch separate plan execution. Ordinary wrappers use
+`Settlement.cooperative.suspendPlan`; context-sensitive orchestration calls a named
+`Settlement.*.runPlan` operation with the child or merged `RunContext`. Raw `SuspendInstruction`
+remains for non-plan async work such as callbacks, delays, and fan-out drivers.
 
 ## Policy wrappers (retry, timeout, cancel)
 
@@ -211,7 +214,7 @@ Built-in policies attach through `.with(Policy.*)` on the op value (`packages/op
 - **Retry** (`retryPlan`): loops inner execution inside a `SuspendInstruction`, applies
   `RetryPolicy` delay via abortable sleep (`retries` is the post-failure budget; `delay(retry, cause)`
   uses a 0-based retry index), and stops on success, non-retryable `Err`, or abort.
-- **Timeout** (`timeoutPlan`): races inner `executePlan(..., interruptOnAbortSettlement)` against a timer;
+- **Timeout** (`timeoutPlan`): races `Settlement.interrupting.runPlan(...)` against a timer;
   surfaces `TimeoutError` on the typed channel. Invalid `timeoutMs` (negative or non-finite) fails
   at run time as `Err(UnhandledException)`. Error-channel transforms compose through plan rewriters
   ([ADR 0007](../adr/0007-op-execution-plan-ast.md); historical hook detail in superseded
@@ -231,6 +234,8 @@ you add or rename a transform, keep these touch points in sync:
 1. **Plan constructor** in `packages/op/src/plan/transforms.ts` for value/error transforms
    (`map`, `flatMap`, `tap`, `mapErr`, `tapErr`, `recover`) or
    `packages/op/src/plan/lifecycle.ts` for lifecycle hooks (`.on("enter")`, `.on("exit")`).
+   Execute an ordinary child plan with `Settlement.cooperative.suspendPlan`; reserve raw
+   `SuspendInstruction` for callback or other non-plan async work.
    For policy push-through, pass a `rewrite` override that rebuilds after `source.rewrite(rewriter)`
    (use `rewriteUnaryPlan` for single-child wrappers; combinator nodes map each child plan).
 2. **Fluent surface** in `packages/op/src/core/shell.ts` (bind-time transform ordering in
@@ -310,9 +315,9 @@ errors only.
 ## Combinators and nested plan execution
 
 `packages/op/src/plan/combinators.ts` and `packages/op/src/execution/fan-out.ts` run combinator
-child plans through `Plan.execute` / `executePlan` (often with per-child `AbortController` signals)
+child plans through named `Settlement` operations (often with per-child `AbortController` signals)
 and enforce ordering contracts documented in `op-invariants.md`. `Op.settle` is a unary
-`settlePlan` wrapper with `AbortSettlement.passThrough`. `Op.all`, `Op.any`, and `Op.race` wait for
+`settlePlan` wrapper using `Settlement.cooperative.suspendPlan`. `Op.all`, `Op.any`, and `Op.race` wait for
 aborted sibling finalization before the parent `run()` settles
 ([ADR 0004](../adr/0004-combinators-wait-for-loser-finalization.md)). Interrupt-on-abort fan-out
 uses `Settlement.interrupting.runPlan(...)` so aborted losers still unwind when they never observe

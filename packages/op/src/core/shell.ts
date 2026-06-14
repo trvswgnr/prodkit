@@ -2,6 +2,7 @@ import { Result } from "../result.js";
 import { unsafeCoerce } from "@prodkit/shared/runtime";
 import { OP_BOUND_BRAND, OP_BRAND } from "./identity.js";
 import { createRunContext } from "../execution/runtime.js";
+import { Settlement } from "../execution/settlement.js";
 import {
   NestedOpInstruction,
   SuspendInstruction,
@@ -83,11 +84,12 @@ class PolicySourceImpl {
     // SAFETY: PolicyWrapFn returns unknown; around() middleware was typed against the source plan's T, E, M.
     return unsafeCoerce<Op<TNext, ENext, AsArgs<A>, MNext>>(
       this.wrapPlan((plan) => {
-        // SAFETY: PolicyWrapFn erases plan to unknown; around() closes over T, E, M and only calls typedPlan.execute.
+        // SAFETY: PolicyWrapFn erases plan to unknown; around() closes over T, E, M and only runs typedPlan.
         const typedPlan: Plan<T, E, M> = unsafeCoerce(plan);
         return createPlan<TNext, ENext, MNext>(function* () {
           const result: Result<TNext, ENext | UnhandledException> = yield* new SuspendInstruction(
-            (context) => run((nextContext) => typedPlan.execute(nextContext), context),
+            (context) =>
+              run((nextContext) => Settlement.cooperative.runPlan(typedPlan, nextContext), context),
           );
 
           if (result.isErr()) return yield* result;

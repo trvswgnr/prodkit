@@ -12,9 +12,8 @@ import { createPlan, createUnaryPlan, type Plan, type PlanRewriter } from "../pl
 export function releasePlan<T, E, M>(source: Plan<T, E, M>, release: ReleaseFn<T>): Plan<T, E, M> {
   return createUnaryPlan(
     function* () {
-      const result: Result<T, E | UnhandledException> = yield* new SuspendInstruction((context) =>
-        source.execute(context),
-      );
+      const result: Result<T, E | UnhandledException> =
+        yield* Settlement.cooperative.suspendPlan(source);
 
       if (result.isErr()) return yield* result;
 
@@ -46,7 +45,9 @@ function retryPlan<T, E, M>(
     while (true) {
       type AttemptStep = { result: Result<T, E | UnhandledException>; aborted: boolean };
       const attemptStep: AttemptStep = yield* new SuspendInstruction((context) =>
-        source.execute(context).then((result) => ({ result, aborted: context.signal.aborted })),
+        Settlement.cooperative
+          .runPlan(source, context)
+          .then((result) => ({ result, aborted: context.signal.aborted })),
       );
 
       const result = attemptStep.result;
@@ -110,7 +111,11 @@ function cancelPlan<T, E, M>(source: Plan<T, E, M>, abortSignal: AbortSignal): P
   return createPlan(function* () {
     const result: Result<T, E | UnhandledException> =
       yield* Settlement.interruptingAndDraining.suspend((outerContext) =>
-        runWithBoundCancel((context) => source.execute(context), abortSignal, outerContext),
+        runWithBoundCancel(
+          (context) => Settlement.cooperative.runPlan(source, context),
+          abortSignal,
+          outerContext,
+        ),
       );
 
     if (result.isErr()) return yield* result;

@@ -59,6 +59,20 @@ describe("Settlement", () => {
     expect(result).toEqual(Result.ok(7));
   });
 
+  test("cooperative suspendPlan creates unbranded nested plan work", async () => {
+    const controller = new AbortController();
+    const instruction = Settlement.cooperative.suspendPlan(
+      genPlan(function* () {
+        return 7;
+      }),
+    );
+    const work = instruction.suspend(createRunContext(controller.signal));
+
+    expect(instruction).toBeInstanceOf(SuspendInstruction);
+    expect(isAbortDrainedWork(work)).toBe(false);
+    await expect(work).resolves.toEqual(Result.ok(7));
+  });
+
   test("interrupting runPlan unwinds suspended work after abort", async () => {
     const controller = new AbortController();
     const abortCause = new Error("cancelled");

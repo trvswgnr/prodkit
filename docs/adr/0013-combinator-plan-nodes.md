@@ -17,7 +17,7 @@ plans structurally via `PlanRewriter` hooks ([ADR 0007](0007-op-execution-plan-a
 **Each public combinator is a plan node.** Multi-child combinators (`allPlan`, `racePlan`,
 `anyPlan`, `allSettledPlan`) use `createPlan` with `rewrite` that maps each child plan. Unary
 `settlePlan` uses `createUnaryPlan` like `mapPlan` and policy wrappers: one child via
-`source.execute`, rebuilt with `(inner) => settlePlan(inner)`.
+`Settlement.cooperative.suspendPlan`, rebuilt with `(inner) => settlePlan(inner)`.
 
 | Plan node | Public op | Child cancel settlement | Loser wait |
 | --- | --- | --- | --- |
@@ -31,9 +31,9 @@ Public factories bind `OP_PLAN_BIND` and delegate to these nodes. Imperative fan
 from the public combinator module; concurrency runs through `execution/fan-out.ts`.
 
 **Shared fan-out owns child wiring and settlement.** Per-child `AbortController` wiring, outer-signal
-cascade, `detach()` for parent abort listeners, unbounded fan-out, bounded worker pool, and child
-execution through `Plan.execute` with `AbortSettlement` (not ad hoc `drive*` at the combinator
-layer). Combinator plan nodes call fan-out with the settlement row from the table above. The outer
+cascade, listener detach, unbounded fan-out, bounded worker pool, and child execution through named
+`Settlement` operations (not ad hoc `drive*` at the combinator layer). Combinator plan nodes call
+fan-out with the settlement row from the table above. The outer
 `SuspendInstruction` for combinator plans wraps returned fan-out work with `withAbortDrain(...)` when
 interrupt settlement applies so timeout/cancel on a wrapped combinator still drains in-flight children
 ([ADR 0004](0004-combinators-wait-for-loser-finalization.md)).
@@ -55,7 +55,7 @@ representation lives under `plan/`.
 timeout/retry/cancel could not participate in `PlanRewriter`, blocking the ADR 0007 goal.
 
 **Two execution ports duplicated settlement.** Combinators and plans previously exposed parallel
-interrupt-on-abort entry points. Nested work now routes through `executePlan` with `AbortSettlement`.
+interrupt-on-abort entry points. Nested work now routes through named `Settlement` operations.
 
 ## Considered options
 
