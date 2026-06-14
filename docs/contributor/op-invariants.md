@@ -10,9 +10,12 @@ It focuses on semantics that should remain stable across refactors.
 
 ## Scope and model
 
-`Op.run()` is driven by `drive()` in `packages/op/src/execution/runtime.ts`.
-That runtime executes generator instructions, tracks registered exit finalizers, and settles to a single `Result`.
-Public combinators in `packages/op/src/core/combinators.ts` are plan-backed; child work runs through `Plan.execute` / `executePlan` in `packages/op/src/plan/`, not combinator-local `drive()` calls.
+All run paths settle through `packages/op/src/execution/runtime.ts`. Instance `.run()` calls
+`executePlan`; static `Op.run(...)` binds a nullary Op and calls `drive()`. The runtime executes
+generator instructions, tracks registered exit finalizers, and settles to a single `Result`.
+Public combinators in `packages/op/src/core/combinators.ts` are plan-backed; child work runs through
+`Plan.execute` and `executePlan` in `packages/op/src/execution/runtime.ts`, not combinator-local
+`drive()` calls.
 
 ## Invariant 1: cleanup ordering is deterministic and LIFO
 
@@ -129,33 +132,38 @@ Representative tests:
 - `packages/op/tests/unit/di/index.test.ts` (`DI.provide(inner).with(Policy.timeout(...)) runs inner Op.defer cleanup when inner Op.try ignores abort`)
 - `packages/op/tests/unit/core/combinator-race.test.ts` (`settles when the winner succeeds and a loser ignores abort`)
 
-## Invariant 4: recursive yield* composition stays on one stack-safe run
+## Invariant 4: user-shaped composition depth does not consume the host stack
 
-Direct `yield* childOp` composition does not delegate recursively through the host JavaScript call
-stack. Plan-backed Op shells yield a `NestedOpInstruction`, and `driveIterator` walks child
-iterators through an explicit frame stack. A completed child resumes its parent frame with the
-child value.
+Deep composition is supported before and during execution without recursively consuming the host
+JavaScript call stack.
 
-Every frame shares the same `RunContext` and registered exit-finalizer array. A frame may also carry
-the nearest arity-bound finalizer args so nested parameterized ops keep their existing
-`Op.defer` context without replacing the outer `RunContext.args`. Run arguments, cancellation
-signal, runtime extensions, typed failures, and unhandled causes therefore keep the same settlement
-behavior as shallow `yield*` composition. Terminal settlement closes active generator frames from
-inner to outer, then runs registered finalizers in their existing LIFO order.
+Before execution, `packages/op/src/plan/model.ts` owns the full Plan composition spine. Fluent
+transforms are accumulated and materialized iteratively. Unary wrappers expose rebuild metadata
+that the same module walks iteratively for policy push-through. Interleaved fluent and policy chains
+therefore preserve call order and linear binding behavior at large depth.
+
+During execution, `packages/op/src/execution/runtime.ts` owns Plan reentrancy scheduling and
+generator iteration. Deep sequential Plan nodes run through `executePlan`, which bounds synchronous
+reentrancy before continuing queued Plan work. Direct `yield* childOp` composition yields a
+`NestedOpInstruction`, and `driveIterator` walks child iterators through an explicit frame stack.
+
+Direct nested Op frames share the same `RunContext` and registered exit-finalizer array. A frame may
+also carry the nearest arity-bound finalizer args so nested parameterized ops keep their existing
+`Op.defer` context without replacing the outer `RunContext.args`. Terminal settlement closes active
+generator frames from inner to outer, then runs registered finalizers in LIFO order.
 
 If a child iterator method throws synchronously, the driver pops that frame and calls the parent
 iterator's `throw(...)` method. This preserves native generator `try`/`catch` behavior while keeping
-the registered finalizers from every entered frame on the shared run-level stack. Failures while
-resolving yielded suspend or custom instructions retain their existing runtime settlement behavior.
+the registered finalizers from every entered frame on the shared run-level stack.
 
-Plan nodes that intentionally launch child execution through `SuspendInstruction` keep their
-existing settlement scopes and child-run behavior. The iterator-frame path applies to direct
-generator `yield*` composition only.
+Plan nodes that intentionally launch isolated child execution keep their existing settlement scope
+and cleanup ownership. The depth invariant does not merge child runs or their finalizer registries.
 
 Representative tests:
 
-- `packages/op/tests/unit/plan/stack-safety.test.ts` (`recursively nested yield* returns the correct value at depth 20_000`, `recursively nested yield* stays stack-safe when every level suspends`)
-- `packages/op/tests/unit/execution/nested-op.test.ts` (shared context, cleanup ordering and precedence, failure causes, policy and lifecycle behavior)
+- `packages/op/tests/unit/plan/deep-composition.test.ts` (deep fluent materialization and policy rewrite)
+- `packages/op/tests/unit/execution/runtime.test.ts` (`generator yield* loop returns the correct value at depth 50_000`, `flatMap chain returns the correct value at depth 20_000`)
+- `packages/op/tests/unit/execution/nested-op.test.ts` (recursive `yield*`, shared context, cleanup ordering and precedence, failure causes, policy and lifecycle behavior)
 
 ## Guardrails for future changes
 
@@ -166,11 +174,13 @@ Before changing runtime/combinator internals, preserve these properties:
 3. Stable input-order semantics for combinator outputs and grouped errors.
 4. Wait-for-loser-finalization semantics after winner selection.
 5. Timeout-wins settlement preserves cleanup faults with `TimeoutError` as the primary `ErrorGroup` entry.
-6. Direct recursive `yield*` uses explicit iterator frames with one run context and finalizer stack.
+6. User-shaped Plan and `yield*` depth stays off the host stack without merging child-run cleanup scopes.
 
 Any intentional semantic change should include:
 
-- explicit test updates in `packages/op/tests/unit/execution/runtime.test.ts`,
+- explicit test updates in `packages/op/tests/unit/plan/deep-composition.test.ts`,
+  `packages/op/tests/unit/execution/runtime.test.ts`,
+  `packages/op/tests/unit/execution/nested-op.test.ts`,
   `packages/op/tests/unit/core/lifecycle-*.test.ts`, and/or
   `packages/op/tests/unit/core/combinator-*.test.ts`
 - an accompanying update to this document explaining the new invariant
@@ -186,7 +196,8 @@ The references here are `packages/op/src/execution/runtime.ts`, `packages/op/src
 
 ## Single-run driver (`drive`)
 
-Running an `Op` is walking one or more iterators over `Instruction`s. Direct `yield* childOp`
+Running an `Op` is scheduling Plan iterators and walking them over `Instruction`s. `executePlan`
+bounds synchronous Plan reentrancy in the runtime module. Direct `yield* childOp`
 produces a `NestedOpInstruction`; `driveIterator` pushes the child iterator onto an explicit frame
 stack and resumes the parent when the child completes. All active frames use the same run context
 and finalizer registry.

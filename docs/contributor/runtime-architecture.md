@@ -11,8 +11,8 @@ and documentation roles: [`docs/CONTEXT.md`](../CONTEXT.md).
 The internal layout names three distinct responsibilities:
 
 - `core/`: callable `Op` surface, construction, lifecycle types, identity, and metadata
-- `plan/`: execution AST model, Op bridge, execution scheduling, rewrite chain, and plan nodes
-- `execution/`: generator driver, instructions, cleanup, settlement, child sessions, and fan-out
+- `plan/`: execution AST model, iterative composition and rewrite, Op bridge, and plan nodes
+- `execution/`: Plan scheduling, generator driver, instructions, cleanup, settlement, child sessions, and fan-out
 
 Public entrypoints fan into core builders and combinators. Those construct plan nodes, and all plan
 execution settles through the same execution driver:
@@ -29,15 +29,13 @@ packages/op/src/index.ts          (Op factory, Op.run, re-exports)
   |   |-- lifecycle.ts            (enter, exit, and release callback contracts)
   |   '-- metadata.ts             (EmptyMeta, Blocking, MergeMeta, IsRunnable)
   |-- plan/
-  |   |-- model.ts                (Plan interface, construction, unary rewrite mechanics)
+  |   |-- model.ts                (Plan interface, iterative fluent materialization and rewrite)
   |   |-- bridge.ts               (Op-to-Plan binding and lookup)
-  |   |-- execute.ts              (stack-safe Plan execution scheduling)
-  |   |-- factory-chain.ts        (stack-safe fluent transform materialization)
   |   |-- transforms.ts           (map, flatMap, tap, mapErr, tapErr, recover)
   |   |-- lifecycle.ts            (enter and exit plan nodes)
   |   '-- combinators.ts          (all, any, race, allSettled, settle plan nodes)
   |-- execution/
-  |   |-- runtime.ts              (createRunContext, drive, runOp, RunContext, ExitContext)
+  |   |-- runtime.ts              (Plan scheduling, generator driver, run context, cleanup settlement)
   |   |-- instructions.ts         (nested Op frames, Suspend, exit finalizer, CustomInstruction)
   |   |-- cleanup.ts              (generator close and registered finalizers)
   |   |-- settlement.ts           (low-level abort settlement primitives)
@@ -60,15 +58,13 @@ small plan modules where surprise imports are regressions.
 <!-- architecture-check-closed: packages/op/src/di/env.ts -->
 <!-- architecture-check-closed: packages/op/src/di/plan.ts -->
 <!-- architecture-check-closed: packages/op/src/plan/bridge.ts -->
-<!-- architecture-check-closed: packages/op/src/plan/execute.ts -->
-<!-- architecture-check-closed: packages/op/src/plan/factory-chain.ts -->
 <!-- architecture-check-closed: packages/op/src/execution/settlement-scope.ts -->
 <!-- architecture-check-closed: packages/op/src/execution/child-run-session.ts -->
 
 **Partial edges** document specific architectural links. Each line must match source; hub modules
 (for example `shell.ts`) may import more than the list shows.
 
-- `packages/op/src/core/shell.ts` imports `packages/op/src/plan/factory-chain.ts`
+- `packages/op/src/core/shell.ts` imports `packages/op/src/plan/model.ts`
 - `packages/op/src/core/shell.ts` imports `packages/op/src/execution/instructions.ts`
 - `packages/op/src/di/types.ts` imports `packages/op/src/core/metadata.ts`
 - `packages/op/src/di/types.ts` imports `packages/op/src/index.ts`
@@ -94,16 +90,8 @@ small plan modules where surprise imports are regressions.
 - `packages/op/src/plan/bridge.ts` imports `packages/op/src/core/surface.ts`
 - `packages/op/src/plan/bridge.ts` imports `packages/op/src/plan/model.ts`
 - `packages/op/src/plan/bridge.ts` imports `@prodkit/shared/runtime`
-- `packages/op/src/plan/execute.ts` imports `packages/op/src/errors.ts`
-- `packages/op/src/plan/execute.ts` imports `packages/op/src/result.ts`
-- `packages/op/src/plan/execute.ts` imports `packages/op/src/execution/runtime.ts`
-- `packages/op/src/plan/execute.ts` imports `packages/op/src/execution/settlement.ts`
-- `packages/op/src/plan/execute.ts` imports `packages/op/src/plan/model.ts`
-- `packages/op/src/plan/execute.ts` imports `@prodkit/shared/runtime`
-- `packages/op/src/plan/factory-chain.ts` imports `packages/op/src/plan/model.ts`
 - `packages/op/src/execution/settlement-scope.ts` imports `packages/op/src/execution/instructions.ts`
 - `packages/op/src/execution/settlement-scope.ts` imports `packages/op/src/plan/model.ts`
-- `packages/op/src/execution/settlement-scope.ts` imports `packages/op/src/plan/execute.ts`
 - `packages/op/src/execution/settlement-scope.ts` imports `packages/op/src/execution/runtime.ts`
 - `packages/op/src/execution/settlement-scope.ts` imports `packages/op/src/execution/settlement.ts`
 - `packages/op/src/execution/settlement-scope.ts` imports `packages/op/src/errors.ts`
@@ -121,28 +109,47 @@ small plan modules where surprise imports are regressions.
 - `packages/op/src/di/plan.ts` imports `packages/op/src/execution/settlement-scope.ts`
 - `packages/op/src/policy/plan.ts` imports `packages/op/src/execution/child-run-session.ts`
 - `packages/op/src/policy/plan.ts` imports `packages/op/src/execution/settlement-scope.ts`
+- `packages/op/src/execution/runtime.ts` imports `packages/op/src/plan/model.ts`
 - `packages/op/src/execution/runtime.ts` imports `@prodkit/shared/runtime`
+- `packages/op/src/plan/model.ts` imports `packages/op/src/execution/runtime.ts`
+
+## Composition depth
+
+Contributors need one depth contract: user-shaped composition must not consume the host JavaScript
+call stack. Ownership follows execution phase rather than exposing separate stack-safety systems:
+
+- Before execution, `packages/op/src/plan/model.ts` iteratively materializes fluent transforms and
+  walks unary policy-rewrite metadata. `core/shell.ts` only appends transforms through that module.
+- During execution, `packages/op/src/execution/runtime.ts` owns both Plan reentrancy scheduling and
+  the generator driver. Deep sequential Plan nodes yield through `executePlan`; direct
+  `yield* childOp` uses explicit iterator frames in `driveIterator`.
+
+Other Plan, policy, DI, and combinator modules declare composition and settlement intent. They
+should not add local depth counters, recursive rewrite walks, or independent execution trampolines.
+The invariant and representative tests are in
+[`op-invariants.md`](op-invariants.md#invariant-4-user-shaped-composition-depth-does-not-consume-the-host-stack).
 
 ## From `Op.run()` to `drive()`
 
-1. **Call site.** `await op.run(...args)` or `await Op.run(op, ...args)` both end in
-   `runOp` (`packages/op/src/execution/runtime.ts`), which calls
-   `drive(op, createRunContext(signal, args))`. Tuple args flow into `RunContext.args` for
-   enter/exit hooks; they are not an options bag
+1. **Call site.** `await op.run(...args)` binds a Plan and calls `executePlan`.
+   `await Op.run(op, ...args)` binds a nullary Op and calls `runOp` / `drive`. Both paths live in
+   `packages/op/src/execution/runtime.ts` and converge on `driveIterator`. Tuple args flow into
+   `RunContext.args` for enter/exit hooks; they are not an options bag
    ([ADR 0006](../adr/0006-run-args-only-fluent-policy-composition.md)).
 2. **Arity binding.** For generator-defined ops, `fromGenFn` in `core/builders.ts` wraps the user
    generator in `makeCoreOp` once per `op(...args)` call, binds defer args via
    `bindArityArgsToFinalizers`, and exposes the callable through `makeUnboundPlanOp`
    ([ADR 0001](../adr/0001-core-nullary-vs-lifted-arity.md)).
-3. **Nullary execution.** `drive` only accepts `Op<T, E, [], M>`: a nullary op whose body is a
-   generator function `() => Generator<Instruction, T>`. Direct `yield* childOp` composition yields
-   a `NestedOpInstruction`; the driver pushes the child iterator onto an explicit frame stack
-   instead of using recursive native iterator delegation. Everything that participates in `yield*`
-   composition (policies, combinators, `flatMap`, DI `provide`) runs at this arity internally;
-   lifting re-attaches tuple call signatures at the public boundary.
-4. **Settlement.** `drive` walks instructions until the generator completes or yields a terminal
-   `Result.err`, then runs registered exit finalizers LIFO and may override the body result with
-   `Err(UnhandledException)` when teardown fails
+3. **Plan materialization.** `plan/model.ts` replays the fluent transform chain in call order,
+   applying structural policy rewrites without recursively walking user-shaped depth.
+4. **Nullary execution.** `executePlan` schedules a Plan iterator through `driveIterator`. Direct
+   `yield* childOp` composition yields a `NestedOpInstruction`; the driver pushes the child iterator
+   onto an explicit frame stack instead of using recursive native iterator delegation. Everything
+   that participates in `yield*` composition runs at nullary arity internally; lifting re-attaches
+   tuple call signatures at the public seam.
+5. **Settlement.** `driveIterator` walks instructions until the generator completes or yields a
+   terminal `Result.err`, then runs registered exit finalizers LIFO and may override the body result
+   with `Err(UnhandledException)` when teardown fails
    ([ADR 0003](../adr/0003-three-cleanup-channels.md),
    [ADR 0005](../adr/0005-unhandled-exception-runtime-channel.md)).
 
@@ -158,7 +165,7 @@ Parent-to-child signal cascade and Policy race orchestration use `ChildRunSessio
 `raceBoundCancel`). Combinator fan-out drives children through `driveFanOutPlans` in
 `packages/op/src/execution/fan-out.ts`. Nested plan and suspend choreography uses `Settlement` presets in
 `packages/op/src/execution/settlement-scope.ts` so call sites declare one intent instead of pairing
-`executePlan` settlement args with `withAbortDrain`.
+runtime `executePlan` settlement args with `withAbortDrain`.
 
 | Preset | Typical use | Notes |
 | --- | --- | --- |
@@ -225,7 +232,7 @@ you add or rename a transform, keep these touch points in sync:
    For policy push-through, pass a `rewrite` override that rebuilds after `source.rewrite(rewriter)`
    (use `rewriteUnaryPlan` for single-child wrappers; combinator nodes map each child plan).
 2. **Fluent surface** in `packages/op/src/core/shell.ts` (bind-time transform ordering in
-   `packages/op/src/plan/factory-chain.ts`):
+   `packages/op/src/plan/model.ts`):
    - add the method on `fluentMethodsForContext`
    - add the method name to `createSyncValueFluentPrototype`'s `methodNames` list when sync-value
      ops should expose the same API
@@ -314,9 +321,11 @@ the signal. Fan-out and provision suspends wrap their returned work with `withAb
 
 ```mermaid
 flowchart TD
-  run["op.run(...args) or Op.run(op, ...args)"]
-  runOp["runOp: createRunContext(signal, args)"]
-  drive["drive(nullaryOp, context)"]
+  instRun["op.run(...args): bind plan + executePlan"]
+  staticRun["Op.run(op, ...args): runOp / drive"]
+  executePlan["executePlan: schedule plan.iterate()"]
+  drive["drive: op() iterator"]
+  driveIterator["driveIterator"]
   next["iter.next()"]
   dispatch{"yielded instruction?"}
   nested["NestedOp: push child iterator frame"]
@@ -329,7 +338,8 @@ flowchart TD
   settle["settleIteratorWithCleanup: closeGenerator + LIFO finalizers"]
   ok["Result.ok(value)"]
 
-  run --> runOp --> drive --> next --> dispatch
+  instRun --> executePlan --> driveIterator --> next --> dispatch
+  staticRun --> drive --> driveIterator
   dispatch -->|NestedOpInstruction| nested --> next
   dispatch -->|SuspendInstruction| suspend --> next
   dispatch -->|RegisterExitFinalizer| finalizer --> next

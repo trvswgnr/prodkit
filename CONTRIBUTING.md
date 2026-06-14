@@ -194,8 +194,8 @@ For module-to-test placement, start with [`docs/contributor/runtime-architecture
 - Re-exports from dependencies must be explicit named exports in `packages/op/src/index.ts` (never `export *`).
 - Internal runtime concerns are split into focused modules under `packages/op/src/`:
   - `core/` (callable Op surface, builders, combinator factories, lifecycle contracts, identity, and metadata)
-  - `plan/` (Plan model, Op bridge, execution scheduling, rewrite chain, and transform/combinator nodes)
-  - `execution/` (generator driver, instructions, cleanup, settlement, child-run sessions, and fan-out)
+  - `plan/` (Plan model, iterative composition and rewrite, Op bridge, and transform/combinator nodes)
+  - `execution/` (Plan scheduling, generator driver, instructions, cleanup, settlement, child-run sessions, and fan-out)
   - `policy/` (retry, timeout, cancel, release policies and `Delay` helpers)
   - `di/` (dependency tokens, bindings, plan integration, and run-context environment)
   - `hkt.ts` (reusable HKT primitives for `@prodkit/op/hkt`)
@@ -204,8 +204,8 @@ For module-to-test placement, start with [`docs/contributor/runtime-architecture
 - Test layout under `packages/op/tests/` mirrors runtime modules (see [`docs/contributor/runtime-architecture.md`](docs/contributor/runtime-architecture.md)):
   - `integration/index.test.ts` for public API contract coverage
   - `unit/core/` for builders, fluent methods, lifecycle hooks, and public combinator behavior
-  - `unit/plan/` for Plan binding, execution equivalence, and deep transform stack safety
-  - `unit/execution/` for the driver, instructions, cleanup, settlement, child sessions, and fan-out
+  - `unit/plan/` for Plan binding, execution equivalence, rewrite, and deep composition
+  - `unit/execution/` for Plan scheduling, the driver, instructions, cleanup, settlement, child sessions, and fan-out
   - `unit/policy/` for retry, timeout, cancel, release, abort-signal, and policy HKT behavior
   - `unit/di/` for DI runtime behavior; `types/di.test.ts` for DI compile-time contracts
   - `unit/errors.test.ts` for shared error contracts
