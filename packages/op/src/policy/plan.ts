@@ -3,7 +3,7 @@ import { Result } from "../result.js";
 import { sleepWithSignal } from "@prodkit/shared/runtime";
 import { SuspendInstruction, RegisterExitFinalizerInstruction } from "../execution/instructions.js";
 import { ChildRunSession } from "../execution/child-run-session.js";
-import { Settlement, SettlementPresets } from "../execution/settlement-scope.js";
+import { Settlement } from "../execution/settlement.js";
 import { normalizeRetryPolicy, type NormalizedRetryPolicy } from "./retry-policy.js";
 import { validateTimeoutMs } from "./validate.js";
 import type { ReleaseFn } from "../core/lifecycle.js";
@@ -95,7 +95,7 @@ function timeoutPlan<T, E, M>(
     const result: Result<T, E | UnhandledException | TimeoutError> = yield* new SuspendInstruction(
       (outerContext) =>
         ChildRunSession.raceTimeout(
-          (context) => Settlement.interrupting(context.signal).runPlan(source, context),
+          (context) => Settlement.interrupting.runPlan(source, context),
           timeoutMs,
           outerContext,
         ),
@@ -108,15 +108,14 @@ function timeoutPlan<T, E, M>(
 
 function cancelPlan<T, E, M>(source: Plan<T, E, M>, abortSignal: AbortSignal): Plan<T, E, M> {
   return createPlan(function* () {
-    const result: Result<T, E | UnhandledException> = yield* Settlement.suspendObservedWork(
-      SettlementPresets.interruptingAndDraining,
-      (outerContext) =>
+    const result: Result<T, E | UnhandledException> =
+      yield* Settlement.interruptingAndDraining.suspend((outerContext) =>
         ChildRunSession.raceBoundCancel(
           (context) => source.execute(context),
           abortSignal,
           outerContext,
         ),
-    );
+      );
 
     if (result.isErr()) return yield* result;
     return result.value;

@@ -64,10 +64,8 @@ the boundary choice is not already covered by ADR 0008.
 | **Instruction** | Yielded discriminant the driver dispatches (`Suspend`, exit finalizer registration, `CustomInstruction`, terminal `Err`). |
 | **Policy** | Retry, timeout, cancel, release, or custom attachment applied with `.with(Policy.*)` before `.run()`. |
 | **Blocking** | Metadata key marking an unsatisfied requirement (for example missing DI binding) that blocks `.run()` at the type level. |
-| **Settlement** | How a suspend or abort resolves (pass-through, interrupt-on-abort, drain-after-abort). |
-| **Settlement preset** | Contributor-only named launch/completion intent for nested plan work (`cooperative`, `rejecting`, `interrupting`, `interruptingAndDraining`). |
-| **Settlement scope** | Signal-bound compiled preset; call sites use `Settlement.*` in `execution/settlement-scope.ts` instead of pairing `executePlan` settlement with `withAbortDrain`. |
-| **Child run session** | Contributor-only scoped child `AbortSignal` derived from a parent run context (or bound plus outer signals), with guaranteed parent-listener detach. Also owns bound-cancel and timeout race orchestration for Policy plans. Distinct from settlement scope: propagation wiring and first-settler races, not launch/completion preset compilation. |
+| **Settlement** | Contributor-facing named operations for cooperative, rejecting, interrupting, or interrupt-and-drain nested work. Driver-only abort mechanics live separately in `execution/abort-settlement.ts`. |
+| **Child run session** | Scoped child `AbortSignal` derived from a parent run context (or bound plus outer signals), with guaranteed parent-listener detach. Also owns bound-cancel and timeout race orchestration for Policy plans. Distinct from settlement: propagation wiring and first-settler races, not nested-work completion intent. |
 | **UnhandledException** | Non-recoverable runtime channel from `better-result`; wraps invalid yields, cleanup faults, and validation failures. |
 | **ErrorGroup** | Aggregate error preserving multiple failures (`Op.any` when all fail; cleanup settlement with message `Operation cleanup failed`). |
 

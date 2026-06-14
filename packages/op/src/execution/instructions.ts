@@ -1,12 +1,12 @@
 // oxlint-disable typescript/no-explicit-any
 import { Tagged } from "../tagged.js";
 import { Err } from "../result.js";
-import type { SuspendWork } from "./settlement.js";
+import type { SuspendWork } from "./abort-settlement.js";
 import type { ExitContext, RunContext } from "./runtime.js";
 import type { EmptyMeta, MergeUnionMeta } from "../core/metadata.js";
 
-export type { SuspendWork } from "./settlement.js";
-export { isAbortDrainedWork, withAbortDrain } from "./settlement.js";
+export type { SuspendWork } from "./abort-settlement.js";
+export { isAbortDrainedWork, withAbortDrain } from "./abort-settlement.js";
 
 export const CUSTOM_INSTRUCTION_META = Symbol("prodkit.op.custom-instruction-meta");
 

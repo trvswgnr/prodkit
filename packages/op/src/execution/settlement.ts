@@ -1,134 +1,73 @@
-/**
- * Abort settlement for suspend interruption, nested-plan execution, and DI lazy resolve.
- *
- * Call sites declare intent here instead of threading booleans through the driver.
- * Suspend work wrapped with {@link withAbortDrain} maps to
- * {@link AbortSettlement.interruptAndDrainOnAbort} when the enclosing suspend uses
- * {@link AbortSettlement.interruptOnAbort} (see {@link settlementForSuspendedWork}).
- */
+import { abortReason } from "@prodkit/shared/runtime";
+import { UnhandledException } from "../errors.js";
+import { Result } from "../result.js";
+import type { Plan } from "../plan/model.js";
+import { SuspendInstruction } from "./instructions.js";
+import type { RunContext } from "./runtime.js";
+import { AbortSettlement, awaitWithAbort, withAbortDrain } from "./abort-settlement.js";
 
-export type AbortSettlement =
-  | { readonly kind: "passThrough" }
-  | { readonly kind: "rejectOnAbort"; readonly getAbortReason: () => unknown }
-  | { readonly kind: "interruptOnAbort"; readonly getAbortReason: () => unknown }
-  | { readonly kind: "interruptAndDrainOnAbort"; readonly getAbortReason: () => unknown };
+type MapChildContext = (parent: RunContext<readonly unknown[]>) => RunContext<readonly unknown[]>;
 
-export const AbortSettlement = {
-  passThrough: { kind: "passThrough" } as const satisfies AbortSettlement,
-
-  rejectOnAbort(getAbortReason: () => unknown): AbortSettlement {
-    return { kind: "rejectOnAbort", getAbortReason };
-  },
-
-  interruptOnAbort(getAbortReason: () => unknown): AbortSettlement {
-    return { kind: "interruptOnAbort", getAbortReason };
-  },
-
-  interruptAndDrainOnAbort(getAbortReason: () => unknown): AbortSettlement {
-    return { kind: "interruptAndDrainOnAbort", getAbortReason };
-  },
-};
-
-const ABORT_DRAINED_WORK = Symbol("prodkit.op.abort-drained-work");
-
-type AbortDrainedWork<T> = {
-  readonly [ABORT_DRAINED_WORK]: true;
-  readonly promise: PromiseLike<T>;
-};
-
-/** Suspend callback return type: plain promise or drain-on-abort wrapped work. */
-export type SuspendWork<T> = PromiseLike<T> | AbortDrainedWork<T>;
-
-export function withAbortDrain<T>(promise: PromiseLike<T>): AbortDrainedWork<T> {
-  return { [ABORT_DRAINED_WORK]: true, promise };
-}
-
-export function isAbortDrainedWork<T>(work: SuspendWork<T>): work is AbortDrainedWork<T> {
-  return typeof work === "object" && work !== null && ABORT_DRAINED_WORK in work;
-}
-
-export function settlementForSuspendedWork(
-  driveSettlement: AbortSettlement,
-  suspendWork: SuspendWork<unknown>,
-): {
-  readonly settlement: AbortSettlement;
-  readonly suspended: PromiseLike<unknown>;
-} {
-  const shouldDrainOnAbort = isAbortDrainedWork(suspendWork);
-  const settlement =
-    driveSettlement.kind === "interruptOnAbort" && shouldDrainOnAbort
-      ? AbortSettlement.interruptAndDrainOnAbort(driveSettlement.getAbortReason)
-      : driveSettlement;
-  const suspended = shouldDrainOnAbort ? suspendWork.promise : suspendWork;
-  return { settlement, suspended };
-}
-
-function scheduleInterruptFallback(abortReason: unknown): Promise<never> {
-  return new Promise((_, reject) => {
-    setTimeout(() => reject(abortReason), 0);
-  });
-}
-
-/** Race in-flight work against a macrotimer fallback after the cooperative interrupt window. */
-export function raceInFlightAfterInterrupt<T>(
-  inFlight: PromiseLike<T>,
-  abortReason: unknown,
-): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    queueMicrotask(() => {
-      void Promise.race([inFlight, scheduleInterruptFallback(abortReason)]).then(resolve, reject);
-    });
-  });
-}
-
-export function awaitWithAbort<T>(
-  suspended: PromiseLike<T>,
-  signal: AbortSignal,
+function runPlan<T, E, M>(
+  plan: Plan<T, E, M>,
+  context: RunContext<readonly unknown[]>,
   settlement: AbortSettlement,
-): PromiseLike<T> {
-  if (settlement.kind === "passThrough") return suspended;
+): Promise<Result<T, E | UnhandledException>> {
+  return plan.execute(context, settlement);
+}
 
-  if (signal.aborted) {
-    return Promise.reject(settlement.getAbortReason());
-  }
+function interruptOnAbort(signal: AbortSignal): AbortSettlement {
+  return AbortSettlement.interruptOnAbort(() => abortReason(signal));
+}
 
-  return new Promise<T>((resolve, reject) => {
-    let settled = false;
-    const settleResolve = (value: T) => {
-      if (settled) return;
-      settled = true;
-      signal.removeEventListener("abort", onAbort);
-      resolve(value);
-    };
-    const settleReject = (error: unknown) => {
-      if (settled) return;
-      settled = true;
-      signal.removeEventListener("abort", onAbort);
-      reject(error);
-    };
+/**
+ * Named settlement operations for nested plans, observed suspend work, and DI lazy resolve.
+ *
+ * Contributor call sites choose one operation directly. Driver-only abort mechanics remain in
+ * `abort-settlement.ts`.
+ */
+export const Settlement = {
+  cooperative: {
+    runPlan<T, E, M>(
+      plan: Plan<T, E, M>,
+      context: RunContext<readonly unknown[]>,
+    ): Promise<Result<T, E | UnhandledException>> {
+      return runPlan(plan, context, AbortSettlement.passThrough);
+    },
+  },
 
-    const onAbort = () => {
-      if (settled) return;
-      if (settlement.kind === "rejectOnAbort") {
-        settleReject(settlement.getAbortReason());
-        return;
-      }
-
-      void raceInFlightAfterInterrupt(suspended, settlement.getAbortReason()).then(
-        settleResolve,
-        settleReject,
+  rejecting: {
+    awaitWork<T>(work: PromiseLike<T>, signal: AbortSignal): PromiseLike<T> {
+      return awaitWithAbort(
+        work,
+        signal,
+        AbortSettlement.rejectOnAbort(() => abortReason(signal)),
       );
-    };
+    },
+  },
 
-    signal.addEventListener("abort", onAbort, { once: true });
-    Promise.resolve(suspended).then(settleResolve, settleReject);
-  });
-}
+  interrupting: {
+    runPlan<T, E, M>(
+      plan: Plan<T, E, M>,
+      context: RunContext<readonly unknown[]>,
+    ): Promise<Result<T, E | UnhandledException>> {
+      return runPlan(plan, context, interruptOnAbort(context.signal));
+    },
+  },
 
-export async function drainInFlightWork(suspended: PromiseLike<unknown>): Promise<void> {
-  try {
-    await suspended;
-  } catch {
-    // ignore: abort rejection or child settlement errors while draining fan-out/provision work
-  }
-}
+  interruptingAndDraining: {
+    suspend<T>(
+      start: (context: RunContext<readonly unknown[]>) => PromiseLike<T>,
+    ): SuspendInstruction {
+      return new SuspendInstruction((context) => withAbortDrain(start(context)));
+    },
+
+    suspendPlan<T, E, M>(plan: Plan<T, E, M>, mapContext?: MapChildContext): SuspendInstruction {
+      return new SuspendInstruction((context) => {
+        const mapped = mapContext?.(context) ?? context;
+        const work = runPlan(plan, mapped, interruptOnAbort(mapped.signal));
+        return withAbortDrain(work);
+      });
+    },
+  },
+} as const;

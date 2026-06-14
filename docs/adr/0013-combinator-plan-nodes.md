@@ -75,4 +75,5 @@ nodes still need explicit rewrite methods until ceremony is reduced.
 - `packages/op/src/core/combinators.ts` holds public op factories and type helpers; fan-out and plan
   shapes live under `plan/`.
 - Tests from ADR 0004 and op-invariants.md Invariant 3 are the behavioral contract.
-- Abort settlement uses `packages/op/src/execution/settlement.ts`.
+- Driver-level abort settlement uses `packages/op/src/execution/abort-settlement.ts`; contributor
+  call sites select named operations from `packages/op/src/execution/settlement.ts`.

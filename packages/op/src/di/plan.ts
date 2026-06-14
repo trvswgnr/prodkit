@@ -2,7 +2,7 @@ import { getPlan } from "../plan/bridge.js";
 import { createUnaryPlan, type Plan } from "../plan/model.js";
 import type { AsArgs } from "../core/surface.js";
 import { makeUnboundPlanOp } from "../core/shell.js";
-import { Settlement, SettlementPresets } from "../execution/settlement-scope.js";
+import { Settlement } from "../execution/settlement.js";
 import { CUSTOM_INSTRUCTION_META, type CustomInstruction } from "../execution/instructions.js";
 import type { RunContext } from "../execution/runtime.js";
 import { UnhandledException } from "../errors.js";
@@ -74,11 +74,10 @@ export function providePlan<T, E, M>(
 
   return createUnaryPlan(
     function* () {
-      const result: Result<T, E | UnhandledException> = yield* Settlement.suspendPlan(
-        SettlementPresets.interruptingAndDraining,
-        source,
-        (context) => extendContextWithBindings(context, snapshot),
-      );
+      const result: Result<T, E | UnhandledException> =
+        yield* Settlement.interruptingAndDraining.suspendPlan(source, (context) =>
+          extendContextWithBindings(context, snapshot),
+        );
 
       if (result.isErr()) return yield* result;
       return result.value;

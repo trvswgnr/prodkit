@@ -1,5 +1,5 @@
 import { createRunContext, type RunContext } from "../execution/runtime.js";
-import { Settlement } from "../execution/settlement-scope.js";
+import { Settlement } from "../execution/settlement.js";
 import { hasBrand, isPromiseLike } from "@prodkit/shared/runtime";
 import {
   DI_LAZY_BINDING,
@@ -52,18 +52,16 @@ export function resolveInjectedValue(
     return produced;
   }
 
-  const inflight = Settlement.rejecting(signal)
-    .awaitWork(produced)
-    .then(
-      (resolved) => {
-        env.set(dependency, resolved);
-        return resolved;
-      },
-      (error) => {
-        env.set(dependency, matchedValue);
-        return Promise.reject(error);
-      },
-    );
+  const inflight = Settlement.rejecting.awaitWork(produced, signal).then(
+    (resolved) => {
+      env.set(dependency, resolved);
+      return resolved;
+    },
+    (error) => {
+      env.set(dependency, matchedValue);
+      return Promise.reject(error);
+    },
+  );
 
   env.set(dependency, inflight);
   return inflight;

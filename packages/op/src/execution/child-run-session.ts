@@ -6,7 +6,7 @@ import {
   UnhandledException,
 } from "../errors.js";
 import { Result } from "../result.js";
-import { raceInFlightAfterInterrupt } from "./settlement.js";
+import { raceInFlightAfterInterrupt } from "./abort-settlement.js";
 import { createRunContext, type RunContext } from "./runtime.js";
 
 function watchParentAbort(

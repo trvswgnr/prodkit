@@ -118,7 +118,7 @@ Enforced by code paths:
 
 - `packages/op/src/execution/fan-out.ts` (`driveFanOutPlans`): uses `ChildRunSession.pool` to isolate
   child cancellation and detach parent abort listeners on settle; combinator child runs call
-  `executePlan` with `Settlement.interrupting` so aborted losers unwind even when they ignore the signal
+  `Settlement.interrupting.runPlan` so aborted losers unwind even when they ignore the signal
 
 Representative tests:
 
@@ -271,9 +271,9 @@ Representative regression tests:
 - `packages/op/tests/unit/execution/fan-out-regression.test.ts` (`Op.race waits for loser defer cleanup before run() settles`)
 
 `Op.all` fails fast on the first child error, aborts siblings, and waits for every active branch
-to settle before returning. Fan-out children run through `Settlement.interrupting`. Combinator plans use
-`Settlement.interruptingAndDraining` so an enclosing `Policy.timeout` can drain in-flight fan-out work before the
-timeout result settles.
+to settle before returning. Fan-out children run through `Settlement.interrupting.runPlan`.
+Combinator plans use `Settlement.interruptingAndDraining.suspend` so an enclosing `Policy.timeout`
+can drain in-flight fan-out work before the timeout result settles.
 
 `Op.any` runs children together under one outer abort umbrella. First success picks the winner and
 abort-signals the losers, but `.run()` still waits until those aborted branches finish so cleanup
@@ -373,15 +373,15 @@ Cancellation and cooperative `AbortSignal` behavior show up wherever `SuspendIns
 signal, plus README's `Op.defer` / `.on("exit")` notes and checks in
 `packages/op/tests/unit/policy/retry.test.ts`,
 `packages/op/tests/unit/policy/timeout.test.ts`, and
-`packages/op/tests/unit/core/lifecycle-*.test.ts`. Settlement presets live in
-`packages/op/src/execution/settlement-scope.ts`: DI lazy-resolve uses `Settlement.rejecting`;
+`packages/op/tests/unit/core/lifecycle-*.test.ts`. Named settlement operations live in
+`packages/op/src/execution/settlement.ts`: DI lazy-resolve uses `Settlement.rejecting.awaitWork`;
 `ChildRunSession` in `execution/child-run-session.ts` owns parent-to-child signal cascade for fan-out,
 `raceTimeout` / `raceBoundCancel` orchestration for Policy timeout and cancel, and bound-cancel merge;
-`raceInFlightAfterInterrupt` in `execution/settlement.ts` is the shared macrotimer fallback primitive;
-Policy.cancel uses `Settlement.interruptingAndDraining`; fan-out children
-use `Settlement.interrupting`; combinators
-and `DI.provide` use `Settlement.interruptingAndDraining`. Low-level `AbortSettlement` primitives
-remain in `packages/op/src/execution/settlement.ts` for the driver.
+`raceInFlightAfterInterrupt` in `execution/abort-settlement.ts` is the shared macrotimer fallback
+primitive; Policy.cancel and combinators use `Settlement.interruptingAndDraining.suspend`; fan-out
+children use `Settlement.interrupting.runPlan`; `DI.provide` uses
+`Settlement.interruptingAndDraining.suspendPlan`. Low-level `AbortSettlement` primitives remain in
+`packages/op/src/execution/abort-settlement.ts` for the driver.
 Type-level contracts collected in
 `packages/op/tests/types/op.test.ts`, with custom policy spike coverage in
 `packages/op/tests/unit/policy/hkt.test.ts`. Runnable metadata and args-only `.run()` gating are

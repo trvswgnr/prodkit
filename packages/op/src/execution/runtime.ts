@@ -15,7 +15,7 @@ import {
   awaitWithAbort,
   drainInFlightWork,
   settlementForSuspendedWork,
-} from "./settlement.js";
+} from "./abort-settlement.js";
 import type { Op } from "../index.js";
 import type { Plan } from "../plan/model.js";
 import { EMPTY_TUPLE } from "../core/identity.js";

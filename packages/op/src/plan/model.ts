@@ -4,7 +4,7 @@ import { unsafeCoerce } from "@prodkit/shared/runtime";
 import type { TrackedErr } from "../core/surface.js";
 import { executePlan, type RunContext } from "../execution/runtime.js";
 import type { RuntimeInstruction } from "../execution/instructions.js";
-import type { AbortSettlement } from "../execution/settlement.js";
+import type { AbortSettlement } from "../execution/abort-settlement.js";
 import type { EmptyMeta } from "../core/metadata.js";
 
 const PLAN_UNARY_REWRITE: unique symbol = Symbol("prodkit.op.plan-unary-rewrite");

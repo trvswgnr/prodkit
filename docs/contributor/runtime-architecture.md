@@ -38,8 +38,8 @@ packages/op/src/index.ts          (Op factory, Op.run, re-exports)
   |   |-- runtime.ts              (Plan scheduling, generator driver, run context, cleanup settlement)
   |   |-- instructions.ts         (nested Op frames, Suspend, exit finalizer, CustomInstruction)
   |   |-- cleanup.ts              (generator close and registered finalizers)
-  |   |-- settlement.ts           (low-level abort settlement primitives)
-  |   |-- settlement-scope.ts     (nested plan and suspend settlement presets)
+  |   |-- abort-settlement.ts     (driver-level abort settlement mechanics)
+  |   |-- settlement.ts           (named nested plan and suspend settlement operations)
   |   |-- child-run-session.ts    (parent-to-child AbortSignal sessions)
   |   '-- fan-out.ts              (bounded and unbounded combinator child scheduling)
   |-- policy/                     (Policy.* constructors, retry-policy, plan rewriters)
@@ -58,7 +58,7 @@ small plan modules where surprise imports are regressions.
 <!-- architecture-check-closed: packages/op/src/di/env.ts -->
 <!-- architecture-check-closed: packages/op/src/di/plan.ts -->
 <!-- architecture-check-closed: packages/op/src/plan/bridge.ts -->
-<!-- architecture-check-closed: packages/op/src/execution/settlement-scope.ts -->
+<!-- architecture-check-closed: packages/op/src/execution/settlement.ts -->
 <!-- architecture-check-closed: packages/op/src/execution/child-run-session.ts -->
 
 **Partial edges** document specific architectural links. Each line must match source; hub modules
@@ -90,25 +90,25 @@ small plan modules where surprise imports are regressions.
 - `packages/op/src/plan/bridge.ts` imports `packages/op/src/core/surface.ts`
 - `packages/op/src/plan/bridge.ts` imports `packages/op/src/plan/model.ts`
 - `packages/op/src/plan/bridge.ts` imports `@prodkit/shared/runtime`
-- `packages/op/src/execution/settlement-scope.ts` imports `packages/op/src/execution/instructions.ts`
-- `packages/op/src/execution/settlement-scope.ts` imports `packages/op/src/plan/model.ts`
-- `packages/op/src/execution/settlement-scope.ts` imports `packages/op/src/execution/runtime.ts`
-- `packages/op/src/execution/settlement-scope.ts` imports `packages/op/src/execution/settlement.ts`
-- `packages/op/src/execution/settlement-scope.ts` imports `packages/op/src/errors.ts`
-- `packages/op/src/execution/settlement-scope.ts` imports `packages/op/src/result.ts`
-- `packages/op/src/execution/settlement-scope.ts` imports `@prodkit/shared/runtime`
+- `packages/op/src/execution/settlement.ts` imports `packages/op/src/execution/instructions.ts`
+- `packages/op/src/execution/settlement.ts` imports `packages/op/src/plan/model.ts`
+- `packages/op/src/execution/settlement.ts` imports `packages/op/src/execution/runtime.ts`
+- `packages/op/src/execution/settlement.ts` imports `packages/op/src/execution/abort-settlement.ts`
+- `packages/op/src/execution/settlement.ts` imports `packages/op/src/errors.ts`
+- `packages/op/src/execution/settlement.ts` imports `packages/op/src/result.ts`
+- `packages/op/src/execution/settlement.ts` imports `@prodkit/shared/runtime`
 - `packages/op/src/execution/child-run-session.ts` imports `packages/op/src/execution/runtime.ts`
-- `packages/op/src/execution/child-run-session.ts` imports `packages/op/src/execution/settlement.ts`
+- `packages/op/src/execution/child-run-session.ts` imports `packages/op/src/execution/abort-settlement.ts`
 - `packages/op/src/execution/child-run-session.ts` imports `packages/op/src/errors.ts`
 - `packages/op/src/execution/child-run-session.ts` imports `packages/op/src/result.ts`
 - `packages/op/src/execution/child-run-session.ts` imports `@prodkit/shared/runtime`
-- `packages/op/src/plan/combinators.ts` imports `packages/op/src/execution/settlement-scope.ts`
+- `packages/op/src/plan/combinators.ts` imports `packages/op/src/execution/settlement.ts`
 - `packages/op/src/execution/fan-out.ts` imports `packages/op/src/execution/child-run-session.ts`
-- `packages/op/src/execution/fan-out.ts` imports `packages/op/src/execution/settlement-scope.ts`
-- `packages/op/src/di/env.ts` imports `packages/op/src/execution/settlement-scope.ts`
-- `packages/op/src/di/plan.ts` imports `packages/op/src/execution/settlement-scope.ts`
+- `packages/op/src/execution/fan-out.ts` imports `packages/op/src/execution/settlement.ts`
+- `packages/op/src/di/env.ts` imports `packages/op/src/execution/settlement.ts`
+- `packages/op/src/di/plan.ts` imports `packages/op/src/execution/settlement.ts`
 - `packages/op/src/policy/plan.ts` imports `packages/op/src/execution/child-run-session.ts`
-- `packages/op/src/policy/plan.ts` imports `packages/op/src/execution/settlement-scope.ts`
+- `packages/op/src/policy/plan.ts` imports `packages/op/src/execution/settlement.ts`
 - `packages/op/src/execution/runtime.ts` imports `packages/op/src/plan/model.ts`
 - `packages/op/src/execution/runtime.ts` imports `@prodkit/shared/runtime`
 - `packages/op/src/plan/model.ts` imports `packages/op/src/execution/runtime.ts`
@@ -158,21 +158,22 @@ Built-in policies (retry, timeout, cancel) attach on the op value **before** `.r
 
 ## Abort settlement
 
-Low-level primitives live in `packages/op/src/execution/settlement.ts`, including
+Driver-level primitives live in `packages/op/src/execution/abort-settlement.ts`, including
 `raceInFlightAfterInterrupt` for the cooperative-interrupt then macrotimer-fallback window.
 Parent-to-child signal cascade and Policy race orchestration use `ChildRunSession` in
 `packages/op/src/execution/child-run-session.ts` (`isolated`, `pool`, `boundCancel`, `raceTimeout`,
 `raceBoundCancel`). Combinator fan-out drives children through `driveFanOutPlans` in
-`packages/op/src/execution/fan-out.ts`. Nested plan and suspend choreography uses `Settlement` presets in
-`packages/op/src/execution/settlement-scope.ts` so call sites declare one intent instead of pairing
-runtime `executePlan` settlement args with `withAbortDrain`.
+`packages/op/src/execution/fan-out.ts`. Contributor call sites use the named `Settlement` operations
+in `packages/op/src/execution/settlement.ts` instead of pairing runtime `executePlan` settlement
+arguments with `withAbortDrain`.
 
-| Preset | Typical use | Notes |
+| Operation | Typical use | Notes |
 | --- | --- | --- |
-| `cooperative` | `Op.allSettled` fan-out children | `passThrough` launch; no drain marker |
-| `rejecting` | DI lazy factory resolve | `awaitWork` rejects promptly on abort |
-| `interrupting` | Fan-out children, `Policy.timeout` inner nested plan | Interrupt launch; no drain marker |
-| `interruptingAndDraining` | Combinators, `DI.provide`, `Policy.cancel` suspend | Interrupt launch plus drain observation |
+| `Settlement.cooperative.runPlan` | `Op.allSettled` fan-out children | Pass-through launch |
+| `Settlement.rejecting.awaitWork` | DI lazy factory resolve | Rejects promptly on abort |
+| `Settlement.interrupting.runPlan` | Fan-out children, `Policy.timeout` inner nested plan | Interrupt launch |
+| `Settlement.interruptingAndDraining.suspend` | Combinators, `Policy.cancel` | Drain observed work after outer interrupt |
+| `Settlement.interruptingAndDraining.suspendPlan` | `DI.provide` | Interrupt nested launch and drain after outer interrupt |
 
 `settlementForSuspendedWork` still upgrades `interruptOnAbort` to `interruptAndDrainOnAbort` when the
 suspend callback returns drain-marked work. Combinators still wait for loser finalization per
@@ -260,7 +261,7 @@ Extension-owned plan nodes (for example `providePlan` in `@prodkit/op/di`) use t
    `resolve(context)` reads bindings from `context.extensions`.
 2. **`DI.provide(op, bindings)`** (`providePlan` / `provideOp` in `packages/op/src/di/plan.ts`; env in `packages/op/src/di/env.ts`)
    is a plan-backed op (`makeUnboundPlanOp`) whose `providePlan` node executes through
-   `Settlement.suspendPlan(SettlementPresets.interruptingAndDraining, ...)` and extends
+   `Settlement.interruptingAndDraining.suspendPlan(...)` and extends
    `context.extensions` with the binding `Map` under an internal extension key.
    Policy attach rewrites the inner source via `providePlan(source.rewrite(rewriter), bindings)`.
 3. **Metadata.** Provided dependencies block bare `.run()` until satisfied via `ProvidedMeta`
@@ -313,8 +314,8 @@ and enforce ordering contracts documented in `op-invariants.md`. `Op.settle` is 
 `settlePlan` wrapper with `AbortSettlement.passThrough`. `Op.all`, `Op.any`, and `Op.race` wait for
 aborted sibling finalization before the parent `run()` settles
 ([ADR 0004](../adr/0004-combinators-wait-for-loser-finalization.md)). Interrupt-on-abort fan-out
-uses `executePlan(..., interruptOnAbortSettlement)` so aborted losers still unwind when they never observe
-the signal. Fan-out and provision suspends wrap their returned work with `withAbortDrain(...)` so outer
+uses `Settlement.interrupting.runPlan(...)` so aborted losers still unwind when they never observe
+the signal. Fan-out and provision suspends use `Settlement.interruptingAndDraining` so outer
 `Policy.timeout` can drain in-flight nested work before returning `TimeoutError`.
 
 ## Driver loop (call flow)

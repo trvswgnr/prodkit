@@ -3,7 +3,7 @@ import { Result, type Err } from "../result.js";
 import type { RunContext } from "./runtime.js";
 import { ChildRunSession } from "./child-run-session.js";
 import { type Plan } from "../plan/model.js";
-import { Settlement } from "./settlement-scope.js";
+import { Settlement } from "./settlement.js";
 import { unsafeCoerce } from "@prodkit/shared/runtime";
 
 type ExecuteChildPlan = (
@@ -135,7 +135,7 @@ export function collectAllOk<T, E>(
 }
 
 const executeInterruptingPlan: ExecuteChildPlan = (plan, context) =>
-  Settlement.interrupting(context.signal).runPlan(plan, context);
+  Settlement.interrupting.runPlan(plan, context);
 
 async function driveAllUnboundedPlans<T, E>(
   plans: readonly Plan<T, E, unknown>[],
@@ -191,7 +191,7 @@ export async function driveAllPlans<T, E>(
 }
 
 export const executeCooperativePlan: ExecuteChildPlan = (plan, context) =>
-  Settlement.cooperative(context.signal).runPlan(plan, context);
+  Settlement.cooperative.runPlan(plan, context);
 
 export function collectAllSettled<T, E>(
   results: ReadonlyArray<Result<T, E | UnhandledException> | undefined>,

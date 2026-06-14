@@ -1,7 +1,7 @@
 import { UnhandledException } from "../errors.js";
 import { Result } from "../result.js";
 import { SuspendInstruction } from "../execution/instructions.js";
-import { Settlement, SettlementPresets } from "../execution/settlement-scope.js";
+import { Settlement } from "../execution/settlement.js";
 import type { RunContext } from "../execution/runtime.js";
 import { createPlan, createUnaryPlan, type Plan } from "./model.js";
 import {
@@ -19,10 +19,10 @@ export function allPlan<T, E, M>(
 
   return createPlan(
     function* () {
-      const result: Result<T[], E | UnhandledException> = yield* Settlement.suspendObservedWork(
-        SettlementPresets.interruptingAndDraining,
-        (outerContext) => driveAllPlans(snapshot, outerContext, concurrency),
-      );
+      const result: Result<T[], E | UnhandledException> =
+        yield* Settlement.interruptingAndDraining.suspend((outerContext) =>
+          driveAllPlans(snapshot, outerContext, concurrency),
+        );
 
       if (result.isErr()) return yield* result;
       return result.value;
@@ -42,10 +42,10 @@ export function racePlan<T, E, M>(children: readonly Plan<T, E, M>[]): Plan<T, E
 
   return createPlan(
     function* () {
-      const result: Result<T, E | UnhandledException> = yield* Settlement.suspendObservedWork(
-        SettlementPresets.interruptingAndDraining,
-        (outerContext) => driveRacePlans(snapshot, outerContext),
-      );
+      const result: Result<T, E | UnhandledException> =
+        yield* Settlement.interruptingAndDraining.suspend((outerContext) =>
+          driveRacePlans(snapshot, outerContext),
+        );
 
       if (result.isErr()) return yield* result;
       return result.value;
@@ -61,10 +61,10 @@ export function anyPlan<T, E, M>(children: readonly Plan<T, E, M>[]): Plan<T, E,
 
   return createPlan(
     function* () {
-      const result: Result<T, E | UnhandledException> = yield* Settlement.suspendObservedWork(
-        SettlementPresets.interruptingAndDraining,
-        (outerContext) => driveAnyPlans(snapshot, outerContext),
-      );
+      const result: Result<T, E | UnhandledException> =
+        yield* Settlement.interruptingAndDraining.suspend((outerContext) =>
+          driveAnyPlans(snapshot, outerContext),
+        );
 
       if (result.isErr()) return yield* result;
       return result.value;
