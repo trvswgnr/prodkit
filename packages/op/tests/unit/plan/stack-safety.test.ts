@@ -5,11 +5,43 @@ import { Policy } from "../../../src/policy/index.js";
 /**
  * Regression coverage for deep-composition stack safety.
  *
- * The generator path trampolines through the async driver and is stack-safe.
- * The fluent / plan-wrapping path should also bind and execute deep valid
- * compositions without treating stack depth as a runtime fault.
+ * Recursive yield* composition is represented as child iterator frames that
+ * the driver walks iteratively. The loop case below is intentionally shallow
+ * delegation and covers repeated sequencing instead of recursive nesting.
  */
 describe("deep composition stack safety", () => {
+  test("recursively nested yield* returns the correct value at depth 20_000", async () => {
+    const depth = 20_000;
+    const nested = (remaining: number): Op<number, never, []> =>
+      Op(function* () {
+        if (remaining === 0) return 0;
+        return 1 + (yield* nested(remaining - 1));
+      });
+
+    const result = await nested(depth).run();
+    assert(result.isOk(), "deep nested yield* composition should succeed");
+    expect(result.value).toBe(depth);
+  });
+
+  test("recursively nested yield* stays stack-safe when every level suspends", async () => {
+    const depth = 20_000;
+    const nested = (remaining: number): Op<number, never, []> =>
+      Op(function* () {
+        if (remaining === 0) return 0;
+        yield* Op.try(
+          () =>
+            new Promise<void>((resolve) => {
+              queueMicrotask(resolve);
+            }),
+        );
+        return 1 + (yield* nested(remaining - 1));
+      });
+
+    const result = await nested(depth).run();
+    assert(result.isOk(), "deep async nested yield* composition should succeed");
+    expect(result.value).toBe(depth);
+  });
+
   test("generator yield* loop returns the correct value at depth 50_000", async () => {
     const depth = 50_000;
     const op = Op(function* () {

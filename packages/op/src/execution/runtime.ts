@@ -1,12 +1,14 @@
 import { CLEANUP_FAILURE_MESSAGE, ErrorGroup, UnhandledException } from "../errors.js";
 import { Result } from "../result.js";
+import { unsafeCoerce } from "@prodkit/shared/runtime";
 import {
   CUSTOM_INSTRUCTION_META,
   isErrInstruction,
+  NestedOpInstruction,
   RegisterExitFinalizerInstruction,
   SuspendInstruction,
   type CustomInstruction,
-  type Instruction,
+  type RuntimeInstruction,
 } from "./instructions.js";
 import {
   AbortSettlement,
@@ -66,16 +68,22 @@ export async function drive<T, E, M>(
   return driveInternal(op, context, AbortSettlement.passThrough);
 }
 
-async function resumeSuspendedInstruction<T, E, M>(
+type RuntimeIterator<E, M> = Iterator<RuntimeInstruction<E, M>, unknown, unknown>;
+type RuntimeIteratorStep<E, M> = IteratorResult<RuntimeInstruction<E, M>, unknown>;
+type RuntimeIteratorFrame<E, M> = {
+  readonly iterator: RuntimeIterator<E, M>;
+  readonly finalizerArgs: readonly unknown[] | undefined;
+};
+
+async function resolveSuspendedInstruction(
   instruction: SuspendInstruction,
-  iterator: Iterator<Instruction<E, M>, T, unknown>,
   context: RunContext<readonly unknown[]>,
   driveSettlement: AbortSettlement,
-): Promise<IteratorResult<Instruction<E, M>, T>> {
+): Promise<unknown> {
   const suspendWork = instruction.suspend(context);
   const { settlement, suspended } = settlementForSuspendedWork(driveSettlement, suspendWork);
   try {
-    return iterator.next(await awaitWithAbort(suspended, context.signal, settlement));
+    return await awaitWithAbort(suspended, context.signal, settlement);
   } catch (cause) {
     if (settlement.kind === "interruptAndDrainOnAbort") {
       await drainInFlightWork(suspended);
@@ -84,28 +92,25 @@ async function resumeSuspendedInstruction<T, E, M>(
   }
 }
 
-async function resumeCustomInstruction<T, E, M>(
+async function resolveCustomInstruction(
   instruction: CustomInstruction<unknown, unknown>,
-  iterator: Iterator<Instruction<E, M>, T, unknown>,
   context: RunContext<readonly unknown[]>,
   driveSettlement: AbortSettlement,
-): Promise<IteratorResult<Instruction<E, M>, T>> {
-  return iterator.next(
-    await awaitWithAbort(
-      Promise.resolve(instruction.resolve(context)),
-      context.signal,
-      driveSettlement,
-    ),
+): Promise<unknown> {
+  return awaitWithAbort(
+    Promise.resolve(instruction.resolve(context)),
+    context.signal,
+    driveSettlement,
   );
 }
 
-function registerExitFinalizerInstruction<T, E, M>(
+function registerExitFinalizerInstruction(
   instruction: RegisterExitFinalizerInstruction,
-  iterator: Iterator<Instruction<E, M>, T, unknown>,
   runArgs: readonly unknown[],
+  frameArgs: readonly unknown[] | undefined,
   finalizers: ExitFinalizer[],
-): IteratorResult<Instruction<E, M>, T> {
-  const argsAtRegistration = instruction.args ?? runArgs;
+) {
+  const argsAtRegistration = instruction.args ?? frameArgs ?? runArgs;
   finalizers.push((ctx) =>
     instruction.finalize({
       signal: ctx.signal,
@@ -113,16 +118,69 @@ function registerExitFinalizerInstruction<T, E, M>(
       args: argsAtRegistration,
     }),
   );
-  return iterator.next(undefined);
+}
+
+function throwIntoIterator<E, M>(
+  iterator: RuntimeIterator<E, M>,
+  cause: unknown,
+): RuntimeIteratorStep<E, M> {
+  if (iterator.throw === undefined) throw cause;
+  return iterator.throw(cause);
+}
+
+function advanceIteratorFrames<E, M>(
+  frames: RuntimeIteratorFrame<E, M>[],
+  throwing: boolean,
+  initialValue: unknown,
+): RuntimeIteratorStep<E, M> {
+  let value = initialValue;
+
+  while (true) {
+    const frame = frames[frames.length - 1];
+    if (frame === undefined) {
+      throw new Error("Nested Op iterator stack lost its current frame");
+    }
+
+    try {
+      return throwing ? throwIntoIterator(frame.iterator, value) : frame.iterator.next(value);
+    } catch (cause) {
+      if (frames.length === 1) throw cause;
+      frames.pop();
+      throwing = true;
+      value = cause;
+    }
+  }
+}
+
+function enterNestedFrame<E, M>(
+  frames: RuntimeIteratorFrame<E, M>[],
+  parent: RuntimeIteratorFrame<E, M>,
+  instruction: NestedOpInstruction<unknown, E, M>,
+): RuntimeIteratorStep<E, M> {
+  let iterator: RuntimeIterator<E, M>;
+  try {
+    iterator = instruction.iterate();
+  } catch (cause) {
+    return advanceIteratorFrames(frames, true, cause);
+  }
+
+  frames.push({
+    iterator,
+    finalizerArgs: instruction.finalizerArgs ?? parent.finalizerArgs,
+  });
+  return advanceIteratorFrames(frames, false, undefined);
 }
 
 async function settleIteratorWithCleanup<T, E, M>(
-  iter: Iterator<Instruction<E, M>, T, unknown>,
+  frames: readonly RuntimeIteratorFrame<E, M>[],
   context: RunContext<readonly unknown[]>,
   finalizers: readonly ExitFinalizer[],
   result: Result<T, E | UnhandledException>,
 ): Promise<Result<T, E | UnhandledException>> {
-  closeGenerator(iter);
+  for (let index = frames.length - 1; index >= 0; index -= 1) {
+    const frame = frames[index];
+    if (frame !== undefined) closeGenerator(frame.iterator);
+  }
   const exitCtx: ExitContext<T, E, readonly unknown[]> = {
     signal: context.signal,
     args: context.args,
@@ -139,29 +197,58 @@ async function settleIteratorWithCleanup<T, E, M>(
 }
 
 export async function driveIterator<T, E, M>(
-  iter: Iterator<Instruction<E, M>, T, unknown>,
+  iter: Iterator<RuntimeInstruction<E, M>, T, unknown>,
   context: RunContext<readonly unknown[]>,
   settlement: AbortSettlement = AbortSettlement.passThrough,
 ): Promise<Result<T, E | UnhandledException>> {
   const finalizers: ExitFinalizer[] = [];
+  const rootFrame: RuntimeIteratorFrame<E, M> = {
+    iterator: iter,
+    finalizerArgs: undefined,
+  };
+  const frames: RuntimeIteratorFrame<E, M>[] = [rootFrame];
   const settle = (result: Result<T, E | UnhandledException>) =>
-    settleIteratorWithCleanup(iter, context, finalizers, result);
+    settleIteratorWithCleanup(frames, context, finalizers, result);
 
   try {
-    let step = iter.next();
-    while (!step.done) {
+    let step = advanceIteratorFrames(frames, false, undefined);
+    while (true) {
+      const current = frames[frames.length - 1];
+      if (current === undefined) {
+        throw new Error("Nested Op iterator stack lost its current frame");
+      }
+
+      if (step.done) {
+        if (frames.length === 1) {
+          // SAFETY: only the root iterator remains, so its completed value has the declared T.
+          const value = await unsafeCoerce<T>(step.value);
+          return settle(Result.ok(value));
+        }
+
+        frames.pop();
+        step = advanceIteratorFrames(frames, false, step.value);
+        continue;
+      }
+
       try {
         if (step.value instanceof SuspendInstruction) {
-          step = await resumeSuspendedInstruction(step.value, iter, context, settlement);
+          const value = await resolveSuspendedInstruction(step.value, context, settlement);
+          step = advanceIteratorFrames(frames, false, value);
           continue;
         }
         const instr = step.value;
         if (instr instanceof RegisterExitFinalizerInstruction) {
-          step = registerExitFinalizerInstruction(instr, iter, context.args, finalizers);
+          registerExitFinalizerInstruction(instr, context.args, current.finalizerArgs, finalizers);
+          step = advanceIteratorFrames(frames, false, undefined);
+          continue;
+        }
+        if (instr instanceof NestedOpInstruction) {
+          step = enterNestedFrame(frames, current, instr);
           continue;
         }
         if (isCustomInstruction(instr)) {
-          step = await resumeCustomInstruction(instr, iter, context, settlement);
+          const value = await resolveCustomInstruction(instr, context, settlement);
+          step = advanceIteratorFrames(frames, false, value);
           continue;
         }
         if (isErrInstruction<E>(instr)) {
@@ -176,8 +263,6 @@ export async function driveIterator<T, E, M>(
         return settle(Result.err(unhandled));
       }
     }
-    const value = await step.value;
-    return settle(Result.ok(value));
   } catch (cause) {
     const unhandled = new UnhandledException({ cause });
     return settle(Result.err(unhandled));

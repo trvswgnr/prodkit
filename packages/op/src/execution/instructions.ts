@@ -69,11 +69,31 @@ export class RegisterExitFinalizerInstruction extends Tagged("RegisterExitFinali
   }
 }
 
+/** Internal driver instruction for direct Op-to-Op generator delegation. */
+export class NestedOpInstruction<T, E, M = EmptyMeta> extends Tagged("NestedOpInstruction") {
+  readonly iterate: () => Generator<RuntimeInstruction<E, M>, T, unknown>;
+  readonly finalizerArgs: readonly unknown[] | undefined;
+
+  constructor(
+    iterate: () => Generator<RuntimeInstruction<E, M>, T, unknown>,
+    finalizerArgs?: readonly unknown[],
+  ) {
+    super();
+    this.iterate = iterate;
+    this.finalizerArgs = finalizerArgs;
+  }
+}
+
 export type Instruction<E, M = EmptyMeta> =
   | Err<unknown, E>
   | SuspendInstruction
   | RegisterExitFinalizerInstruction
   | CustomInstruction<unknown, M>;
+
+/** Driver instruction set. Kept separate so NestedOpInstruction is not part of the extension API. */
+export type RuntimeInstruction<E, M = EmptyMeta> =
+  | Instruction<E, M>
+  | NestedOpInstruction<unknown, E, M>;
 
 export function isErrInstruction<E>(value: unknown): value is Err<unknown, E> {
   return (

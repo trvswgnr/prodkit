@@ -3,14 +3,14 @@ import { Result } from "../result.js";
 import { unsafeCoerce } from "@prodkit/shared/runtime";
 import type { TrackedErr } from "../core/surface.js";
 import type { RunContext } from "../execution/runtime.js";
-import type { Instruction } from "../execution/instructions.js";
+import type { RuntimeInstruction } from "../execution/instructions.js";
 import type { AbortSettlement } from "../execution/settlement.js";
 import type { EmptyMeta } from "../core/metadata.js";
 import { executePlan } from "./execute.js";
 
 const PLAN_UNARY_REWRITE: unique symbol = Symbol("prodkit.op.plan-unary-rewrite");
 
-type PlanInstruction<_E, M> = Instruction<unknown, M>;
+type PlanInstruction<_E, M> = RuntimeInstruction<unknown, M>;
 type PlanIterator<T, E, M> = Generator<PlanInstruction<E, M>, T, unknown>;
 type ErasedPlan = Plan<unknown, unknown, unknown>;
 type UnaryPlanRewrite = {
@@ -150,7 +150,7 @@ function rewritePlanStackSafe(source: ErasedPlan, rewriter: PlanRewriter): Erase
 }
 
 export function genPlan<T, E, M>(
-  gen: () => Generator<Instruction<E, M>, T, unknown>,
+  gen: () => Generator<RuntimeInstruction<E, M>, T, unknown>,
 ): Plan<T, TrackedErr<E>, M> {
   return createPlan(() => gen());
 }

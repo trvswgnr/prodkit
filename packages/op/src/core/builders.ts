@@ -7,10 +7,15 @@ import type {
   InferInstructionErr,
   InferInstructionMeta,
   Instruction,
+  RuntimeInstruction,
 } from "../execution/instructions.js";
 import type { EmptyMeta } from "./metadata.js";
 import type { Op } from "../index.js";
-import { RegisterExitFinalizerInstruction, SuspendInstruction } from "../execution/instructions.js";
+import {
+  NestedOpInstruction,
+  RegisterExitFinalizerInstruction,
+  SuspendInstruction,
+} from "../execution/instructions.js";
 import { Result } from "../result.js";
 import { makeCoreOp } from "./generator.js";
 import { isAwaited, sleepWithSignal, unsafeCoerce } from "@prodkit/shared/runtime";
@@ -78,13 +83,21 @@ export function _try<T, E = UnhandledException>(
 }
 
 function bindArityArgsToFinalizers<T, M>(
-  iterator: Generator<Instruction<unknown, M>, T, unknown>,
+  iterator: Generator<RuntimeInstruction<unknown, M>, T, unknown>,
   args: readonly unknown[],
-): Generator<Instruction<unknown, M>, T, unknown> {
+): Generator<RuntimeInstruction<unknown, M>, T, unknown> {
   const bindStep = (
-    step: IteratorResult<Instruction<unknown, M>, T>,
-  ): IteratorResult<Instruction<unknown, M>, T> => {
+    step: IteratorResult<RuntimeInstruction<unknown, M>, T>,
+  ): IteratorResult<RuntimeInstruction<unknown, M>, T> => {
     if (step.done) return step;
+    if (step.value instanceof NestedOpInstruction) {
+      const nested = step.value;
+      if (nested.finalizerArgs !== undefined) return step;
+      return {
+        done: false,
+        value: new NestedOpInstruction(nested.iterate, args),
+      };
+    }
     if (!(step.value instanceof RegisterExitFinalizerInstruction)) return step;
     if (step.value.args !== undefined) return step;
     return {
@@ -115,7 +128,7 @@ export function fromGenFn<Y extends Instruction<unknown, unknown>, T, A>(
     genPlan(() =>
       // SAFETY: user generators use instruction subtype Y; runtime iterator is the internal Instruction supertype.
       unsafeCoerce<
-        Generator<Instruction<InferInstructionErr<Y>, InferInstructionMeta<Y>>, T, unknown>
+        Generator<RuntimeInstruction<InferInstructionErr<Y>, InferInstructionMeta<Y>>, T, unknown>
       >(bindArityArgsToFinalizers(f(...args), args)),
     );
 

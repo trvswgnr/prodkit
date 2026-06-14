@@ -38,7 +38,7 @@ packages/op/src/index.ts          (Op factory, Op.run, re-exports)
   |   '-- combinators.ts          (all, any, race, allSettled, settle plan nodes)
   |-- execution/
   |   |-- runtime.ts              (createRunContext, drive, runOp, RunContext, ExitContext)
-  |   |-- instructions.ts         (Suspend, exit finalizer, CustomInstruction protocol)
+  |   |-- instructions.ts         (nested Op frames, Suspend, exit finalizer, CustomInstruction)
   |   |-- cleanup.ts              (generator close and registered finalizers)
   |   |-- settlement.ts           (low-level abort settlement primitives)
   |   |-- settlement-scope.ts     (nested plan and suspend settlement presets)
@@ -69,6 +69,7 @@ small plan modules where surprise imports are regressions.
 (for example `shell.ts`) may import more than the list shows.
 
 - `packages/op/src/core/shell.ts` imports `packages/op/src/plan/factory-chain.ts`
+- `packages/op/src/core/shell.ts` imports `packages/op/src/execution/instructions.ts`
 - `packages/op/src/di/types.ts` imports `packages/op/src/core/metadata.ts`
 - `packages/op/src/di/types.ts` imports `packages/op/src/index.ts`
 - `packages/op/src/di/types.ts` imports `packages/op/src/di/index.ts`
@@ -120,6 +121,7 @@ small plan modules where surprise imports are regressions.
 - `packages/op/src/di/plan.ts` imports `packages/op/src/execution/settlement-scope.ts`
 - `packages/op/src/policy/plan.ts` imports `packages/op/src/execution/child-run-session.ts`
 - `packages/op/src/policy/plan.ts` imports `packages/op/src/execution/settlement-scope.ts`
+- `packages/op/src/execution/runtime.ts` imports `@prodkit/shared/runtime`
 
 ## From `Op.run()` to `drive()`
 
@@ -133,7 +135,9 @@ small plan modules where surprise imports are regressions.
    `bindArityArgsToFinalizers`, and exposes the callable through `makeUnboundPlanOp`
    ([ADR 0001](../adr/0001-core-nullary-vs-lifted-arity.md)).
 3. **Nullary execution.** `drive` only accepts `Op<T, E, [], M>`: a nullary op whose body is a
-   generator function `() => Generator<Instruction, T>`. Everything that participates in `yield*`
+   generator function `() => Generator<Instruction, T>`. Direct `yield* childOp` composition yields
+   a `NestedOpInstruction`; the driver pushes the child iterator onto an explicit frame stack
+   instead of using recursive native iterator delegation. Everything that participates in `yield*`
    composition (policies, combinators, `flatMap`, DI `provide`) runs at this arity internally;
    lifting re-attaches tuple call signatures at the public boundary.
 4. **Settlement.** `drive` walks instructions until the generator completes or yields a terminal
@@ -169,19 +173,25 @@ suspend callback returns drain-marked work. Combinators still wait for loser fin
 
 ## Instruction lifecycle
 
-Each `yield` from an op generator produces an `Instruction` discriminant. `drive` in
-`packages/op/src/execution/runtime.ts` dispatches on the yielded value:
+Each public generator `yield` produces an `Instruction` discriminant. The internal
+`RuntimeInstruction` union adds `NestedOpInstruction` for direct Op-to-Op delegation without
+widening the exported custom-instruction protocol. `drive` in `packages/op/src/execution/runtime.ts`
+dispatches on the yielded value:
 
 | Yielded value | Driver action |
 | --- | --- |
+| `NestedOpInstruction` | Push the child iterator and nearest arity-bound finalizer args onto the current run's explicit frame stack; resume the parent with the child value when it completes |
 | `SuspendInstruction` | Await `suspend(runContext)` (abort settlement follows the enclosing `executePlan`; work wrapped with `withAbortDrain(...)` drains if abort interrupts the await), resume generator with the settled value |
 | `RegisterExitFinalizerInstruction` | Push `finalize` onto a per-run LIFO stack (optional frozen `args` for arity-bound defers) |
 | `CustomInstruction` | Await `resolve(runContext)` and resume (extension hook; see DI below) |
 | `Result.err(...)` (`Err` instruction) | Short-circuit to `Err` and run exit finalizers |
 | Anything else | `Err(UnhandledException)` for invalid yields |
 
-Suspends are how policies and combinators nest work: they call `executePlan` (with a
-`AbortSettlement` when interrupt-on-abort applies) on child plans with child or merged
+Direct generator composition uses nested iterator frames so every `yield*` level shares one
+`RunContext` and exit-finalizer stack. Synchronous child iterator throws are passed to parent
+iterators through `throw(...)`, preserving generator `try`/`catch` behavior. Suspends are how
+policies and combinators intentionally launch separate plan execution: they call `executePlan`
+(with an `AbortSettlement` when interrupt-on-abort applies) on child plans with child or merged
 `RunContext` values rather than blocking the outer generator thread.
 
 ## Policy wrappers (retry, timeout, cancel)
@@ -309,6 +319,7 @@ flowchart TD
   drive["drive(nullaryOp, context)"]
   next["iter.next()"]
   dispatch{"yielded instruction?"}
+  nested["NestedOp: push child iterator frame"]
   suspend["Suspend: await suspend(context)"]
   finalizer["RegisterExitFinalizer: push finalize"]
   custom["CustomInstruction: await resolve(context)"]
@@ -319,6 +330,7 @@ flowchart TD
   ok["Result.ok(value)"]
 
   run --> runOp --> drive --> next --> dispatch
+  dispatch -->|NestedOpInstruction| nested --> next
   dispatch -->|SuspendInstruction| suspend --> next
   dispatch -->|RegisterExitFinalizer| finalizer --> next
   dispatch -->|CustomInstruction| custom --> next
