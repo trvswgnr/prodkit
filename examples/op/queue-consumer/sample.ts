@@ -13,13 +13,6 @@ export type ConsumerRunOptions = {
   maxIterations?: number;
 };
 
-export type ConsumerRunSummary = {
-  batchesProcessed: number;
-  messagesSucceeded: number;
-  messagesFailed: number;
-  stoppedReason: "max-iterations" | "shutdown";
-};
-
 export type ConsumerDeps = {
   pollBatch: (batchSize: number, signal: AbortSignal) => Promise<QueueMessage[]>;
   processMessage: (message: QueueMessage, signal: AbortSignal) => Promise<void>;

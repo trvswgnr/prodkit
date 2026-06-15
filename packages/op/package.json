@@ -78,7 +78,6 @@
   "devDependencies": {
     "@prodkit/shared": "workspace:*",
     "@vitest/coverage-v8": "catalog:",
-    "esbuild": "^0.25.11",
     "fast-check": "4.7.0",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",

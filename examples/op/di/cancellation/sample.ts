@@ -15,12 +15,6 @@ export type LedgerConnection = {
   readonly connId: string;
 };
 
-export type AccountSnapshot = {
-  readonly accountId: string;
-  readonly balanceCents: number;
-  readonly connId: string;
-};
-
 export class LedgerConnectionService extends DI.Dependency(
   "LedgerConnectionService",
 )<LedgerConnection> {}

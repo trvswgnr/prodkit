@@ -8,7 +8,6 @@ export interface EnterContext<A = []> {
 
 export type EnterFn<A> = (ctx: EnterContext<A>) => unknown;
 export type ExitFn<T = unknown, E = unknown, A = []> = (ctx: ExitContext<T, E, A>) => unknown;
-export type LifecycleFn<T = unknown, E = unknown, A = []> = EnterFn<A> | ExitFn<T, E, A>;
 
 /** Widened hook for {@link builders.defer} where enclosing `Op` `T`/`E` are not inferred. */
 export type AnyExitFn = ExitFn<unknown, unknown, readonly unknown[]>;

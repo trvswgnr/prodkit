@@ -1,5 +1,4 @@
-import type { Scheduler, SchedulerAct, SchedulerReportItem } from "fast-check";
-import { vi } from "vitest";
+import type { Scheduler, SchedulerReportItem } from "fast-check";
 import { Op } from "../../src/index.js";
 import { Result } from "../../src/result.js";
 import type { UnhandledException } from "../../src/errors.js";
@@ -9,31 +8,6 @@ export const FC_SCHEDULER_ASSERT_OPTIONS = { numRuns: 100 };
 export type SchedulerRaceBranch = { kind: "ok"; value: number } | { kind: "err"; error: string };
 
 export type SchedulerAnyBranch = { kind: "ok"; value: number } | { kind: "fail"; error: string };
-
-export function buildWrapWithVitestTimersAct(s: Scheduler): SchedulerAct {
-  let timersAlreadyScheduled = false;
-
-  function scheduleTimersIfNeeded() {
-    if (timersAlreadyScheduled || vi.getTimerCount() === 0) {
-      return;
-    }
-
-    timersAlreadyScheduled = true;
-    void s.schedule(Promise.resolve("advance timers")).then(() => {
-      timersAlreadyScheduled = false;
-      vi.advanceTimersToNextTimer();
-      scheduleTimersIfNeeded();
-    });
-  }
-
-  return async (f) => {
-    try {
-      await f();
-    } finally {
-      scheduleTimersIfNeeded();
-    }
-  };
-}
 
 function parseBranchIndex(label: string, prefix: string): number | undefined {
   if (!label.startsWith(prefix)) return undefined;
