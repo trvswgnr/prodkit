@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Timeout settlement now preserves registered cleanup failures in an `ErrorGroup` after the timed
   child run unwinds. `TimeoutError` is always the primary entry; prior body errors and cleanup faults
   follow in their original order.
+- `Policy.cancel` now prevents pre-aborted work from starting and waits for registered teardown
+  after interrupting non-cooperative suspension. Cooperative results retain precedence, and cleanup
+  failures preserve the raw abort reason as the primary `ErrorGroup` entry.
 
 ## [0.2.0] - 2026-06-13
 

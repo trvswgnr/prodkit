@@ -15,4 +15,4 @@ Extended documentation for `@prodkit/op`. These files ship in the npm tarball al
 | [hkt.md](hkt.md) | `@prodkit/op/hkt` encoding and custom `Policy.define` checklist |
 | [internal.md](internal.md) | `@prodkit/op/internal` extension surface |
 | [lifecycle.md](lifecycle.md) | `Op.defer`, release, enter/exit hooks, finalizer ordering |
-| [cancellation.md](cancellation.md) | Cooperative cancellation contract and composed-run wiring |
+| [cancellation.md](cancellation.md) | Cancellation guarantees and composed-run wiring |

@@ -22,6 +22,11 @@ first entry. Cleanup failures follow in finalizer execution order, which is LIFO
 A successful body contributes no entry. The same group shape is used for one or many cleanup
 failures. `finalize` can be sync or async.
 
+When `Policy.cancel` interrupts the body, cleanup grouping uses the raw abort reason as the first
+entry rather than nesting it inside another `UnhandledException`. If cooperative work maps the
+abort to a typed error, that typed error remains first. Timeout cleanup grouping similarly keeps
+`TimeoutError` first.
+
 Use `Op.defer` / `.with(Policy.release(...))` / `.on("exit", ...)` for effectful cleanup. Native
 generator `finally` blocks are only best-effort synchronous finalization; yielded or async work
 inside `finally` is not driven during early exit. Register defer **before** risky steps:

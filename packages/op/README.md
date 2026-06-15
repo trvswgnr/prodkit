@@ -28,9 +28,9 @@ timeout, or cancellation with `.with(...)`.
 ## Project status
 
 `@prodkit/op` is a runtime-agnostic operation library: typed async composition, explicit failure,
-cooperative cancellation, lifecycle cleanup, and composable retry/timeout policy on a bounded public
-surface. It exists so production TypeScript services do not reinvent execution contracts one call
-site at a time. The package is in beta and strictly follows SemVer from v0.2.0 onward.
+cancellation, lifecycle cleanup, and composable retry/timeout policy on a bounded public surface.
+It exists so production TypeScript services do not reinvent execution contracts one call site at a
+time. The package is in beta and strictly follows SemVer from v0.2.0 onward.
 
 **Maintenance:** Small enough that your team can own it if the maintainer ever gets hit by a bus.
 The API surface is intentionally bounded so a team can understand, fork, or maintain the runtime
@@ -225,9 +225,10 @@ Policy export list and custom `Policy.define` HKT checklist: [docs/policy.md](do
 
 ### Cancellation
 
-Cancellation is cooperative: the runtime propagates `AbortSignal`; your `Op.try` callbacks and
-cancellable dependencies must observe it. Combinators abort siblings and wait for settlement;
-finalizers still run on timeout or external cancel. Full contract:
+Cancellation propagates `AbortSignal` to dependencies and interrupts non-cooperative work at `Op`
+suspension boundaries. A pre-aborted bound signal prevents wrapped work from starting. In-flight
+cooperative results are preserved, and registered finalizers finish before timeout or external
+cancel settles. Full contract:
 [docs/cancellation.md](docs/cancellation.md).
 
 ## Typed errors
@@ -307,7 +308,7 @@ extensions ship as subpath exports; the main `@prodkit/op` entry does not re-exp
 | [`@prodkit/op/hkt`](docs/hkt.md) | HKT helpers for custom policies |
 | [`@prodkit/op/internal`](docs/internal.md) | Extension-author surface |
 | [`docs/lifecycle.md`](docs/lifecycle.md) | `Op.defer`, release, enter/exit hooks, finalizer ordering |
-| [`docs/cancellation.md`](docs/cancellation.md) | Cooperative cancellation and composed-run wiring |
+| [`docs/cancellation.md`](docs/cancellation.md) | Cancellation guarantees and composed-run wiring |
 | [`docs/comparison.md`](docs/comparison.md) | Tradeoffs vs Promise, neverthrow, fp-ts, Effect |
 | [`docs/faq.md`](docs/faq.md) | Objection-handling FAQ |
 | [`docs/performance.md`](docs/performance.md) | Benchmark snapshot and bundle-size notes |
