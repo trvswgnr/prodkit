@@ -18,7 +18,6 @@ import {
 } from "./abort-settlement.js";
 import type { Op } from "../index.js";
 import type { Plan } from "../plan/model.js";
-import { EMPTY_TUPLE } from "../core/identity.js";
 import { closeGenerator, runFinalizersSafely, type ExitFinalizer } from "./cleanup.js";
 
 export { closeGenerator } from "./cleanup.js";
@@ -46,7 +45,7 @@ export interface ExitContext<T, E, A = []> {
 
 export function createRunContext(
   signal: AbortSignal,
-  args: readonly unknown[] = EMPTY_TUPLE,
+  args: readonly unknown[] = [],
   extensions: ReadonlyMap<unknown, unknown> = new Map(),
 ): RunContext<readonly unknown[]> {
   return { signal, args, extensions };

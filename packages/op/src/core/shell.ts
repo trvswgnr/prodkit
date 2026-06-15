@@ -1,6 +1,5 @@
 import { Result } from "../result.js";
 import { unsafeCoerce } from "@prodkit/shared/runtime";
-import { OP_BOUND_BRAND, OP_BRAND } from "./identity.js";
 import { createRunContext } from "../execution/runtime.js";
 import { Settlement } from "../execution/settlement.js";
 import {
@@ -260,8 +259,6 @@ function planOpShell<
         bindArgs(...args).execute(createRunContext(new AbortController().signal, args)),
       ...fluentMethodsForContext<T, E, A, M, Yieldable>(shellContext),
       [Symbol.iterator]: () => nestedPlanIterator(makeIterable().iterate),
-      [OP_BRAND]: true,
-      [OP_BOUND_BRAND]: bound,
       _tag: "Op" as const,
     }),
   );
@@ -318,8 +315,6 @@ export function makeSyncValueOp<T>(value: T): OpInterface<T, never, [], EmptyMet
       [OP_PLAN_BIND]: bindPlan,
       run: () => Promise.resolve(Result.ok(value)),
       [Symbol.iterator]: () => syncValueIterator(value),
-      [OP_BRAND]: true,
-      [OP_BOUND_BRAND]: true,
       _tag: "Op" as const,
     }),
   );

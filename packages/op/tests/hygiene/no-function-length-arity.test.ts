@@ -15,10 +15,8 @@ import {
  */
 const ARITY_GUARD_FILES = [
   "src/core/builders.ts",
-  "src/core/identity.ts",
   "src/core/shell.ts",
   "src/plan/transforms.ts",
-  "src/core/generator.ts",
   "src/di/plan.ts",
 ] as const;
 

@@ -6,7 +6,6 @@ import { makeBoundPlanOp } from "./shell.js";
 import { Result } from "../result.js";
 import type { EmptyMeta, MergeMeta } from "./metadata.js";
 import { unsafeCoerce } from "@prodkit/shared/runtime";
-import { EMPTY_TUPLE } from "./identity.js";
 import { ErrorGroup, UnhandledException } from "../errors.js";
 
 type MergeOpsMeta<Ops extends readonly AnyNullaryOp[]> = Ops extends readonly [
@@ -26,7 +25,7 @@ export function allOp<const Ops extends readonly AnyNullaryOp[]>(
   const snapshot = ops.slice();
   const bindAllPlan = () =>
     allPlan(
-      snapshot.map((op) => getPlan(op, EMPTY_TUPLE)),
+      snapshot.map((op) => getPlan(op, [])),
       concurrency,
     );
 
@@ -44,7 +43,7 @@ export function allSettledOp<const Ops extends readonly AnyNullaryOp[]>(
   const snapshot = ops.slice();
   const bindAllSettledPlan = () =>
     allSettledPlan(
-      snapshot.map((op) => getPlan(op, EMPTY_TUPLE)),
+      snapshot.map((op) => getPlan(op, [])),
       concurrency,
     );
 
@@ -55,7 +54,7 @@ export function allSettledOp<const Ops extends readonly AnyNullaryOp[]>(
 export function settleOp<T, E, M>(
   op: Op<T, E, [], M>,
 ): Op<Result<T, E | UnhandledException>, never, [], M> {
-  const bindSettlePlan = () => settlePlan(getPlan(op, EMPTY_TUPLE));
+  const bindSettlePlan = () => settlePlan(getPlan(op, []));
 
   // SAFETY: makeBoundPlanOp omits metadata in its return; bindSettlePlan was built from the typed source op.
   return unsafeCoerce(makeBoundPlanOp(bindSettlePlan));
@@ -81,7 +80,7 @@ export function anyOp<const Ops extends readonly AnyNullaryOp[]>(
   ops: Ops,
 ): Op<AnyOpOk<Ops>, AnyOpErr<Ops>, [], MergeOpsMeta<Ops>> {
   const snapshot = ops.slice();
-  const bindAnyPlan = () => anyPlan(snapshot.map((op) => getPlan(op, EMPTY_TUPLE)));
+  const bindAnyPlan = () => anyPlan(snapshot.map((op) => getPlan(op, [])));
 
   // SAFETY: makeBoundPlanOp omits merged metadata in its return; bindAnyPlan was built from the typed snapshot ops.
   return unsafeCoerce(makeBoundPlanOp(bindAnyPlan));
@@ -93,7 +92,7 @@ export function raceOp<const Ops extends readonly AnyNullaryOp[]>(
   ops: Ops,
 ): Op<RaceOpOk<Ops>, RaceOpErr<Ops>, [], MergeOpsMeta<Ops>> {
   const snapshot = ops.slice();
-  const bindRacePlan = () => racePlan(snapshot.map((op) => getPlan(op, EMPTY_TUPLE)));
+  const bindRacePlan = () => racePlan(snapshot.map((op) => getPlan(op, [])));
 
   // SAFETY: makeBoundPlanOp omits merged metadata in its return; bindRacePlan was built from the typed snapshot ops.
   return unsafeCoerce(makeBoundPlanOp(bindRacePlan));

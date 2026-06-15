@@ -2,7 +2,7 @@ import { NEVER, unsafeCoerce } from "@prodkit/shared/runtime";
 import { assert, describe, expect, test } from "vitest";
 import { closeGenerator, runFinalizersSafely } from "../../../src/execution/cleanup.js";
 import { createRunContext, drive } from "../../../src/execution/runtime.js";
-import { makeCoreOp } from "../../../src/core/generator.js";
+import { makeCoreOp } from "../../../src/core/builders.js";
 import {
   CUSTOM_INSTRUCTION_META,
   isErrInstruction,

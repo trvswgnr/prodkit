@@ -1,5 +1,5 @@
 import { UnhandledException } from "../errors.js";
-import { makeUnboundPlanOp, makeSyncValueOp } from "./shell.js";
+import { makeBoundPlanOp, makeUnboundPlanOp, makeSyncValueOp } from "./shell.js";
 import { genPlan } from "../plan/model.js";
 import type { AnyExitFn } from "./lifecycle.js";
 import type { AsArgs, OpInterface, TrackedErr } from "./surface.js";
@@ -17,8 +17,14 @@ import {
   SuspendInstruction,
 } from "../execution/instructions.js";
 import { Result } from "../result.js";
-import { makeCoreOp } from "./generator.js";
 import { isAwaited, sleepWithSignal, unsafeCoerce } from "@prodkit/shared/runtime";
+
+/** Builds a nullary generator leaf op backed by the internal plan model. */
+export function makeCoreOp<T, E, M = EmptyMeta>(
+  gen: () => Generator<Instruction<E, M>, T, unknown>,
+): Op<T, TrackedErr<E>, [], M> {
+  return makeBoundPlanOp(() => genPlan(gen));
+}
 
 export function succeed<T>(value: T | PromiseLike<T>): Op<Awaited<T>, never, [], EmptyMeta> {
   if (!isAwaited(value)) {

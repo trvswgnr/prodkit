@@ -1,7 +1,6 @@
 import { unsafeCoerce } from "@prodkit/shared/runtime";
 import { TimeoutError, UnhandledException } from "../errors.js";
 import { Result } from "../result.js";
-import { EMPTY_TUPLE } from "../core/identity.js";
 import { SuspendInstruction } from "../execution/instructions.js";
 import { Settlement } from "../execution/settlement.js";
 import type {
@@ -59,7 +58,7 @@ export function flatMapPlan<T, E, R extends AnyNullaryOp, M>(
     const second: Result<
       InferOpOk<R>,
       InferOpErr<R> | UnhandledException
-    > = yield* Settlement.cooperative.suspendPlan(getPlan(bind(first.value), EMPTY_TUPLE));
+    > = yield* Settlement.cooperative.suspendPlan(getPlan(bind(first.value), []));
 
     if (second.isErr()) return yield* second;
     return second.value;

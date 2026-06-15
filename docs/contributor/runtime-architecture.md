@@ -10,7 +10,7 @@ and documentation roles: [`docs/CONTEXT.md`](../CONTEXT.md).
 
 The internal layout names three distinct responsibilities:
 
-- `core/`: callable `Op` surface, construction, lifecycle types, identity, and metadata
+- `core/`: callable `Op` surface, construction, lifecycle types, and metadata
 - `plan/`: execution AST model, iterative composition and rewrite, Op bridge, and plan nodes
 - `execution/`: Plan scheduling, generator driver, instructions, cleanup, settlement, child signal wiring, and fan-out
 
@@ -20,17 +20,15 @@ execution settles through the same execution driver:
 ```text
 packages/op/src/index.ts          (Op factory, Op.run, re-exports)
   |-- core/
-  |   |-- builders.ts             (Op.of, Op.try, fromGenFn, Op.defer, ...)
+  |   |-- builders.ts             (Op.of, Op.try, fromGenFn, makeCoreOp, Op.defer, ...)
   |   |-- combinators.ts          (Op.all, Op.any, Op.race, Op.allSettled, Op.settle, ...)
   |   |-- shell.ts                (callable Op object and fluent methods)
   |   |-- surface.ts              (Op interfaces and inference helpers)
-  |   |-- generator.ts            (makeCoreOp: nullary generator leaf adapter)
-  |   |-- identity.ts             (brands, isOp, nullary coercion)
   |   |-- lifecycle.ts            (enter, exit, and release callback contracts)
   |   '-- metadata.ts             (EmptyMeta, Blocking, MergeMeta, IsRunnable)
   |-- plan/
   |   |-- model.ts                (Plan interface, iterative fluent materialization and rewrite)
-  |   |-- bridge.ts               (Op-to-Plan binding and lookup)
+  |   |-- bridge.ts               (Op-to-Plan binding)
   |   |-- transforms.ts           (map, flatMap, tap, mapErr, tapErr, recover)
   |   |-- lifecycle.ts            (enter and exit plan nodes)
   |   '-- combinators.ts          (all, any, race, allSettled, settle plan nodes)
@@ -87,7 +85,6 @@ small plan modules where surprise imports are regressions.
 - `packages/op/src/di/plan.ts` imports `packages/op/src/index.ts`
 - `packages/op/src/di/plan.ts` imports `@prodkit/shared/runtime`
 - `packages/op/src/plan/bridge.ts` imports `packages/op/src/index.ts`
-- `packages/op/src/plan/bridge.ts` imports `packages/op/src/core/identity.ts`
 - `packages/op/src/plan/bridge.ts` imports `packages/op/src/core/surface.ts`
 - `packages/op/src/plan/bridge.ts` imports `packages/op/src/plan/model.ts`
 - `packages/op/src/plan/bridge.ts` imports `@prodkit/shared/runtime`
@@ -136,9 +133,9 @@ The invariant and representative tests are in
    `packages/op/src/execution/runtime.ts` and converge on `driveIterator`. Tuple args flow into
    `RunContext.args` for enter/exit hooks; they are not an options bag
    ([ADR 0006](../adr/0006-run-args-only-fluent-policy-composition.md)).
-2. **Arity binding.** For generator-defined ops, `fromGenFn` in `core/builders.ts` wraps the user
-   generator in `makeCoreOp` once per `op(...args)` call, binds defer args via
-   `bindArityArgsToFinalizers`, and exposes the callable through `makeUnboundPlanOp`
+2. **Arity binding.** For generator-defined ops, `fromGenFn` in `core/builders.ts` binds the user
+   generator and defer args via `bindArityArgsToFinalizers`, then exposes the callable through
+   `makeUnboundPlanOp`
    ([ADR 0001](../adr/0001-core-nullary-vs-lifted-arity.md)).
 3. **Plan materialization.** `plan/model.ts` replays the fluent transform chain in call order,
    applying structural policy rewrites without recursively walking user-shaped depth.

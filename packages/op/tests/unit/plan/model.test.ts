@@ -1,4 +1,5 @@
 import { assert, describe, expect, test } from "vitest";
+import { unsafeCoerce } from "@prodkit/shared/runtime";
 import { Op } from "../../../src/index.js";
 import { runOp } from "../../../src/execution/runtime.js";
 import { createRunContext } from "../../../src/execution/runtime.js";
@@ -21,6 +22,11 @@ async function expectPlanMatchesRun<T, E>(op: Op<T, E, []>) {
 }
 
 describe("internal Plan leaves", () => {
+  test("rejects structurally fabricated ops without an internal plan binder", () => {
+    const customOp = unsafeCoerce<Op<number, never, []>>(() => customOp);
+    expect(() => getPlan(customOp, [])).toThrowError("Expected an Op created by @prodkit/op");
+  });
+
   test("Op.of leaf execution matches runOp", async () => {
     await expectPlanMatchesRun(Op.of(69));
   });

@@ -14,7 +14,7 @@ serve different consumers and stay as separate construction paths rather than on
 
 ## Decision
 
-- **`makeCoreOp`** (`packages/op/src/core/generator.ts`) builds nullary core ops from
+- **`makeCoreOp`** (`packages/op/src/core/builders.ts`) builds nullary core ops from
   generator leaves. Every leaf that participates in `yield*` / `drive()` still has a nullary
   iterator surface.
 - **Plan-backed Op shells** (`packages/op/src/core/shell.ts`) decorate a
@@ -43,9 +43,9 @@ policies compose on the intended inner work and the outer arity stays stable.
 
 ## Consequences
 
-- New core combinators should target plan nodes first, then expose arity through `makePlanOp` if
-  the operation is user-facing.
-- Brand and `Object.assign` coerces exist because TypeScript cannot infer the callable-plus-methods
-  intersection after `Object.assign`; that limitation is structural, not a missing refactor.
+- New core combinators should target plan nodes first, then expose arity through
+  `makeBoundPlanOp` or `makeUnboundPlanOp`.
+- `Object.assign` coerces exist because TypeScript cannot infer the callable-plus-methods
+  intersection after assignment; that limitation is structural, not a missing refactor.
 - `op-invariants.md` documents execution invariants for the nullary driver; this ADR documents why arity
   lifting is a separate layer.
