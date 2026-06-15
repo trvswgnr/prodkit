@@ -23,6 +23,10 @@ single import path.
 This matches the existing `package.json` `peerDependencies` and `exports` layout (see ADR 0008
 for subpath placement; the main entry still does not re-export peers).
 
+Package internals use the private `packages/op/src/result.ts` facade to keep the allowed
+`better-result` surface explicit. That internal boundary does not change the consumer split-import
+contract.
+
 ## Why not re-export from `@prodkit/op`
 
 Re-exports blur ownership: type identity, semver, and breaking changes for result types would

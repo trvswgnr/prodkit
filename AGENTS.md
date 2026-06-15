@@ -37,6 +37,7 @@ Read these before guessing repo structure or conventions:
 - Do not add runtime deprecation warnings for user-facing APIs; use JSDoc, docs, and changelog migration notes instead.
 - Prefers normalization only when inputs have an obvious safe interpretation; invalid inputs should surface at run time as `Err(UnhandledException)` with the validation error as `cause`.
 - Dislikes boolean flags and optional one-field option bags; prefer explicit named constructs that make uncommon behavior visible at the call site.
+- Prefers consolidating tiny one- or two-export modules unless they enforce a documented ownership or dependency boundary.
 
 ## Workflow defaults
 

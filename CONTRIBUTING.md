@@ -200,6 +200,9 @@ For module-to-test placement, start with [`docs/contributor/runtime-architecture
   - `di/` (dependency tokens, bindings, plan integration, and run-context environment)
   - `hkt.ts` (reusable HKT primitives for `@prodkit/op/hkt`)
   - `errors.ts`, `result.ts`, `tagged.ts` (shared domain contracts)
+- `result.ts` is the private internal facade for the allowed `better-result` surface (`Result` and
+  `Err`). Package internals import through it; consumers still import result primitives directly
+  from `better-result` as documented in ADR 0015.
 - `@prodkit/shared` (`packages/shared`, private): workspace globals, publishable tsconfig/vitest presets, and runtime primitives (`@prodkit/shared/runtime`). Publishable packages declare `"@prodkit/shared": "workspace:*"` and extend `@prodkit/shared/tsconfig/publishable`.
 - Test layout under `packages/op/tests/` mirrors runtime modules (see [`docs/contributor/runtime-architecture.md`](docs/contributor/runtime-architecture.md)):
   - `integration/index.test.ts` for public API contract coverage
