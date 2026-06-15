@@ -1,10 +1,49 @@
 import { describe, expect, test, assert, vi } from "vitest";
 import { _try } from "../../../src/core/builders.js";
+import { Op } from "../../../src/index.js";
 import { UnhandledException } from "../../../src/errors.js";
 import { Policy } from "../../../src/policy/index.js";
 import { neverSettling, settleOutcome } from "../../support/utils.js";
 
 describe("Policy.cancel", () => {
+  test("pre-aborted signal skips wrapped work while outer lifecycle hooks retain scope", async () => {
+    const controller = new AbortController();
+    const abortReason = new Error("already cancelled");
+    const body = vi.fn();
+    const innerEnter = vi.fn();
+    const acquire = vi.fn();
+    const release = vi.fn();
+    const outerEnter = vi.fn();
+    const outerExit = vi.fn();
+    controller.abort(abortReason);
+
+    const source = Op(function* () {
+      body();
+      return yield* Op(function* () {
+        acquire();
+        return 69;
+      })
+        .on("enter", innerEnter)
+        .with(Policy.release(release));
+    });
+
+    const result = await source
+      .with(Policy.cancel(controller.signal))
+      .on("enter", outerEnter)
+      .on("exit", outerExit)
+      .run();
+
+    assert(result.isErr(), "result should be Err");
+    assert(result.error instanceof UnhandledException);
+    expect(result.error.cause).toBe(abortReason);
+    expect(body).not.toHaveBeenCalled();
+    expect(innerEnter).not.toHaveBeenCalled();
+    expect(acquire).not.toHaveBeenCalled();
+    expect(release).not.toHaveBeenCalled();
+    expect(outerEnter).toHaveBeenCalledTimes(1);
+    expect(outerExit).toHaveBeenCalledTimes(1);
+  });
+
   test("passes a live signal into Op.try by default", async () => {
     const controller = new AbortController();
     let seenSignal: AbortSignal | undefined;
@@ -65,5 +104,15 @@ describe("Policy.cancel", () => {
     assert(result.isErr(), "result should be Err");
     assert(result.error instanceof UnhandledException);
     expect(result.error.cause).toBe(abortReason);
+  });
+
+  test("a result settled before bound abort remains unchanged", async () => {
+    const controller = new AbortController();
+    const result = await Op.of(69).with(Policy.cancel(controller.signal)).run();
+
+    controller.abort(new Error("too late"));
+
+    assert(result.isOk(), "result should be Ok");
+    expect(result.value).toBe(69);
   });
 });

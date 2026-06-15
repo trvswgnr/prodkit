@@ -93,14 +93,14 @@ function timeoutPlan<T, E, M>(
       return yield* Result.err(new UnhandledException({ cause }));
     }
 
-    const result: Result<T, E | UnhandledException | TimeoutError> = yield* new SuspendInstruction(
-      (outerContext) =>
+    const result: Result<T, E | UnhandledException | TimeoutError> =
+      yield* Settlement.abortOwned.suspend((outerContext) =>
         runWithTimeout(
           (context) => Settlement.interrupting.runPlan(source, context),
           timeoutMs,
           outerContext,
         ),
-    );
+      );
 
     if (result.isErr()) return yield* result;
     return result.value;
@@ -109,14 +109,14 @@ function timeoutPlan<T, E, M>(
 
 function cancelPlan<T, E, M>(source: Plan<T, E, M>, abortSignal: AbortSignal): Plan<T, E, M> {
   return createPlan(function* () {
-    const result: Result<T, E | UnhandledException> =
-      yield* Settlement.interruptingAndDraining.suspend((outerContext) =>
+    const result: Result<T, E | UnhandledException> = yield* Settlement.abortOwned.suspend(
+      (outerContext) =>
         runWithBoundCancel(
-          (context) => Settlement.cooperative.runPlan(source, context),
+          (context) => Settlement.interrupting.runPlan(source, context),
           abortSignal,
           outerContext,
         ),
-      );
+    );
 
     if (result.isErr()) return yield* result;
     return result.value;

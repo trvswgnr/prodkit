@@ -2,6 +2,7 @@ import { assert, describe, expect, test, vi } from "vitest";
 import { Op, TimeoutError, type ExitContext } from "../../../src/index.js";
 import { ErrorGroup, UnhandledException } from "../../../src/errors.js";
 import { Policy } from "../../../src/policy/index.js";
+import { deferredPromise, neverSettling } from "../../support/utils.js";
 
 describe('op.on("exit")', () => {
   test('.on("exit") runs finalizer after success', async () => {
@@ -203,6 +204,39 @@ describe('op.on("exit")', () => {
       assert(result.error.cause instanceof ErrorGroup, "cause should be ErrorGroup");
       expect(result.error.cause.errors[0]).toBeInstanceOf(TimeoutError);
       expect(result.error.cause.errors[1]).toBe(cleanupFault);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('Policy.cancel runs inner .on("exit") after interrupting non-cooperative work', async () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      const finalizeGate = deferredPromise<void>();
+      const finalizeStarted = vi.fn();
+      let settled = false;
+      const child = Op.try(neverSettling).on("exit", async () => {
+        finalizeStarted();
+        await finalizeGate.promise;
+      });
+      const runPromise = Op(function* () {
+        return yield* child;
+      })
+        .with(Policy.cancel(controller.signal))
+        .run();
+      void runPromise.then(() => {
+        settled = true;
+      });
+
+      controller.abort(new Error("cancelled"));
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(finalizeStarted).toHaveBeenCalledTimes(1);
+      expect(settled).toBe(false);
+
+      finalizeGate.resolve();
+      await runPromise;
     } finally {
       vi.useRealTimers();
     }

@@ -6,7 +6,6 @@ import {
   UnhandledException,
 } from "../errors.js";
 import { Result } from "../result.js";
-import { raceInFlightAfterInterrupt } from "./abort-settlement.js";
 import { createRunContext, type RunContext } from "./runtime.js";
 
 function watchParentAbort(
@@ -90,14 +89,14 @@ export function createFanOutChildren(parent: RunContext<readonly unknown[]>): Fa
 
 type BoundCancelChild = {
   readonly context: RunContext<readonly unknown[]>;
-  readonly boundAbort: Promise<void>;
   detach(): void;
 };
 
-function preserveCleanupFailureAfterTimeout<T, E>(
+function normalizeCleanupFailureAfterInterruption<T, E>(
   drainedResult: Result<T, E>,
-  timeoutError: TimeoutError,
-): Result<T, E | TimeoutError | UnhandledException> | undefined {
+  interruption: unknown,
+  unrelatedFailure: "prependInterruption" | "preserve",
+): Result<T, E | UnhandledException> | undefined {
   if (drainedResult.isOk()) return undefined;
 
   const error = drainedResult.error;
@@ -113,11 +112,10 @@ function preserveCleanupFailureAfterTimeout<T, E>(
   if (errors.length === 0) return undefined;
 
   const [first, ...rest] = errors;
-  const isTimeoutInterruption =
-    first === timeoutError || (UnhandledException.is(first) && first.cause === timeoutError);
-  const preservedErrors = isTimeoutInterruption
-    ? [timeoutError, ...rest]
-    : [timeoutError, ...errors];
+  const isInterruption =
+    first === interruption || (UnhandledException.is(first) && first.cause === interruption);
+  if (!isInterruption && unrelatedFailure === "preserve") return undefined;
+  const preservedErrors = isInterruption ? [interruption, ...rest] : [interruption, ...errors];
 
   return Result.err(
     new UnhandledException({
@@ -132,17 +130,8 @@ function createBoundCancelChild(
 ): BoundCancelChild {
   const controller = new AbortController();
 
-  let boundAborted = false;
-  let notifyBoundAbort!: () => void;
-  const boundAbort = new Promise<void>((resolve) => {
-    notifyBoundAbort = resolve;
-  });
-
   const onBoundAbort = () => {
-    if (boundAborted) return;
-    boundAborted = true;
-    controller.abort(boundSignal.reason);
-    notifyBoundAbort();
+    controller.abort(abortReason(boundSignal));
   };
 
   const outerWatch = watchParentAbort(parent.signal, (reason) => controller.abort(reason));
@@ -152,7 +141,6 @@ function createBoundCancelChild(
 
   return {
     context: createRunContext(controller.signal, parent.args, parent.extensions),
-    boundAbort,
     detach() {
       boundSignal.removeEventListener("abort", onBoundAbort);
       outerWatch.detach();
@@ -160,27 +148,25 @@ function createBoundCancelChild(
   };
 }
 
-export function runWithBoundCancel<T, E>(
+export async function runWithBoundCancel<T, E>(
   run: (context: RunContext<readonly unknown[]>) => Promise<Result<T, E | UnhandledException>>,
   boundSignal: AbortSignal,
   outerContext: RunContext<readonly unknown[]>,
 ): Promise<Result<T, E | UnhandledException>> {
+  if (boundSignal.aborted) {
+    return Result.err(new UnhandledException({ cause: abortReason(boundSignal) }));
+  }
+
   const child = createBoundCancelChild(boundSignal, outerContext);
-  const runPromise = run(child.context);
-  const firstSettlement = Promise.race([
-    runPromise.then(() => "run" as const),
-    child.boundAbort.then(() => "boundAbort" as const),
-  ]);
+  try {
+    const result = await run(child.context);
+    if (!boundSignal.aborted) return result;
 
-  return firstSettlement
-    .then((winner) => {
-      if (winner === "run") return runPromise;
-
-      return raceInFlightAfterInterrupt(runPromise, boundSignal.reason).catch((reason) =>
-        Result.err(new UnhandledException({ cause: reason })),
-      );
-    })
-    .finally(child.detach);
+    const interruption = abortReason(boundSignal);
+    return normalizeCleanupFailureAfterInterruption(result, interruption, "preserve") ?? result;
+  } finally {
+    child.detach();
+  }
 }
 
 export async function runWithTimeout<T, E>(
@@ -211,6 +197,7 @@ export async function runWithTimeout<T, E>(
 
   const drainedResult = await runPromise;
   return (
-    preserveCleanupFailureAfterTimeout(drainedResult, timeoutError) ?? Result.err(timeoutError)
+    normalizeCleanupFailureAfterInterruption(drainedResult, timeoutError, "prependInterruption") ??
+    Result.err(timeoutError)
   );
 }

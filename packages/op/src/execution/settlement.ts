@@ -4,7 +4,12 @@ import { Result } from "../result.js";
 import type { Plan } from "../plan/model.js";
 import { SuspendInstruction } from "./instructions.js";
 import type { RunContext } from "./runtime.js";
-import { AbortSettlement, awaitWithAbort, withAbortDrain } from "./abort-settlement.js";
+import {
+  AbortSettlement,
+  awaitWithAbort,
+  withAbortDrain,
+  withAbortOwnership,
+} from "./abort-settlement.js";
 
 type MapChildContext = (parent: RunContext<readonly unknown[]>) => RunContext<readonly unknown[]>;
 
@@ -27,6 +32,14 @@ function interruptOnAbort(signal: AbortSignal): AbortSettlement {
  * `abort-settlement.ts`.
  */
 export const Settlement = {
+  abortOwned: {
+    suspend<T>(
+      start: (context: RunContext<readonly unknown[]>) => PromiseLike<T>,
+    ): SuspendInstruction {
+      return new SuspendInstruction((context) => withAbortOwnership(start(context)));
+    },
+  },
+
   cooperative: {
     runPlan<T, E, M>(
       plan: Plan<T, E, M>,

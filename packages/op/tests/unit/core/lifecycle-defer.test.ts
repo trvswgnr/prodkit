@@ -2,7 +2,7 @@ import { assert, describe, expect, test, vi } from "vitest";
 import { Op, TimeoutError, type ExitContext } from "../../../src/index.js";
 import { ErrorGroup, UnhandledException } from "../../../src/errors.js";
 import { Policy } from "../../../src/policy/index.js";
-import { neverSettling } from "../../support/utils.js";
+import { deferredPromise, neverSettling } from "../../support/utils.js";
 
 describe("Op.defer error handling", () => {
   test("when op succeeds, cleanup throws: UnhandledException with cleanup ErrorGroup", async () => {
@@ -42,6 +42,25 @@ describe("Op.defer error handling", () => {
     expect(r.error.cause).toBeInstanceOf(ErrorGroup);
     assert(r.error.cause instanceof ErrorGroup);
     expect(r.error.cause.errors).toEqual(["boom", cleanupError]);
+  });
+
+  test("unrelated runtime failures keep their UnhandledException wrapper in cleanup groups", async () => {
+    const bodyFault = new Error("body failed");
+    const cleanupFault = new Error("cleanup failed");
+    const result = await Op(function* () {
+      yield* Op.defer(() => {
+        throw cleanupFault;
+      });
+      throw bodyFault;
+    }).run();
+
+    assert(result.isErr(), "should be Err");
+    assert(result.error instanceof UnhandledException, "should be UnhandledException");
+    assert(result.error.cause instanceof ErrorGroup, "cause should be ErrorGroup");
+    const [bodyError, groupedCleanupFault] = result.error.cause.errors;
+    assert(bodyError instanceof UnhandledException, "body error should stay wrapped");
+    expect(bodyError.cause).toBe(bodyFault);
+    expect(groupedCleanupFault).toBe(cleanupFault);
   });
 
   test("when op fails, cleanup succeeds: failure is preserved", async () => {
@@ -403,6 +422,183 @@ describe("Op.defer ordering and policies", () => {
         expect(result.error.cause).toBe("cancelled");
       }
       expect(cleanup).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("Policy.cancel interrupts non-cooperative work and awaits async Op.defer cleanup", async () => {
+    vi.useFakeTimers();
+    try {
+      const cleanupGate = deferredPromise<void>();
+      const cleanupStarted = vi.fn();
+      const controller = new AbortController();
+      const abortReason = new Error("cancelled");
+      let settled = false;
+      const runPromise = Op(function* () {
+        yield* Op.defer(async () => {
+          cleanupStarted();
+          await cleanupGate.promise;
+        });
+        yield* Op.try(neverSettling);
+      })
+        .with(Policy.cancel(controller.signal))
+        .run();
+      void runPromise.then(() => {
+        settled = true;
+      });
+
+      controller.abort(abortReason);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(cleanupStarted).toHaveBeenCalledTimes(1);
+      expect(settled).toBe(false);
+
+      cleanupGate.resolve();
+      const result = await runPromise;
+
+      assert(result.isErr(), "should be Err");
+      assert(result.error instanceof UnhandledException, "should be UnhandledException");
+      expect(result.error.cause).toBe(abortReason);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("Policy.cancel cleanup group starts with the raw abort reason", async () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      const abortReason = new Error("cancelled");
+      const earlierCleanupFault = new Error("earlier cleanup failed");
+      const laterCleanupFault = new Error("later cleanup failed");
+      const runPromise = Op(function* () {
+        yield* Op.defer(() => {
+          throw earlierCleanupFault;
+        });
+        yield* Op.defer(() => {
+          throw laterCleanupFault;
+        });
+        yield* Op.try(neverSettling);
+      })
+        .with(Policy.cancel(controller.signal))
+        .run();
+
+      controller.abort(abortReason);
+      await vi.advanceTimersByTimeAsync(0);
+      const result = await runPromise;
+
+      assert(result.isErr(), "should be Err");
+      assert(result.error instanceof UnhandledException, "should be UnhandledException");
+      assert(result.error.cause instanceof ErrorGroup, "cause should be ErrorGroup");
+      expect(result.error.cause.errors).toEqual([
+        abortReason,
+        laterCleanupFault,
+        earlierCleanupFault,
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("Policy.cancel keeps a cooperative typed error first when cleanup fails", async () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      const cleanupFault = new Error("cleanup failed");
+      const runPromise = Op(function* () {
+        yield* Op.defer(() => {
+          throw cleanupFault;
+        });
+        yield* Op.try(
+          (signal) =>
+            new Promise<never>((_resolve, reject) => {
+              if (signal.aborted) {
+                reject(signal.reason);
+                return;
+              }
+              signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+            }),
+          () => "mapped cancellation" as const,
+        );
+      })
+        .with(Policy.cancel(controller.signal))
+        .run();
+
+      controller.abort(new Error("cancelled"));
+      await vi.advanceTimersByTimeAsync(0);
+      const result = await runPromise;
+
+      assert(result.isErr(), "should be Err");
+      assert(result.error instanceof UnhandledException, "should be UnhandledException");
+      assert(result.error.cause instanceof ErrorGroup, "cause should be ErrorGroup");
+      expect(result.error.cause.errors).toEqual(["mapped cancellation", cleanupFault]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("Policy.timeout around Policy.cancel preserves inner cleanup failure", async () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      const cleanupFault = new Error("cleanup failed");
+      const runPromise = Op(function* () {
+        yield* Op.defer(async () => {
+          await new Promise<void>((resolve) => {
+            setTimeout(() => resolve(), 20);
+          });
+          throw cleanupFault;
+        });
+        yield* Op.try(neverSettling);
+      })
+        .with(Policy.cancel(controller.signal))
+        .with(Policy.timeout(10))
+        .run();
+
+      await vi.advanceTimersByTimeAsync(10);
+      await vi.advanceTimersByTimeAsync(20);
+      await vi.runOnlyPendingTimersAsync();
+      const result = await runPromise;
+
+      assert(result.isErr(), "should be Err");
+      assert(result.error instanceof UnhandledException, "should be UnhandledException");
+      assert(result.error.cause instanceof ErrorGroup, "cause should be ErrorGroup");
+      expect(result.error.cause.errors[0]).toBeInstanceOf(TimeoutError);
+      expect(result.error.cause.errors[1]).toBe(cleanupFault);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("Policy.cancel around Policy.timeout awaits inner cleanup failure", async () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      const abortReason = new Error("cancelled");
+      const cleanupFault = new Error("cleanup failed");
+      const runPromise = Op(function* () {
+        yield* Op.defer(async () => {
+          await new Promise<void>((resolve) => {
+            setTimeout(() => resolve(), 20);
+          });
+          throw cleanupFault;
+        });
+        yield* Op.try(neverSettling);
+      })
+        .with(Policy.timeout(1_000))
+        .with(Policy.cancel(controller.signal))
+        .run();
+
+      controller.abort(abortReason);
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(20);
+      const result = await runPromise;
+
+      assert(result.isErr(), "should be Err");
+      assert(result.error instanceof UnhandledException, "should be UnhandledException");
+      assert(result.error.cause instanceof ErrorGroup, "cause should be ErrorGroup");
+      expect(result.error.cause.errors).toEqual([abortReason, cleanupFault]);
     } finally {
       vi.useRealTimers();
     }

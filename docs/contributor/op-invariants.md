@@ -69,7 +69,7 @@ Representative test:
 
 - `packages/op/tests/unit/execution/generator-finalization.test.ts` (`preserves original Err result when cleanup throws during iter.return()`)
 
-## Invariant 2 (timeout composition): timeout-wins settlement preserves cleanup faults
+## Invariant 2a: timeout-wins settlement preserves cleanup faults
 
 `Policy.timeout` runs the wrapped work through `runWithTimeout` in
 `packages/op/src/execution/child-run.ts`. When the timeout wins the race, the child run is
@@ -91,7 +91,7 @@ Why this matters:
 Enforced by code paths:
 
 - `packages/op/src/execution/child-run.ts` (`runWithTimeout`): drains the aborted child run before settling
-- `packages/op/src/execution/child-run.ts` (`preserveCleanupFailureAfterTimeout`): prepends `TimeoutError` to any drained cleanup-failure `ErrorGroup`
+- `packages/op/src/execution/child-run.ts` (`normalizeCleanupFailureAfterInterruption`): prepends `TimeoutError` to any drained cleanup-failure `ErrorGroup`
 - `packages/op/src/errors.ts` (`CLEANUP_FAILURE_MESSAGE`): single marker shared by the `settleIteratorWithCleanup` producer and the timeout-race consumer
 
 Representative tests:
@@ -100,6 +100,42 @@ Representative tests:
 - `packages/op/tests/unit/core/lifecycle-exit.test.ts` (`Policy.timeout preserves a throwing inner .on("exit") finalizer`)
 - `packages/op/tests/unit/core/lifecycle-release.test.ts` (`Policy.timeout preserves a throwing registered release cleanup`)
 - `packages/op/tests/unit/execution/child-run.test.ts` (`runWithTimeout preserves cleanup failures from the drained child run`, `runWithTimeout preserves cleanup failures when drained group lacks a timeout interruption`, `runWithTimeout prepends TimeoutError when drained group leads with a non-timeout body error`)
+
+## Invariant 2b: bound cancellation drains registered teardown
+
+`Policy.cancel` runs wrapped work through `runWithBoundCancel` in
+`packages/op/src/execution/child-run.ts`. A bound signal already aborted when `.run()` starts
+settles to `Err(UnhandledException)` before the child plan launches. Lifecycle wrappers outside the
+cancel plan retain their normal scope.
+
+After launch, the child plan runs through `Settlement.interrupting.runPlan`. Cancellation remains
+an interrupt request: work that settles during the cooperative interrupt window keeps its `Result`,
+including mapped typed errors. Non-cooperative suspended work is interrupted at the suspension
+boundary, then the standard driver unwinds every registered finalizer before `runWithBoundCancel`
+returns. Bound and parent abort listeners detach after settlement.
+
+If interrupted cleanup fails, the cleanup `ErrorGroup` contains the raw bound abort reason first,
+followed by exact cleanup faults in LIFO execution order. The child-run interruption normalizer is
+shared with timeout settlement and only removes an `UnhandledException` wrapper when it carries
+the exact interruption reason. Cooperative typed failures and unrelated runtime failures keep
+their existing cleanup-group shape.
+
+`Policy.release` remains success-gated. A hook registered after successful inner completion runs
+during later cancellation; cancellation before inner success does not register the hook.
+
+Enforced by code paths:
+
+- `packages/op/src/policy/plan.ts` (`cancelPlan`): gives `runWithBoundCancel` abort ownership and launches the child through interrupting plan settlement
+- `packages/op/src/execution/child-run.ts` (`runWithBoundCancel`): checks pre-abort, owns signal wiring, awaits child teardown, normalizes interrupted cleanup groups, and detaches listeners
+- `packages/op/src/execution/runtime.ts` (`settleIteratorWithCleanup`): unwinds child finalizers before the child result settles
+
+Representative tests:
+
+- `packages/op/tests/unit/policy/cancel.test.ts` (`pre-aborted signal skips wrapped work while outer lifecycle hooks retain scope`, `a result settled before bound abort remains unchanged`)
+- `packages/op/tests/unit/core/lifecycle-defer.test.ts` (`Policy.cancel interrupts non-cooperative work and awaits async Op.defer cleanup`, `Policy.cancel cleanup group starts with the raw abort reason`, `Policy.cancel keeps a cooperative typed error first when cleanup fails`)
+- `packages/op/tests/unit/core/lifecycle-exit.test.ts` (`Policy.cancel runs inner .on("exit") after interrupting non-cooperative work`)
+- `packages/op/tests/unit/core/lifecycle-release.test.ts` (`Policy.cancel awaits a release registered before later cancellation`, `Policy.cancel does not register release before the wrapped operation succeeds`, `Policy.cancel groups the raw abort reason before a registered release fault`)
+- `packages/op/tests/unit/execution/child-run.test.ts` (`runWithBoundCancel skips launch for a pre-aborted bound signal`, `runWithBoundCancel settles when child work ignores abort`)
 
 ## Invariant 3: chain-order semantics in combinators are stable
 
@@ -174,7 +210,8 @@ Before changing runtime/combinator internals, preserve these properties:
 3. Stable input-order semantics for combinator outputs and grouped errors.
 4. Wait-for-loser-finalization semantics after winner selection.
 5. Timeout-wins settlement preserves cleanup faults with `TimeoutError` as the primary `ErrorGroup` entry.
-6. User-shaped Plan and `yield*` depth stays off the host stack without merging child-run cleanup scopes.
+6. Bound cancellation prevents pre-aborted launch and waits for registered child teardown.
+7. User-shaped Plan and `yield*` depth stays off the host stack without merging child-run cleanup scopes.
 
 Any intentional semantic change should include:
 
@@ -377,8 +414,9 @@ signal, plus README's `Op.defer` / `.on("exit")` notes and checks in
 `packages/op/src/execution/settlement.ts`: DI lazy-resolve uses `Settlement.rejecting.awaitWork`;
 `execution/child-run.ts` provides scenario operations for fan-out, timeout, and bound cancellation;
 `raceInFlightAfterInterrupt` in `execution/abort-settlement.ts` is the shared macrotimer fallback
-primitive; Policy.cancel and combinators use `Settlement.interruptingAndDraining.suspend`; fan-out
-children use `Settlement.interrupting.runPlan`; `DI.provide` uses
+primitive; timeout and Policy.cancel use `Settlement.abortOwned.suspend`; combinators use
+`Settlement.interruptingAndDraining.suspend`; fan-out children and the bound-cancel child use
+`Settlement.interrupting.runPlan`; `DI.provide` uses
 `Settlement.interruptingAndDraining.suspendPlan`. Low-level `AbortSettlement` primitives remain in
 `packages/op/src/execution/abort-settlement.ts` for the driver.
 Type-level contracts collected in

@@ -3,6 +3,7 @@ import { Settlement } from "../../../src/execution/settlement.js";
 import {
   AbortSettlement,
   isAbortDrainedWork,
+  isAbortOwnedWork,
   settlementForSuspendedWork,
 } from "../../../src/execution/abort-settlement.js";
 import { SuspendInstruction } from "../../../src/execution/instructions.js";
@@ -12,6 +13,19 @@ import { Result } from "../../../src/result.js";
 import { UnhandledException } from "../../../src/errors.js";
 
 describe("Settlement", () => {
+  test("abortOwned suspend keeps abort settlement inside the observed work", () => {
+    const controller = new AbortController();
+    const instruction = Settlement.abortOwned.suspend(() => Promise.resolve(1));
+    const work = instruction.suspend(createRunContext(controller.signal));
+    const settled = settlementForSuspendedWork(
+      AbortSettlement.interruptOnAbort(() => "abort"),
+      work,
+    );
+
+    expect(isAbortOwnedWork(work)).toBe(true);
+    expect(settled.settlement.kind).toBe("passThrough");
+  });
+
   test("interruptingAndDraining suspend marks observed work for drain upgrade", () => {
     const controller = new AbortController();
     const instruction = Settlement.interruptingAndDraining.suspend(() => Promise.resolve(1));

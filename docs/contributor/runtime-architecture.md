@@ -99,7 +99,6 @@ small plan modules where surprise imports are regressions.
 - `packages/op/src/execution/settlement.ts` imports `packages/op/src/result.ts`
 - `packages/op/src/execution/settlement.ts` imports `@prodkit/shared/runtime`
 - `packages/op/src/execution/child-run.ts` imports `packages/op/src/execution/runtime.ts`
-- `packages/op/src/execution/child-run.ts` imports `packages/op/src/execution/abort-settlement.ts`
 - `packages/op/src/execution/child-run.ts` imports `packages/op/src/errors.ts`
 - `packages/op/src/execution/child-run.ts` imports `packages/op/src/result.ts`
 - `packages/op/src/execution/child-run.ts` imports `@prodkit/shared/runtime`
@@ -163,19 +162,21 @@ Driver-level primitives live in `packages/op/src/execution/abort-settlement.ts`,
 `raceInFlightAfterInterrupt` for the cooperative-interrupt then macrotimer-fallback window.
 Parent-to-child signal cascade uses scenario operations in
 `packages/op/src/execution/child-run.ts`: `createFanOutChildren`, `runWithTimeout`, and
-`runWithBoundCancel`. Controller construction and listener ownership stay private. Combinator
-fan-out drives children through `driveFanOutPlans` in `packages/op/src/execution/fan-out.ts`.
-Contributor call sites use the named `Settlement` operations in
-`packages/op/src/execution/settlement.ts` instead of pairing runtime `executePlan` settlement
-arguments with `withAbortDrain`.
+`runWithBoundCancel`. Bound cancellation checks pre-abort before launch and awaits its interrupting
+child run through registered teardown; the driver owns the fallback interruption. Controller
+construction and listener ownership stay private. Combinator fan-out drives children through
+`driveFanOutPlans` in `packages/op/src/execution/fan-out.ts`. Contributor call sites use the named
+`Settlement` operations in `packages/op/src/execution/settlement.ts` instead of pairing runtime
+`executePlan` settlement arguments with `withAbortDrain`.
 
 | Operation | Typical use | Notes |
 | --- | --- | --- |
+| `Settlement.abortOwned.suspend` | Timeout and bound-cancel scenarios | Suspended scenario owns parent abort and teardown settlement |
 | `Settlement.cooperative.runPlan` | `Op.allSettled` fan-out children | Pass-through launch |
 | `Settlement.cooperative.suspendPlan` | Plan transforms, lifecycle wrappers, release, `Op.settle` | Pass-through nested plan suspend |
 | `Settlement.rejecting.awaitWork` | DI lazy factory resolve | Rejects promptly on abort |
-| `Settlement.interrupting.runPlan` | Fan-out children, `Policy.timeout` inner nested plan | Interrupt launch |
-| `Settlement.interruptingAndDraining.suspend` | Combinators, `Policy.cancel` | Drain observed work after outer interrupt |
+| `Settlement.interrupting.runPlan` | Fan-out children, timeout and bound-cancel child plans | Interrupt launch |
+| `Settlement.interruptingAndDraining.suspend` | Combinators | Drain observed work after outer interrupt |
 | `Settlement.interruptingAndDraining.suspendPlan` | `DI.provide` | Interrupt nested launch and drain after outer interrupt |
 
 `settlementForSuspendedWork` still upgrades `interruptOnAbort` to `interruptAndDrainOnAbort` when the
@@ -216,11 +217,15 @@ Built-in policies attach through `.with(Policy.*)` on the op value (`packages/op
   uses a 0-based retry index), and stops on success, non-retryable `Err`, or abort.
 - **Timeout** (`timeoutPlan`): races `Settlement.interrupting.runPlan(...)` against a timer;
   surfaces `TimeoutError` on the typed channel. Invalid `timeoutMs` (negative or non-finite) fails
-  at run time as `Err(UnhandledException)`. Error-channel transforms compose through plan rewriters
+  at run time as `Err(UnhandledException)`. The timeout scenario owns parent abort settlement so
+  nested policies still await its child teardown. Error-channel transforms compose through plan rewriters
   ([ADR 0007](../adr/0007-op-execution-plan-ast.md); historical hook detail in superseded
   [ADR 0002](../adr/0002-ophooks-rebuild-and-timeout-asymmetry.md)).
-- **Cancel** (`cancelPlan`): merges a caller-supplied `AbortSignal` with the run context signal
-  through a composed `AbortController` so either parent or bound signal can cancel the inner run.
+- **Cancel** (`cancelPlan`): checks a caller-supplied `AbortSignal` before launch, then merges it
+  with the run context signal through a composed `AbortController`. The child runs with interrupting
+  settlement while the wrapper gives `runWithBoundCancel` ownership of parent abort settlement.
+  Non-cooperative suspension unwinds registered teardown before cancellation resolves. Results
+  settled during the cooperative interrupt window retain precedence.
 
 Method order on the fluent object defines wrapper nesting (outermost policy is applied last in
 the chain). See policy ordering notes in `op-invariants.md`.

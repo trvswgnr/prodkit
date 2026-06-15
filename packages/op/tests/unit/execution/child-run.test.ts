@@ -4,15 +4,18 @@ import {
   runWithBoundCancel,
   runWithTimeout,
 } from "../../../src/execution/child-run.js";
+import { SuspendInstruction } from "../../../src/execution/instructions.js";
 import { createRunContext } from "../../../src/execution/runtime.js";
+import { Settlement } from "../../../src/execution/settlement.js";
 import {
   CLEANUP_FAILURE_MESSAGE,
   ErrorGroup,
   TimeoutError,
   UnhandledException,
 } from "../../../src/errors.js";
+import { createPlan } from "../../../src/plan/model.js";
 import { Result } from "../../../src/result.js";
-import { neverSettling, settleOutcome } from "../../support/utils.js";
+import { neverSettling, settleOutcome, trackAbortListeners } from "../../support/utils.js";
 
 describe("child runs", () => {
   test("fan-out children cascade the parent abort reason", () => {
@@ -104,6 +107,29 @@ describe("child runs", () => {
     await expect(runPromise).resolves.toEqual(Result.ok("bound-cancelled"));
   });
 
+  test("runWithBoundCancel skips launch for a pre-aborted bound signal", async () => {
+    const bound = new AbortController();
+    const outer = new AbortController();
+    const abortReason = new Error("already cancelled");
+    bound.abort(abortReason);
+    const trackedBound = trackAbortListeners(bound.signal);
+    const trackedOuter = trackAbortListeners(outer.signal);
+    const run = vi.fn(async () => Result.ok(69));
+    try {
+      const result = await runWithBoundCancel(run, bound.signal, createRunContext(outer.signal));
+
+      assert(result.isErr(), "result should be Err");
+      assert(result.error instanceof UnhandledException, "should be UnhandledException");
+      expect(result.error.cause).toBe(abortReason);
+      expect(run).not.toHaveBeenCalled();
+      expect(trackedBound.activeAbortListeners).toBe(0);
+      expect(trackedOuter.activeAbortListeners).toBe(0);
+    } finally {
+      trackedBound.restore();
+      trackedOuter.restore();
+    }
+  });
+
   test("runWithBoundCancel passes the outer abort reason to child work", async () => {
     const bound = new AbortController();
     const outer = new AbortController();
@@ -128,27 +154,38 @@ describe("child runs", () => {
 
   test("runWithBoundCancel settles when child work ignores abort", async () => {
     const bound = new AbortController();
-    const outerContext = createRunContext(new AbortController().signal);
+    const outer = new AbortController();
+    const trackedBound = trackAbortListeners(bound.signal);
+    const trackedOuter = trackAbortListeners(outer.signal);
+    const outerContext = createRunContext(outer.signal);
     const abortReason = new Error("request cancelled");
+    const source = createPlan(function* () {
+      yield* new SuspendInstruction(neverSettling);
+      return 69;
+    });
 
-    const runPromise = runWithBoundCancel(
-      async () => {
-        await neverSettling();
-        return Result.ok(69);
-      },
-      bound.signal,
-      outerContext,
-    );
-    bound.abort(abortReason);
+    try {
+      const runPromise = runWithBoundCancel(
+        (context) => Settlement.interrupting.runPlan(source, context),
+        bound.signal,
+        outerContext,
+      );
+      bound.abort(abortReason);
 
-    expect(await settleOutcome(runPromise)).toBe("settled");
-    const result = await runPromise;
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error).toBeInstanceOf(UnhandledException);
-      if (result.error instanceof UnhandledException) {
-        expect(result.error.cause).toBe(abortReason);
+      expect(await settleOutcome(runPromise)).toBe("settled");
+      const result = await runPromise;
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(UnhandledException);
+        if (result.error instanceof UnhandledException) {
+          expect(result.error.cause).toBe(abortReason);
+        }
       }
+      expect(trackedBound.activeAbortListeners).toBe(0);
+      expect(trackedOuter.activeAbortListeners).toBe(0);
+    } finally {
+      trackedBound.restore();
+      trackedOuter.restore();
     }
   });
 

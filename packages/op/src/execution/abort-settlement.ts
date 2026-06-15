@@ -30,21 +30,36 @@ export const AbortSettlement = {
 };
 
 const ABORT_DRAINED_WORK = Symbol("prodkit.op.abort-drained-work");
+const ABORT_OWNED_WORK = Symbol("prodkit.op.abort-owned-work");
 
 type AbortDrainedWork<T> = {
   readonly [ABORT_DRAINED_WORK]: true;
   readonly promise: PromiseLike<T>;
 };
 
-/** Suspend callback return type: plain promise or drain-on-abort wrapped work. */
-export type SuspendWork<T> = PromiseLike<T> | AbortDrainedWork<T>;
+type AbortOwnedWork<T> = {
+  readonly [ABORT_OWNED_WORK]: true;
+  readonly promise: PromiseLike<T>;
+};
+
+/** Suspend callback return type: plain, drain-on-abort, or abort-owned work. */
+export type SuspendWork<T> = PromiseLike<T> | AbortDrainedWork<T> | AbortOwnedWork<T>;
 
 export function withAbortDrain<T>(promise: PromiseLike<T>): AbortDrainedWork<T> {
   return { [ABORT_DRAINED_WORK]: true, promise };
 }
 
+/** Marks work that handles parent abort and teardown settlement inside its own scenario. */
+export function withAbortOwnership<T>(promise: PromiseLike<T>): AbortOwnedWork<T> {
+  return { [ABORT_OWNED_WORK]: true, promise };
+}
+
 export function isAbortDrainedWork<T>(work: SuspendWork<T>): work is AbortDrainedWork<T> {
   return typeof work === "object" && work !== null && ABORT_DRAINED_WORK in work;
+}
+
+export function isAbortOwnedWork<T>(work: SuspendWork<T>): work is AbortOwnedWork<T> {
+  return typeof work === "object" && work !== null && ABORT_OWNED_WORK in work;
 }
 
 export function settlementForSuspendedWork(
@@ -54,6 +69,10 @@ export function settlementForSuspendedWork(
   readonly settlement: AbortSettlement;
   readonly suspended: PromiseLike<unknown>;
 } {
+  if (isAbortOwnedWork(suspendWork)) {
+    return { settlement: AbortSettlement.passThrough, suspended: suspendWork.promise };
+  }
+
   const shouldDrainOnAbort = isAbortDrainedWork(suspendWork);
   const settlement =
     driveSettlement.kind === "interruptOnAbort" && shouldDrainOnAbort
