@@ -1,6 +1,6 @@
 import { CLEANUP_FAILURE_MESSAGE, ErrorGroup, UnhandledException } from "../errors.js";
 import { Result } from "../result.js";
-import { unsafeCoerce } from "@prodkit/shared/runtime";
+import { isRecordLike, unsafeCoerce } from "@prodkit/shared/runtime";
 import {
   CUSTOM_INSTRUCTION_META,
   isErrInstruction,
@@ -131,11 +131,7 @@ function pumpPlanExecutionQueue() {
 
 function isCustomInstruction(value: unknown): value is CustomInstruction<unknown, unknown> {
   return (
-    typeof value === "object" &&
-    value !== null &&
-    CUSTOM_INSTRUCTION_META in value &&
-    "resolve" in value &&
-    typeof value.resolve === "function"
+    isRecordLike(value) && CUSTOM_INSTRUCTION_META in value && typeof value.resolve === "function"
   );
 }
 

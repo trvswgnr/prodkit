@@ -1,3 +1,5 @@
+import { keyIs } from "@prodkit/shared/runtime";
+
 /**
  * Driver-level abort mechanics for suspended work and nested plan execution.
  *
@@ -55,11 +57,11 @@ export function withAbortOwnership<T>(promise: PromiseLike<T>): AbortOwnedWork<T
 }
 
 export function isAbortDrainedWork<T>(work: SuspendWork<T>): work is AbortDrainedWork<T> {
-  return typeof work === "object" && work !== null && ABORT_DRAINED_WORK in work;
+  return keyIs(work, ABORT_DRAINED_WORK, true);
 }
 
 export function isAbortOwnedWork<T>(work: SuspendWork<T>): work is AbortOwnedWork<T> {
-  return typeof work === "object" && work !== null && ABORT_OWNED_WORK in work;
+  return keyIs(work, ABORT_OWNED_WORK, true);
 }
 
 export function settlementForSuspendedWork(

@@ -115,18 +115,19 @@ export function concurrencyLimit(
   return Result.ok(Math.min(concurrency, size));
 }
 
+function missingResultError(index: number): UnhandledException {
+  return new UnhandledException({
+    cause: new Error(`Op combinator invariant violation: missing result at index ${index}`),
+  });
+}
+
 export function collectAllOk<T, E>(
   results: readonly (Result<T, E | UnhandledException> | undefined)[],
 ): Result<T[], E | UnhandledException> {
   const values: T[] = [];
 
   for (const [index, result] of results.entries()) {
-    if (result === undefined)
-      return Result.err(
-        new UnhandledException({
-          cause: new Error(`Op combinator invariant violation: missing result at index ${index}`),
-        }),
-      );
+    if (result === undefined) return Result.err(missingResultError(index));
     if (result.isErr()) return result;
     values.push(result.value);
   }
@@ -137,19 +138,23 @@ export function collectAllOk<T, E>(
 const executeInterruptingPlan: ExecuteChildPlan = (plan, context) =>
   Settlement.interrupting.runPlan(plan, context);
 
-async function driveAllUnboundedPlans<T, E>(
+async function driveAllUntilFirstError<T, E>(
   plans: readonly Plan<T, E, unknown>[],
   outerContext: RunContext<readonly unknown[]>,
+  config: {
+    poolSize: number;
+    onFirstError: (controls: FanOutSettleControls, index: number) => void;
+  },
 ): Promise<Result<T[], E | UnhandledException>> {
-  let firstErr: Err<T[], E | UnhandledException> | undefined;
+  let firstErr: Err<T, E | UnhandledException> | undefined;
   const results = await driveFanOutPlans(plans, outerContext, {
-    poolSize: plans.length,
+    poolSize: config.poolSize,
     executeChild: executeInterruptingPlan,
     shouldScheduleMore: () => firstErr === undefined,
-    onChildSettled: (result, index, { abortSiblingsExcept }) => {
+    onChildSettled: (result, index, controls) => {
       if (result.isErr() && firstErr === undefined) {
         firstErr = result;
-        abortSiblingsExcept(index);
+        config.onFirstError(controls, index);
       }
     },
   });
@@ -157,6 +162,16 @@ async function driveAllUnboundedPlans<T, E>(
   if (firstErr !== undefined) return firstErr;
 
   return collectAllOk(results);
+}
+
+async function driveAllUnboundedPlans<T, E>(
+  plans: readonly Plan<T, E, unknown>[],
+  outerContext: RunContext<readonly unknown[]>,
+): Promise<Result<T[], E | UnhandledException>> {
+  return driveAllUntilFirstError(plans, outerContext, {
+    poolSize: plans.length,
+    onFirstError: ({ abortSiblingsExcept }, index) => abortSiblingsExcept(index),
+  });
 }
 
 export async function driveAllPlans<T, E>(
@@ -172,22 +187,10 @@ export async function driveAllPlans<T, E>(
 
   if (limit.value >= plans.length) return driveAllUnboundedPlans(plans, outerContext);
 
-  let firstErr: Err<T, E | UnhandledException> | undefined;
-  const results = await driveFanOutPlans(plans, outerContext, {
+  return driveAllUntilFirstError(plans, outerContext, {
     poolSize: limit.value,
-    executeChild: executeInterruptingPlan,
-    shouldScheduleMore: () => firstErr === undefined,
-    onChildSettled: (result, _index, { abortActive }) => {
-      if (result.isErr() && firstErr === undefined) {
-        firstErr = result;
-        abortActive();
-      }
-    },
+    onFirstError: ({ abortActive }) => abortActive(),
   });
-
-  if (firstErr !== undefined) return firstErr;
-
-  return collectAllOk(results);
 }
 
 export const executeCooperativePlan: ExecuteChildPlan = (plan, context) =>
@@ -199,30 +202,11 @@ export function collectAllSettled<T, E>(
   const settled: Result<T, E | UnhandledException>[] = [];
 
   for (const [index, result] of results.entries()) {
-    if (result === undefined)
-      return Result.err(
-        new UnhandledException({
-          cause: new Error(`Op combinator invariant violation: missing result at index ${index}`),
-        }),
-      );
+    if (result === undefined) return Result.err(missingResultError(index));
     settled.push(result);
   }
 
   return Result.ok(settled);
-}
-
-async function driveAllSettledUnboundedPlans<T, E>(
-  plans: readonly Plan<T, E, unknown>[],
-  outerContext: RunContext<readonly unknown[]>,
-): Promise<Result<T, E | UnhandledException>[]> {
-  const results = await driveFanOutPlans(plans, outerContext, {
-    poolSize: plans.length,
-    executeChild: executeCooperativePlan,
-    shouldScheduleMore: () => true,
-  });
-
-  // SAFETY: driveFanOutPlans types results as unknown; every child plan matches T and E at this site.
-  return unsafeCoerce(results);
 }
 
 export async function driveAllSettledPlans<T, E>(
@@ -236,16 +220,17 @@ export async function driveAllSettledPlans<T, E>(
 
   if (plans.length === 0) return Result.ok([]);
 
-  if (limit.value >= plans.length) {
-    const results = await driveAllSettledUnboundedPlans(plans, outerContext);
-    return Result.ok(results);
-  }
-
   const results = await driveFanOutPlans(plans, outerContext, {
-    poolSize: limit.value,
+    poolSize: limit.value >= plans.length ? plans.length : limit.value,
     executeChild: executeCooperativePlan,
     shouldScheduleMore: () => true,
   });
+
+  if (limit.value >= plans.length) {
+    // SAFETY: driveFanOutPlans types results as unknown; every child plan matches T and E at this site.
+    const settled: Result<T, E | UnhandledException>[] = unsafeCoerce(results);
+    return Result.ok(settled);
+  }
 
   return collectAllSettled(results);
 }

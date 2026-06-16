@@ -19,6 +19,12 @@ function isRuntimeBypass(error: unknown): error is UnhandledException | TimeoutE
   return UnhandledException.is(error) || TimeoutError.is(error);
 }
 
+function trackedDomainError<E>(error: unknown): TrackedErr<E> | undefined {
+  if (isRuntimeBypass(error)) return undefined;
+  // SAFETY: TS cannot narrow E to TrackedErr<E> after the bypass guard; bypass faults return above.
+  return unsafeCoerce(error);
+}
+
 export function mapPlan<T, E, U, M>(
   source: Plan<T, E, M>,
   transform: (value: T) => U,
@@ -95,11 +101,8 @@ export function mapErrPlan<T, E, E2, M>(
 
       if (result.isOk()) return result.value;
 
-      const sourceError = result.error;
-      if (isRuntimeBypass(sourceError)) return yield* result;
-
-      // SAFETY: TS cannot narrow E to TrackedErr<E> after the bypass guard; bypass faults return above.
-      const domainError: TrackedErr<E> = unsafeCoerce(sourceError);
+      const domainError = trackedDomainError<E>(result.error);
+      if (domainError === undefined) return yield* result;
 
       const mapped: E2 = yield* new SuspendInstruction(() =>
         Promise.resolve(transform(domainError)),
@@ -122,12 +125,9 @@ export function tapErrPlan<T, E, R, M>(
         yield* Settlement.cooperative.suspendPlan(source);
 
       if (sourceResult.isOk()) return sourceResult.value;
-      const sourceError = sourceResult.error;
 
-      if (isRuntimeBypass(sourceError)) return yield* sourceResult;
-
-      // SAFETY: TS cannot narrow E to TrackedErr<E> after the bypass guard; bypass faults return above.
-      const domainError: TrackedErr<E> = unsafeCoerce(sourceError);
+      const domainError = trackedDomainError<E>(sourceResult.error);
+      if (domainError === undefined) return yield* sourceResult;
 
       yield* new SuspendInstruction(() => Promise.resolve(observe(domainError)));
       return yield* sourceResult;
@@ -149,10 +149,8 @@ export function recoverPlan<T, E, ECaught extends TrackedErr<E>, R, M>(
 
       if (result.isOk()) return result.value;
 
-      if (isRuntimeBypass(result.error)) return yield* result;
-
-      // SAFETY: TS cannot narrow E to TrackedErr<E> after the bypass guard; bypass faults return above.
-      const error: TrackedErr<E> = unsafeCoerce(result.error);
+      const error = trackedDomainError<E>(result.error);
+      if (error === undefined) return yield* result;
 
       if (!predicate(error)) return yield* result;
 

@@ -60,10 +60,6 @@ export class InjectInstruction<T, D> implements CustomInstruction<T, WithDIMeta<
     // SAFETY: generator yield type is unknown; CustomInstruction resolves yield* to the same T as resolve().
     return unsafeCoerce(yield this);
   }
-
-  static is(value: unknown): value is InjectInstruction<unknown, AnyDependency> {
-    return value instanceof InjectInstruction;
-  }
 }
 
 export function providePlan<T, E, M>(

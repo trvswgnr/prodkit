@@ -146,20 +146,6 @@ function rebuildUnaryWraps(
   return rebuilt;
 }
 
-/**
- * Splits a plan's leading run of unary wrappers from its nearest non-unary node.
- *
- * Returned `wraps` are innermost-first, matching left-to-right application order:
- * `wraps.reduce((plan, wrap) => wrap(plan), base)` reconstructs the input plan.
- */
-function splitLeadingUnaryWraps(plan: ErasedPlan): {
-  readonly base: ErasedPlan;
-  readonly wraps: ReadonlyArray<UnaryPlanRewrite["rebuild"]>;
-} {
-  const walk = walkUnaryWraps(plan);
-  return { base: walk.base, wraps: walk.rebuilds };
-}
-
 export function appendPlanTransform(
   factory: ErasedPlanFactory,
   transform: ErasedPlanTransform,
@@ -193,9 +179,9 @@ function applyPlanTransforms(source: ErasedPlan, tail: PlanTransformNode): Erase
   // Normalize an already-materialized unary entry once so stacked push-through policies do not
   // repeatedly walk and rebuild the same prefix.
   if (hasPushPolicy) {
-    const split = splitLeadingUnaryWraps(source);
-    base = split.base;
-    for (const wrap of split.wraps) pendingUnaryWraps.push(wrap);
+    const { base: unaryBase, rebuilds } = walkUnaryWraps(source);
+    base = unaryBase;
+    for (const wrap of rebuilds) pendingUnaryWraps.push(wrap);
   }
 
   const materialize = () => {

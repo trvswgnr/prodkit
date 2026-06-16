@@ -1,4 +1,5 @@
 // oxlint-disable typescript/no-explicit-any
+import { isRecordLike } from "@prodkit/shared/runtime";
 import { Tagged } from "../tagged.js";
 import { Err } from "../result.js";
 import type { SuspendWork } from "./abort-settlement.js";
@@ -97,10 +98,6 @@ export type RuntimeInstruction<E, M = EmptyMeta> =
 
 export function isErrInstruction<E>(value: unknown): value is Err<unknown, E> {
   return (
-    typeof value === "object" &&
-    value !== null &&
-    "isErr" in value &&
-    typeof value.isErr === "function" &&
-    value.isErr()
+    isRecordLike(value) && "isErr" in value && typeof value.isErr === "function" && value.isErr()
   );
 }

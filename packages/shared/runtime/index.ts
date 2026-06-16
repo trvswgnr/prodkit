@@ -54,9 +54,13 @@ export function isRecordLike(value: unknown): value is Record<PropertyKey, unkno
   return (typeof value === "object" || typeof value === "function") && value !== null;
 }
 
-/** True when `value` is a function that carries `key -> true` (internal brand pattern). */
-export function hasBrand<K extends PropertyKey>(value: unknown, key: K): value is Record<K, true> {
-  return isRecordLike(value) && value[key] === true;
+/** True when `value` is record-like and `value[key] === expected`. */
+export function keyIs<K extends PropertyKey, const V>(
+  value: unknown,
+  key: K,
+  expected: V,
+): value is Record<K, V> {
+  return isRecordLike(value) && value[key] === expected;
 }
 
 export function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {

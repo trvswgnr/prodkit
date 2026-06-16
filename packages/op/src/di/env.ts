@@ -1,6 +1,6 @@
 import { createRunContext, type RunContext } from "../execution/runtime.js";
 import { Settlement } from "../execution/settlement.js";
-import { hasBrand, isPromiseLike } from "@prodkit/shared/runtime";
+import { isPromiseLike, keyIs } from "@prodkit/shared/runtime";
 import {
   DI_LAZY_BINDING,
   DI_SINGLETON_BINDING,
@@ -15,7 +15,7 @@ export const DI_ENV_EXTENSION = Symbol("prodkit.op.di.env");
 export const MISSING_DEPENDENCY = Symbol("prodkit.op.di.missing-dependency");
 
 export function isLazyBinding(value: unknown): value is AnyLazyBinding {
-  return hasBrand(value, DI_LAZY_BINDING);
+  return keyIs(value, DI_LAZY_BINDING, true);
 }
 
 export type Env = Map<AnyDependency, DependencyValue<AnyDependency>>;
@@ -30,7 +30,7 @@ function withProvisionEntry(env: Env, entry: AnyBinding): Env {
   if (env.has(entry.dependency)) {
     throw new DuplicateDependencyError(entry.dependency.key);
   }
-  const value = hasBrand(entry, DI_SINGLETON_BINDING) ? entry.value : entry;
+  const value = keyIs(entry, DI_SINGLETON_BINDING, true) ? entry.value : entry;
   env.set(entry.dependency, value);
   return env;
 }
