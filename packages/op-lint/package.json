@@ -1,0 +1,71 @@
+{
+  "name": "@prodkit/op-lint",
+  "version": "0.0.0",
+  "description": "Oxlint-loadable lint rules for @prodkit/op generator composition.",
+  "keywords": [
+    "eslint",
+    "lint",
+    "operations",
+    "oxlint",
+    "prodkit",
+    "typescript"
+  ],
+  "homepage": "https://github.com/trvswgnr/prodkit/tree/main/packages/op-lint#readme",
+  "bugs": {
+    "url": "https://github.com/trvswgnr/prodkit/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/trvswgnr/prodkit"
+  },
+  "files": [
+    "dist",
+    "CHANGELOG.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "fix": "pnpm run lint:fix && pnpm run fmt",
+    "fmt": "oxfmt \"src/**/*.ts\" \"*.ts\"",
+    "fmt:check": "oxfmt --check \"src/**/*.ts\" \"*.ts\"",
+    "lint": "pnpm -w exec oxlint --config oxlint.config.ts packages/op-lint/src",
+    "lint:fix": "pnpm -w exec oxlint --config oxlint.config.ts --fix packages/op-lint/src",
+    "changelog:check": "pnpm --filter @prodkit/tools run changelog:check op-lint",
+    "prepare": "pnpm run build",
+    "prepublishOnly": "pnpm -w run gate && pnpm run changelog:check",
+    "release:prepare": "pnpm -w run gate && pnpm run changelog:check && npm pack --dry-run",
+    "release:patch": "pnpm --filter @prodkit/tools run release:cut op-lint patch",
+    "release:minor": "pnpm --filter @prodkit/tools run release:cut op-lint minor",
+    "release:publish:manual": "npm publish --access public --provenance",
+    "release:push": "git push && git push --tags",
+    "coverage": "vitest run --coverage",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@prodkit/shared": "workspace:*",
+    "@types/node": "^24.12.2",
+    "@vitest/coverage-v8": "catalog:",
+    "eslint": "10.5.0",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

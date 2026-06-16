@@ -1,0 +1,8 @@
+{
+  "extends": "@prodkit/shared/tsconfig/publishable",
+  "compilerOptions": {
+    "types": ["@prodkit/shared", "node"]
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
