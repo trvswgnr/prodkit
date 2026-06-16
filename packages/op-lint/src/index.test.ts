@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -20,18 +20,31 @@ describe("@prodkit/op-lint plugin", () => {
     );
   });
 
-  test("loads through Oxlint JavaScript plugins and reports a direct misuse", () => {
+  test("loads through Oxlint JavaScript plugins and reports direct and typed misuses", () => {
     const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
     const repoRoot = resolve(packageRoot, "../..");
     const distEntry = resolve(packageRoot, "dist/index.mjs");
     const oxlintBin = resolve(repoRoot, "node_modules/oxlint/bin/oxlint");
+    const opPackageRoot = resolve(packageRoot, "../op");
+    const betterResultRoot = resolve(opPackageRoot, "node_modules/better-result");
 
     expect(existsSync(distEntry), `${distEntry} should exist before the smoke test`).toBe(true);
     expect(existsSync(oxlintBin), `${oxlintBin} should exist before the smoke test`).toBe(true);
+    expect(existsSync(opPackageRoot), `${opPackageRoot} should exist before the smoke test`).toBe(
+      true,
+    );
+    expect(
+      existsSync(betterResultRoot),
+      `${betterResultRoot} should exist before the smoke test`,
+    ).toBe(true);
 
     const tempDir = mkdtempSync(resolve(tmpdir(), "prodkit-op-lint-"));
 
     try {
+      mkdirSync(resolve(tempDir, "node_modules/@prodkit"), { recursive: true });
+      symlinkSync(opPackageRoot, resolve(tempDir, "node_modules/@prodkit/op"), "dir");
+      symlinkSync(betterResultRoot, resolve(tempDir, "node_modules/better-result"), "dir");
+
       writeFileSync(
         resolve(tempDir, "plugin.mjs"),
         `export { default } from ${JSON.stringify(pathToFileURL(distEntry).href)};\n`,
@@ -52,16 +65,70 @@ describe("@prodkit/op-lint plugin", () => {
         "utf8",
       );
       writeFileSync(
-        resolve(tempDir, "fixture.ts"),
+        resolve(tempDir, "tsconfig.json"),
+        `${JSON.stringify(
+          {
+            compilerOptions: {
+              module: "NodeNext",
+              moduleResolution: "NodeNext",
+              skipLibCheck: true,
+              strict: true,
+              target: "ES2022",
+            },
+            include: ["*.ts"],
+          },
+          null,
+          2,
+        )}\n`,
+        "utf8",
+      );
+      writeFileSync(
+        resolve(tempDir, "ops.ts"),
         [
           'import { Op } from "@prodkit/op";',
           "",
+          'export const importedOperation = Op.of("ok");',
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+      writeFileSync(
+        resolve(tempDir, "fixture.ts"),
+        [
+          'import { Op, type Op as OpType } from "@prodkit/op";',
+          'import { importedOperation } from "./ops.js";',
+          "",
+          "const direct = Op.of(1);",
+          "const alias = direct;",
+          "",
+          "declare const service: {",
+          "  readonly stored: OpType<boolean, never, []>;",
+          "  load(): OpType<number, never, []>;",
+          "};",
+          "",
+          "function generic<T extends OpType<number, never, []>>(op: T) {",
+          "  return Op(function* () {",
+          "    op;",
+          "  });",
+          "}",
+          "",
+          "const iterable = { *[Symbol.iterator]() { yield 1; return 1; } };",
+          'const lookalike = { _tag: "Op", run() {}, with() {}, on() {}, map() {}, mapErr() {}, flatMap() {}, tap() {}, tapErr() {}, recover() {} };',
+          "",
           "const program = Op(function* () {",
           "  Op.of(1);",
+          "  direct;",
+          "  alias;",
+          "  importedOperation;",
+          "  service.stored;",
+          "  service.load();",
+          "  iterable;",
+          "  lookalike;",
           "  return yield* Op.of(2);",
           "});",
           "",
           "void program;",
+          "void generic(direct);",
           "",
         ].join("\n"),
         "utf8",
@@ -78,7 +145,23 @@ describe("@prodkit/op-lint plugin", () => {
       const output = `${result.stdout}\n${result.stderr}`;
 
       expect(result.status, output).toBe(1);
-      expect(output).toContain("prodkit-op(require-yield-star)");
+      const outputJson = JSON.parse(result.stdout);
+      const diagnostics: unknown[] =
+        typeof outputJson === "object" &&
+        outputJson !== null &&
+        "diagnostics" in outputJson &&
+        Array.isArray(outputJson.diagnostics)
+          ? outputJson.diagnostics
+          : [];
+      const opDiagnostics = diagnostics.filter(
+        (diagnostic) =>
+          typeof diagnostic === "object" &&
+          diagnostic !== null &&
+          "code" in diagnostic &&
+          diagnostic.code === "prodkit-op(require-yield-star)",
+      );
+
+      expect(opDiagnostics).toHaveLength(7);
       expect(output).toContain("Compose this Op with yield*");
     } finally {
       rmSync(tempDir, { recursive: true, force: true });

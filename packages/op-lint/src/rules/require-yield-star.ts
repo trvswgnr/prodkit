@@ -1,4 +1,5 @@
 import { isRecordLike } from "@prodkit/shared/runtime";
+import { createOpTypeDetector, type TypeAwareRuleContext } from "../op-type-detector.js";
 
 const docsUrl = "https://github.com/trvswgnr/prodkit/tree/main/packages/op-lint#require-yield-star";
 
@@ -21,7 +22,7 @@ type RangedNode = {
   loc?: unknown;
 };
 
-type RuleContext = {
+type RuleContext = TypeAwareRuleContext & {
   report(diagnostic: { node: RangedNode; messageId: "missingYieldStar" }): void;
 };
 
@@ -140,6 +141,7 @@ export const requireYieldStarRule = {
     schema: [],
   },
   create(context: RuleContext) {
+    const opTypeDetector = createOpTypeDetector(context);
     const functionStack: boolean[] = [];
     const enterFunction = (node: unknown) => {
       functionStack.push(isFunctionLike(node) && node.generator === true);
@@ -161,7 +163,7 @@ export const requireYieldStarRule = {
       ExpressionStatement(node: unknown) {
         if (!isInsideCurrentGenerator()) return;
         if (!isExpressionStatement(node)) return;
-        if (!isDirectOpBuilderCall(node.expression)) return;
+        if (!isOpExpressionStatement(node.expression, opTypeDetector)) return;
 
         context.report({
           node,
@@ -171,3 +173,13 @@ export const requireYieldStarRule = {
     };
   },
 };
+
+function isOpExpressionStatement(
+  expression: unknown,
+  opTypeDetector: ReturnType<typeof createOpTypeDetector>,
+): boolean {
+  if (isDirectOpBuilderCall(expression)) return true;
+  if (opTypeDetector === undefined || !isNode(expression)) return false;
+
+  return opTypeDetector.isOpExpression(expression);
+}

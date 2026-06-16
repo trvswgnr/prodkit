@@ -38,6 +38,9 @@
   "publishConfig": {
     "access": "public"
   },
+  "peerDependencies": {
+    "typescript": ">=5.9 <7"
+  },
   "scripts": {
     "build": "tsdown",
     "fix": "pnpm run lint:fix && pnpm run fmt",

@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Publish the initial ESLint-compatible, Oxlint-loadable `@prodkit/op-lint` plugin package with the
   `require-yield-star` rule scaffold.
+- Detect ignored `@prodkit/op` values in `require-yield-star` with TypeScript checker-backed
+  identity, including aliases, imports, generic `Op` parameters, properties, and methods returning
+  Ops.
+
+### Changed
+
+- Keep TypeScript external and require it as a peer dependency for checker-backed linting.
 
 ## [0.0.0]
 

@@ -7,7 +7,7 @@ Compatibility is tested against ESLint RuleTester and Oxlint JavaScript plugin l
 ## Install
 
 ```bash
-pnpm add -D @prodkit/op-lint oxlint
+pnpm add -D @prodkit/op-lint oxlint typescript
 ```
 
 ## Oxlint
@@ -33,8 +33,8 @@ when upgrading.
 
 ### `require-yield-star`
 
-Reports direct calls to known `Op` builders inside generator bodies when the returned operation is
-not composed with `yield*`.
+Reports `Op`-typed expressions inside generator bodies when the returned operation is not composed
+with `yield*`.
 
 ```ts
 import { Op } from "@prodkit/op";
@@ -48,5 +48,6 @@ const valid = Op(function* () {
 });
 ```
 
-The rule is syntax-only: it catches direct `Op.<builder>(...)` expression statements in generator
-functions. It does not do type-aware import, alias, or custom builder analysis.
+The rule uses TypeScript checker information to recognize `@prodkit/op` values, including aliases,
+imported operations, generic `Op` parameters, properties, and methods returning Ops. When type
+information is unavailable, it still catches direct `Op.<builder>(...)` expression statements.
