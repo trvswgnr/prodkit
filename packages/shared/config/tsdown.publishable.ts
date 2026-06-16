@@ -1,6 +1,6 @@
 import { defineConfig, type UserConfig } from "tsdown";
 
-/** Shared tsdown defaults for publishable packages (`@prodkit/op`, `@prodkit/std`). */
+/** Shared tsdown defaults for publishable `@prodkit/*` packages. */
 export function publishableTsdown(config: UserConfig) {
   return defineConfig({
     format: ["esm"],

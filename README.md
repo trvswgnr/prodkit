@@ -9,6 +9,7 @@ examples, benchmarks, and maintainer tooling.
 Use each publishable package README under `packages/*/README.md` as the source of truth for that package's installation, API reference, usage examples, and consumer-facing commands:
 
 - [`@prodkit/op`](packages/op/README.md) (published to npm with the package)
+- [`@prodkit/op-lint`](packages/op-lint/README.md) (published to npm with the package)
 - [`@prodkit/std`](packages/std/README.md) (reserved; runtime-agnostic utilities planned)
 
 Other workspace roots are maintainer- or CI-oriented: [`examples`](examples/) (`@prodkit/examples`, topic folders under `examples/op/` and `examples/op/di/`), [`tools`](tools/) (`@prodkit/tools`), and [`benchmarks`](benchmarks/) (`@prodkit/benchmarks`).
@@ -19,6 +20,7 @@ Other workspace roots are maintainer- or CI-oriented: [`examples`](examples/) (`
 | --- | --- | --- |
 | npm consumers | [`packages/op/README.md`](packages/op/README.md) | Hub, quick start, core API |
 | npm consumers | [`packages/op/docs/`](packages/op/docs/README.md) | Comparison, performance, subpaths, lifecycle (ships on npm) |
+| npm consumers | [`packages/op-lint/README.md`](packages/op-lint/README.md) | Lint plugin install and rules |
 | contributors | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Setup, gate, testing, release |
 | security | [`SECURITY.md`](SECURITY.md) | Vulnerability reporting and disclosure |
 | contributors | [`docs/CONTEXT.md`](docs/CONTEXT.md) | Domain vocabulary, doc roles, where new modules live |
@@ -26,7 +28,7 @@ Other workspace roots are maintainer- or CI-oriented: [`examples`](examples/) (`
 | contributors | [`docs/contributor/runtime-architecture.md`](docs/contributor/runtime-architecture.md) | Module graph and execution flow |
 | architects | [`docs/adr/`](docs/adr/) | Why decisions were made |
 
-Changelogs: [`packages/op/CHANGELOG.md`](packages/op/CHANGELOG.md), [`packages/std/CHANGELOG.md`](packages/std/CHANGELOG.md).
+Changelogs: [`packages/op/CHANGELOG.md`](packages/op/CHANGELOG.md), [`packages/op-lint/CHANGELOG.md`](packages/op-lint/CHANGELOG.md), [`packages/std/CHANGELOG.md`](packages/std/CHANGELOG.md).
 
 ## workspace layout
 
@@ -50,7 +52,7 @@ pnpm run gate
 
 ## release flow
 
-Pushing a package-scoped tag (`op-v*`, `std-v*`) triggers
+Pushing a package-scoped tag (`op-v*`, `op-lint-v*`, `std-v*`) triggers
 [`.github/workflows/release.yml`](.github/workflows/release.yml), which publishes the matching
 npm package with trusted publishing and provenance. Release helpers live on each publishable
 package:
@@ -58,6 +60,9 @@ package:
 ```bash
 pnpm --filter @prodkit/op run release:patch   # or release:minor
 pnpm --filter @prodkit/op run release:push
+
+pnpm --filter @prodkit/op-lint run release:patch   # or release:minor
+pnpm --filter @prodkit/op-lint run release:push
 
 pnpm --filter @prodkit/std run release:patch
 pnpm --filter @prodkit/std run release:push

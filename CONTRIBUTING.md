@@ -14,7 +14,7 @@ pnpm install
 
 - This repository is a pnpm workspace monorepo orchestrated by Turborepo (`turbo`).
 - Root scripts (`pnpm run build|test|lint|typecheck|gate`) run across the workspace graph.
-- Publishable libraries today: **`@prodkit/op`** and **`@prodkit/std`** (see `packages/op`, `packages/std`).
+- Publishable libraries today: **`@prodkit/op`**, **`@prodkit/op-lint`**, and **`@prodkit/std`** (see `packages/op`, `packages/op-lint`, `packages/std`).
 - Supporting workspaces: **`@prodkit/shared`** (`packages/shared`, private workspace types/config), **`@prodkit/examples`** (`examples/`), **`@prodkit/tools`** (`tools/`), **`@prodkit/benchmarks`** (`benchmarks/`).
 - `@prodkit/op` landed first historically; the repo is intentionally multi-package.
 - Package-scoped scripts stay in the owning workspace `package.json`; invoke them with `pnpm --filter <workspace> run <script>`.
@@ -44,8 +44,9 @@ auto-merge).
 ## Documentation
 
 `@prodkit/op` consumer docs (`packages/op/README.md`, `packages/op/docs/`) ship on npm. They cover
-installation, API usage, and runtime semantics for library users. They do not link to monorepo-only
-material (ADRs, contributor guides, or `docs/CONTEXT.md`).
+installation, API usage, and runtime semantics for library users. `@prodkit/op-lint` consumer docs
+live in `packages/op-lint/README.md` and ship with the lint plugin package. Consumer docs do not
+link to monorepo-only material (ADRs, contributor guides, or `docs/CONTEXT.md`).
 
 Contributor and architecture docs live in the repo only:
 
@@ -84,6 +85,8 @@ and packs `@prodkit/std` even though `packages/std/src/` is effectively empty to
 tarball layout, `exports` wiring, and publish plumbing for the second npm package, not utility
 module coverage. When `@prodkit/std` subpaths ship real code, the same pack path exercises them
 without changing the gate shape.
+`@prodkit/op-lint` keeps its Oxlint JavaScript-plugin smoke coverage in package tests because it
+exercises lint loading rather than the runnable examples workspace.
 
 Pull requests and pushes to `main` and `beta/0.2.0` run the same gate in
 `.github/workflows/ci.yml`.
@@ -110,8 +113,8 @@ A `runnable-gating:check` gate step fails when Vitest coverage excludes for comp
 gating modules are removed or when stable describe/test titles for metadata blocking and DI provide
 behavior disappear from `@prodkit/op` tests (see Runnable metadata in
 [`docs/contributor/runtime-architecture.md`](docs/contributor/runtime-architecture.md)).
-A `docs:check` gate step fails when shipped consumer docs (`README.md`, `packages/op/README.md`,
-and `packages/op/docs/`) contain broken relative links, missing in-repo GitHub blob/tree targets, or
+A `docs:check` gate step fails when shipped consumer docs (`README.md`, package READMEs, and
+`packages/op/docs/`) contain broken relative links, missing in-repo GitHub blob/tree targets, or
 stale heading anchors.
 A `changelog:api:check` gate step fails when `packages/op/src/index.ts`,
 `packages/op/src/di/index.ts`, `packages/op/src/policy/index.ts`, or `packages/op/src/hkt.ts`
@@ -252,6 +255,15 @@ which doc to open for a given question.
   `@prodkit/op` keeps an external `tests/` tree instead; that difference is intentional.
 - Package docs: [`packages/std/README.md`](packages/std/README.md). Ship changelog: [`packages/std/CHANGELOG.md`](packages/std/CHANGELOG.md).
 
+## Source layout (`@prodkit/op-lint`)
+
+- Source under `packages/op-lint/src/`; the published entrypoint exports a plain
+  ESLint-compatible plugin object for Oxlint JavaScript plugin loading.
+- Rules are package-owned under `packages/op-lint/src/rules/` and tests colocate under
+  `packages/op-lint/src/**/*.test.ts`.
+- Package docs: [`packages/op-lint/README.md`](packages/op-lint/README.md). Ship changelog:
+  [`packages/op-lint/CHANGELOG.md`](packages/op-lint/CHANGELOG.md).
+
 You can run consumer install path checks directly. Each mode builds a temporary mini-pnpm workspace (reusing `catalog:` and pnpm safety policy from `pnpm-workspace.yaml`), installs `@prodkit/op` and `@prodkit/std` from the chosen source, then runs `examples/` smoke:
 
 ```bash
@@ -259,6 +271,7 @@ pnpm --filter @prodkit/tools run examples:smoke:pack
 pnpm --filter @prodkit/tools run examples:smoke:github
 pnpm --filter @prodkit/tools run examples:smoke:npm
 pnpm --filter @prodkit/op run test
+pnpm --filter @prodkit/op-lint run test
 pnpm --filter @prodkit/std run test
 ```
 
@@ -293,7 +306,7 @@ consumers, not for repo-internal implementation history.
 
 ## Release Workflow (Recommended)
 
-Publishable packages use package-scoped git tags (`op-vX.Y.Z`, `std-vX.Y.Z`).
+Publishable packages use package-scoped git tags (`op-vX.Y.Z`, `op-lint-vX.Y.Z`, `std-vX.Y.Z`).
 Pushing a tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml),
 which publishes the matching npm package. Legacy plain `v*` tags remain in history but
 are not used for new releases.
@@ -301,6 +314,7 @@ are not used for new releases.
 1. Keep the package changelog updated under `## [Unreleased]` as work lands:
 
    - `@prodkit/op`: `packages/op/CHANGELOG.md`
+   - `@prodkit/op-lint`: `packages/op-lint/CHANGELOG.md`
    - `@prodkit/std`: `packages/std/CHANGELOG.md`
 
    Changelogs follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) for **npm consumers** of
@@ -323,6 +337,8 @@ are not used for new releases.
 ```bash
 pnpm --filter @prodkit/op run release:patch   # patch bump
 pnpm --filter @prodkit/op run release:minor   # minor bump (for example 0.1.x -> 0.2.0)
+pnpm --filter @prodkit/op-lint run release:patch
+pnpm --filter @prodkit/op-lint run release:minor
 pnpm --filter @prodkit/std run release:patch
 ```
 
@@ -341,10 +357,11 @@ release validation runs against the tagged commit.
 
 ```bash
 pnpm --filter @prodkit/op run release:push
+pnpm --filter @prodkit/op-lint run release:push
 pnpm --filter @prodkit/std run release:push
 ```
 
-4. The workflow (for tags like `op-v0.1.70` or `std-v0.1.1`) then:
+4. The workflow (for tags like `op-v0.1.70`, `op-lint-v0.1.0`, or `std-v0.1.1`) then:
 
    - validates the tag is the latest package-scoped tag on `main`
    - verifies the `CI` workflow has passed for the tagged commit
@@ -390,4 +407,11 @@ pnpm --filter @prodkit/op publish --access public --provenance --no-git-checks
 ```bash
 pnpm --filter @prodkit/std run release:prepare
 pnpm --filter @prodkit/std publish --access public --provenance --no-git-checks
+```
+
+`@prodkit/op-lint` (after version + changelog updates):
+
+```bash
+pnpm --filter @prodkit/op-lint run release:prepare
+pnpm --filter @prodkit/op-lint publish --access public --provenance --no-git-checks
 ```

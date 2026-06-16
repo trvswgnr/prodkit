@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "op-v*"
+      - "op-lint-v*"
       - "std-v*"
 
 permissions:
@@ -38,7 +39,7 @@ jobs:
           package_id="${tag%%-v*}"
 
           case "$package_id" in
-            op|std) ;;
+            op|op-lint|std) ;;
             *)
               echo "Unsupported release tag prefix: ${tag}"
               echo "allow_publish=false" >> "$GITHUB_OUTPUT"
@@ -154,6 +155,7 @@ jobs:
         run: |
           case "${{ needs.validate-publish-source.outputs.package_id }}" in
             op) echo "NPM_FILTER=@prodkit/op" >> "$GITHUB_ENV" ;;
+            op-lint) echo "NPM_FILTER=@prodkit/op-lint" >> "$GITHUB_ENV" ;;
             std) echo "NPM_FILTER=@prodkit/std" >> "$GITHUB_ENV" ;;
             *)
               echo "Unsupported package id: ${{ needs.validate-publish-source.outputs.package_id }}"

@@ -1,6 +1,6 @@
 import { defineConfig } from "vitest/config";
 
-/** Shared vitest defaults for publishable packages (`@prodkit/op`, `@prodkit/std`). */
+/** Shared vitest defaults for publishable `@prodkit/*` packages. */
 export default defineConfig({
   test: {
     coverage: {
