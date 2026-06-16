@@ -25,7 +25,7 @@
     "@prodkit/shared": "workspace:*",
     "@types/node": "^24.12.2",
     "effect": "^3.21.2",
-    "esbuild": "^0.25.11",
+    "esbuild": "^0.28.1",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "tinybench": "^5.1.0",
