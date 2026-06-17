@@ -127,7 +127,22 @@ describe("@prodkit/op-lint plugin", () => {
           "  return yield* Op.of(2);",
           "});",
           "",
+          "const returned = Op(function* () {",
+          "  return direct;",
+          "});",
+          "",
+          "const yielded = Op(function* () {",
+          "  yield direct;",
+          "});",
+          "",
+          "const awaited = Op(async function* () {",
+          "  await service.load();",
+          "});",
+          "",
           "void program;",
+          "void returned;",
+          "void yielded;",
+          "void awaited;",
           "void generic(direct);",
           "",
         ].join("\n"),
@@ -161,7 +176,7 @@ describe("@prodkit/op-lint plugin", () => {
           diagnostic.code === "prodkit-op(require-yield-star)",
       );
 
-      expect(opDiagnostics).toHaveLength(7);
+      expect(opDiagnostics).toHaveLength(10);
       expect(output).toContain("Compose this Op with yield*");
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
@@ -176,11 +191,36 @@ describe("@prodkit/op-lint plugin", () => {
   }).run("require-yield-star", requireYieldStarRule, {
     valid: [
       "const program = Op(function* () { return yield* Op.of(1); });",
+      "const program = Op(function* () { const staged = Op.of(1); return yield* staged; });",
+      "const program = Op(function* () { items.map(() => Op.of(1)); });",
+      "const program = Op(function* () { items.map(() => { return Op.of(1); }); });",
       "function notAnOpGenerator() { Op.of(1); }",
+      "function notAGeneratorCallback() { return Op.of(1); }",
     ],
     invalid: [
       {
         code: "const program = Op(function* () { Op.of(1); });",
+        output: "const program = Op(function* () { yield* Op.of(1); });",
+        errors: [{ messageId: "missingYieldStar" }],
+      },
+      {
+        code: "const program = Op(function* () { return Op.of(1); });",
+        output: "const program = Op(function* () { return yield* Op.of(1); });",
+        errors: [{ messageId: "missingYieldStar" }],
+      },
+      {
+        code: "const program = Op(function* () { yield Op.of(1); });",
+        output: "const program = Op(function* () { yield* Op.of(1); });",
+        errors: [{ messageId: "missingYieldStar" }],
+      },
+      {
+        code: "const program = Op(async function* () { await Op.of(1); });",
+        output: "const program = Op(async function* () { yield* Op.of(1); });",
+        errors: [{ messageId: "missingYieldStar" }],
+      },
+      {
+        code: "const program = Op(async function* () { return await Op.of(1); });",
+        output: "const program = Op(async function* () { return yield* Op.of(1); });",
         errors: [{ messageId: "missingYieldStar" }],
       },
     ],

@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Detect ignored `@prodkit/op` values in `require-yield-star` with TypeScript checker-backed
   identity, including aliases, imports, generic `Op` parameters, properties, and methods returning
   Ops.
+- Report returned, yielded, and awaited `@prodkit/op` values in `require-yield-star`, with autofixes
+  for direct rewrites to `yield*`.
 
 ### Changed
 

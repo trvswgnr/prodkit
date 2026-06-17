@@ -23,7 +23,7 @@ type RangedNode = {
 };
 
 type RuleContext = TypeAwareRuleContext & {
-  report(diagnostic: { node: RangedNode; messageId: "missingYieldStar" }): void;
+  report(diagnostic: { node: RangedNode; messageId: "missingYieldStar"; fix?: FixFunction }): void;
 };
 
 type FunctionLikeNode = RangedNode & {
@@ -40,6 +40,22 @@ type CallExpressionNode = RangedNode & {
   callee: unknown;
 };
 
+type ReturnStatementNode = RangedNode & {
+  type: "ReturnStatement";
+  argument?: unknown;
+};
+
+type YieldExpressionNode = RangedNode & {
+  type: "YieldExpression";
+  argument?: unknown;
+  delegate?: boolean;
+};
+
+type AwaitExpressionNode = RangedNode & {
+  type: "AwaitExpression";
+  argument?: unknown;
+};
+
 type StaticMemberExpressionNode = RangedNode & {
   type: "MemberExpression";
   object: unknown;
@@ -51,6 +67,18 @@ type IdentifierNode = RangedNode & {
   type: "Identifier";
   name: string;
 };
+
+type Fix = {
+  range: [number, number];
+  text: string;
+};
+
+type Fixer = {
+  insertTextBefore(nodeOrToken: RangedNode, text: string): Fix;
+  replaceTextRange(range: [number, number], text: string): Fix;
+};
+
+type FixFunction = (fixer: Fixer) => Fix | Fix[] | Iterable<Fix> | null;
 
 function isNode(value: unknown): value is RangedNode {
   if (!isRecordLike(value)) return false;
@@ -109,6 +137,30 @@ function isExpressionStatement(value: unknown): value is ExpressionStatementNode
   );
 }
 
+function isReturnStatement(value: unknown): value is ReturnStatementNode {
+  return (
+    isRecordLike(value) &&
+    isNodeWithType(value, "ReturnStatement") &&
+    Object.hasOwn(value, "argument")
+  );
+}
+
+function isYieldExpression(value: unknown): value is YieldExpressionNode {
+  return (
+    isRecordLike(value) &&
+    isNodeWithType(value, "YieldExpression") &&
+    Object.hasOwn(value, "argument")
+  );
+}
+
+function isAwaitExpression(value: unknown): value is AwaitExpressionNode {
+  return (
+    isRecordLike(value) &&
+    isNodeWithType(value, "AwaitExpression") &&
+    Object.hasOwn(value, "argument")
+  );
+}
+
 function isFunctionLike(value: unknown): value is FunctionLikeNode {
   if (!isRecordLike(value)) return false;
   const generator = value["generator"];
@@ -131,10 +183,11 @@ export const requireYieldStarRule = {
   meta: {
     type: "problem" as const,
     docs: {
-      description: "Require composing direct Op builder calls with yield* inside generators.",
+      description: "Require composing Ops with yield* inside generators.",
       recommended: true,
       url: docsUrl,
     },
+    fixable: "code" as const,
     messages: {
       missingYieldStar: "Compose this Op with yield* so it runs inside the generator.",
     },
@@ -168,6 +221,42 @@ export const requireYieldStarRule = {
         context.report({
           node,
           messageId: "missingYieldStar",
+          fix: (fixer) => fixer.insertTextBefore(asRangedNode(node.expression), "yield* "),
+        });
+      },
+      ReturnStatement(node: unknown) {
+        if (!isInsideCurrentGenerator()) return;
+        if (!isReturnStatement(node)) return;
+        if (isYieldExpression(node.argument) || isAwaitExpression(node.argument)) return;
+        if (!isOpExpression(node.argument, opTypeDetector)) return;
+
+        context.report({
+          node,
+          messageId: "missingYieldStar",
+          fix: (fixer) => fixer.insertTextBefore(asRangedNode(node.argument), "yield* "),
+        });
+      },
+      YieldExpression(node: unknown) {
+        if (!isInsideCurrentGenerator()) return;
+        if (!isYieldExpression(node)) return;
+        if (node.delegate === true) return;
+        if (!isOpExpression(node.argument, opTypeDetector)) return;
+
+        context.report({
+          node,
+          messageId: "missingYieldStar",
+          fix: (fixer) => fixer.replaceTextRange(keywordRange(node, "yield"), "yield*"),
+        });
+      },
+      AwaitExpression(node: unknown) {
+        if (!isInsideCurrentGenerator()) return;
+        if (!isAwaitExpression(node)) return;
+        if (!isOpExpression(node.argument, opTypeDetector)) return;
+
+        context.report({
+          node,
+          messageId: "missingYieldStar",
+          fix: (fixer) => fixer.replaceTextRange(keywordRange(node, "await"), "yield*"),
         });
       },
     };
@@ -178,8 +267,27 @@ function isOpExpressionStatement(
   expression: unknown,
   opTypeDetector: ReturnType<typeof createOpTypeDetector>,
 ): boolean {
+  if (isYieldExpression(expression) || isAwaitExpression(expression)) return false;
+
+  return isOpExpression(expression, opTypeDetector);
+}
+
+function isOpExpression(
+  expression: unknown,
+  opTypeDetector: ReturnType<typeof createOpTypeDetector>,
+): boolean {
   if (isDirectOpBuilderCall(expression)) return true;
   if (opTypeDetector === undefined || !isNode(expression)) return false;
 
   return opTypeDetector.isOpExpression(expression);
+}
+
+function asRangedNode(node: unknown): RangedNode {
+  if (isNode(node)) return node;
+
+  throw new TypeError("Expected ranged AST node for require-yield-star autofix.");
+}
+
+function keywordRange(node: RangedNode, keyword: "await" | "yield"): [number, number] {
+  return [node.range[0], node.range[0] + keyword.length];
 }
