@@ -8,6 +8,7 @@ right doc before diving into code.
 | Package | Role |
 | --- | --- |
 | `@prodkit/op` | Runtime-agnostic operation library: typed async composition, policies, combinators, DI subpath |
+| `@prodkit/op-lint` | Oxlint-loadable lint rules for `@prodkit/op` generator composition |
 | `@prodkit/std` | Reserved runtime-agnostic utilities (no `@prodkit/op` dependency); example subpath `@prodkit/std/array` |
 | `@prodkit/shared` | Private workspace globals, publishable tsconfig/vitest presets, and runtime primitives (not published) |
 | `@prodkit/examples` | Consumer smoke and sample apps |
@@ -23,6 +24,7 @@ exports, not separate npm packages or `@prodkit/std` modules. Full placement rul
 | Path | Workspace | Audience |
 | --- | --- | --- |
 | `packages/op/` | `@prodkit/op` | Published operation runtime and subpaths |
+| `packages/op-lint/` | `@prodkit/op-lint` | Published lint plugin for Op usage |
 | `packages/std/` | `@prodkit/std` | Published utilities with no `@prodkit/op` dependency |
 | `packages/shared/` | `@prodkit/shared` | Private presets and workspace primitives (not on npm) |
 | `examples/` | `@prodkit/examples` | Consumer samples and smoke; layout in `examples/README.md`, topic index in `examples/op/README.md` |
@@ -40,6 +42,7 @@ Use this table when adding a feature. Rationale and examples:
 | Situation | Home |
 | --- | --- |
 | Builds on `Op`, plans, policies, or DI; runtime-agnostic; depends only on `@prodkit/op` and `better-result` (existing op peer) | `@prodkit/op/<subpath>` (for example `@prodkit/op/policy` for a circuit-breaker policy) |
+| Lint rules or lint-plugin integration for Op usage | `@prodkit/op-lint` |
 | Runtime-agnostic utilities that do not import `@prodkit/op` | `@prodkit/std/<subpath>` (for example `@prodkit/std/array`) |
 | Platform-specific (Node-only CLI adapter, DOM-only helper) | New `@prodkit/*` package under `packages/` |
 | Hard dependency on an integration SDK (OpenTelemetry, a validation stack, an HTTP framework) | New `@prodkit/*` package under `packages/` |
@@ -73,6 +76,7 @@ the boundary choice is not already covered by ADR 0008.
 | Question | Start here |
 | --- | --- |
 | How do I install and use `@prodkit/op`? | [`packages/op/README.md`](../packages/op/README.md) (hub + core API; ships on npm) |
+| How do I lint `@prodkit/op` generator usage? | [`packages/op-lint/README.md`](../packages/op-lint/README.md) (ships on npm) |
 | Subpaths, lifecycle, cancellation depth | [`packages/op/docs/`](../packages/op/docs/README.md) (ships on npm) |
 | Why was it built this way? | [`docs/adr/README.md`](adr/README.md) (monorepo only) |
 | How does execution flow through modules? | [`docs/contributor/runtime-architecture.md`](contributor/runtime-architecture.md) |
@@ -83,7 +87,7 @@ the boundary choice is not already covered by ADR 0008.
 | How should durable docs be written? | [Evergreen writing](#evergreen-writing) (this file) |
 | How does `@prodkit/op` compare to Effect / neverthrow? | [`packages/op/docs/comparison.md`](../packages/op/docs/comparison.md) (ships on npm) |
 | What is the runtime overhead? | [`packages/op/docs/performance.md`](../packages/op/docs/performance.md) (ships on npm) |
-| What changed in the last release? | Package `CHANGELOG.md` under `packages/op` or `packages/std` |
+| What changed in the last release? | Package `CHANGELOG.md` under `packages/op`, `packages/op-lint`, or `packages/std` |
 
 ## Documentation boundaries
 

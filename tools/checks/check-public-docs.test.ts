@@ -21,6 +21,8 @@ void test("slugifyHeading matches package README policy anchors", () => {
 void test("broken relative and github links are reported", () => {
   const root = mkdtempSync(path.join(tmpdir(), "public-docs-check-"));
   mkdirSync(path.join(root, "packages/op/docs"), { recursive: true });
+  mkdirSync(path.join(root, "packages/op-lint"), { recursive: true });
+  mkdirSync(path.join(root, "packages/std"), { recursive: true });
   writeFileSync(path.join(root, "README.md"), "[root](packages/op/README.md)\n", "utf8");
   writeFileSync(
     path.join(root, "packages/op/README.md"),
@@ -31,6 +33,8 @@ void test("broken relative and github links are reported", () => {
     ].join("\n"),
     "utf8",
   );
+  writeFileSync(path.join(root, "packages/op-lint/README.md"), "# @prodkit/op-lint\n", "utf8");
+  writeFileSync(path.join(root, "packages/std/README.md"), "# @prodkit/std\n", "utf8");
   writeFileSync(path.join(root, "packages/op/docs/README.md"), "## Guides\n", "utf8");
 
   const issues = checkPublicDocs(root);

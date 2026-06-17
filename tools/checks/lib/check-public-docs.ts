@@ -9,7 +9,13 @@ export function listPublicDocRelativePaths(repoRoot: string): string[] {
         .sort()
         .map((entry) => `packages/op/docs/${entry}`)
     : [];
-  return ["README.md", "packages/op/README.md", ...guideDocs];
+  return [
+    "README.md",
+    "packages/op/README.md",
+    "packages/op-lint/README.md",
+    "packages/std/README.md",
+    ...guideDocs,
+  ];
 }
 
 const MARKDOWN_LINK = /\[([^\]]*)\]\(([^)]+)\)/g;

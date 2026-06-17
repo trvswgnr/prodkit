@@ -1,0 +1,451 @@
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
+import { isRecordLike } from "@prodkit/shared/runtime";
+import * as ts from "typescript";
+
+const prodkitOpPackageName = "@prodkit/op";
+const tsConfigFileName = "tsconfig.json";
+
+export type TypeAwareRuleContext = {
+  cwd?: string;
+  filename?: string;
+  physicalFilename?: string;
+  sourceCode?: unknown;
+};
+
+export type RangedNode = {
+  range: readonly [number, number];
+};
+
+export type OpTypeDetector = {
+  isOpExpression(node: RangedNode): boolean;
+};
+
+type TypeScriptProject = {
+  checker: ts.TypeChecker;
+  program: ts.Program;
+  sourceFileIndexes: WeakMap<ts.SourceFile, SourceFileIndex>;
+};
+
+type SourceFileIndex = {
+  byRange: Map<string, ts.Node[]>;
+};
+
+type SourceOverride = {
+  fileName: string;
+  text: string;
+};
+
+const projectCache = new Map<string, TypeScriptProject>();
+const packageNameCache = new Map<string, string | undefined>();
+const canonicalPathCache = new Map<string, string>();
+
+export function clearOpTypeDetectorCaches(): void {
+  projectCache.clear();
+  packageNameCache.clear();
+  canonicalPathCache.clear();
+}
+
+export function createOpTypeDetector(context: TypeAwareRuleContext): OpTypeDetector | undefined {
+  const fileName = resolveLintFileName(context);
+  if (fileName === undefined) return undefined;
+
+  const project = getTypeScriptProject(fileName, sourceTextFromContext(context));
+  if (project === undefined) return undefined;
+
+  const sourceFile = getProjectSourceFile(project.program, fileName);
+  if (sourceFile === undefined) return undefined;
+
+  return {
+    isOpExpression(node) {
+      const tsNode = findTypeScriptNodeAtRange(project, sourceFile, node.range);
+      if (tsNode === undefined) return false;
+
+      return isProdkitOpType(project.checker, project.checker.getTypeAtLocation(tsNode));
+    },
+  };
+}
+
+function sourceTextFromContext(context: TypeAwareRuleContext): string | undefined {
+  const sourceCode = context.sourceCode;
+  if (!isRecordLike(sourceCode)) return undefined;
+
+  const text = sourceCode["text"];
+  return typeof text === "string" ? text : undefined;
+}
+
+function resolveLintFileName(context: TypeAwareRuleContext): string | undefined {
+  const rawFileName = context.physicalFilename ?? context.filename;
+  if (rawFileName === undefined || rawFileName.startsWith("<")) return undefined;
+
+  const cwd = context.cwd ?? process.cwd();
+  return isAbsolute(rawFileName) ? normalize(rawFileName) : normalize(resolve(cwd, rawFileName));
+}
+
+function getTypeScriptProject(
+  fileName: string,
+  sourceText: string | undefined,
+): TypeScriptProject | undefined {
+  const configPath = ts.findConfigFile(dirname(fileName), ts.sys.fileExists, tsConfigFileName);
+  const sourceOverride = createSourceOverride(fileName, sourceText);
+
+  if (configPath === undefined) {
+    return getInferredProject(fileName, sourceOverride);
+  }
+
+  const parsedConfig = parseConfig(configPath);
+  if (parsedConfig === undefined) {
+    return getInferredProject(fileName, sourceOverride);
+  }
+
+  const canonicalFileName = canonicalPath(fileName);
+  const parsedFileNames = new Set(parsedConfig.fileNames.map(canonicalPath));
+  const fileIsInConfig = parsedFileNames.has(canonicalFileName);
+  const rootNames = fileIsInConfig ? parsedConfig.fileNames : [...parsedConfig.fileNames, fileName];
+  const options = normalizeCompilerOptions(parsedConfig.options);
+  const cacheKey = [
+    "config",
+    canonicalPath(configPath),
+    fileIsInConfig ? "included" : canonicalFileName,
+    sourceOverride === undefined ? "disk" : sourceOverrideCacheKey(sourceOverride),
+  ].join(":");
+
+  return getCachedProject(cacheKey, rootNames, options, sourceOverride);
+}
+
+function getInferredProject(
+  fileName: string,
+  sourceOverride: SourceOverride | undefined,
+): TypeScriptProject {
+  const options = normalizeCompilerOptions({
+    module: ts.ModuleKind.NodeNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeNext,
+    skipLibCheck: true,
+    strict: true,
+    target: ts.ScriptTarget.ES2022,
+  });
+  const cacheKey = [
+    "inferred",
+    canonicalPath(fileName),
+    sourceOverride === undefined ? "disk" : sourceOverrideCacheKey(sourceOverride),
+  ].join(":");
+
+  return getCachedProject(cacheKey, [fileName], options, sourceOverride);
+}
+
+function createSourceOverride(
+  fileName: string,
+  sourceText: string | undefined,
+): SourceOverride | undefined {
+  if (sourceText === undefined || existsSync(fileName)) return undefined;
+
+  return { fileName, text: sourceText };
+}
+
+function sourceOverrideCacheKey(sourceOverride: SourceOverride): string {
+  return `${canonicalPath(sourceOverride.fileName)}:${sourceOverride.text.length}`;
+}
+
+function parseConfig(configPath: string): ts.ParsedCommandLine | undefined {
+  return ts.getParsedCommandLineOfConfigFile(
+    configPath,
+    {},
+    {
+      ...ts.sys,
+      onUnRecoverableConfigFileDiagnostic() {},
+    },
+  );
+}
+
+function normalizeCompilerOptions(options: ts.CompilerOptions): ts.CompilerOptions {
+  return {
+    ...options,
+    allowJs: true,
+    noEmit: true,
+  };
+}
+
+function getCachedProject(
+  cacheKey: string,
+  rootNames: readonly string[],
+  options: ts.CompilerOptions,
+  sourceOverride: SourceOverride | undefined,
+): TypeScriptProject {
+  const cached = projectCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
+  const host = createCompilerHost(options, sourceOverride);
+  const program = ts.createProgram([...rootNames], options, host);
+  const project: TypeScriptProject = {
+    checker: program.getTypeChecker(),
+    program,
+    sourceFileIndexes: new WeakMap(),
+  };
+
+  projectCache.set(cacheKey, project);
+  return project;
+}
+
+function createCompilerHost(
+  options: ts.CompilerOptions,
+  sourceOverride: SourceOverride | undefined,
+): ts.CompilerHost {
+  const host = ts.createCompilerHost(options, true);
+  if (sourceOverride === undefined) return host;
+
+  const originalFileExists = host.fileExists.bind(host);
+  const originalReadFile = host.readFile.bind(host);
+  const sourceFileName = canonicalPath(sourceOverride.fileName);
+
+  host.fileExists = (fileName) => {
+    if (canonicalPath(fileName) === sourceFileName) return true;
+    return originalFileExists(fileName);
+  };
+  host.readFile = (fileName) => {
+    if (canonicalPath(fileName) === sourceFileName) return sourceOverride.text;
+    return originalReadFile(fileName);
+  };
+
+  return host;
+}
+
+function getProjectSourceFile(program: ts.Program, fileName: string): ts.SourceFile | undefined {
+  const direct = program.getSourceFile(fileName);
+  if (direct !== undefined) return direct;
+
+  const canonicalFileName = canonicalPath(fileName);
+  return program
+    .getSourceFiles()
+    .find((sourceFile) => canonicalPath(sourceFile.fileName) === canonicalFileName);
+}
+
+function findTypeScriptNodeAtRange(
+  project: TypeScriptProject,
+  sourceFile: ts.SourceFile,
+  range: readonly [number, number],
+): ts.Node | undefined {
+  const index = getSourceFileIndex(project, sourceFile);
+  const exactMatches = index.byRange.get(rangeKey(range[0], range[1]));
+  const exactExpression = findLastNode(exactMatches, ts.isExpression);
+  if (exactExpression !== undefined) return exactExpression;
+  if (exactMatches !== undefined && exactMatches.length > 0)
+    return exactMatches[exactMatches.length - 1];
+
+  return findDeepestContainedExpression(sourceFile, range[0], range[1]);
+}
+
+function getSourceFileIndex(
+  project: TypeScriptProject,
+  sourceFile: ts.SourceFile,
+): SourceFileIndex {
+  const cached = project.sourceFileIndexes.get(sourceFile);
+  if (cached !== undefined) return cached;
+
+  const index = buildSourceFileIndex(sourceFile);
+  project.sourceFileIndexes.set(sourceFile, index);
+  return index;
+}
+
+function buildSourceFileIndex(sourceFile: ts.SourceFile): SourceFileIndex {
+  const byRange = new Map<string, ts.Node[]>();
+
+  const visit = (node: ts.Node) => {
+    const key = rangeKey(node.getStart(sourceFile), node.getEnd());
+    const nodes = byRange.get(key);
+    if (nodes === undefined) {
+      byRange.set(key, [node]);
+    } else {
+      nodes.push(node);
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return { byRange };
+}
+
+function findDeepestContainedExpression(
+  sourceFile: ts.SourceFile,
+  start: number,
+  end: number,
+): ts.Expression | undefined {
+  let match: ts.Expression | undefined;
+
+  const visit = (node: ts.Node) => {
+    const nodeStart = node.getStart(sourceFile);
+    const nodeEnd = node.getEnd();
+    if (nodeEnd < start || nodeStart > end) return;
+
+    if (nodeStart >= start && nodeEnd <= end && ts.isExpression(node)) {
+      match = node;
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return match;
+}
+
+function findLastNode<T extends ts.Node>(
+  nodes: readonly ts.Node[] | undefined,
+  predicate: (node: ts.Node) => node is T,
+): T | undefined {
+  if (nodes === undefined) return undefined;
+
+  for (let index = nodes.length - 1; index >= 0; index -= 1) {
+    const node = nodes[index];
+    if (node !== undefined && predicate(node)) return node;
+  }
+
+  return undefined;
+}
+
+function rangeKey(start: number, end: number): string {
+  return `${start}:${end}`;
+}
+
+function isProdkitOpType(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+  seen: Set<ts.Type> = new Set(),
+): boolean {
+  if (seen.has(type)) return false;
+  seen.add(type);
+
+  if (isAnyOrUnknown(type)) return false;
+  if (isProdkitOpAlias(type) || hasProdkitOpPackageShape(checker, type)) return true;
+
+  if (type.isUnion()) {
+    return type.types.some((part) => isProdkitOpType(checker, part, seen));
+  }
+
+  if (type.isIntersection()) {
+    return type.types.some((part) => isProdkitOpType(checker, part, seen));
+  }
+
+  const apparent = checker.getApparentType(type);
+  if (apparent !== type && isProdkitOpType(checker, apparent, seen)) return true;
+
+  const constraint = checker.getBaseConstraintOfType(type);
+  if (constraint !== undefined && constraint !== type) {
+    return isProdkitOpType(checker, constraint, seen);
+  }
+
+  return false;
+}
+
+function isAnyOrUnknown(type: ts.Type): boolean {
+  const flags = type.getFlags();
+  return (flags & ts.TypeFlags.Any) !== 0 || (flags & ts.TypeFlags.Unknown) !== 0;
+}
+
+function isProdkitOpAlias(type: ts.Type): boolean {
+  const aliasSymbol = type.aliasSymbol;
+  if (aliasSymbol === undefined) return false;
+
+  return symbolHasDeclarationFromPackage(aliasSymbol, prodkitOpPackageName, "Op");
+}
+
+function hasProdkitOpPackageShape(checker: ts.TypeChecker, type: ts.Type): boolean {
+  const tagProperty = type.getProperty("_tag");
+  const runProperty = type.getProperty("run");
+  if (tagProperty === undefined || runProperty === undefined) return false;
+
+  const declaration = firstDeclaration(tagProperty) ?? firstDeclaration(runProperty);
+  if (declaration === undefined) return false;
+
+  const tagType = checker.getTypeOfSymbolAtLocation(tagProperty, declaration);
+
+  return (
+    typeIncludesStringLiteral(tagType, "Op") &&
+    symbolHasDeclarationFromPackage(tagProperty, prodkitOpPackageName) &&
+    symbolHasDeclarationFromPackage(runProperty, prodkitOpPackageName)
+  );
+}
+
+function typeIncludesStringLiteral(type: ts.Type, expected: string): boolean {
+  if (type.isStringLiteral()) return type.value === expected;
+  if (type.isUnion()) return type.types.some((part) => typeIncludesStringLiteral(part, expected));
+
+  return false;
+}
+
+function firstDeclaration(symbol: ts.Symbol): ts.Declaration | undefined {
+  return symbol.declarations?.[0];
+}
+
+function symbolHasDeclarationFromPackage(
+  symbol: ts.Symbol,
+  packageName: string,
+  declarationName?: string,
+): boolean {
+  return (
+    symbol.declarations?.some((declaration) => {
+      if (declarationName !== undefined && declarationIdentifier(declaration) !== declarationName) {
+        return false;
+      }
+
+      return packageNameForFile(declaration.getSourceFile().fileName) === packageName;
+    }) ?? false
+  );
+}
+
+function declarationIdentifier(declaration: ts.Declaration): string | undefined {
+  const name = ts.getNameOfDeclaration(declaration);
+  return name !== undefined && ts.isIdentifier(name) ? name.text : undefined;
+}
+
+function packageNameForFile(fileName: string): string | undefined {
+  let dir = dirname(canonicalPath(fileName));
+
+  while (true) {
+    const cached = packageNameCache.get(dir);
+    if (packageNameCache.has(dir)) return cached;
+
+    const packageJsonPath = join(dir, "package.json");
+    if (existsSync(packageJsonPath)) {
+      const packageName = readPackageName(packageJsonPath);
+      packageNameCache.set(dir, packageName);
+      return packageName;
+    }
+
+    const parent = dirname(dir);
+    if (parent === dir) {
+      packageNameCache.set(dir, undefined);
+      return undefined;
+    }
+
+    dir = parent;
+  }
+}
+
+function readPackageName(packageJsonPath: string): string | undefined {
+  try {
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+    return isRecordLike(packageJson) && typeof packageJson["name"] === "string"
+      ? packageJson["name"]
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function canonicalPath(fileName: string): string {
+  const normalized = normalize(fileName);
+  const cached = canonicalPathCache.get(normalized);
+  if (cached !== undefined) return cached;
+
+  const canonical = safeRealpath(normalized);
+  canonicalPathCache.set(normalized, canonical);
+  return canonical;
+}
+
+function safeRealpath(fileName: string): string {
+  try {
+    return normalize(realpathSync.native(fileName));
+  } catch {
+    return normalize(resolve(fileName));
+  }
+}
