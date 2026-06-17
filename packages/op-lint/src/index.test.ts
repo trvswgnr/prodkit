@@ -1,5 +1,13 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -178,6 +186,137 @@ describe("@prodkit/op-lint plugin", () => {
 
       expect(opDiagnostics).toHaveLength(10);
       expect(output).toContain("Compose this Op with yield*");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("loads through ESLint flat config and applies fixes", () => {
+    const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+    const distEntry = resolve(packageRoot, "dist/index.mjs");
+    const eslintBin = resolve(packageRoot, "node_modules/eslint/bin/eslint.js");
+    const opPackageRoot = resolve(packageRoot, "../op");
+    const betterResultRoot = resolve(opPackageRoot, "node_modules/better-result");
+
+    expect(existsSync(distEntry), `${distEntry} should exist before the smoke test`).toBe(true);
+    expect(existsSync(eslintBin), `${eslintBin} should exist before the smoke test`).toBe(true);
+    expect(existsSync(opPackageRoot), `${opPackageRoot} should exist before the smoke test`).toBe(
+      true,
+    );
+    expect(
+      existsSync(betterResultRoot),
+      `${betterResultRoot} should exist before the smoke test`,
+    ).toBe(true);
+
+    const tempDir = mkdtempSync(resolve(tmpdir(), "prodkit-op-lint-eslint-"));
+    const fixturePath = resolve(tempDir, "fixture.js");
+
+    try {
+      mkdirSync(resolve(tempDir, "node_modules/@prodkit"), { recursive: true });
+      symlinkSync(opPackageRoot, resolve(tempDir, "node_modules/@prodkit/op"), "dir");
+      symlinkSync(betterResultRoot, resolve(tempDir, "node_modules/better-result"), "dir");
+
+      writeFileSync(
+        resolve(tempDir, "eslint.config.mjs"),
+        [
+          `import prodkitOp from ${JSON.stringify(pathToFileURL(distEntry).href)};`,
+          "",
+          "export default [",
+          "  {",
+          '    files: ["**/*.js"],',
+          "    languageOptions: {",
+          '      ecmaVersion: "latest",',
+          '      sourceType: "module",',
+          "    },",
+          "    plugins: {",
+          '      "prodkit-op": prodkitOp,',
+          "    },",
+          "    rules: {",
+          '      "prodkit-op/require-yield-star": "error",',
+          "    },",
+          "  },",
+          "];",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+      writeFileSync(
+        resolve(tempDir, "tsconfig.json"),
+        `${JSON.stringify(
+          {
+            compilerOptions: {
+              allowJs: true,
+              module: "NodeNext",
+              moduleResolution: "NodeNext",
+              skipLibCheck: true,
+              strict: true,
+              target: "ES2022",
+            },
+            include: ["*.js"],
+          },
+          null,
+          2,
+        )}\n`,
+        "utf8",
+      );
+      writeFileSync(
+        fixturePath,
+        [
+          'import { Op } from "@prodkit/op";',
+          "",
+          "const direct = Op.of(1);",
+          "",
+          "const program = Op(function* () {",
+          "  Op.of(1);",
+          "  return direct;",
+          "});",
+          "",
+          "void program;",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const reportResult = spawnSync(
+        process.execPath,
+        [eslintBin, "--format", "json", fixturePath],
+        {
+          cwd: tempDir,
+          encoding: "utf8",
+        },
+      );
+      const reportOutput = `${reportResult.stdout}\n${reportResult.stderr}`;
+
+      expect(reportResult.status, reportOutput).toBe(1);
+      const reportJson = JSON.parse(reportResult.stdout);
+      const messages: unknown[] =
+        Array.isArray(reportJson) &&
+        reportJson[0] !== undefined &&
+        typeof reportJson[0] === "object" &&
+        reportJson[0] !== null &&
+        "messages" in reportJson[0] &&
+        Array.isArray(reportJson[0].messages)
+          ? reportJson[0].messages
+          : [];
+
+      expect(messages).toHaveLength(2);
+      expect(reportOutput).toContain("prodkit-op/require-yield-star");
+
+      const fixResult = spawnSync(process.execPath, [eslintBin, "--fix", fixturePath], {
+        cwd: tempDir,
+        encoding: "utf8",
+      });
+      const fixOutput = `${fixResult.stdout}\n${fixResult.stderr}`;
+
+      expect(fixResult.status, fixOutput).toBe(0);
+      expect(readFileSync(fixturePath, "utf8")).toContain(
+        [
+          "const program = Op(function* () {",
+          "  yield* Op.of(1);",
+          "  return yield* direct;",
+          "});",
+        ].join("\n"),
+      );
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }
