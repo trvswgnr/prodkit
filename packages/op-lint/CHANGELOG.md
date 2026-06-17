@@ -22,3 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Keep TypeScript external and require it as a peer dependency for checker-backed linting.
 - Overhaul the `@prodkit/op-lint` README around common Op generator mistakes, Oxlint setup, ESLint
   setup, and checker-backed detection limits.
+
+## [0.0.0]
+
+### Added
+
+- Establish the unpublished package baseline for release tooling.
