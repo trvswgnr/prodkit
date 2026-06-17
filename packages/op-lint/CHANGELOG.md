@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- No entries yet.
+
+## [0.1.0] - 2026-06-17
+
+### Added
+
 - Publish the initial ESLint-compatible, Oxlint-loadable `@prodkit/op-lint` plugin package with the
   `require-yield-star` rule scaffold.
 - Detect ignored `@prodkit/op` values in `require-yield-star` with TypeScript checker-backed
@@ -28,3 +34,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Establish the unpublished package baseline for release tooling.
+
