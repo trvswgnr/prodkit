@@ -114,6 +114,10 @@ describe("@prodkit/op-lint plugin", () => {
           "  load(): OpType<number, never, []>;",
           "};",
           "",
+          "const Console = {",
+          "  info: (...args: unknown[]) => Op.of(undefined).tap(() => console.info(...args)),",
+          "};",
+          "",
           "function generic<T extends OpType<number, never, []>>(op: T) {",
           "  return Op(function* () {",
           "    op;",
@@ -130,6 +134,7 @@ describe("@prodkit/op-lint plugin", () => {
           "  importedOperation;",
           "  service.stored;",
           "  service.load();",
+          '  Console.info("divide", 1, 2);',
           "  iterable;",
           "  lookalike;",
           "  return yield* Op.of(2);",
@@ -184,7 +189,7 @@ describe("@prodkit/op-lint plugin", () => {
           diagnostic.code === "prodkit-op(require-yield-star)",
       );
 
-      expect(opDiagnostics).toHaveLength(10);
+      expect(opDiagnostics).toHaveLength(11);
       expect(output).toContain("Compose this Op with yield*");
     } finally {
       rmSync(tempDir, { recursive: true, force: true });

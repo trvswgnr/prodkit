@@ -61,7 +61,7 @@ export function createOpTypeDetector(context: TypeAwareRuleContext): OpTypeDetec
       const tsNode = findTypeScriptNodeAtRange(project, sourceFile, node.range);
       if (tsNode === undefined) return false;
 
-      return isProdkitOpType(project.checker, project.checker.getTypeAtLocation(tsNode));
+      return expressionProducesProdkitOp(project.checker, tsNode);
     },
   };
 }
@@ -231,7 +231,92 @@ function findTypeScriptNodeAtRange(
   if (exactMatches !== undefined && exactMatches.length > 0)
     return exactMatches[exactMatches.length - 1];
 
-  return findDeepestContainedExpression(sourceFile, range[0], range[1]);
+  return findBestMatchingExpression(sourceFile, range[0], range[1]);
+}
+
+function expressionProducesProdkitOp(checker: ts.TypeChecker, node: ts.Node): boolean {
+  const type = checker.getTypeAtLocation(node);
+  if (isProdkitOpType(checker, type)) return true;
+
+  if (ts.isCallExpression(node)) {
+    const signature = checker.getResolvedSignature(node);
+    if (signature !== undefined) {
+      return isProdkitOpType(checker, checker.getReturnTypeOfSignature(signature));
+    }
+  }
+
+  return false;
+}
+
+function findBestMatchingExpression(
+  sourceFile: ts.SourceFile,
+  start: number,
+  end: number,
+): ts.Expression | undefined {
+  let match: ts.Expression | undefined;
+  let bestScore: readonly [number, number, number] = [-1, -1, -1];
+
+  const visit = (node: ts.Node) => {
+    if (!ts.isExpression(node)) {
+      ts.forEachChild(node, visit);
+      return;
+    }
+
+    const score = expressionMatchScore(sourceFile, node, start, end);
+    if (compareMatchScores(score, bestScore) > 0) {
+      bestScore = score;
+      match = node;
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return match;
+}
+
+function expressionMatchScore(
+  sourceFile: ts.SourceFile,
+  node: ts.Expression,
+  start: number,
+  end: number,
+): readonly [number, number, number] {
+  const nodeStart = node.getStart(sourceFile);
+  const nodeEnd = node.getEnd();
+  const overlapStart = Math.max(start, nodeStart);
+  const overlapEnd = Math.min(end, nodeEnd);
+  const overlap = Math.max(0, overlapEnd - overlapStart);
+  const kindPriority = ts.isCallExpression(node) ? 1 : 0;
+  const span = nodeEnd - nodeStart;
+
+  return [overlap, kindPriority, span];
+}
+
+function compareMatchScores(
+  left: readonly [number, number, number],
+  right: readonly [number, number, number],
+): number {
+  for (let index = 0; index < left.length; index += 1) {
+    const leftValue = left[index] ?? 0;
+    const rightValue = right[index] ?? 0;
+    if (leftValue !== rightValue) return leftValue > rightValue ? 1 : -1;
+  }
+
+  return 0;
+}
+
+function findLastNode<T extends ts.Node>(
+  nodes: readonly ts.Node[] | undefined,
+  predicate: (node: ts.Node) => node is T,
+): T | undefined {
+  if (nodes === undefined) return undefined;
+
+  for (let index = nodes.length - 1; index >= 0; index -= 1) {
+    const node = nodes[index];
+    if (node !== undefined && predicate(node)) return node;
+  }
+
+  return undefined;
 }
 
 function getSourceFileIndex(
@@ -263,43 +348,6 @@ function buildSourceFileIndex(sourceFile: ts.SourceFile): SourceFileIndex {
 
   visit(sourceFile);
   return { byRange };
-}
-
-function findDeepestContainedExpression(
-  sourceFile: ts.SourceFile,
-  start: number,
-  end: number,
-): ts.Expression | undefined {
-  let match: ts.Expression | undefined;
-
-  const visit = (node: ts.Node) => {
-    const nodeStart = node.getStart(sourceFile);
-    const nodeEnd = node.getEnd();
-    if (nodeEnd < start || nodeStart > end) return;
-
-    if (nodeStart >= start && nodeEnd <= end && ts.isExpression(node)) {
-      match = node;
-    }
-
-    ts.forEachChild(node, visit);
-  };
-
-  visit(sourceFile);
-  return match;
-}
-
-function findLastNode<T extends ts.Node>(
-  nodes: readonly ts.Node[] | undefined,
-  predicate: (node: ts.Node) => node is T,
-): T | undefined {
-  if (nodes === undefined) return undefined;
-
-  for (let index = nodes.length - 1; index >= 0; index -= 1) {
-    const node = nodes[index];
-    if (node !== undefined && predicate(node)) return node;
-  }
-
-  return undefined;
 }
 
 function rangeKey(start: number, end: number): string {
