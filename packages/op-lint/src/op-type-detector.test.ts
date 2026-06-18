@@ -372,3 +372,112 @@ describe("op-type-detector Console wrapper", () => {
     }
   });
 });
+
+describe("op-type-detector quick start returns", () => {
+  const quickStartSource = [
+    'import { Op } from "@prodkit/op";',
+    'import { TaggedError } from "better-result";',
+    "",
+    'class DivisionByZeroError extends TaggedError("DivisionByZeroError")() {}',
+    "",
+    "const divide = Op(function* (a: number, b: number) {",
+    "  if (b === 0) return yield* new DivisionByZeroError();",
+    "  return a / b;",
+    "});",
+    "",
+    "const sqrt = Op(function* (n: number) {",
+    '  if (n < 0) return yield* Op.fail("Negative");',
+    "  return Math.sqrt(n);",
+    "});",
+    "",
+    "const program = Op(function* () {",
+    "  const quotient = yield* divide(10, 2);",
+    "  const rooted = yield* sqrt(quotient);",
+    "  return rooted * 2;",
+    "});",
+    "",
+    "void program;",
+    "",
+  ].join("\n");
+
+  function returnArgumentRanges(sourceFile: ts.SourceFile): Map<string, [number, number]> {
+    const ranges = new Map<string, [number, number]>();
+
+    const visit = (node: ts.Node) => {
+      if (ts.isReturnStatement(node) && node.expression !== undefined) {
+        const text = node.expression.getText(sourceFile);
+        ranges.set(text, [node.expression.getStart(sourceFile), node.expression.getEnd()]);
+      }
+      ts.forEachChild(node, visit);
+    };
+
+    visit(sourceFile);
+    return ranges;
+  }
+
+  test("does not treat plain success returns as Ops", () => {
+    clearOpTypeDetectorCaches();
+    const { tempDir, filePath } = setupTempProject(quickStartSource);
+
+    try {
+      const detector = createOpTypeDetector({
+        cwd: tempDir,
+        filename: filePath,
+        physicalFilename: filePath,
+        sourceCode: { text: quickStartSource },
+      });
+      expect(detector).toBeDefined();
+
+      const sourceFile = ts.createSourceFile(
+        filePath,
+        quickStartSource,
+        ts.ScriptTarget.ES2022,
+        true,
+      );
+      const ranges = returnArgumentRanges(sourceFile);
+
+      for (const expression of ["a / b", "Math.sqrt(n)", "rooted * 2"]) {
+        const range = ranges.get(expression);
+        expect(range, expression).toBeDefined();
+        if (range === undefined) continue;
+        expect(detector?.isOpExpression({ range }), expression).toBe(false);
+      }
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("does not treat plain success returns as Ops when ranges are slightly shifted", () => {
+    clearOpTypeDetectorCaches();
+    const { tempDir, filePath } = setupTempProject(quickStartSource);
+
+    try {
+      const detector = createOpTypeDetector({
+        cwd: tempDir,
+        filename: filePath,
+        physicalFilename: filePath,
+        sourceCode: { text: quickStartSource },
+      });
+      expect(detector).toBeDefined();
+
+      const sourceFile = ts.createSourceFile(
+        filePath,
+        quickStartSource,
+        ts.ScriptTarget.ES2022,
+        true,
+      );
+      const ranges = returnArgumentRanges(sourceFile);
+
+      for (const expression of ["a / b", "Math.sqrt(n)", "rooted * 2"]) {
+        const range = ranges.get(expression);
+        expect(range, expression).toBeDefined();
+        if (range === undefined) continue;
+        const [start, end] = range;
+        const shiftedRange: [number, number] = [start + 1, end - 1];
+        expect(detector?.isOpExpression({ range: shiftedRange }), expression).toBe(false);
+      }
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});

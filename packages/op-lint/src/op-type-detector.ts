@@ -254,7 +254,7 @@ function findBestMatchingExpression(
   end: number,
 ): ts.Expression | undefined {
   let match: ts.Expression | undefined;
-  let bestScore: readonly [number, number, number] = [-1, -1, -1];
+  let bestScore: readonly [number, number] = [-1, Number.NEGATIVE_INFINITY];
 
   const visit = (node: ts.Node) => {
     if (!ts.isExpression(node)) {
@@ -280,21 +280,20 @@ function expressionMatchScore(
   node: ts.Expression,
   start: number,
   end: number,
-): readonly [number, number, number] {
+): readonly [number, number] {
   const nodeStart = node.getStart(sourceFile);
   const nodeEnd = node.getEnd();
   const overlapStart = Math.max(start, nodeStart);
   const overlapEnd = Math.min(end, nodeEnd);
   const overlap = Math.max(0, overlapEnd - overlapStart);
-  const kindPriority = ts.isCallExpression(node) ? 1 : 0;
   const span = nodeEnd - nodeStart;
 
-  return [overlap, kindPriority, span];
+  return [overlap, -span];
 }
 
 function compareMatchScores(
-  left: readonly [number, number, number],
-  right: readonly [number, number, number],
+  left: readonly [number, number],
+  right: readonly [number, number],
 ): number {
   for (let index = 0; index < left.length; index += 1) {
     const leftValue = left[index] ?? 0;

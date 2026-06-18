@@ -7,9 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Fixed
 
-- No entries yet.
+- Prefer the smallest overlapping TypeScript expression when linter ranges drift, so plain
+  generator success returns such as `return a / b` are not mistaken for ignored Ops.
 
 ## [0.1.1] - 2026-06-18
 
