@@ -47,8 +47,9 @@ Bundle size (compressed-size-action and compare report):
 
 ## Commands
 
-Local harness output goes under `op/.artifacts/` (gitignored). JSON reports, CPU profiles, and heap
-profiles all land there.
+Comparison output goes under `op/.artifacts/` (gitignored). Profiler JSON reports, CPU profiles,
+and heap profiles go under `.profiles/op/` (also gitignored) so profiling output stays outside the
+code directory.
 
 From repo root:
 
@@ -108,7 +109,7 @@ CodSpeed reports end-to-end scenario timings. The profile harness decomposes the
 ```bash
 pnpm --filter @prodkit/op run build
 pnpm --filter @prodkit/benchmarks run profile
-pnpm --filter @prodkit/benchmarks run profile -- --report=op/.artifacts/profile.json
+pnpm --filter @prodkit/benchmarks run profile -- --report=.profiles/op/profile.json
 pnpm --filter @prodkit/benchmarks run profile -- --steps=12
 ```
 
@@ -144,7 +145,7 @@ pnpm --filter @prodkit/benchmarks run profile:cpu -- --scenario=compose.yieldCha
 pnpm --filter @prodkit/benchmarks run profile:heap -- --scenario=compose.yieldChain
 ```
 
-Node writes `CPU.*.cpuprofile` or `Heap.*.heapprofile` under `op/.artifacts/`.
+Node writes `CPU.*.cpuprofile` or `Heap.*.heapprofile` under `.profiles/op/`.
 The profile command prints the resolved artifact path when it can detect it.
 
 Use `--package-dir=` to profile a packed install tree instead of the workspace build.

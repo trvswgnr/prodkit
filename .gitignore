@@ -4,6 +4,7 @@ dist
 *.tgz
 coverage
 benchmarks/op/.artifacts/
+benchmarks/.profiles/
 *.lcov
 logs
 _.log

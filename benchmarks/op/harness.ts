@@ -11,6 +11,7 @@ export type { BenchOp, RunResult };
 export const OP_PACKAGE = "@prodkit/op";
 export const ENTRY_FALLBACK = "./dist/index.mjs";
 export const BENCHMARK_ARTIFACTS_DIR = "op/.artifacts";
+export const BENCHMARK_PROFILE_DIR = ".profiles/op";
 
 export const DEFAULT_BENCH_TIME_MS = 300;
 export const DEFAULT_BENCH_WARMUP_TIME_MS = 150;
@@ -199,12 +200,22 @@ export function resolveBenchmarkArtifact(name: string): string {
   return path.join(BENCHMARK_ARTIFACTS_DIR, name);
 }
 
+export function resolveProfileArtifact(name: string): string {
+  return path.join(BENCHMARK_PROFILE_DIR, name);
+}
+
 export function resolveReportPath(argv: readonly string[], defaultName: string): string {
   return parseReportPath(argv) ?? resolveBenchmarkArtifact(defaultName);
 }
 
 export async function ensureBenchmarkArtifactsDir(): Promise<string> {
   const absolutePath = path.resolve(BENCHMARK_ARTIFACTS_DIR);
+  await mkdir(absolutePath, { recursive: true });
+  return absolutePath;
+}
+
+export async function ensureBenchmarkProfileDir(): Promise<string> {
+  const absolutePath = path.resolve(BENCHMARK_PROFILE_DIR);
   await mkdir(absolutePath, { recursive: true });
   return absolutePath;
 }

@@ -2,8 +2,8 @@ import { statSync } from "node:fs";
 import path from "node:path";
 import {
   asBenchOp,
-  BENCHMARK_ARTIFACTS_DIR,
-  ensureBenchmarkArtifactsDir,
+  BENCHMARK_PROFILE_DIR,
+  ensureBenchmarkProfileDir,
   findNewestProfileArtifact,
   formatNumber,
   formatRatio,
@@ -15,7 +15,7 @@ import {
   parseStepsArg,
   readEnvironmentReport,
   readPackageVersion,
-  resolveBenchmarkArtifact,
+  resolveProfileArtifact,
   resolveOpPackageDir,
   runTinybenchVariant,
   writeJsonReport,
@@ -237,7 +237,7 @@ function printInterpretationGuide(): void {
   logger.info("");
   logger.info("Machine-readable output:");
   logger.info(
-    `  pnpm --filter @prodkit/benchmarks run profile -- --report=${resolveBenchmarkArtifact("profile.json")}`,
+    `  pnpm --filter @prodkit/benchmarks run profile -- --report=${resolveProfileArtifact("profile.json")}`,
   );
   logger.info("");
   logger.info("CPU profile (flame graph):");
@@ -245,14 +245,14 @@ function printInterpretationGuide(): void {
     "  pnpm --filter @prodkit/benchmarks run profile:cpu -- --scenario=compose.yieldChain",
   );
   logger.info(
-    "  Open the emitted *.cpuprofile in op/.artifacts/ via Chrome DevTools or https://speedscope.app",
+    "  Open the emitted *.cpuprofile in .profiles/op/ via Chrome DevTools or https://speedscope.app",
   );
   logger.info("");
   logger.info("Heap profile (allocations):");
   logger.info(
     "  pnpm --filter @prodkit/benchmarks run profile:heap -- --scenario=compose.yieldChain",
   );
-  logger.info("  Open the emitted *.heapprofile in op/.artifacts/ via Chrome DevTools Memory");
+  logger.info("  Open the emitted *.heapprofile in .profiles/op/ via Chrome DevTools Memory");
 }
 
 async function measureAsyncScenario(
@@ -303,7 +303,7 @@ async function main(): Promise<void> {
   const profileMode = parseProfileMode(argv);
   const scenarioFilter = parseScenarioFilter(argv);
   const steps = parseStepsArg(argv);
-  const reportPath = parseReportPath(argv);
+  const reportPath = parseReportPath(argv) ?? resolveProfileArtifact("profile.json");
   const profileLoopIterations =
     profileMode === "breakdown"
       ? undefined
@@ -343,8 +343,8 @@ async function main(): Promise<void> {
       throw new Error(`${profileMode} mode requires profile loop iterations.`);
     }
 
-    await ensureBenchmarkArtifactsDir();
-    const artifactsDir = path.resolve(BENCHMARK_ARTIFACTS_DIR);
+    await ensureBenchmarkProfileDir();
+    const artifactsDir = path.resolve(BENCHMARK_PROFILE_DIR);
     const startedAt = Date.now();
     await runProfileLoop(spec, Op, steps, profileLoopIterations);
     const artifactPrefix = profileMode === "cpu" ? "CPU" : "Heap";
