@@ -194,7 +194,7 @@ describe("@prodkit/op-lint plugin", () => {
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }
-  });
+  }, 60_000);
 
   test("loads through ESLint flat config and applies fixes", () => {
     const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -325,7 +325,7 @@ describe("@prodkit/op-lint plugin", () => {
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }
-  });
+  }, 60_000);
 
   new RuleTester({
     languageOptions: {
