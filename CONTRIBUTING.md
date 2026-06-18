@@ -152,14 +152,15 @@ pnpm run bench
 pnpm --filter @prodkit/benchmarks run compare
 pnpm --filter @prodkit/tools run performance:sync -- --write
 pnpm --filter @prodkit/benchmarks run profile
+pnpm --filter @prodkit/benchmarks run profile:op-lint
 ```
 
-- CodSpeed comments on pull requests with runtime regression data; see [`benchmarks/op/README.md`](benchmarks/op/README.md).
+- CodSpeed comments on pull requests with runtime regression data; see [`benchmarks/op/README.md`](benchmarks/op/README.md) and [`benchmarks/op-lint/README.md`](benchmarks/op-lint/README.md).
 - Bundle-size deltas appear on pull requests via the CI `bundle-size` job.
 - `compare` + `performance:sync` refresh the public native-vs-Op table in [`packages/op/docs/performance.md`](packages/op/docs/performance.md).
-- Use `profile.ts` locally after a CodSpeed regression to isolate overhead sources.
+- Use `profile.ts` locally after a CodSpeed regression to isolate overhead sources. V8 CPU and heap profile outputs go under `benchmarks/.profiles/`, which is gitignored.
 
-Detailed benchmark scenarios and authoring guidance live in `benchmarks/op/README.md`.
+Detailed benchmark scenarios and authoring guidance live in `benchmarks/op/README.md` and `benchmarks/op-lint/README.md`.
 Published baseline interpretation lives in [`packages/op/docs/performance.md`](packages/op/docs/performance.md).
 
 ## Type Cast Policy

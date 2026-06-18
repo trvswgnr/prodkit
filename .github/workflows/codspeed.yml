@@ -68,8 +68,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build @prodkit/op
-        run: pnpm --filter @prodkit/op run build
+      - name: Build benchmarked packages
+        run: |
+          pnpm --filter @prodkit/op run build
+          pnpm --filter @prodkit/op-lint run build
 
       - name: Install libc debug symbols
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libc6-dbg
@@ -79,7 +81,7 @@ jobs:
         with:
           mode: walltime
           working-directory: benchmarks
-          run: pnpm vitest bench --run op/codspeed.walltime.bench.ts
+          run: pnpm vitest bench --run op/codspeed.walltime.bench.ts op-lint/codspeed.walltime.bench.ts
 
       - name: Write comparison report
         run: pnpm --filter @prodkit/benchmarks run compare
