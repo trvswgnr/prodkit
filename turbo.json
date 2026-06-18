@@ -15,8 +15,18 @@
       "inputs": ["**/*.ts", "vitest.config.ts", "tsconfig.json", "package.json"],
       "outputLogs": "new-only"
     },
+    "@prodkit/benchmarks#test": {
+      "dependsOn": ["@prodkit/op-lint#test", "^build", "build"],
+      "inputs": ["**/*.ts", "vitest.config.ts", "tsconfig.json", "package.json"],
+      "outputLogs": "new-only"
+    },
     "typecheck": {
       "dependsOn": ["^build"],
+      "inputs": ["**/*.ts", "tsconfig.json"],
+      "outputLogs": "new-only"
+    },
+    "@prodkit/benchmarks#typecheck": {
+      "dependsOn": ["@prodkit/op-lint#test", "^build"],
       "inputs": ["**/*.ts", "tsconfig.json"],
       "outputLogs": "new-only"
     },
