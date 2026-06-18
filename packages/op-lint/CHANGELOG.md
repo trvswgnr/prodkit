@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- No entries yet.
+
+## [0.1.1] - 2026-06-18
+
 ### Fixed
 
 - Match TypeScript nodes for checker-backed Op detection when Oxlint or ESLint ranges differ
@@ -35,3 +41,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Establish the unpublished package baseline for release tooling.
+
