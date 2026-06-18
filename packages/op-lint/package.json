@@ -1,6 +1,6 @@
 {
   "name": "@prodkit/op-lint",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Oxlint-loadable lint rules for @prodkit/op generator composition.",
   "keywords": [
     "eslint",

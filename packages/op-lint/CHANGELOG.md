@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- No entries yet.
+
+## [0.1.2] - 2026-06-18
+
 ### Fixed
 
 - Prefer the smallest overlapping TypeScript expression when linter ranges drift, so plain
@@ -42,4 +48,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Establish the unpublished package baseline for release tooling.
+
 
