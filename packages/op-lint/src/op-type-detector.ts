@@ -39,13 +39,20 @@ type SourceOverride = {
   text: string;
 };
 
+type TypeClassificationCache = {
+  opFactoryTypes: Map<ts.Type, boolean>;
+  opTypes: Map<ts.Type, boolean>;
+};
+
 const projectCache = new Map<string, TypeScriptProject>();
+const projectReuseCache = new Map<string, TypeScriptProject>();
 const packageNameCache = new Map<string, string | undefined>();
 const canonicalPathCache = new Map<string, string>();
 const maxProjectCacheEntries = 32;
 
 export function clearOpTypeDetectorCaches(): void {
   projectCache.clear();
+  projectReuseCache.clear();
   packageNameCache.clear();
   canonicalPathCache.clear();
 }
@@ -60,24 +67,60 @@ export function createOpTypeDetector(context: TypeAwareRuleContext): OpTypeDetec
   const sourceFile = getProjectSourceFile(project.program, fileName);
   if (sourceFile === undefined) return undefined;
 
+  const nodeAtRangeCache = new Map<string, ts.Node | undefined>();
+  const anyOrUnknownExpressionCache = new Map<string, boolean>();
+  const opFactoryExpressionCache = new Map<string, boolean>();
+  const opExpressionCache = new Map<string, boolean>();
+  const typeClassificationCache: TypeClassificationCache = {
+    opFactoryTypes: new Map(),
+    opTypes: new Map(),
+  };
+
+  const nodeAtRange = (range: readonly [number, number]): ts.Node | undefined => {
+    const key = rangeKey(range[0], range[1]);
+    if (nodeAtRangeCache.has(key)) return nodeAtRangeCache.get(key);
+
+    const tsNode = findTypeScriptNodeAtRange(project, sourceFile, range);
+    nodeAtRangeCache.set(key, tsNode);
+    return tsNode;
+  };
+
   return {
     isAnyOrUnknownExpression(node) {
-      const tsNode = findTypeScriptNodeAtRange(project, sourceFile, node.range);
+      const key = rangeKey(node.range[0], node.range[1]);
+      const cached = anyOrUnknownExpressionCache.get(key);
+      if (cached !== undefined) return cached;
+
+      const tsNode = nodeAtRange(node.range);
       if (tsNode === undefined) return false;
 
-      return isAnyOrUnknown(project.checker.getTypeAtLocation(tsNode));
+      const result = isAnyOrUnknown(project.checker.getTypeAtLocation(tsNode));
+      anyOrUnknownExpressionCache.set(key, result);
+      return result;
     },
     isOpFactoryExpression(node) {
-      const tsNode = findTypeScriptNodeAtRange(project, sourceFile, node.range);
+      const key = rangeKey(node.range[0], node.range[1]);
+      const cached = opFactoryExpressionCache.get(key);
+      if (cached !== undefined) return cached;
+
+      const tsNode = nodeAtRange(node.range);
       if (tsNode === undefined) return false;
 
-      return expressionIsProdkitOpFactory(project.checker, tsNode);
+      const result = expressionIsProdkitOpFactory(project.checker, tsNode, typeClassificationCache);
+      opFactoryExpressionCache.set(key, result);
+      return result;
     },
     isOpExpression(node) {
-      const tsNode = findTypeScriptNodeAtRange(project, sourceFile, node.range);
+      const key = rangeKey(node.range[0], node.range[1]);
+      const cached = opExpressionCache.get(key);
+      if (cached !== undefined) return cached;
+
+      const tsNode = nodeAtRange(node.range);
       if (tsNode === undefined) return false;
 
-      return expressionProducesProdkitOp(project.checker, tsNode);
+      const result = expressionProducesProdkitOp(project.checker, tsNode, typeClassificationCache);
+      opExpressionCache.set(key, result);
+      return result;
     },
   };
 }
@@ -125,8 +168,12 @@ function getTypeScriptProject(
     fileIsInConfig ? "included" : canonicalFileName,
     sourceOverride === undefined ? "disk" : sourceOverrideCacheKey(sourceOverride),
   ].join(":");
+  const reuseKey =
+    fileIsInConfig || sourceOverride !== undefined
+      ? undefined
+      : ["config-reuse", canonicalPath(configPath), "excluded", "disk"].join(":");
 
-  return getCachedProject(cacheKey, rootNames, options, sourceOverride);
+  return getCachedProject(cacheKey, rootNames, options, sourceOverride, reuseKey);
 }
 
 function getInferredProject(
@@ -196,6 +243,7 @@ function getCachedProject(
   rootNames: readonly string[],
   options: ts.CompilerOptions,
   sourceOverride: SourceOverride | undefined,
+  reuseKey?: string,
 ): TypeScriptProject {
   const cached = projectCache.get(cacheKey);
   if (cached !== undefined) {
@@ -205,7 +253,8 @@ function getCachedProject(
   }
 
   const host = createCompilerHost(options, sourceOverride);
-  const program = ts.createProgram([...rootNames], options, host);
+  const oldProgram = reuseKey === undefined ? undefined : projectReuseCache.get(reuseKey)?.program;
+  const program = ts.createProgram([...rootNames], options, host, oldProgram);
   const project: TypeScriptProject = {
     checker: program.getTypeChecker(),
     program,
@@ -213,6 +262,7 @@ function getCachedProject(
   };
 
   cacheProject(cacheKey, project);
+  if (reuseKey !== undefined) projectReuseCache.set(reuseKey, project);
   return project;
 }
 
@@ -273,22 +323,30 @@ function findTypeScriptNodeAtRange(
   return findBestMatchingExpression(sourceFile, range[0], range[1]);
 }
 
-function expressionProducesProdkitOp(checker: ts.TypeChecker, node: ts.Node): boolean {
+function expressionProducesProdkitOp(
+  checker: ts.TypeChecker,
+  node: ts.Node,
+  cache: TypeClassificationCache,
+): boolean {
   const type = checker.getTypeAtLocation(node);
-  if (isProdkitOpType(checker, type)) return true;
+  if (isProdkitOpType(checker, type, cache)) return true;
 
   if (ts.isCallExpression(node)) {
     const signature = checker.getResolvedSignature(node);
     if (signature !== undefined) {
-      return isProdkitOpType(checker, checker.getReturnTypeOfSignature(signature));
+      return isProdkitOpType(checker, checker.getReturnTypeOfSignature(signature), cache);
     }
   }
 
   return false;
 }
 
-function expressionIsProdkitOpFactory(checker: ts.TypeChecker, node: ts.Node): boolean {
-  return isProdkitOpFactoryType(checker, checker.getTypeAtLocation(node));
+function expressionIsProdkitOpFactory(
+  checker: ts.TypeChecker,
+  node: ts.Node,
+  cache: TypeClassificationCache,
+): boolean {
+  return isProdkitOpFactoryType(checker, checker.getTypeAtLocation(node), cache);
 }
 
 function findBestMatchingExpression(
@@ -399,61 +457,79 @@ function rangeKey(start: number, end: number): string {
 function isProdkitOpType(
   checker: ts.TypeChecker,
   type: ts.Type,
+  cache: TypeClassificationCache,
   seen: Set<ts.Type> = new Set(),
 ): boolean {
+  const cached = cache.opTypes.get(type);
+  if (cached !== undefined) return cached;
   if (seen.has(type)) return false;
   seen.add(type);
 
-  if (isAnyOrUnknown(type)) return false;
-  if (isProdkitOpAlias(type) || hasProdkitOpPackageShape(checker, type)) return true;
+  const result = (() => {
+    if (isAnyOrUnknown(type)) return false;
+    if (isProdkitOpAlias(type) || hasProdkitOpPackageShape(checker, type)) return true;
 
-  if (type.isUnion()) {
-    return type.types.some((part) => isProdkitOpType(checker, part, seen));
-  }
+    if (type.isUnion()) {
+      return type.types.some((part) => isProdkitOpType(checker, part, cache, seen));
+    }
 
-  if (type.isIntersection()) {
-    return type.types.some((part) => isProdkitOpType(checker, part, seen));
-  }
+    if (type.isIntersection()) {
+      return type.types.some((part) => isProdkitOpType(checker, part, cache, seen));
+    }
 
-  const apparent = checker.getApparentType(type);
-  if (apparent !== type && isProdkitOpType(checker, apparent, seen)) return true;
+    const apparent = checker.getApparentType(type);
+    if (apparent !== type && isProdkitOpType(checker, apparent, cache, seen)) return true;
 
-  const constraint = checker.getBaseConstraintOfType(type);
-  if (constraint !== undefined && constraint !== type) {
-    return isProdkitOpType(checker, constraint, seen);
-  }
+    const constraint = checker.getBaseConstraintOfType(type);
+    if (constraint !== undefined && constraint !== type) {
+      return isProdkitOpType(checker, constraint, cache, seen);
+    }
 
-  return false;
+    return false;
+  })();
+
+  seen.delete(type);
+  cache.opTypes.set(type, result);
+  return result;
 }
 
 function isProdkitOpFactoryType(
   checker: ts.TypeChecker,
   type: ts.Type,
+  cache: TypeClassificationCache,
   seen: Set<ts.Type> = new Set(),
 ): boolean {
+  const cached = cache.opFactoryTypes.get(type);
+  if (cached !== undefined) return cached;
   if (seen.has(type)) return false;
   seen.add(type);
 
-  if (isAnyOrUnknown(type)) return false;
-  if (hasProdkitOpFactoryPackageShape(checker, type)) return true;
+  const result = (() => {
+    if (isAnyOrUnknown(type)) return false;
+    if (hasProdkitOpFactoryPackageShape(checker, type)) return true;
 
-  if (type.isUnion()) {
-    return type.types.some((part) => isProdkitOpFactoryType(checker, part, seen));
-  }
+    if (type.isUnion()) {
+      return type.types.some((part) => isProdkitOpFactoryType(checker, part, cache, seen));
+    }
 
-  if (type.isIntersection()) {
-    return type.types.some((part) => isProdkitOpFactoryType(checker, part, seen));
-  }
+    if (type.isIntersection()) {
+      return type.types.some((part) => isProdkitOpFactoryType(checker, part, cache, seen));
+    }
 
-  const apparent = checker.getApparentType(type);
-  if (apparent !== type && isProdkitOpFactoryType(checker, apparent, seen)) return true;
+    const apparent = checker.getApparentType(type);
+    if (apparent !== type && isProdkitOpFactoryType(checker, apparent, cache, seen)) return true;
 
-  const constraint = checker.getBaseConstraintOfType(type);
-  if (constraint !== undefined && constraint !== type) {
-    return isProdkitOpFactoryType(checker, constraint, seen);
-  }
+    const constraint = checker.getBaseConstraintOfType(type);
+    if (constraint !== undefined && constraint !== type) {
+      return isProdkitOpFactoryType(checker, constraint, cache, seen);
+    }
 
-  return false;
+    return false;
+  })();
+
+  seen.delete(type);
+  cache.opFactoryTypes.set(type, result);
+  return result;
 }
 
 function isAnyOrUnknown(type: ts.Type): boolean {
@@ -534,26 +610,35 @@ function declarationIdentifier(declaration: ts.Declaration): string | undefined 
 
 function packageNameForFile(fileName: string): string | undefined {
   let dir = dirname(canonicalPath(fileName));
+  const visited: string[] = [];
 
   while (true) {
     const cached = packageNameCache.get(dir);
-    if (packageNameCache.has(dir)) return cached;
+    if (packageNameCache.has(dir)) {
+      cachePackageNameForDirs(visited, cached);
+      return cached;
+    }
 
+    visited.push(dir);
     const packageJsonPath = join(dir, "package.json");
     if (existsSync(packageJsonPath)) {
       const packageName = readPackageName(packageJsonPath);
-      packageNameCache.set(dir, packageName);
+      cachePackageNameForDirs(visited, packageName);
       return packageName;
     }
 
     const parent = dirname(dir);
     if (parent === dir) {
-      packageNameCache.set(dir, undefined);
+      cachePackageNameForDirs(visited, undefined);
       return undefined;
     }
 
     dir = parent;
   }
+}
+
+function cachePackageNameForDirs(dirs: readonly string[], packageName: string | undefined): void {
+  for (const dir of dirs) packageNameCache.set(dir, packageName);
 }
 
 function readPackageName(packageJsonPath: string): string | undefined {

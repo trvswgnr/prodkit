@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Improve `require-yield-star` lint throughput by deferring checker setup until type-aware
+  detection is needed and caching repeated detector lookups.
 - Keep checker-backed detection aligned with the current lint source instead of reusing stale
   TypeScript programs after edits.
 - Reuse checker programs for unchanged on-disk files instead of rebuilding a full TypeScript

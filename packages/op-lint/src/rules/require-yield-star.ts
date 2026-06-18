@@ -115,6 +115,8 @@ type BindingDeclarer = (name: string, kind: BindingKind) => void;
 
 type FallbackOpIdentifierPredicate = (node: unknown) => node is IdentifierNode;
 
+type OpTypeDetectorProvider = () => OpTypeDetector | undefined;
+
 function isNode(value: unknown): value is RangedNode {
   if (!isRecordLike(value)) return false;
 
@@ -257,7 +259,16 @@ export const requireYieldStarRule = {
     schema: [],
   },
   create(context: RuleContext) {
-    const opTypeDetector = createOpTypeDetector(context);
+    let opTypeDetector: OpTypeDetector | undefined;
+    let opTypeDetectorResolved = false;
+    const getOpTypeDetector: OpTypeDetectorProvider = () => {
+      if (!opTypeDetectorResolved) {
+        opTypeDetectorResolved = true;
+        opTypeDetector = createOpTypeDetector(context);
+      }
+
+      return opTypeDetector;
+    };
     const opGeneratorArgumentRanges = new Set<string>();
     const functionStack: FunctionFrame[] = [];
     const scopeStack: Array<Map<string, BindingKind>> = [new Map()];
@@ -288,7 +299,7 @@ export const requireYieldStarRule = {
         isOpGeneratorBody: isOpGeneratorBody(
           node,
           opGeneratorArgumentRanges,
-          opTypeDetector,
+          getOpTypeDetector,
           isFallbackOpIdentifier,
         ),
       });
@@ -319,7 +330,7 @@ export const requireYieldStarRule = {
 
         const generatorArgument = opFactoryGeneratorArgument(
           node,
-          opTypeDetector,
+          getOpTypeDetector,
           isFallbackOpIdentifier,
         );
         if (generatorArgument !== undefined) {
@@ -341,7 +352,7 @@ export const requireYieldStarRule = {
       ExpressionStatement(node: unknown) {
         if (!isInsideCurrentOpGenerator()) return;
         if (!isExpressionStatement(node)) return;
-        if (!isOpExpressionStatement(node.expression, opTypeDetector, isFallbackOpIdentifier))
+        if (!isOpExpressionStatement(node.expression, getOpTypeDetector, isFallbackOpIdentifier))
           return;
 
         context.report({
@@ -354,7 +365,7 @@ export const requireYieldStarRule = {
         if (!isInsideCurrentOpGenerator()) return;
         if (!isReturnStatement(node)) return;
         if (isYieldExpression(node.argument) || isAwaitExpression(node.argument)) return;
-        if (!isOpExpression(node.argument, opTypeDetector, isFallbackOpIdentifier)) return;
+        if (!isOpExpression(node.argument, getOpTypeDetector, isFallbackOpIdentifier)) return;
 
         context.report({
           node,
@@ -366,7 +377,7 @@ export const requireYieldStarRule = {
         if (!isInsideCurrentOpGenerator()) return;
         if (!isYieldExpression(node)) return;
         if (node.delegate === true) return;
-        if (!isOpExpression(node.argument, opTypeDetector, isFallbackOpIdentifier)) return;
+        if (!isOpExpression(node.argument, getOpTypeDetector, isFallbackOpIdentifier)) return;
 
         context.report({
           node,
@@ -377,7 +388,7 @@ export const requireYieldStarRule = {
       AwaitExpression(node: unknown) {
         if (!isInsideCurrentOpGenerator()) return;
         if (!isAwaitExpression(node)) return;
-        if (!isOpExpression(node.argument, opTypeDetector, isFallbackOpIdentifier)) return;
+        if (!isOpExpression(node.argument, getOpTypeDetector, isFallbackOpIdentifier)) return;
 
         context.report({
           node,
@@ -460,21 +471,21 @@ function declarePattern(pattern: unknown, declareBinding: BindingDeclarer): void
 function isOpGeneratorBody(
   node: unknown,
   opGeneratorArgumentRanges: ReadonlySet<string>,
-  opTypeDetector: OpTypeDetector | undefined,
+  getOpTypeDetector: OpTypeDetectorProvider,
   isFallbackOpIdentifier: FallbackOpIdentifierPredicate,
 ): boolean {
   if (!isFunctionLike(node) || node.generator !== true) return false;
   if (opGeneratorArgumentRanges.has(nodeRangeKey(node))) return true;
 
-  return isFirstArgumentOfOpFactoryCall(node, opTypeDetector, isFallbackOpIdentifier);
+  return isFirstArgumentOfOpFactoryCall(node, getOpTypeDetector, isFallbackOpIdentifier);
 }
 
 function opFactoryGeneratorArgument(
   callExpression: CallExpressionNode,
-  opTypeDetector: OpTypeDetector | undefined,
+  getOpTypeDetector: OpTypeDetectorProvider,
   isFallbackOpIdentifier: FallbackOpIdentifierPredicate,
 ): RangedNode | undefined {
-  if (!isKnownOpFactoryCallee(callExpression.callee, opTypeDetector, isFallbackOpIdentifier)) {
+  if (!isKnownOpFactoryCallee(callExpression.callee, getOpTypeDetector, isFallbackOpIdentifier)) {
     return undefined;
   }
   if (!Array.isArray(callExpression.arguments)) return undefined;
@@ -487,14 +498,14 @@ function opFactoryGeneratorArgument(
 
 function isFirstArgumentOfOpFactoryCall(
   node: unknown,
-  opTypeDetector: OpTypeDetector | undefined,
+  getOpTypeDetector: OpTypeDetectorProvider,
   isFallbackOpIdentifier: FallbackOpIdentifierPredicate,
 ): boolean {
   if (!isRecordLike(node)) return false;
 
   const parent = node["parent"];
   if (!isCallExpression(parent)) return false;
-  if (!isKnownOpFactoryCallee(parent.callee, opTypeDetector, isFallbackOpIdentifier)) {
+  if (!isKnownOpFactoryCallee(parent.callee, getOpTypeDetector, isFallbackOpIdentifier)) {
     return false;
   }
   if (!Array.isArray(parent.arguments)) return false;
@@ -504,44 +515,34 @@ function isFirstArgumentOfOpFactoryCall(
 
 function isKnownOpFactoryCallee(
   callee: unknown,
-  opTypeDetector: OpTypeDetector | undefined,
+  getOpTypeDetector: OpTypeDetectorProvider,
   isFallbackOpIdentifier: FallbackOpIdentifierPredicate,
 ): boolean {
-  if (opTypeDetector !== undefined && isNode(callee)) {
-    return (
-      opTypeDetector.isOpFactoryExpression(callee) ||
-      (opTypeDetector.isAnyOrUnknownExpression(callee) && isFallbackOpIdentifier(callee))
-    );
-  }
+  if (isFallbackOpIdentifier(callee)) return true;
+  if (!isNode(callee)) return false;
 
-  return isFallbackOpIdentifier(callee);
+  return getOpTypeDetector()?.isOpFactoryExpression(callee) === true;
 }
 
 function isOpExpressionStatement(
   expression: unknown,
-  opTypeDetector: OpTypeDetector | undefined,
+  getOpTypeDetector: OpTypeDetectorProvider,
   isFallbackOpIdentifier: FallbackOpIdentifierPredicate,
 ): boolean {
   if (isYieldExpression(expression) || isAwaitExpression(expression)) return false;
 
-  return isOpExpression(expression, opTypeDetector, isFallbackOpIdentifier);
+  return isOpExpression(expression, getOpTypeDetector, isFallbackOpIdentifier);
 }
 
 function isOpExpression(
   expression: unknown,
-  opTypeDetector: OpTypeDetector | undefined,
+  getOpTypeDetector: OpTypeDetectorProvider,
   isFallbackOpIdentifier: FallbackOpIdentifierPredicate,
 ): boolean {
-  if (opTypeDetector === undefined) {
-    return isFallbackDirectOpBuilderCall(expression, isFallbackOpIdentifier);
-  }
+  if (isFallbackDirectOpBuilderCall(expression, isFallbackOpIdentifier)) return true;
   if (!isNode(expression)) return false;
 
-  return (
-    opTypeDetector.isOpExpression(expression) ||
-    (opTypeDetector.isAnyOrUnknownExpression(expression) &&
-      isFallbackDirectOpBuilderCall(expression, isFallbackOpIdentifier))
-  );
+  return getOpTypeDetector()?.isOpExpression(expression) === true;
 }
 
 function asRangedNode(node: unknown): RangedNode {
