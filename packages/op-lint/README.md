@@ -112,7 +112,8 @@ export default [
 
 ### `prodkit-op/require-yield-star`
 
-Reports Op values inside generator bodies when they are not composed with `yield*`.
+Reports Op values inside `Op(function* () { ... })` bodies, including checker-resolved aliases of
+the `Op` factory, when they are not composed with `yield*`.
 
 The rule reports:
 
@@ -125,14 +126,15 @@ The rule allows:
 
 - `return yield* loadUser();`
 - Staging an Op in a local variable before later `yield*` composition
+- Plain generators that are not passed to the `@prodkit/op` factory
 - Ops returned from non-generator callbacks
 - Non-Op iterables and structural lookalikes that do not come from `@prodkit/op`
 
 ## Type detection
 
 The rule detects direct `Op.<builder>(...)` calls even without checker information. With TypeScript
-resolution available, it also recognizes aliases, imported operations, generic `Op` parameters,
-properties typed as Ops, and methods returning Ops.
+resolution available, it also recognizes aliased Op factory names, imported operations, generic `Op`
+parameters, properties typed as Ops, and methods returning Ops.
 
 The detector is conservative. Type-aware matches require TypeScript to resolve the linted file and
 `@prodkit/op` from the nearest `tsconfig.json`; without a config, the plugin falls back to an

@@ -6,7 +6,7 @@ export default mergeConfig(
   defineConfig({
     test: {
       coverage: {
-        exclude: ["src/**/*.test.ts"],
+        exclude: ["src/**/*.test.ts", "src/test-support/**"],
       },
       include: ["src/**/*.test.ts"],
       typecheck: {

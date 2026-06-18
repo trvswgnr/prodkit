@@ -1,22 +1,37 @@
 import { spawnSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { existsSync, readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { RuleTester } from "eslint";
 import { describe, expect, test } from "vitest";
 import { plugin as opLintPlugin, requireYieldStarRule } from "./index.js";
+import { setupTempOpLintProject, writeDefaultTsConfig } from "./test-support/op-lint-fixture.js";
 
 RuleTester.describe = describe;
 RuleTester.it = test;
+
+function diagnosticLabelSnippets(source: string, diagnostics: readonly unknown[]): string[] {
+  const snippets: string[] = [];
+
+  for (const diagnostic of diagnostics) {
+    if (typeof diagnostic !== "object" || diagnostic === null || !("labels" in diagnostic)) {
+      continue;
+    }
+    const labels = diagnostic.labels;
+    if (!Array.isArray(labels)) continue;
+
+    for (const label of labels) {
+      if (typeof label !== "object" || label === null || !("span" in label)) continue;
+      const { span } = label;
+      if (typeof span !== "object" || span === null) continue;
+      if (!("offset" in span) || !("length" in span)) continue;
+      if (typeof span.offset !== "number" || typeof span.length !== "number") continue;
+
+      snippets.push(source.slice(span.offset, span.offset + span.length));
+    }
+  }
+
+  return snippets;
+}
 
 describe("@prodkit/op-lint plugin", () => {
   test("exports the require-yield-star rule with documentation metadata", () => {
@@ -29,12 +44,8 @@ describe("@prodkit/op-lint plugin", () => {
   });
 
   test("loads through Oxlint JavaScript plugins and reports direct and typed misuses", () => {
-    const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-    const repoRoot = resolve(packageRoot, "../..");
-    const distEntry = resolve(packageRoot, "dist/index.mjs");
-    const oxlintBin = resolve(repoRoot, "node_modules/oxlint/bin/oxlint");
-    const opPackageRoot = resolve(packageRoot, "../op");
-    const betterResultRoot = resolve(opPackageRoot, "node_modules/better-result");
+    const project = setupTempOpLintProject();
+    const { betterResultRoot, distEntry, opPackageRoot, oxlintBin, tempDir } = project;
 
     expect(existsSync(distEntry), `${distEntry} should exist before the smoke test`).toBe(true);
     expect(existsSync(oxlintBin), `${oxlintBin} should exist before the smoke test`).toBe(true);
@@ -46,121 +57,103 @@ describe("@prodkit/op-lint plugin", () => {
       `${betterResultRoot} should exist before the smoke test`,
     ).toBe(true);
 
-    const tempDir = mkdtempSync(resolve(tmpdir(), "prodkit-op-lint-"));
-
     try {
-      mkdirSync(resolve(tempDir, "node_modules/@prodkit"), { recursive: true });
-      symlinkSync(opPackageRoot, resolve(tempDir, "node_modules/@prodkit/op"), "dir");
-      symlinkSync(betterResultRoot, resolve(tempDir, "node_modules/better-result"), "dir");
-
-      writeFileSync(
-        resolve(tempDir, "plugin.mjs"),
+      project.writeFile(
+        "plugin.mjs",
         `export { default } from ${JSON.stringify(pathToFileURL(distEntry).href)};\n`,
-        "utf8",
       );
-      writeFileSync(
-        resolve(tempDir, ".oxlintrc.json"),
-        `${JSON.stringify(
-          {
-            jsPlugins: [{ name: "prodkit-op", specifier: "./plugin.mjs" }],
-            rules: {
-              "prodkit-op/require-yield-star": "error",
-            },
-          },
-          null,
-          2,
-        )}\n`,
-        "utf8",
-      );
-      writeFileSync(
-        resolve(tempDir, "tsconfig.json"),
-        `${JSON.stringify(
-          {
-            compilerOptions: {
-              module: "NodeNext",
-              moduleResolution: "NodeNext",
-              skipLibCheck: true,
-              strict: true,
-              target: "ES2022",
-            },
-            include: ["*.ts"],
-          },
-          null,
-          2,
-        )}\n`,
-        "utf8",
-      );
-      writeFileSync(
-        resolve(tempDir, "ops.ts"),
+      project.writeJson(".oxlintrc.json", {
+        jsPlugins: [{ name: "prodkit-op", specifier: "./plugin.mjs" }],
+        rules: {
+          "prodkit-op/require-yield-star": "error",
+        },
+      });
+      writeDefaultTsConfig(project);
+      project.writeFile(
+        "ops.ts",
         [
           'import { Op } from "@prodkit/op";',
           "",
           'export const importedOperation = Op.of("ok");',
           "",
         ].join("\n"),
-        "utf8",
       );
-      writeFileSync(
-        resolve(tempDir, "fixture.ts"),
-        [
-          'import { Op, type Op as OpType } from "@prodkit/op";',
-          'import { importedOperation } from "./ops.js";',
-          "",
-          "const direct = Op.of(1);",
-          "const alias = direct;",
-          "",
-          "declare const service: {",
-          "  readonly stored: OpType<boolean, never, []>;",
-          "  load(): OpType<number, never, []>;",
-          "};",
-          "",
-          "const Console = {",
-          "  info: (...args: unknown[]) => Op.of(undefined).tap(() => console.info(...args)),",
-          "};",
-          "",
-          "function generic<T extends OpType<number, never, []>>(op: T) {",
-          "  return Op(function* () {",
-          "    op;",
-          "  });",
-          "}",
-          "",
-          "const iterable = { *[Symbol.iterator]() { yield 1; return 1; } };",
-          'const lookalike = { _tag: "Op", run() {}, with() {}, on() {}, map() {}, mapErr() {}, flatMap() {}, tap() {}, tapErr() {}, recover() {} };',
-          "",
-          "const program = Op(function* () {",
-          "  Op.of(1);",
-          "  direct;",
-          "  alias;",
-          "  importedOperation;",
-          "  service.stored;",
-          "  service.load();",
-          '  Console.info("divide", 1, 2);',
-          "  iterable;",
-          "  lookalike;",
-          "  return yield* Op.of(2);",
-          "});",
-          "",
-          "const returned = Op(function* () {",
-          "  return direct;",
-          "});",
-          "",
-          "const yielded = Op(function* () {",
-          "  yield direct;",
-          "});",
-          "",
-          "const awaited = Op(async function* () {",
-          "  await service.load();",
-          "});",
-          "",
-          "void program;",
-          "void returned;",
-          "void yielded;",
-          "void awaited;",
-          "void generic(direct);",
-          "",
-        ].join("\n"),
-        "utf8",
-      );
+      const fixtureSource = [
+        'import { Op, Op as Operation, type Op as OpType } from "@prodkit/op";',
+        'import { importedOperation } from "./ops.js";',
+        "",
+        "const direct = Op.of(1);",
+        "const alias = direct;",
+        "",
+        "declare const service: {",
+        "  readonly stored: OpType<boolean, never, []>;",
+        "  load(): OpType<number, never, []>;",
+        "};",
+        "",
+        "const Console = {",
+        "  info: (...args: unknown[]) => Op.of(undefined).tap(() => console.info(...args)),",
+        "};",
+        "",
+        "function generic<T extends OpType<number, never, []>>(op: T) {",
+        "  return Op(function* () {",
+        "    op;",
+        "  });",
+        "}",
+        "",
+        "const iterable = { *[Symbol.iterator]() { yield 1; return 1; } };",
+        'const lookalike = { _tag: "Op", run() {}, with() {}, on() {}, map() {}, mapErr() {}, flatMap() {}, tap() {}, tapErr() {}, recover() {} };',
+        "",
+        "const validDivide = Op(function* (a: number, b: number) {",
+        '  yield* Console.info("divide", a, b);',
+        "  return a / b;",
+        "});",
+        "",
+        "const aliasedProgram = Operation(function* () {",
+        "  Operation.of(3);",
+        "});",
+        "",
+        "const shadowedOpName = Op(function* () {",
+        "  const Op = { of: (value: number) => value };",
+        "  Op.of(999);",
+        "  return yield* Operation.of(1);",
+        "});",
+        "",
+        "const program = Op(function* () {",
+        "  Op.of(1);",
+        "  direct;",
+        "  alias;",
+        "  importedOperation;",
+        "  service.stored;",
+        "  service.load();",
+        '  Console.info("divide", 1, 2);',
+        "  iterable;",
+        "  lookalike;",
+        "  return yield* Op.of(2);",
+        "});",
+        "",
+        "const returned = Op(function* () {",
+        "  return direct;",
+        "});",
+        "",
+        "const yielded = Op(function* () {",
+        "  yield direct;",
+        "});",
+        "",
+        "const awaited = Op(async function* () {",
+        "  await service.load();",
+        "});",
+        "",
+        "void validDivide;",
+        "void aliasedProgram;",
+        "void shadowedOpName;",
+        "void program;",
+        "void returned;",
+        "void yielded;",
+        "void awaited;",
+        "void generic(direct);",
+        "",
+      ].join("\n");
+      project.writeFile("fixture.ts", fixtureSource);
 
       const result = spawnSync(
         process.execPath,
@@ -189,19 +182,21 @@ describe("@prodkit/op-lint plugin", () => {
           diagnostic.code === "prodkit-op(require-yield-star)",
       );
 
-      expect(opDiagnostics).toHaveLength(11);
+      const snippets = diagnosticLabelSnippets(fixtureSource, opDiagnostics);
+
+      expect(opDiagnostics).toHaveLength(12);
+      expect(snippets).toContain("Operation.of(3);");
+      expect(snippets).not.toContain("Op.of(999)");
+      expect(snippets).not.toContain("return a / b");
       expect(output).toContain("Compose this Op with yield*");
     } finally {
-      rmSync(tempDir, { recursive: true, force: true });
+      project.cleanup();
     }
   }, 60_000);
 
   test("loads through ESLint flat config and applies fixes", () => {
-    const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-    const distEntry = resolve(packageRoot, "dist/index.mjs");
-    const eslintBin = resolve(packageRoot, "node_modules/eslint/bin/eslint.js");
-    const opPackageRoot = resolve(packageRoot, "../op");
-    const betterResultRoot = resolve(opPackageRoot, "node_modules/better-result");
+    const project = setupTempOpLintProject("prodkit-op-lint-eslint-");
+    const { betterResultRoot, distEntry, eslintBin, opPackageRoot, tempDir } = project;
 
     expect(existsSync(distEntry), `${distEntry} should exist before the smoke test`).toBe(true);
     expect(existsSync(eslintBin), `${eslintBin} should exist before the smoke test`).toBe(true);
@@ -213,16 +208,30 @@ describe("@prodkit/op-lint plugin", () => {
       `${betterResultRoot} should exist before the smoke test`,
     ).toBe(true);
 
-    const tempDir = mkdtempSync(resolve(tmpdir(), "prodkit-op-lint-eslint-"));
-    const fixturePath = resolve(tempDir, "fixture.js");
+    const fixturePath = project.writeFile(
+      "fixture.js",
+      [
+        'import { Op } from "@prodkit/op";',
+        "",
+        "const direct = Op.of(1);",
+        "",
+        "const program = Op(function* () {",
+        "  Op.of(1);",
+        "  {",
+        "    const Op = { of: (value) => value };",
+        "    Op.of(999);",
+        "  }",
+        "  return direct;",
+        "});",
+        "",
+        "void program;",
+        "",
+      ].join("\n"),
+    );
 
     try {
-      mkdirSync(resolve(tempDir, "node_modules/@prodkit"), { recursive: true });
-      symlinkSync(opPackageRoot, resolve(tempDir, "node_modules/@prodkit/op"), "dir");
-      symlinkSync(betterResultRoot, resolve(tempDir, "node_modules/better-result"), "dir");
-
-      writeFileSync(
-        resolve(tempDir, "eslint.config.mjs"),
+      project.writeFile(
+        "eslint.config.mjs",
         [
           `import prodkitOp from ${JSON.stringify(pathToFileURL(distEntry).href)};`,
           "",
@@ -243,44 +252,8 @@ describe("@prodkit/op-lint plugin", () => {
           "];",
           "",
         ].join("\n"),
-        "utf8",
       );
-      writeFileSync(
-        resolve(tempDir, "tsconfig.json"),
-        `${JSON.stringify(
-          {
-            compilerOptions: {
-              allowJs: true,
-              module: "NodeNext",
-              moduleResolution: "NodeNext",
-              skipLibCheck: true,
-              strict: true,
-              target: "ES2022",
-            },
-            include: ["*.js"],
-          },
-          null,
-          2,
-        )}\n`,
-        "utf8",
-      );
-      writeFileSync(
-        fixturePath,
-        [
-          'import { Op } from "@prodkit/op";',
-          "",
-          "const direct = Op.of(1);",
-          "",
-          "const program = Op(function* () {",
-          "  Op.of(1);",
-          "  return direct;",
-          "});",
-          "",
-          "void program;",
-          "",
-        ].join("\n"),
-        "utf8",
-      );
+      writeDefaultTsConfig(project, { allowJs: true, include: ["*.js"] });
 
       const reportResult = spawnSync(
         process.execPath,
@@ -318,12 +291,16 @@ describe("@prodkit/op-lint plugin", () => {
         [
           "const program = Op(function* () {",
           "  yield* Op.of(1);",
+          "  {",
+          "    const Op = { of: (value) => value };",
+          "    Op.of(999);",
+          "  }",
           "  return yield* direct;",
           "});",
         ].join("\n"),
       );
     } finally {
-      rmSync(tempDir, { recursive: true, force: true });
+      project.cleanup();
     }
   }, 60_000);
 
@@ -338,6 +315,10 @@ describe("@prodkit/op-lint plugin", () => {
       "const program = Op(function* () { const staged = Op.of(1); return yield* staged; });",
       "const program = Op(function* () { items.map(() => Op.of(1)); });",
       "const program = Op(function* () { items.map(() => { return Op.of(1); }); });",
+      "function* notAnOpGenerator() { Op.of(1); return Op.of(2); }",
+      "const program = Op(function* () { function* nested() { Op.of(1); return Op.of(2); } return yield* Op.of(3); });",
+      "const Op = Object.assign((gen) => gen, { of: (value) => value }); const program = Op(function* () { Op.of(1); });",
+      'import { Op } from "@prodkit/op"; const program = Op(function* () { { const Op = { of: (value) => value }; Op.of(1); } return yield* Op.of(2); });',
       "function notAnOpGenerator() { Op.of(1); }",
       "function notAGeneratorCallback() { return Op.of(1); }",
     ],
@@ -365,6 +346,12 @@ describe("@prodkit/op-lint plugin", () => {
       {
         code: "const program = Op(async function* () { return await Op.of(1); });",
         output: "const program = Op(async function* () { return yield* Op.of(1); });",
+        errors: [{ messageId: "missingYieldStar" }],
+      },
+      {
+        code: 'import { Op as Operation } from "@prodkit/op"; const program = Operation(function* () { Operation.of(1); });',
+        output:
+          'import { Op as Operation } from "@prodkit/op"; const program = Operation(function* () { yield* Operation.of(1); });',
         errors: [{ messageId: "missingYieldStar" }],
       },
     ],

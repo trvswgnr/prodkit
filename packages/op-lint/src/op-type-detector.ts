@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
 import { isRecordLike } from "@prodkit/shared/runtime";
@@ -18,6 +19,8 @@ export type RangedNode = {
 };
 
 export type OpTypeDetector = {
+  isAnyOrUnknownExpression(node: RangedNode): boolean;
+  isOpFactoryExpression(node: RangedNode): boolean;
   isOpExpression(node: RangedNode): boolean;
 };
 
@@ -39,6 +42,7 @@ type SourceOverride = {
 const projectCache = new Map<string, TypeScriptProject>();
 const packageNameCache = new Map<string, string | undefined>();
 const canonicalPathCache = new Map<string, string>();
+const maxProjectCacheEntries = 32;
 
 export function clearOpTypeDetectorCaches(): void {
   projectCache.clear();
@@ -57,6 +61,18 @@ export function createOpTypeDetector(context: TypeAwareRuleContext): OpTypeDetec
   if (sourceFile === undefined) return undefined;
 
   return {
+    isAnyOrUnknownExpression(node) {
+      const tsNode = findTypeScriptNodeAtRange(project, sourceFile, node.range);
+      if (tsNode === undefined) return false;
+
+      return isAnyOrUnknown(project.checker.getTypeAtLocation(tsNode));
+    },
+    isOpFactoryExpression(node) {
+      const tsNode = findTypeScriptNodeAtRange(project, sourceFile, node.range);
+      if (tsNode === undefined) return false;
+
+      return expressionIsProdkitOpFactory(project.checker, tsNode);
+    },
     isOpExpression(node) {
       const tsNode = findTypeScriptNodeAtRange(project, sourceFile, node.range);
       if (tsNode === undefined) return false;
@@ -137,13 +153,23 @@ function createSourceOverride(
   fileName: string,
   sourceText: string | undefined,
 ): SourceOverride | undefined {
-  if (sourceText === undefined || existsSync(fileName)) return undefined;
+  if (sourceText === undefined) return undefined;
+  if (sourceMatchesDisk(fileName, sourceText)) return undefined;
 
   return { fileName, text: sourceText };
 }
 
+function sourceMatchesDisk(fileName: string, sourceText: string): boolean {
+  try {
+    return readFileSync(fileName, "utf8") === sourceText;
+  } catch {
+    return false;
+  }
+}
+
 function sourceOverrideCacheKey(sourceOverride: SourceOverride): string {
-  return `${canonicalPath(sourceOverride.fileName)}:${sourceOverride.text.length}`;
+  const sourceHash = createHash("sha256").update(sourceOverride.text).digest("hex");
+  return `${canonicalPath(sourceOverride.fileName)}:${sourceOverride.text.length}:${sourceHash}`;
 }
 
 function parseConfig(configPath: string): ts.ParsedCommandLine | undefined {
@@ -172,7 +198,11 @@ function getCachedProject(
   sourceOverride: SourceOverride | undefined,
 ): TypeScriptProject {
   const cached = projectCache.get(cacheKey);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    projectCache.delete(cacheKey);
+    projectCache.set(cacheKey, cached);
+    return cached;
+  }
 
   const host = createCompilerHost(options, sourceOverride);
   const program = ts.createProgram([...rootNames], options, host);
@@ -182,8 +212,17 @@ function getCachedProject(
     sourceFileIndexes: new WeakMap(),
   };
 
-  projectCache.set(cacheKey, project);
+  cacheProject(cacheKey, project);
   return project;
+}
+
+function cacheProject(cacheKey: string, project: TypeScriptProject): void {
+  if (projectCache.size >= maxProjectCacheEntries) {
+    const oldestKey = projectCache.keys().next().value;
+    if (oldestKey !== undefined) projectCache.delete(oldestKey);
+  }
+
+  projectCache.set(cacheKey, project);
 }
 
 function createCompilerHost(
@@ -246,6 +285,10 @@ function expressionProducesProdkitOp(checker: ts.TypeChecker, node: ts.Node): bo
   }
 
   return false;
+}
+
+function expressionIsProdkitOpFactory(checker: ts.TypeChecker, node: ts.Node): boolean {
+  return isProdkitOpFactoryType(checker, checker.getTypeAtLocation(node));
 }
 
 function findBestMatchingExpression(
@@ -383,6 +426,36 @@ function isProdkitOpType(
   return false;
 }
 
+function isProdkitOpFactoryType(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+  seen: Set<ts.Type> = new Set(),
+): boolean {
+  if (seen.has(type)) return false;
+  seen.add(type);
+
+  if (isAnyOrUnknown(type)) return false;
+  if (hasProdkitOpFactoryPackageShape(checker, type)) return true;
+
+  if (type.isUnion()) {
+    return type.types.some((part) => isProdkitOpFactoryType(checker, part, seen));
+  }
+
+  if (type.isIntersection()) {
+    return type.types.some((part) => isProdkitOpFactoryType(checker, part, seen));
+  }
+
+  const apparent = checker.getApparentType(type);
+  if (apparent !== type && isProdkitOpFactoryType(checker, apparent, seen)) return true;
+
+  const constraint = checker.getBaseConstraintOfType(type);
+  if (constraint !== undefined && constraint !== type) {
+    return isProdkitOpFactoryType(checker, constraint, seen);
+  }
+
+  return false;
+}
+
 function isAnyOrUnknown(type: ts.Type): boolean {
   const flags = type.getFlags();
   return (flags & ts.TypeFlags.Any) !== 0 || (flags & ts.TypeFlags.Unknown) !== 0;
@@ -409,6 +482,21 @@ function hasProdkitOpPackageShape(checker: ts.TypeChecker, type: ts.Type): boole
     typeIncludesStringLiteral(tagType, "Op") &&
     symbolHasDeclarationFromPackage(tagProperty, prodkitOpPackageName) &&
     symbolHasDeclarationFromPackage(runProperty, prodkitOpPackageName)
+  );
+}
+
+function hasProdkitOpFactoryPackageShape(checker: ts.TypeChecker, type: ts.Type): boolean {
+  const tagProperty = type.getProperty("_tag");
+  if (tagProperty === undefined) return false;
+
+  const declaration = firstDeclaration(tagProperty);
+  if (declaration === undefined) return false;
+
+  const tagType = checker.getTypeOfSymbolAtLocation(tagProperty, declaration);
+
+  return (
+    typeIncludesStringLiteral(tagType, "OpFactory") &&
+    symbolHasDeclarationFromPackage(tagProperty, prodkitOpPackageName)
   );
 }
 

@@ -1,5 +1,9 @@
 import { isRecordLike } from "@prodkit/shared/runtime";
-import { createOpTypeDetector, type TypeAwareRuleContext } from "../op-type-detector.js";
+import {
+  createOpTypeDetector,
+  type OpTypeDetector,
+  type TypeAwareRuleContext,
+} from "../op-type-detector.js";
 
 const docsUrl = "https://github.com/trvswgnr/prodkit/tree/main/packages/op-lint#require-yield-star";
 
@@ -37,6 +41,7 @@ type ExpressionStatementNode = RangedNode & {
 
 type CallExpressionNode = RangedNode & {
   type: "CallExpression";
+  arguments?: unknown;
   callee: unknown;
 };
 
@@ -54,6 +59,26 @@ type YieldExpressionNode = RangedNode & {
 type AwaitExpressionNode = RangedNode & {
   type: "AwaitExpression";
   argument?: unknown;
+};
+
+type BlockStatementNode = RangedNode & {
+  type: "BlockStatement";
+};
+
+type FunctionWithParamsNode = FunctionLikeNode & {
+  id?: unknown;
+  params?: unknown;
+};
+
+type ImportDeclarationNode = RangedNode & {
+  type: "ImportDeclaration";
+  source?: unknown;
+  specifiers?: unknown;
+};
+
+type VariableDeclaratorNode = RangedNode & {
+  type: "VariableDeclarator";
+  id?: unknown;
 };
 
 type StaticMemberExpressionNode = RangedNode & {
@@ -79,6 +104,16 @@ type Fixer = {
 };
 
 type FixFunction = (fixer: Fixer) => Fix | Fix[] | Iterable<Fix> | null;
+
+type FunctionFrame = {
+  isOpGeneratorBody: boolean;
+};
+
+type BindingKind = "local" | "prodkit-op";
+
+type BindingDeclarer = (name: string, kind: BindingKind) => void;
+
+type FallbackOpIdentifierPredicate = (node: unknown) => node is IdentifierNode;
 
 function isNode(value: unknown): value is RangedNode {
   if (!isRecordLike(value)) return false;
@@ -161,6 +196,10 @@ function isAwaitExpression(value: unknown): value is AwaitExpressionNode {
   );
 }
 
+function isBlockStatement(value: unknown): value is BlockStatementNode {
+  return isRecordLike(value) && isNodeWithType(value, "BlockStatement");
+}
+
 function isFunctionLike(value: unknown): value is FunctionLikeNode {
   if (!isRecordLike(value)) return false;
   const generator = value["generator"];
@@ -168,15 +207,39 @@ function isFunctionLike(value: unknown): value is FunctionLikeNode {
   return isNode(value) && typeof generator === "boolean";
 }
 
+function isFunctionWithParams(value: unknown): value is FunctionWithParamsNode {
+  return isFunctionLike(value);
+}
+
+function isImportDeclaration(value: unknown): value is ImportDeclarationNode {
+  return isRecordLike(value) && isNodeWithType(value, "ImportDeclaration");
+}
+
+function isVariableDeclarator(value: unknown): value is VariableDeclaratorNode {
+  return isRecordLike(value) && isNodeWithType(value, "VariableDeclarator");
+}
+
 export function isDirectOpBuilderCall(expression: unknown): expression is CallExpressionNode {
-  if (!isCallExpression(expression)) return false;
-  if (!isStaticMemberExpression(expression.callee)) return false;
+  return directOpBuilderObject(expression)?.name === "Op";
+}
+
+function isFallbackDirectOpBuilderCall(
+  expression: unknown,
+  isFallbackOpIdentifier: FallbackOpIdentifierPredicate,
+): boolean {
+  const object = directOpBuilderObject(expression);
+  return object !== undefined && isFallbackOpIdentifier(object);
+}
+
+function directOpBuilderObject(expression: unknown): IdentifierNode | undefined {
+  if (!isCallExpression(expression)) return undefined;
+  if (!isStaticMemberExpression(expression.callee)) return undefined;
 
   const { object, property } = expression.callee;
 
-  return (
-    isIdentifierNamed(object, "Op") && isIdentifier(property) && opBuilderNames.has(property.name)
-  );
+  return isIdentifier(object) && isIdentifier(property) && opBuilderNames.has(property.name)
+    ? object
+    : undefined;
 }
 
 export const requireYieldStarRule = {
@@ -195,28 +258,91 @@ export const requireYieldStarRule = {
   },
   create(context: RuleContext) {
     const opTypeDetector = createOpTypeDetector(context);
-    const functionStack: boolean[] = [];
+    const opGeneratorArgumentRanges = new Set<string>();
+    const functionStack: FunctionFrame[] = [];
+    const scopeStack: Array<Map<string, BindingKind>> = [new Map()];
+    const prodkitOpFactoryNames = new Set<string>();
+    const declareBinding = (name: string, kind: BindingKind) => {
+      scopeStack.at(-1)?.set(name, kind);
+    };
+    const resolveBinding = (name: string): BindingKind | undefined => {
+      for (let index = scopeStack.length - 1; index >= 0; index -= 1) {
+        const scope = scopeStack[index];
+        const binding = scope?.get(name);
+        if (binding !== undefined) return binding;
+      }
+
+      return undefined;
+    };
+    const isFallbackOpIdentifier = (node: unknown): node is IdentifierNode => {
+      if (!isIdentifier(node)) return false;
+
+      const binding = resolveBinding(node.name);
+      if (binding === "prodkit-op") return true;
+      if (binding === "local") return false;
+
+      return prodkitOpFactoryNames.size === 0 && node.name === "Op";
+    };
     const enterFunction = (node: unknown) => {
-      functionStack.push(isFunctionLike(node) && node.generator === true);
+      functionStack.push({
+        isOpGeneratorBody: isOpGeneratorBody(
+          node,
+          opGeneratorArgumentRanges,
+          opTypeDetector,
+          isFallbackOpIdentifier,
+        ),
+      });
+      scopeStack.push(new Map());
+      declareFunctionParams(node, declareBinding);
     };
     const exitFunction = () => {
       functionStack.pop();
+      scopeStack.pop();
     };
-    const isInsideCurrentGenerator = () => functionStack.at(-1) === true;
+    const isInsideCurrentOpGenerator = () => functionStack.at(-1)?.isOpGeneratorBody === true;
 
     return {
-      FunctionDeclaration: enterFunction,
+      ImportDeclaration(node: unknown) {
+        for (const name of prodkitOpImportNames(node)) {
+          prodkitOpFactoryNames.add(name);
+          declareBinding(name, "prodkit-op");
+        }
+      },
+      BlockStatement(node: unknown) {
+        if (isBlockStatement(node)) scopeStack.push(new Map());
+      },
+      "BlockStatement:exit"(node: unknown) {
+        if (isBlockStatement(node)) scopeStack.pop();
+      },
+      CallExpression(node: unknown) {
+        if (!isCallExpression(node)) return;
+
+        const generatorArgument = opFactoryGeneratorArgument(
+          node,
+          opTypeDetector,
+          isFallbackOpIdentifier,
+        );
+        if (generatorArgument !== undefined) {
+          opGeneratorArgumentRanges.add(nodeRangeKey(generatorArgument));
+        }
+      },
+      FunctionDeclaration(node: unknown) {
+        declareFunctionName(node, declareBinding);
+        enterFunction(node);
+      },
       "FunctionDeclaration:exit": exitFunction,
       FunctionExpression: enterFunction,
       "FunctionExpression:exit": exitFunction,
-      ArrowFunctionExpression() {
-        functionStack.push(false);
-      },
+      ArrowFunctionExpression: enterFunction,
       "ArrowFunctionExpression:exit": exitFunction,
+      VariableDeclarator(node: unknown) {
+        declareVariable(node, declareBinding);
+      },
       ExpressionStatement(node: unknown) {
-        if (!isInsideCurrentGenerator()) return;
+        if (!isInsideCurrentOpGenerator()) return;
         if (!isExpressionStatement(node)) return;
-        if (!isOpExpressionStatement(node.expression, opTypeDetector)) return;
+        if (!isOpExpressionStatement(node.expression, opTypeDetector, isFallbackOpIdentifier))
+          return;
 
         context.report({
           node,
@@ -225,10 +351,10 @@ export const requireYieldStarRule = {
         });
       },
       ReturnStatement(node: unknown) {
-        if (!isInsideCurrentGenerator()) return;
+        if (!isInsideCurrentOpGenerator()) return;
         if (!isReturnStatement(node)) return;
         if (isYieldExpression(node.argument) || isAwaitExpression(node.argument)) return;
-        if (!isOpExpression(node.argument, opTypeDetector)) return;
+        if (!isOpExpression(node.argument, opTypeDetector, isFallbackOpIdentifier)) return;
 
         context.report({
           node,
@@ -237,10 +363,10 @@ export const requireYieldStarRule = {
         });
       },
       YieldExpression(node: unknown) {
-        if (!isInsideCurrentGenerator()) return;
+        if (!isInsideCurrentOpGenerator()) return;
         if (!isYieldExpression(node)) return;
         if (node.delegate === true) return;
-        if (!isOpExpression(node.argument, opTypeDetector)) return;
+        if (!isOpExpression(node.argument, opTypeDetector, isFallbackOpIdentifier)) return;
 
         context.report({
           node,
@@ -249,9 +375,9 @@ export const requireYieldStarRule = {
         });
       },
       AwaitExpression(node: unknown) {
-        if (!isInsideCurrentGenerator()) return;
+        if (!isInsideCurrentOpGenerator()) return;
         if (!isAwaitExpression(node)) return;
-        if (!isOpExpression(node.argument, opTypeDetector)) return;
+        if (!isOpExpression(node.argument, opTypeDetector, isFallbackOpIdentifier)) return;
 
         context.report({
           node,
@@ -263,23 +389,159 @@ export const requireYieldStarRule = {
   },
 };
 
+function prodkitOpImportNames(node: unknown): string[] {
+  if (!isImportDeclaration(node)) return [];
+  if (!isRecordLike(node.source) || node.source["value"] !== "@prodkit/op") return [];
+  if (!Array.isArray(node.specifiers)) return [];
+
+  const names: string[] = [];
+  for (const specifier of node.specifiers) {
+    if (!isRecordLike(specifier) || specifier["type"] !== "ImportSpecifier") continue;
+    const imported = specifier["imported"];
+    const local = specifier["local"];
+    if (isIdentifierNamed(imported, "Op") && isIdentifier(local)) {
+      names.push(local.name);
+    }
+  }
+
+  return names;
+}
+
+function declareFunctionName(node: unknown, declareBinding: BindingDeclarer): void {
+  if (!isFunctionWithParams(node)) return;
+  if (isIdentifier(node.id)) declareBinding(node.id.name, "local");
+}
+
+function declareFunctionParams(node: unknown, declareBinding: BindingDeclarer): void {
+  if (!isFunctionWithParams(node) || !Array.isArray(node.params)) return;
+
+  for (const param of node.params) {
+    declarePattern(param, declareBinding);
+  }
+}
+
+function declareVariable(node: unknown, declareBinding: BindingDeclarer): void {
+  if (!isVariableDeclarator(node)) return;
+
+  declarePattern(node.id, declareBinding);
+}
+
+function declarePattern(pattern: unknown, declareBinding: BindingDeclarer): void {
+  if (isIdentifier(pattern)) {
+    declareBinding(pattern.name, "local");
+    return;
+  }
+  if (!isRecordLike(pattern)) return;
+
+  const type = pattern["type"];
+  if (type === "RestElement") {
+    declarePattern(pattern["argument"], declareBinding);
+    return;
+  }
+  if (type === "AssignmentPattern") {
+    declarePattern(pattern["left"], declareBinding);
+    return;
+  }
+  if (type === "ArrayPattern" && Array.isArray(pattern["elements"])) {
+    for (const element of pattern["elements"]) {
+      declarePattern(element, declareBinding);
+    }
+    return;
+  }
+  if (type === "ObjectPattern" && Array.isArray(pattern["properties"])) {
+    for (const property of pattern["properties"]) {
+      if (!isRecordLike(property)) continue;
+      if (property["type"] === "Property") declarePattern(property["value"], declareBinding);
+      if (property["type"] === "RestElement") declarePattern(property["argument"], declareBinding);
+    }
+  }
+}
+
+function isOpGeneratorBody(
+  node: unknown,
+  opGeneratorArgumentRanges: ReadonlySet<string>,
+  opTypeDetector: OpTypeDetector | undefined,
+  isFallbackOpIdentifier: FallbackOpIdentifierPredicate,
+): boolean {
+  if (!isFunctionLike(node) || node.generator !== true) return false;
+  if (opGeneratorArgumentRanges.has(nodeRangeKey(node))) return true;
+
+  return isFirstArgumentOfOpFactoryCall(node, opTypeDetector, isFallbackOpIdentifier);
+}
+
+function opFactoryGeneratorArgument(
+  callExpression: CallExpressionNode,
+  opTypeDetector: OpTypeDetector | undefined,
+  isFallbackOpIdentifier: FallbackOpIdentifierPredicate,
+): RangedNode | undefined {
+  if (!isKnownOpFactoryCallee(callExpression.callee, opTypeDetector, isFallbackOpIdentifier)) {
+    return undefined;
+  }
+  if (!Array.isArray(callExpression.arguments)) return undefined;
+
+  const [firstArgument] = callExpression.arguments;
+  return isFunctionLike(firstArgument) && firstArgument.generator === true
+    ? firstArgument
+    : undefined;
+}
+
+function isFirstArgumentOfOpFactoryCall(
+  node: unknown,
+  opTypeDetector: OpTypeDetector | undefined,
+  isFallbackOpIdentifier: FallbackOpIdentifierPredicate,
+): boolean {
+  if (!isRecordLike(node)) return false;
+
+  const parent = node["parent"];
+  if (!isCallExpression(parent)) return false;
+  if (!isKnownOpFactoryCallee(parent.callee, opTypeDetector, isFallbackOpIdentifier)) {
+    return false;
+  }
+  if (!Array.isArray(parent.arguments)) return false;
+
+  return parent.arguments[0] === node;
+}
+
+function isKnownOpFactoryCallee(
+  callee: unknown,
+  opTypeDetector: OpTypeDetector | undefined,
+  isFallbackOpIdentifier: FallbackOpIdentifierPredicate,
+): boolean {
+  if (opTypeDetector !== undefined && isNode(callee)) {
+    return (
+      opTypeDetector.isOpFactoryExpression(callee) ||
+      (opTypeDetector.isAnyOrUnknownExpression(callee) && isFallbackOpIdentifier(callee))
+    );
+  }
+
+  return isFallbackOpIdentifier(callee);
+}
+
 function isOpExpressionStatement(
   expression: unknown,
-  opTypeDetector: ReturnType<typeof createOpTypeDetector>,
+  opTypeDetector: OpTypeDetector | undefined,
+  isFallbackOpIdentifier: FallbackOpIdentifierPredicate,
 ): boolean {
   if (isYieldExpression(expression) || isAwaitExpression(expression)) return false;
 
-  return isOpExpression(expression, opTypeDetector);
+  return isOpExpression(expression, opTypeDetector, isFallbackOpIdentifier);
 }
 
 function isOpExpression(
   expression: unknown,
-  opTypeDetector: ReturnType<typeof createOpTypeDetector>,
+  opTypeDetector: OpTypeDetector | undefined,
+  isFallbackOpIdentifier: FallbackOpIdentifierPredicate,
 ): boolean {
-  if (isDirectOpBuilderCall(expression)) return true;
-  if (opTypeDetector === undefined || !isNode(expression)) return false;
+  if (opTypeDetector === undefined) {
+    return isFallbackDirectOpBuilderCall(expression, isFallbackOpIdentifier);
+  }
+  if (!isNode(expression)) return false;
 
-  return opTypeDetector.isOpExpression(expression);
+  return (
+    opTypeDetector.isOpExpression(expression) ||
+    (opTypeDetector.isAnyOrUnknownExpression(expression) &&
+      isFallbackDirectOpBuilderCall(expression, isFallbackOpIdentifier))
+  );
 }
 
 function asRangedNode(node: unknown): RangedNode {
@@ -290,4 +552,8 @@ function asRangedNode(node: unknown): RangedNode {
 
 function keywordRange(node: RangedNode, keyword: "await" | "yield"): [number, number] {
   return [node.range[0], node.range[0] + keyword.length];
+}
+
+function nodeRangeKey(node: RangedNode): string {
+  return `${node.range[0]}:${node.range[1]}`;
 }

@@ -1,44 +1,12 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { readFileSync } from "node:fs";
 import * as ts from "typescript";
 import { describe, expect, test } from "vitest";
 import { clearOpTypeDetectorCaches, createOpTypeDetector } from "./op-type-detector.js";
-
-function setupTempProject(source: string) {
-  const tempDir = mkdtempSync(resolve(tmpdir(), "op-lint-detector-"));
-  const packageRoot = resolve(import.meta.dirname, "..");
-  const opPackageRoot = resolve(packageRoot, "../op");
-  const betterResultRoot = resolve(opPackageRoot, "node_modules/better-result");
-
-  mkdirSync(resolve(tempDir, "node_modules/@prodkit"), { recursive: true });
-  symlinkSync(opPackageRoot, resolve(tempDir, "node_modules/@prodkit/op"), "dir");
-  symlinkSync(betterResultRoot, resolve(tempDir, "node_modules/better-result"), "dir");
-
-  writeFileSync(
-    resolve(tempDir, "tsconfig.json"),
-    `${JSON.stringify(
-      {
-        compilerOptions: {
-          module: "NodeNext",
-          moduleResolution: "NodeNext",
-          skipLibCheck: true,
-          strict: true,
-          target: "ES2022",
-        },
-        include: ["*.ts"],
-      },
-      null,
-      2,
-    )}\n`,
-    "utf8",
-  );
-
-  const filePath = resolve(tempDir, "fixture.ts");
-  writeFileSync(filePath, source, "utf8");
-
-  return { tempDir, filePath };
-}
+import {
+  setupTempDetectorProject,
+  setupTempOpLintProject,
+  writeDefaultTsConfig,
+} from "./test-support/op-lint-fixture.js";
 
 function findMemberCallRange(
   sourceFile: ts.SourceFile,
@@ -70,9 +38,59 @@ function findMemberCallRange(
   return range;
 }
 
+function findIdentifierExpressionRange(sourceFile: ts.SourceFile, name: string): [number, number] {
+  let range: [number, number] | undefined;
+
+  const visit = (node: ts.Node) => {
+    if (range !== undefined) return;
+    if (
+      ts.isIdentifier(node) &&
+      node.text === name &&
+      ts.isExpressionStatement(node.parent) &&
+      node.parent.expression === node
+    ) {
+      range = [node.getStart(sourceFile), node.getEnd()];
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  if (range === undefined) {
+    throw new Error(`Identifier expression ${name} not found`);
+  }
+
+  return range;
+}
+
+function findCallCalleeRange(sourceFile: ts.SourceFile, name: string): [number, number] {
+  let range: [number, number] | undefined;
+
+  const visit = (node: ts.Node) => {
+    if (range !== undefined) return;
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === name
+    ) {
+      range = [node.expression.getStart(sourceFile), node.expression.getEnd()];
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  if (range === undefined) {
+    throw new Error(`Call callee ${name}(...) not found`);
+  }
+
+  return range;
+}
+
 function isOpCall(source: string, objectName: string, methodName: string): boolean {
   clearOpTypeDetectorCaches();
-  const { tempDir, filePath } = setupTempProject(source);
+  const project = setupTempDetectorProject(source);
+  const { tempDir, filePath } = project;
 
   try {
     const detector = createOpTypeDetector({
@@ -87,9 +105,63 @@ function isOpCall(source: string, objectName: string, methodName: string): boole
     const range = findMemberCallRange(sourceFile, objectName, methodName);
     return detector?.isOpExpression({ range }) ?? false;
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    project.cleanup();
   }
 }
+
+function isOpFactoryCallee(source: string, calleeName: string): boolean {
+  clearOpTypeDetectorCaches();
+  const project = setupTempDetectorProject(source);
+  const { tempDir, filePath } = project;
+
+  try {
+    const detector = createOpTypeDetector({
+      cwd: tempDir,
+      filename: filePath,
+      physicalFilename: filePath,
+      sourceCode: { text: source },
+    });
+    expect(detector).toBeDefined();
+
+    const sourceFile = ts.createSourceFile(filePath, source, ts.ScriptTarget.ES2022, true);
+    const range = findCallCalleeRange(sourceFile, calleeName);
+    return detector?.isOpFactoryExpression({ range }) ?? false;
+  } finally {
+    project.cleanup();
+  }
+}
+
+describe("op-type-detector Op factory identity", () => {
+  test("recognizes an aliased Op factory", () => {
+    const source = [
+      'import { Op as Operation } from "@prodkit/op";',
+      "",
+      "const program = Operation(function* () {",
+      "  return yield* Operation.of(1);",
+      "});",
+      "",
+      "void program;",
+      "",
+    ].join("\n");
+
+    expect(isOpFactoryCallee(source, "Operation")).toBe(true);
+  });
+
+  test("does not recognize a local OpFactory lookalike", () => {
+    const source = [
+      'const Operation = Object.assign((gen: unknown) => gen, { _tag: "OpFactory" as const });',
+      "",
+      "const program = Operation(function* () {",
+      "  return 1;",
+      "});",
+      "",
+      "void program;",
+      "",
+    ].join("\n");
+
+    expect(isOpFactoryCallee(source, "Operation")).toBe(false);
+  });
+});
 
 describe("op-type-detector Console wrapper", () => {
   test("recognizes service.load()", () => {
@@ -186,37 +258,13 @@ describe("op-type-detector Console wrapper", () => {
 
   test("recognizes Console.info imported from another module", () => {
     clearOpTypeDetectorCaches();
-    const packageRoot = resolve(import.meta.dirname, "..");
-    const opPackageRoot = resolve(packageRoot, "../op");
-    const betterResultRoot = resolve(opPackageRoot, "node_modules/better-result");
-    const tempDir = mkdtempSync(resolve(tmpdir(), "op-lint-detector-"));
+    const project = setupTempOpLintProject("op-lint-detector-");
+    const { tempDir } = project;
 
     try {
-      mkdirSync(resolve(tempDir, "node_modules/@prodkit"), { recursive: true });
-      symlinkSync(opPackageRoot, resolve(tempDir, "node_modules/@prodkit/op"), "dir");
-      symlinkSync(betterResultRoot, resolve(tempDir, "node_modules/better-result"), "dir");
-
-      writeFileSync(
-        resolve(tempDir, "tsconfig.json"),
-        `${JSON.stringify(
-          {
-            compilerOptions: {
-              module: "NodeNext",
-              moduleResolution: "NodeNext",
-              skipLibCheck: true,
-              strict: true,
-              target: "ES2022",
-            },
-            include: ["*.ts"],
-          },
-          null,
-          2,
-        )}\n`,
-        "utf8",
-      );
-
-      writeFileSync(
-        resolve(tempDir, "console.ts"),
+      writeDefaultTsConfig(project);
+      project.writeFile(
+        "console.ts",
         [
           'import { Op } from "@prodkit/op";',
           "",
@@ -225,7 +273,6 @@ describe("op-type-detector Console wrapper", () => {
           "};",
           "",
         ].join("\n"),
-        "utf8",
       );
 
       const divideSource = [
@@ -241,8 +288,7 @@ describe("op-type-detector Console wrapper", () => {
         "",
       ].join("\n");
 
-      const filePath = resolve(tempDir, "divide.ts");
-      writeFileSync(filePath, divideSource, "utf8");
+      const filePath = project.writeFile("divide.ts", divideSource);
 
       const detector = createOpTypeDetector({
         cwd: tempDir,
@@ -256,7 +302,7 @@ describe("op-type-detector Console wrapper", () => {
       const range = findMemberCallRange(sourceFile, "Console", "info");
       expect(detector?.isOpExpression({ range })).toBe(true);
     } finally {
-      rmSync(tempDir, { recursive: true, force: true });
+      project.cleanup();
     }
   });
 
@@ -332,7 +378,7 @@ describe("op-type-detector Console wrapper", () => {
 
   test("recognizes Console.info when lint ranges differ slightly from TypeScript offsets", () => {
     clearOpTypeDetectorCaches();
-    const { tempDir, filePath } = setupTempProject(
+    const project = setupTempDetectorProject(
       [
         'import { Op } from "@prodkit/op";',
         "",
@@ -349,6 +395,7 @@ describe("op-type-detector Console wrapper", () => {
         "",
       ].join("\n"),
     );
+    const { tempDir, filePath } = project;
 
     try {
       const sourceFile = ts.createSourceFile(
@@ -368,7 +415,83 @@ describe("op-type-detector Console wrapper", () => {
       });
       expect(detector?.isOpExpression({ range: shiftedRange })).toBe(true);
     } finally {
-      rmSync(tempDir, { recursive: true, force: true });
+      project.cleanup();
+    }
+  });
+});
+
+describe("op-type-detector source cache", () => {
+  test("uses the current lint source for an existing file", () => {
+    clearOpTypeDetectorCaches();
+    const originalSource = [
+      'import { Op } from "@prodkit/op";',
+      "",
+      "const value = Op.of(1);",
+      "",
+      "const program = Op(function* () {",
+      "  value;",
+      "});",
+      "",
+      "void program;",
+      "",
+    ].join("\n");
+    const updatedSource = [
+      'import { Op } from "@prodkit/op";',
+      "",
+      "const value = 1 + 2;",
+      "",
+      "const program = Op(function* () {",
+      "  value;",
+      "});",
+      "",
+      "void program;",
+      "",
+    ].join("\n");
+    const project = setupTempDetectorProject(originalSource);
+    const { tempDir, filePath } = project;
+
+    try {
+      const originalDetector = createOpTypeDetector({
+        cwd: tempDir,
+        filename: filePath,
+        physicalFilename: filePath,
+        sourceCode: { text: originalSource },
+      });
+      expect(originalDetector).toBeDefined();
+
+      const originalSourceFile = ts.createSourceFile(
+        filePath,
+        originalSource,
+        ts.ScriptTarget.ES2022,
+        true,
+      );
+      expect(
+        originalDetector?.isOpExpression({
+          range: findIdentifierExpressionRange(originalSourceFile, "value"),
+        }),
+      ).toBe(true);
+
+      const updatedDetector = createOpTypeDetector({
+        cwd: tempDir,
+        filename: filePath,
+        physicalFilename: filePath,
+        sourceCode: { text: updatedSource },
+      });
+      expect(updatedDetector).toBeDefined();
+
+      const updatedSourceFile = ts.createSourceFile(
+        filePath,
+        updatedSource,
+        ts.ScriptTarget.ES2022,
+        true,
+      );
+      expect(
+        updatedDetector?.isOpExpression({
+          range: findIdentifierExpressionRange(updatedSourceFile, "value"),
+        }),
+      ).toBe(false);
+    } finally {
+      project.cleanup();
     }
   });
 });
@@ -417,7 +540,8 @@ describe("op-type-detector quick start returns", () => {
 
   test("does not treat plain success returns as Ops", () => {
     clearOpTypeDetectorCaches();
-    const { tempDir, filePath } = setupTempProject(quickStartSource);
+    const project = setupTempDetectorProject(quickStartSource);
+    const { tempDir, filePath } = project;
 
     try {
       const detector = createOpTypeDetector({
@@ -443,13 +567,14 @@ describe("op-type-detector quick start returns", () => {
         expect(detector?.isOpExpression({ range }), expression).toBe(false);
       }
     } finally {
-      rmSync(tempDir, { recursive: true, force: true });
+      project.cleanup();
     }
   });
 
   test("does not treat plain success returns as Ops when ranges are slightly shifted", () => {
     clearOpTypeDetectorCaches();
-    const { tempDir, filePath } = setupTempProject(quickStartSource);
+    const project = setupTempDetectorProject(quickStartSource);
+    const { tempDir, filePath } = project;
 
     try {
       const detector = createOpTypeDetector({
@@ -477,7 +602,7 @@ describe("op-type-detector quick start returns", () => {
         expect(detector?.isOpExpression({ range: shiftedRange }), expression).toBe(false);
       }
     } finally {
-      rmSync(tempDir, { recursive: true, force: true });
+      project.cleanup();
     }
   });
 });

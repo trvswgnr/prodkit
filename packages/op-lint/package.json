@@ -56,8 +56,8 @@
     "release:minor": "pnpm --filter @prodkit/tools run release:cut op-lint minor",
     "release:publish:manual": "npm publish --access public --provenance",
     "release:push": "git push && git push --tags",
-    "coverage": "vitest run --coverage",
-    "test": "vitest run",
+    "coverage": "pnpm run build && vitest run --coverage",
+    "test": "pnpm run build && vitest run",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

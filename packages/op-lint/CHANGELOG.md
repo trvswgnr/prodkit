@@ -7,9 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Fixed
 
-- No entries yet.
+- Keep checker-backed detection aligned with the current lint source instead of reusing stale
+  TypeScript programs after edits.
+- Reuse checker programs for unchanged on-disk files instead of rebuilding a full TypeScript
+  program for every linted file.
+- Recognize aliased `@prodkit/op` factory names when scoping Op generator bodies, and avoid
+  autofixing shadowed local `Op.<builder>` lookalikes when checker information is available.
+- Scope `require-yield-star` to generator bodies passed directly to `Op(...)`, avoiding false
+  positives in plain generators.
 
 ## [0.1.2] - 2026-06-18
 
@@ -48,5 +55,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Establish the unpublished package baseline for release tooling.
-
-
