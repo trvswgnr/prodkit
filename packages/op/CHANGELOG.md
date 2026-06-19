@@ -7,9 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Changed
 
-- No entries yet.
+- No user-facing changes in this release.
 
 ## [0.2.1] - 2026-06-18
 
@@ -497,4 +497,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   paths, including generator finalization behavior.
 - Tightened combinator and policy behavior in edge cases (listener teardown,
   retry timing, and composed operation semantics).
-
