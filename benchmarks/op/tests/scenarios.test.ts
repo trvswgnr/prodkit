@@ -1,11 +1,18 @@
 import { describe, expect, it, beforeAll } from "vitest";
 import {
+  asComparisonOp,
+  asComparisonPolicy,
+  createComparisonScenarios,
+  type ComparisonRuntime,
+} from "../comparison-matrix.ts";
+import {
   asBenchOp,
   getRepoRoot,
   importOpModule,
   resolveOpPackageDir,
   type BenchOp,
 } from "../harness.ts";
+import { createProfileScenarios } from "../profile.ts";
 import {
   COMPOSE_STEPS,
   runAsyncChain,
@@ -25,6 +32,8 @@ import {
   runEffectTimeout,
   runEffectYieldChain,
 } from "../effect-scenarios.ts";
+import { Op as WorkspaceOp } from "@prodkit/op";
+import { Policy as WorkspacePolicy } from "@prodkit/op/policy";
 
 describe("profile scenarios", () => {
   const steps = 3;
@@ -68,5 +77,31 @@ describe("profile scenarios", () => {
 
   it("default compose steps remain stable", () => {
     expect(COMPOSE_STEPS).toBe(6);
+  });
+
+  it("profile scenarios include CodSpeed bench names", () => {
+    const runtime: ComparisonRuntime = {
+      Op: asComparisonOp(WorkspaceOp),
+      Policy: asComparisonPolicy(WorkspacePolicy),
+    };
+    const profileScenarios = createProfileScenarios(asBenchOp(WorkspaceOp), runtime);
+    const profileNames = new Set<string>();
+    const primaryNames = profileScenarios.map((scenario) => scenario.name);
+    expect(new Set(primaryNames).size).toBe(primaryNames.length);
+    for (const scenario of profileScenarios) {
+      profileNames.add(scenario.name);
+      for (const alias of scenario.aliases ?? []) {
+        profileNames.add(alias);
+      }
+    }
+
+    for (const scenario of createComparisonScenarios(runtime)) {
+      expect(profileNames.has(scenario.implementations.op.benchName)).toBe(true);
+      expect(profileNames.has(scenario.overheadBench)).toBe(true);
+    }
+    expect(profileNames.has("compose.opFlatLoop")).toBe(true);
+    expect(profileNames.has("compose.opSequentialRuns")).toBe(true);
+    expect(profileNames.has("compose.rawSyncYieldStar")).toBe(true);
+    expect(profileNames.has("generator.rawYieldStarSync")).toBe(true);
   });
 });

@@ -3,8 +3,10 @@ import path from "node:path";
 import { measureOpBundleSizes, type BundleSizeBounds } from "./measure-bundle-size.ts";
 import {
   BASELINE_IMPLEMENTATION_ID,
-  COMPARISON_SCENARIOS,
+  asComparisonOp,
+  asComparisonPolicy,
   computeVsBaseline,
+  createComparisonScenarios,
   IMPLEMENTATION_COLUMNS,
   libraryPairOutcome,
   type ComparisonScenarioKey,
@@ -14,20 +16,26 @@ import {
   type VsBaselineRatios,
 } from "./comparison-matrix.ts";
 import {
+  benchRunOptionSummary,
   formatNumber,
   formatRatio,
   getRepoRoot,
   parseArgValue,
+  parseBenchRunOptions,
   readEnvironmentReport,
   readPackageVersion,
   resolveOpPackageDir,
+  resolveBenchRunOptions,
   resolveReportPath,
-  runTinybenchVariant,
+  runTinybenchRepeatedVariant,
   writeJsonReport,
-  type TinybenchRecord,
+  type RepeatedTinybenchRecord,
+  type ResolvedBenchRunOptions,
 } from "./harness.ts";
+import { Op } from "@prodkit/op";
+import { Policy } from "@prodkit/op/policy";
 
-type RuntimeCell = TinybenchRecord;
+type RuntimeCell = RepeatedTinybenchRecord;
 
 type LibraryPair = {
   left: ImplementationId;
@@ -37,6 +45,7 @@ type LibraryPair = {
 type ComparisonReport = {
   generatedAt: string;
   environment: ReturnType<typeof readEnvironmentReport>;
+  benchOptions: ResolvedBenchRunOptions;
   current: {
     headSha: string;
     dirty: boolean;
@@ -279,24 +288,34 @@ function formatBytes(bytes: number): string {
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const pair = parseLibraryPairArg(argv);
+  const benchOptions = parseBenchRunOptions(argv);
   const repoRoot = getRepoRoot();
   const reportPath = resolveReportPath(argv, "comparison-report.json");
   const packageDir = resolveOpPackageDir(repoRoot);
   const fingerprint = readCurrentFingerprint(repoRoot);
   const packageVersion = await readPackageVersion(packageDir);
+  const comparisonScenarios = createComparisonScenarios({
+    Op: asComparisonOp(Op),
+    Policy: asComparisonPolicy(Policy),
+  });
 
   logger.info(
     `Comparison target: @prodkit/op@${packageVersion} (${process.version}, ${process.platform}/${process.arch})`,
   );
+  logger.info(`Benchmark timing: ${benchRunOptionSummary(benchOptions)}`);
 
   const scenarios: ComparisonReport["scenarios"] = [];
-  for (const scenario of COMPARISON_SCENARIOS) {
+  for (const scenario of comparisonScenarios) {
     logger.info(`Benchmarking ${scenario.label}...`);
     const runtime: Record<ImplementationId, RuntimeCell> = Object.create(null);
     const descriptions: Record<ImplementationId, string> = Object.create(null);
     for (const column of IMPLEMENTATION_COLUMNS) {
       const cell = scenario.implementations[column.id];
-      runtime[column.id] = await runTinybenchVariant(cell.benchName, cell.run);
+      runtime[column.id] = await runTinybenchRepeatedVariant(
+        cell.benchName,
+        cell.run,
+        benchOptions,
+      );
       descriptions[column.id] = cell.description;
     }
     scenarios.push({
@@ -314,6 +333,7 @@ async function main(): Promise<void> {
   const report: ComparisonReport = {
     generatedAt: new Date().toISOString(),
     environment: readEnvironmentReport(),
+    benchOptions: resolveBenchRunOptions(benchOptions),
     current: {
       headSha: fingerprint.headSha,
       dirty: fingerprint.dirty,

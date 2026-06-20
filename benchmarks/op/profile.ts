@@ -1,25 +1,39 @@
 import { statSync } from "node:fs";
 import path from "node:path";
 import {
+  asComparisonOp,
+  asComparisonPolicy,
+  BASELINE_IMPLEMENTATION_ID,
+  createComparisonScenarios,
+  runOverheadRatioBench,
+  type ComparisonRuntime,
+} from "./comparison-matrix.ts";
+import {
   asBenchOp,
   BENCHMARK_PROFILE_DIR,
+  benchRunOptionSummary,
   ensureBenchmarkProfileDir,
   findNewestProfileArtifact,
   formatNumber,
   formatRatio,
   getRepoRoot,
   importOpModule,
+  importOpPolicyModule,
   parseArgValue,
+  parseBenchRunOptions,
   parsePositiveInt,
   parseReportPath,
   parseStepsArg,
   readEnvironmentReport,
   readPackageVersion,
+  resolveBenchRunOptions,
   resolveProfileArtifact,
   resolveOpPackageDir,
-  runTinybenchVariant,
+  runTinybenchRepeatedVariant,
   writeJsonReport,
-  type TinybenchRecord,
+  type BenchRunOptions,
+  type RepeatedTinybenchRecord,
+  type ResolvedBenchRunOptions,
 } from "./harness.ts";
 import type { BenchOp } from "./scenarios.ts";
 import {
@@ -31,38 +45,43 @@ import {
   runRawSyncYieldStarChain,
   runSingleOpRun,
 } from "./scenarios.ts";
-import { unsafeCoerce } from "@prodkit/shared/runtime";
 
-type AsyncScenarioName =
-  | "baseline.asyncChain"
-  | "baseline.asyncFnChain"
-  | "compose.yieldChain"
-  | "compose.flatOp"
-  | "compose.sequentialRuns"
-  | "compose.singleValueRun";
-
-type SyncReferenceScenarioName = "generator.rawYieldStarSync";
+type ScenarioName = string;
 
 type ProfileMode = "breakdown" | "cpu" | "heap";
+type AsyncScenarioGroup = "compose" | "codspeed";
+type ProfileIterationMode = Exclude<ProfileMode, "breakdown">;
+
+type ProfileIterationDefaults = {
+  cpu: number;
+  heap: number;
+};
 
 type AsyncScenarioSpec = {
   kind: "async";
-  name: AsyncScenarioName;
+  group: AsyncScenarioGroup;
+  name: ScenarioName;
+  aliases?: readonly string[];
   description: string;
-  run: (Op: BenchOp, steps: number) => Promise<unknown>;
+  run: (steps: number) => Promise<unknown>;
+  profileIterations?: Partial<ProfileIterationDefaults>;
 };
 
 type SyncScenarioSpec = {
   kind: "sync";
-  name: SyncReferenceScenarioName;
+  name: ScenarioName;
+  aliases?: readonly string[];
   description: string;
   run: (steps: number) => unknown;
+  profileIterations?: Partial<ProfileIterationDefaults>;
 };
 
 type ScenarioSpec = AsyncScenarioSpec | SyncScenarioSpec;
 
-type ScenarioRecord = TinybenchRecord & {
+type ScenarioRecord = RepeatedTinybenchRecord & {
   description: string;
+  group: AsyncScenarioGroup;
+  aliases?: readonly string[];
   ratioToBaseline: number | null;
 };
 
@@ -73,74 +92,152 @@ type ProfileReport = {
     packageDir: string;
     packageVersion: string;
   };
+  benchOptions: ResolvedBenchRunOptions;
   steps: number;
-  asyncScenarios: Record<AsyncScenarioName, ScenarioRecord>;
+  asyncScenarios: Record<ScenarioName, ScenarioRecord>;
   syncReference: Record<
-    SyncReferenceScenarioName,
-    TinybenchRecord & {
+    ScenarioName,
+    RepeatedTinybenchRecord & {
       description: string;
+      aliases?: readonly string[];
       note: string;
     }
   >;
 };
 
-const ASYNC_SCENARIOS: AsyncScenarioSpec[] = [
-  {
-    kind: "async",
-    name: "baseline.asyncChain",
-    description: "await Promise.resolve chain (native baseline)",
-    run: (_Op, steps) => runAsyncChain(steps),
-  },
-  {
-    kind: "async",
-    name: "baseline.asyncFnChain",
-    description: "await sync values through async fn (microtask-only model)",
-    run: (_Op, steps) => runAsyncFnChain(steps),
-  },
-  {
-    kind: "async",
-    name: "compose.yieldChain",
-    description: "yield* Op.of per step (full sequential compose path)",
-    run: (Op, steps) => runOpYieldChain(Op, steps),
-  },
-  {
-    kind: "async",
-    name: "compose.flatOp",
-    description: "single Op with inline loop (one driver pass, no nested yield*)",
-    run: (Op, steps) => runOpFlatLoop(Op, steps),
-  },
-  {
-    kind: "async",
-    name: "compose.sequentialRuns",
-    description: "sequential Op.of(...).run() (per-step shell, no yield* delegation)",
-    run: (Op, steps) => runOpSequentialRuns(Op, steps),
-  },
-  {
-    kind: "async",
-    name: "compose.singleValueRun",
-    description: "single Op.of(x).run()",
-    run: (Op) => runSingleOpRun(Op),
-  },
-];
-
-const SYNC_REFERENCE_SCENARIOS: SyncScenarioSpec[] = [
-  {
-    kind: "sync",
-    name: "generator.rawYieldStarSync",
-    description: "raw sync yield* chain (no Op, no async driver)",
-    run: (steps) => runRawSyncYieldStarChain(steps),
-  },
-];
-
-const ALL_SCENARIO_NAMES = [
-  ...ASYNC_SCENARIOS.map((scenario) => scenario.name),
-  ...SYNC_REFERENCE_SCENARIOS.map((scenario) => scenario.name),
-] as const;
-
 const DEFAULT_PROFILE_CPU_ITERATIONS = 2_000_000;
 const DEFAULT_PROFILE_HEAP_ITERATIONS = 500_000;
+const CODSPEED_PROFILE_CPU_ITERATIONS = 500_000;
+const CODSPEED_PROFILE_HEAP_ITERATIONS = 100_000;
+const OVERHEAD_PROFILE_CPU_ITERATIONS = 25_000;
+const OVERHEAD_PROFILE_HEAP_ITERATIONS = 5_000;
 
 const logger = console;
+
+function createComposeProfileScenarios(Op: BenchOp): AsyncScenarioSpec[] {
+  return [
+    {
+      kind: "async",
+      group: "compose",
+      name: "baseline.asyncChain",
+      description: "await Promise.resolve chain (native baseline)",
+      run: (steps) => runAsyncChain(steps),
+    },
+    {
+      kind: "async",
+      group: "compose",
+      name: "baseline.asyncFnChain",
+      description: "await sync values through async fn (microtask-only model)",
+      run: (steps) => runAsyncFnChain(steps),
+    },
+    {
+      kind: "async",
+      group: "compose",
+      name: "compose.yieldChain",
+      description: "yield* Op.of per step (full sequential compose path)",
+      run: (steps) => runOpYieldChain(Op, steps),
+    },
+    {
+      kind: "async",
+      group: "compose",
+      name: "compose.flatOp",
+      description: "single Op with inline loop (one driver pass, no nested yield*)",
+      run: (steps) => runOpFlatLoop(Op, steps),
+    },
+    {
+      kind: "async",
+      group: "compose",
+      name: "compose.sequentialRuns",
+      description: "sequential Op.of(...).run() (per-step shell, no yield* delegation)",
+      run: (steps) => runOpSequentialRuns(Op, steps),
+    },
+    {
+      kind: "async",
+      group: "compose",
+      name: "compose.singleValueRun",
+      description: "single Op.of(x).run()",
+      run: () => runSingleOpRun(Op),
+    },
+  ];
+}
+
+function createCodSpeedProfileScenarios(runtime: ComparisonRuntime): AsyncScenarioSpec[] {
+  const specs: AsyncScenarioSpec[] = [];
+  const Op = asBenchOp(runtime.Op);
+  for (const scenario of createComparisonScenarios(runtime)) {
+    const opCell = scenario.implementations.op;
+    specs.push({
+      kind: "async",
+      group: "codspeed",
+      name: opCell.benchName,
+      description: `CodSpeed Op scenario: ${scenario.label} (${opCell.description})`,
+      run: async () => {
+        await opCell.run();
+      },
+      profileIterations: {
+        cpu: CODSPEED_PROFILE_CPU_ITERATIONS,
+        heap: CODSPEED_PROFILE_HEAP_ITERATIONS,
+      },
+    });
+    specs.push({
+      kind: "async",
+      group: "codspeed",
+      name: scenario.overheadBench,
+      description: `CodSpeed overhead ratio for ${scenario.label}`,
+      run: () =>
+        runOverheadRatioBench(scenario.implementations[BASELINE_IMPLEMENTATION_ID].run, opCell.run),
+      profileIterations: {
+        cpu: OVERHEAD_PROFILE_CPU_ITERATIONS,
+        heap: OVERHEAD_PROFILE_HEAP_ITERATIONS,
+      },
+    });
+  }
+  specs.push(
+    {
+      kind: "async",
+      group: "codspeed",
+      name: "compose.opFlatLoop",
+      description: "CodSpeed compose extra: single Op with inline loop",
+      run: (steps) => runOpFlatLoop(Op, steps),
+      profileIterations: {
+        cpu: CODSPEED_PROFILE_CPU_ITERATIONS,
+        heap: CODSPEED_PROFILE_HEAP_ITERATIONS,
+      },
+    },
+    {
+      kind: "async",
+      group: "codspeed",
+      name: "compose.opSequentialRuns",
+      description: "CodSpeed compose extra: sequential Op.of(...).run()",
+      run: (steps) => runOpSequentialRuns(Op, steps),
+      profileIterations: {
+        cpu: CODSPEED_PROFILE_CPU_ITERATIONS,
+        heap: CODSPEED_PROFILE_HEAP_ITERATIONS,
+      },
+    },
+  );
+  return specs;
+}
+
+function createSyncReferenceScenarios(): SyncScenarioSpec[] {
+  return [
+    {
+      kind: "sync",
+      name: "compose.rawSyncYieldStar",
+      aliases: ["generator.rawYieldStarSync"],
+      description: "raw sync yield* chain (no Op, no async driver)",
+      run: (steps) => runRawSyncYieldStarChain(steps),
+    },
+  ];
+}
+
+export function createProfileScenarios(Op: BenchOp, runtime: ComparisonRuntime): ScenarioSpec[] {
+  return [
+    ...createComposeProfileScenarios(Op),
+    ...createCodSpeedProfileScenarios(runtime),
+    ...createSyncReferenceScenarios(),
+  ];
+}
 
 function parseProfileMode(argv: readonly string[]): ProfileMode {
   const value = parseArgValue(argv, "--profile-mode=");
@@ -149,28 +246,37 @@ function parseProfileMode(argv: readonly string[]): ProfileMode {
   throw new Error(`Invalid profile mode "${value}". Expected breakdown, cpu, or heap.`);
 }
 
-function parseScenarioFilter(argv: readonly string[]): string | undefined {
-  const value = parseArgValue(argv, "--scenario=");
-  if (value === undefined) return undefined;
-  const allScenarioNames: readonly string[] = unsafeCoerce(ALL_SCENARIO_NAMES);
-  if (!allScenarioNames.includes(value)) {
-    throw new Error(
-      `Invalid scenario "${value}". Expected one of: ${ALL_SCENARIO_NAMES.join(", ")}`,
-    );
-  }
-  return value;
+function scenarioNames(scenarios: readonly ScenarioSpec[]): string[] {
+  return scenarios.flatMap((scenario) => [scenario.name, ...(scenario.aliases ?? [])]);
 }
 
-function selectScenarios(filter: string | undefined): ScenarioSpec[] {
-  const all = [...ASYNC_SCENARIOS, ...SYNC_REFERENCE_SCENARIOS];
-  if (filter === undefined) return all;
-  return all.filter((scenario) => scenario.name === filter);
+function scenarioMatchesFilter(scenario: ScenarioSpec, filter: string): boolean {
+  return scenario.name === filter || (scenario.aliases ?? []).includes(filter);
+}
+
+function selectScenarios(
+  scenarios: readonly ScenarioSpec[],
+  filter: string | undefined,
+): ScenarioSpec[] {
+  if (filter === undefined) return [...scenarios];
+  const selected = scenarios.filter((scenario) => scenarioMatchesFilter(scenario, filter));
+  if (selected.length === 0) {
+    throw new Error(
+      `Invalid scenario "${filter}". Expected one of: ${scenarioNames(scenarios).join(", ")}`,
+    );
+  }
+  return selected;
+}
+
+function formatMilliseconds(value: number): string {
+  return Intl.NumberFormat("en-US", { maximumFractionDigits: 6 }).format(value);
 }
 
 function printAsyncBreakdownTable(
-  rows: Array<ScenarioRecord & { name: AsyncScenarioName }>,
+  rows: Array<ScenarioRecord & { name: ScenarioName }>,
   steps: number,
 ): void {
+  if (rows.length === 0) return;
   logger.info("");
   logger.info(
     `Async profile breakdown (${steps} compose steps where applicable; higher ops/sec is better):`,
@@ -188,16 +294,35 @@ function printAsyncBreakdownTable(
         ? "n/a".padStart(14)
         : formatRatio(row.ratioToBaseline).padStart(14);
     logger.info(
-      `${row.name.padEnd(28)} ${formatNumber(row.hz).padStart(14)} ${formatNumber(row.latencyMs).padStart(10)} ${formatNumber(row.semMs).padStart(10)} ${formatNumber(row.rme).padStart(8)} ${ratio}  ${row.description}`,
+      `${row.name.padEnd(28)} ${formatNumber(row.hz).padStart(14)} ${formatMilliseconds(row.latencyMs).padStart(10)} ${formatMilliseconds(row.semMs).padStart(10)} ${formatNumber(row.rme).padStart(8)} ${ratio}  ${row.description}`,
+    );
+  }
+}
+
+function printCodSpeedScenarioTable(rows: Array<ScenarioRecord & { name: ScenarioName }>): void {
+  if (rows.length === 0) return;
+  logger.info("");
+  logger.info("CodSpeed profile scenarios (higher ops/sec is better):");
+  logger.info("");
+  logger.info(
+    `${"Scenario".padEnd(28)} ${"ops/sec".padStart(14)} ${"mean ms".padStart(10)} ${"sem ms".padStart(10)} ${"rme %".padStart(8)}  Description`,
+  );
+  logger.info(
+    `${"-".repeat(28)} ${"-".repeat(14)} ${"-".repeat(10)} ${"-".repeat(10)} ${"-".repeat(8)}  ${"-".repeat(40)}`,
+  );
+  for (const row of rows) {
+    logger.info(
+      `${row.name.padEnd(28)} ${formatNumber(row.hz).padStart(14)} ${formatMilliseconds(row.latencyMs).padStart(10)} ${formatMilliseconds(row.semMs).padStart(10)} ${formatNumber(row.rme).padStart(8)}  ${row.description}`,
     );
   }
 }
 
 function printSyncReferenceTable(
   rows: Array<
-    TinybenchRecord & {
-      name: SyncReferenceScenarioName;
+    RepeatedTinybenchRecord & {
+      name: ScenarioName;
       description: string;
+      aliases?: readonly string[];
       note: string;
     }
   >,
@@ -213,7 +338,7 @@ function printSyncReferenceTable(
   );
   for (const row of rows) {
     logger.info(
-      `${row.name.padEnd(28)} ${formatNumber(row.hz).padStart(14)} ${formatNumber(row.latencyMs).padStart(10)} ${formatNumber(row.semMs).padStart(10)} ${formatNumber(row.rme).padStart(8)}  ${row.description}`,
+      `${row.name.padEnd(28)} ${formatNumber(row.hz).padStart(14)} ${formatMilliseconds(row.latencyMs).padStart(10)} ${formatMilliseconds(row.semMs).padStart(10)} ${formatNumber(row.rme).padStart(8)}  ${row.description}`,
     );
     logger.info(`  note: ${row.note}`);
   }
@@ -232,7 +357,10 @@ function printInterpretationGuide(): void {
     "- compose.sequentialRuns vs compose.yieldChain: separates per-step Op shell allocation from yield* delegation.",
   );
   logger.info(
-    "- generator.rawYieldStarSync: sync-only reference; compare absolute ops/sec, not baseline ratios.",
+    "- CodSpeed scenarios mirror CI bench names; use them when a PR regression names a specific bench.",
+  );
+  logger.info(
+    "- compose.rawSyncYieldStar: sync-only reference; compare absolute ops/sec, not baseline ratios.",
   );
   logger.info("");
   logger.info("Machine-readable output:");
@@ -242,28 +370,28 @@ function printInterpretationGuide(): void {
   logger.info("");
   logger.info("CPU profile (flame graph):");
   logger.info(
-    "  pnpm --filter @prodkit/benchmarks run profile:cpu -- --scenario=compose.yieldChain",
+    "  pnpm --filter @prodkit/benchmarks run profile:cpu -- --scenario=compose.opYieldChain",
   );
   logger.info(
     "  Open the emitted *.cpuprofile in .profiles/op/ via Chrome DevTools or https://speedscope.app",
   );
   logger.info("");
   logger.info("Heap profile (allocations):");
-  logger.info(
-    "  pnpm --filter @prodkit/benchmarks run profile:heap -- --scenario=compose.yieldChain",
-  );
+  logger.info("  pnpm --filter @prodkit/benchmarks run profile:heap -- --scenario=all.opAll");
   logger.info("  Open the emitted *.heapprofile in .profiles/op/ via Chrome DevTools Memory");
 }
 
 async function measureAsyncScenario(
   spec: AsyncScenarioSpec,
-  Op: BenchOp,
   steps: number,
+  benchOptions: BenchRunOptions,
 ): Promise<ScenarioRecord> {
-  const record = await runTinybenchVariant(spec.name, () => spec.run(Op, steps));
+  const record = await runTinybenchRepeatedVariant(spec.name, () => spec.run(steps), benchOptions);
   return {
     ...record,
     description: spec.description,
+    group: spec.group,
+    aliases: spec.aliases,
     ratioToBaseline: null,
   };
 }
@@ -271,29 +399,39 @@ async function measureAsyncScenario(
 async function measureSyncScenario(
   spec: SyncScenarioSpec,
   steps: number,
-): Promise<TinybenchRecord & { description: string; note: string }> {
-  const record = await runTinybenchVariant(spec.name, () => spec.run(steps));
+  benchOptions: BenchRunOptions,
+): Promise<
+  RepeatedTinybenchRecord & { description: string; aliases?: readonly string[]; note: string }
+> {
+  const record = await runTinybenchRepeatedVariant(spec.name, () => spec.run(steps), benchOptions);
   return {
     ...record,
     description: spec.description,
+    aliases: spec.aliases,
     note: "Sync-only reference scenario; excluded from async baseline ratios.",
   };
 }
 
 async function runProfileLoop(
   spec: ScenarioSpec,
-  Op: BenchOp,
   steps: number,
   iterations: number,
 ): Promise<void> {
   logger.info(`Profiling ${spec.name} (${iterations.toLocaleString("en-US")} iterations)...`);
   for (let index = 0; index < iterations; index += 1) {
     if (spec.kind === "async") {
-      await spec.run(Op, steps);
+      await spec.run(steps);
     } else {
       spec.run(steps);
     }
   }
+}
+
+function defaultProfileIterations(spec: ScenarioSpec, mode: ProfileIterationMode): number {
+  return (
+    spec.profileIterations?.[mode] ??
+    (mode === "cpu" ? DEFAULT_PROFILE_CPU_ITERATIONS : DEFAULT_PROFILE_HEAP_ITERATIONS)
+  );
 }
 
 async function main(): Promise<void> {
@@ -301,26 +439,22 @@ async function main(): Promise<void> {
   const repoRoot = getRepoRoot();
   const packageDir = resolveOpPackageDir(repoRoot, parseArgValue(argv, "--package-dir="));
   const profileMode = parseProfileMode(argv);
-  const scenarioFilter = parseScenarioFilter(argv);
+  const scenarioFilter = parseArgValue(argv, "--scenario=");
+  const benchOptions = parseBenchRunOptions(argv);
   const steps = parseStepsArg(argv);
   const reportPath = parseReportPath(argv) ?? resolveProfileArtifact("profile.json");
-  const profileLoopIterations =
-    profileMode === "breakdown"
-      ? undefined
-      : parsePositiveInt(
-          parseArgValue(argv, "--iterations=") ??
-            String(
-              profileMode === "cpu"
-                ? DEFAULT_PROFILE_CPU_ITERATIONS
-                : DEFAULT_PROFILE_HEAP_ITERATIONS,
-            ),
-          "iterations",
-        );
+  const iterationsArg = parseArgValue(argv, "--iterations=");
 
   const { Op: opModule } = await importOpModule(packageDir);
+  const { Policy: policyModule } = await importOpPolicyModule(packageDir);
   const Op = asBenchOp(opModule);
+  const runtime = {
+    Op: asComparisonOp(opModule),
+    Policy: asComparisonPolicy(policyModule),
+  };
   const packageVersion = await readPackageVersion(packageDir);
-  const selected = selectScenarios(scenarioFilter);
+  const scenarios = createProfileScenarios(Op, runtime);
+  const selected = selectScenarios(scenarios, scenarioFilter);
 
   logger.info(
     `Profile environment: node=${process.version} platform=${process.platform} arch=${process.arch}`,
@@ -328,6 +462,7 @@ async function main(): Promise<void> {
   logger.info(`Profile target: ${packageDir} (@prodkit/op@${packageVersion})`);
   logger.info(`Profile mode: ${profileMode}`);
   logger.info(`Compose steps: ${steps}`);
+  logger.info(`Benchmark timing: ${benchRunOptionSummary(benchOptions)}`);
 
   if (profileMode === "cpu" || profileMode === "heap") {
     if (selected.length !== 1) {
@@ -339,14 +474,15 @@ async function main(): Promise<void> {
     if (!spec) {
       throw new Error("No scenario selected.");
     }
-    if (profileLoopIterations === undefined) {
-      throw new Error(`${profileMode} mode requires profile loop iterations.`);
-    }
+    const profileLoopIterations =
+      iterationsArg === undefined
+        ? defaultProfileIterations(spec, profileMode)
+        : parsePositiveInt(iterationsArg, "iterations");
 
     await ensureBenchmarkProfileDir();
     const artifactsDir = path.resolve(BENCHMARK_PROFILE_DIR);
     const startedAt = Date.now();
-    await runProfileLoop(spec, Op, steps, profileLoopIterations);
+    await runProfileLoop(spec, steps, profileLoopIterations);
     const artifactPrefix = profileMode === "cpu" ? "CPU" : "Heap";
     const artifactPath = findNewestProfileArtifact(artifactsDir, artifactPrefix);
     logger.info("");
@@ -367,32 +503,36 @@ async function main(): Promise<void> {
     (scenario): scenario is SyncScenarioSpec => scenario.kind === "sync",
   );
 
-  const asyncRows: Array<ScenarioRecord & { name: AsyncScenarioName }> = [];
+  const asyncRows: Array<ScenarioRecord & { name: ScenarioName }> = [];
   for (const spec of asyncSelected) {
-    const record = await measureAsyncScenario(spec, Op, steps);
+    const record = await measureAsyncScenario(spec, steps, benchOptions);
     asyncRows.push({ name: spec.name, ...record });
   }
 
-  const baseline = asyncRows.find((row) => row.name === "baseline.asyncChain");
+  const composeRows = asyncRows.filter((row) => row.group === "compose");
+  const codSpeedRows = asyncRows.filter((row) => row.group === "codspeed");
+  const baseline = composeRows.find((row) => row.name === "baseline.asyncChain");
   if (baseline !== undefined && baseline.hz > 0) {
-    for (const row of asyncRows) {
+    for (const row of composeRows) {
       row.ratioToBaseline = baseline.hz / row.hz;
     }
   }
 
   const syncRows: Array<
-    TinybenchRecord & {
-      name: SyncReferenceScenarioName;
+    RepeatedTinybenchRecord & {
+      name: ScenarioName;
       description: string;
+      aliases?: readonly string[];
       note: string;
     }
   > = [];
   for (const spec of syncSelected) {
-    const record = await measureSyncScenario(spec, steps);
+    const record = await measureSyncScenario(spec, steps, benchOptions);
     syncRows.push({ name: spec.name, ...record });
   }
 
-  printAsyncBreakdownTable(asyncRows, steps);
+  printAsyncBreakdownTable(composeRows, steps);
+  printCodSpeedScenarioTable(codSpeedRows);
   if (syncRows.length > 0) {
     printSyncReferenceTable(syncRows);
   }
@@ -409,7 +549,10 @@ async function main(): Promise<void> {
         semMs: row.semMs,
         rme: row.rme,
         sampleCount: row.sampleCount,
+        repeats: row.repeats,
         description: row.description,
+        group: row.group,
+        aliases: row.aliases,
         ratioToBaseline: row.ratioToBaseline,
       };
     }
@@ -424,7 +567,9 @@ async function main(): Promise<void> {
         semMs: row.semMs,
         rme: row.rme,
         sampleCount: row.sampleCount,
+        repeats: row.repeats,
         description: row.description,
+        aliases: row.aliases,
         note: row.note,
       };
     }
@@ -436,6 +581,7 @@ async function main(): Promise<void> {
         packageDir,
         packageVersion,
       },
+      benchOptions: resolveBenchRunOptions(benchOptions),
       steps,
       asyncScenarios,
       syncReference,
@@ -453,7 +599,9 @@ function statArtifactIsFresh(artifactPath: string, startedAtMs: number): boolean
   }
 }
 
-main().catch((error) => {
-  logger.error(error);
-  process.exitCode = 1;
-});
+if (import.meta.main) {
+  main().catch((error) => {
+    logger.error(error);
+    process.exitCode = 1;
+  });
+}

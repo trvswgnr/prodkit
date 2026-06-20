@@ -1,16 +1,23 @@
 import { bench, describe } from "vitest";
 import {
   BASELINE_IMPLEMENTATION_ID,
-  COMPARISON_SCENARIOS,
+  asComparisonOp,
+  asComparisonPolicy,
+  createComparisonScenarios,
   runOverheadRatioBench,
 } from "./comparison-matrix.ts";
 import { asBenchOp } from "./harness.ts";
 import { Op } from "@prodkit/op";
+import { Policy } from "@prodkit/op/policy";
 import { runOpFlatLoop, runOpSequentialRuns } from "./scenarios.ts";
 
 const op = asBenchOp(Op);
+const comparisonScenarios = createComparisonScenarios({
+  Op: asComparisonOp(Op),
+  Policy: asComparisonPolicy(Policy),
+});
 
-for (const scenario of COMPARISON_SCENARIOS) {
+for (const scenario of comparisonScenarios) {
   describe(scenario.group, () => {
     const opCell = scenario.implementations.op;
     bench(opCell.benchName, opCell.run);
@@ -18,7 +25,7 @@ for (const scenario of COMPARISON_SCENARIOS) {
 }
 
 describe("overhead", () => {
-  for (const scenario of COMPARISON_SCENARIOS) {
+  for (const scenario of comparisonScenarios) {
     bench(scenario.overheadBench, async () => {
       await runOverheadRatioBench(
         scenario.implementations[BASELINE_IMPLEMENTATION_ID].run,

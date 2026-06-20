@@ -16,6 +16,7 @@ export const BENCHMARK_PROFILE_DIR = ".profiles/op";
 export const DEFAULT_BENCH_TIME_MS = 300;
 export const DEFAULT_BENCH_WARMUP_TIME_MS = 150;
 export const DEFAULT_BENCH_WARMUP_ITERATIONS = 5;
+export const DEFAULT_BENCH_REPEATS = 1;
 
 export type TinybenchRecord = {
   hz: number;
@@ -25,6 +26,24 @@ export type TinybenchRecord = {
   semMs: number;
   rme: number;
   sampleCount: number;
+};
+
+export type BenchRunOptions = {
+  time?: number;
+  warmupTime?: number;
+  warmupIterations?: number;
+  repeats?: number;
+};
+
+export type ResolvedBenchRunOptions = {
+  time: number;
+  warmupTime: number;
+  warmupIterations: number;
+  repeats: number;
+};
+
+export type RepeatedTinybenchRecord = TinybenchRecord & {
+  repeats?: TinybenchRecord[];
 };
 
 export type EnvironmentReport = {
@@ -99,11 +118,7 @@ function relativeSafePath(pkgRoot: string, candidate: string): string {
   return absolute;
 }
 
-function readRuntimeEntryFromExports(exportsField: unknown): string | undefined {
-  if (typeof exportsField === "string") return exportsField;
-  if (!isRecord(exportsField)) return undefined;
-
-  const entry = exportsField["."];
+function readRuntimeEntryFromExportTarget(entry: unknown): string | undefined {
   if (typeof entry === "string") return entry;
   if (!isRecord(entry)) return undefined;
 
@@ -115,7 +130,16 @@ function readRuntimeEntryFromExports(exportsField: unknown): string | undefined 
   return undefined;
 }
 
-export async function resolveBundleEntry(packageDir: string): Promise<string> {
+function readRuntimeEntryFromExports(exportsField: unknown, subpath: string): string | undefined {
+  if (subpath === "." && typeof exportsField === "string") return exportsField;
+  if (!isRecord(exportsField)) return undefined;
+  return readRuntimeEntryFromExportTarget(exportsField[subpath]);
+}
+
+export async function resolveBundleEntry(
+  packageDir: string,
+  subpath: string = ".",
+): Promise<string> {
   const packageJsonPath = path.join(packageDir, "package.json");
   const packageJsonRaw = readFileSync(packageJsonPath, "utf8");
   const packageJson: unknown = JSON.parse(packageJsonRaw);
@@ -124,10 +148,16 @@ export async function resolveBundleEntry(packageDir: string): Promise<string> {
     throw new Error("Could not parse package.json.");
   }
 
-  const exportEntry = readRuntimeEntryFromExports(packageJson.exports);
-  const moduleEntry = typeof packageJson.module === "string" ? packageJson.module : undefined;
-  const mainEntry = typeof packageJson.main === "string" ? packageJson.main : undefined;
-  const candidate = exportEntry ?? moduleEntry ?? mainEntry ?? ENTRY_FALLBACK;
+  const exportEntry = readRuntimeEntryFromExports(packageJson.exports, subpath);
+  const moduleEntry =
+    subpath === "." && typeof packageJson.module === "string" ? packageJson.module : undefined;
+  const mainEntry =
+    subpath === "." && typeof packageJson.main === "string" ? packageJson.main : undefined;
+  const candidate =
+    exportEntry ?? moduleEntry ?? mainEntry ?? (subpath === "." ? ENTRY_FALLBACK : undefined);
+  if (candidate === undefined) {
+    throw new Error(`Unable to resolve ${OP_PACKAGE} export ${subpath} from ${packageJsonPath}.`);
+  }
   return relativeSafePath(packageDir, candidate);
 }
 
@@ -157,6 +187,20 @@ export async function importOpModule(packageDir: string): Promise<{ Op: unknown 
     throw new Error(`Unable to import Op from ${modulePath}.`);
   }
   return { Op: mod.Op };
+}
+
+export async function importOpPolicyModule(packageDir: string): Promise<{ Policy: unknown }> {
+  const modulePath = await resolveBundleEntry(packageDir, "./policy");
+  if (!existsSync(modulePath)) {
+    throw new Error(
+      `Resolved policy entry does not exist: ${modulePath}. Run pnpm --filter @prodkit/op run build first.`,
+    );
+  }
+  const mod: unknown = await import(pathToFileURL(modulePath).href);
+  if (!isRecord(mod) || !mod.Policy) {
+    throw new Error(`Unable to import Policy from ${modulePath}.`);
+  }
+  return { Policy: mod.Policy };
 }
 
 export function asBenchOp(input: unknown): BenchOp {
@@ -226,6 +270,37 @@ export function parseStepsArg(argv: readonly string[]): number {
   return parsePositiveInt(value, "steps");
 }
 
+export function parseBenchRunOptions(argv: readonly string[]): BenchRunOptions {
+  const time = parseArgValue(argv, "--time=");
+  const warmupTime = parseArgValue(argv, "--warmup-time=");
+  const warmupIterations = parseArgValue(argv, "--warmup-iterations=");
+  const repeats = parseArgValue(argv, "--repeats=");
+
+  return {
+    time: time === undefined ? undefined : parsePositiveInt(time, "time"),
+    warmupTime: warmupTime === undefined ? undefined : parsePositiveInt(warmupTime, "warmup time"),
+    warmupIterations:
+      warmupIterations === undefined
+        ? undefined
+        : parsePositiveInt(warmupIterations, "warmup iterations"),
+    repeats: repeats === undefined ? undefined : parsePositiveInt(repeats, "repeats"),
+  };
+}
+
+export function benchRunOptionSummary(options: BenchRunOptions): string {
+  const resolved = resolveBenchRunOptions(options);
+  return `time=${resolved.time}ms warmupTime=${resolved.warmupTime}ms warmupIterations=${resolved.warmupIterations} repeats=${resolved.repeats}`;
+}
+
+export function resolveBenchRunOptions(options: BenchRunOptions): ResolvedBenchRunOptions {
+  return {
+    time: options.time ?? DEFAULT_BENCH_TIME_MS,
+    warmupTime: options.warmupTime ?? DEFAULT_BENCH_WARMUP_TIME_MS,
+    warmupIterations: options.warmupIterations ?? DEFAULT_BENCH_WARMUP_ITERATIONS,
+    repeats: options.repeats ?? DEFAULT_BENCH_REPEATS,
+  };
+}
+
 export function formatNumber(value: number): string {
   return Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
 }
@@ -245,11 +320,7 @@ export function readEnvironmentReport(): EnvironmentReport {
 export async function runTinybenchVariant(
   name: string,
   fn: () => Promise<unknown> | unknown,
-  options: {
-    time?: number;
-    warmupTime?: number;
-    warmupIterations?: number;
-  } = {},
+  options: BenchRunOptions = {},
 ): Promise<TinybenchRecord> {
   const bench = new Bench({
     name,
@@ -274,6 +345,32 @@ export async function runTinybenchVariant(
     semMs: latency?.sem ?? 0,
     rme: latency?.rme ?? 0,
     sampleCount: latency?.samples.length ?? 0,
+  };
+}
+
+export async function runTinybenchRepeatedVariant(
+  name: string,
+  fn: () => Promise<unknown> | unknown,
+  options: BenchRunOptions = {},
+): Promise<RepeatedTinybenchRecord> {
+  const repeats = options.repeats ?? DEFAULT_BENCH_REPEATS;
+  if (repeats === 1) {
+    return runTinybenchVariant(name, fn, options);
+  }
+
+  const records: TinybenchRecord[] = [];
+  for (let repeat = 0; repeat < repeats; repeat += 1) {
+    records.push(await runTinybenchVariant(name, fn, options));
+  }
+
+  const sorted = [...records].sort((left, right) => left.hz - right.hz);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  if (median === undefined) {
+    throw new Error(`No Tinybench records captured for ${name}.`);
+  }
+  return {
+    ...median,
+    repeats: records,
   };
 }
 
