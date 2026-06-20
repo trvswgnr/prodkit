@@ -18,7 +18,6 @@ import type { EmptyMeta } from "./metadata.js";
 import {
   appendPlanTransform,
   createPlan,
-  genPlan,
   type ErasedPlanFactory,
   type ErasedPlanTransform,
   type Plan,
@@ -283,28 +282,58 @@ export function makeUnboundPlanOp<T, E, A, M = EmptyMeta>(
 
 type SyncValueOpShell<T> = (() => SyncValueOpShell<T>) &
   PlanBackedOp<T, never, [], EmptyMeta> &
-  OpInterface<T, never, [], EmptyMeta, true>;
+  OpInterface<T, never, [], EmptyMeta, true> & {
+    readonly [SYNC_VALUE]: T;
+    readonly [SYNC_RUN]?: () => Promise<Result<T, never>>;
+  };
+
+const SYNC_VALUE: unique symbol = Symbol("prodkit.op.sync-value");
+const SYNC_RUN: unique symbol = Symbol("prodkit.op.sync-run");
 
 function* syncValueIterator<T>(value: T): Generator<never, T, unknown> {
   return value;
 }
 
-const SYNC_VALUE_OP_PROTOTYPE: SyncValueOpShell<unknown> = Object.create(
-  null,
-  createSyncValueFluentPrototype(),
-);
+function getSyncValueRun<T>(this: SyncValueOpShell<T>): () => Promise<Result<T, never>> {
+  const cached = this[SYNC_RUN];
+  if (cached !== undefined) return cached;
+
+  const value = this[SYNC_VALUE];
+  const run = () => Promise.resolve(Result.ok(value));
+  Object.defineProperty(this, SYNC_RUN, { value: run });
+  return run;
+}
+
+function syncValueIterable<T>(this: SyncValueOpShell<T>): Generator<never, T, unknown> {
+  return syncValueIterator(this[SYNC_VALUE]);
+}
+
+function createSyncValuePlan<T>(value: T): Plan<T, never, EmptyMeta> {
+  let plan: Plan<T, never, EmptyMeta>;
+  plan = {
+    execute: () => Promise.resolve(Result.ok(value)),
+    iterate: () => syncValueIterator(value),
+    rewrite: (rewriter) => {
+      // SAFETY: sync value plans have no local error channel; the rewriter owns the rewritten generics.
+      return unsafeCoerce(rewriter.apply(plan));
+    },
+  };
+  return plan;
+}
+
+const SYNC_VALUE_OP_PROTOTYPE: SyncValueOpShell<unknown> = Object.create(null, {
+  ...createSyncValueFluentPrototype(),
+  run: { get: getSyncValueRun },
+});
 
 /**
  * Builds a bound nullary Op for an already-awaited sync success value.
  *
- * Hot paths (`.run()`, `yield*`) skip the plan op shell and the full generator driver.
+ * Hot paths (`.run()`, `yield*`, hidden plan execution) skip the full generator driver.
  * Fluent transforms upgrade through the normal plan shell on demand.
  */
 export function makeSyncValueOp<T>(value: T): OpInterface<T, never, [], EmptyMeta, true> {
-  const bindPlan = () =>
-    genPlan(function* () {
-      return value;
-    });
+  const bindPlan = () => createSyncValuePlan(value);
 
   const invoke = () => self;
   let self: SyncValueOpShell<T>;
@@ -312,9 +341,9 @@ export function makeSyncValueOp<T>(value: T): OpInterface<T, never, [], EmptyMet
   // SAFETY: Object.assign builds the same shell shape as makeBoundPlanOp; sync values skip generator drive only.
   self = unsafeCoerce(
     Object.assign(invoke, {
+      [SYNC_VALUE]: value,
       [OP_PLAN_BIND]: bindPlan,
-      run: () => Promise.resolve(Result.ok(value)),
-      [Symbol.iterator]: () => syncValueIterator(value),
+      [Symbol.iterator]: syncValueIterable,
       _tag: "Op" as const,
     }),
   );

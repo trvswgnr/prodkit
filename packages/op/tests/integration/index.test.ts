@@ -190,6 +190,14 @@ describe("Op namespace value", () => {
     expect(result.value).toBe(69);
   });
 
+  test("run can be detached from a sync value op", async () => {
+    const run = Op.of(69).run;
+    const result = await run();
+
+    assert(result.isOk(), "should be Ok");
+    expect(result.value).toBe(69);
+  });
+
   test("yield* can consume a generic helper that returns Op(function*)", async () => {
     type Parsed = { version: string };
     const runTest = async (lift: (value: Parsed) => Op<Parsed, never, []>) => {
