@@ -42,7 +42,7 @@
   "devDependencies": {
     "@prodkit/shared": "workspace:*",
     "@types/node": "^24.12.2",
-    "miniflare": "^4.20260611.0",
+    "miniflare": "^4.20260617.0",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "typescript": "catalog:"
