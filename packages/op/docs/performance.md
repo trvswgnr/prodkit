@@ -75,15 +75,18 @@ graphs can lose async stack traces; V8 `--cpu-prof` handles async code fine.
 ```bash
 pnpm --filter @prodkit/op run build
 pnpm --filter @prodkit/benchmarks run profile
-pnpm --filter @prodkit/benchmarks run profile:cpu -- --scenario=compose.yieldChain
-pnpm --filter @prodkit/benchmarks run profile:heap -- --scenario=compose.yieldChain
+pnpm --filter @prodkit/benchmarks run profile:cpu -- --scenario=compose.opYieldChain
+pnpm --filter @prodkit/benchmarks run profile:heap -- --scenario=all.opAll
 ```
+
+Use CodSpeed scenario names with `--scenario=...` when a regression comment names a specific
+bench, for example `overhead.timeout.ratio`.
 
 Refresh the public comparison table locally:
 
 ```bash
 pnpm --filter @prodkit/op run build
-pnpm --filter @prodkit/benchmarks run compare
+pnpm --filter @prodkit/benchmarks run compare -- --time=1000 --repeats=5
 pnpm --filter @prodkit/tools run performance:sync -- --write
 ```
 

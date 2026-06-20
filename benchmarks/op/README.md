@@ -57,11 +57,16 @@ From repo root:
 pnpm run bench
 pnpm --filter @prodkit/benchmarks run codspeed:bench
 pnpm --filter @prodkit/benchmarks run compare
+pnpm --filter @prodkit/benchmarks run compare -- --time=1000 --repeats=5
 pnpm --filter @prodkit/benchmarks run compare -- --pair=op,effect
 pnpm --filter @prodkit/tools run performance:sync -- --write
 ```
 
-Build `@prodkit/op` before running benches locally. CodSpeed instrumentation activates in CI (or with the CodSpeed CLI); locally, Vitest runs plain wall-clock benches for a sanity check.
+Build `@prodkit/op` before running benches locally. CodSpeed instrumentation activates in CI (or
+with the CodSpeed CLI); locally, Vitest runs plain wall-clock benches for a sanity check. Local
+Tinybench commands accept `--time=`, `--warmup-time=`, `--warmup-iterations=`, and `--repeats=`.
+When `--repeats` is above `1`, reports keep the median-throughput run as the main cell and include
+raw repeat samples under `repeats`.
 
 CI publishes runtime regressions via CodSpeed (see [`.github/workflows/codspeed.yml`](../../.github/workflows/codspeed.yml)), bundle-size deltas via `compressed-size-action`, and uploads a comparison report artifact from the walltime job.
 
@@ -110,10 +115,14 @@ CodSpeed reports end-to-end scenario timings. The profile harness decomposes the
 pnpm --filter @prodkit/op run build
 pnpm --filter @prodkit/benchmarks run profile
 pnpm --filter @prodkit/benchmarks run profile -- --report=.profiles/op/profile.json
+pnpm --filter @prodkit/benchmarks run profile -- --time=1000 --repeats=3
 pnpm --filter @prodkit/benchmarks run profile -- --steps=12
 ```
 
-When CodSpeed flags a regression, use `profile.ts` for deep investigation. CodSpeed flame graphs can lose async stack traces; V8 `--cpu-prof` handles async code fine.
+When CodSpeed flags a regression, use `profile.ts` for deep investigation. The profile registry
+accepts CodSpeed bench names such as `all.opAll`, `overhead.timeout.ratio`, and
+`compose.opYieldChain` through `--scenario=...`. CodSpeed flame graphs can lose async stack traces;
+V8 `--cpu-prof` handles async code fine.
 
 ### Async scenarios (included in baseline ratios)
 
@@ -126,23 +135,33 @@ When CodSpeed flags a regression, use `profile.ts` for deep investigation. CodSp
 | `compose.sequentialRuns` | Per-step `Op.of(...).run()` without `yield*` delegation |
 | `compose.singleValueRun` | One `Op.of(x).run()` |
 
+### CodSpeed scenarios
+
+The profile command also includes the walltime CodSpeed scenarios:
+
+- Op absolute benches from the comparison matrix, for example `singleValue.opRun`, `all.opAll`,
+  `retry.opWithPolicyRetry`, and `timeout.opWithPolicyTimeout`.
+- Ratio benches from the same matrix, for example `overhead.all.ratio` and
+  `overhead.timeout.ratio`.
+- Compose extras, `compose.opFlatLoop` and `compose.opSequentialRuns`.
+
 ### Sync reference (excluded from async baseline ratios)
 
 | Scenario | What it isolates |
 | --- | --- |
-| `generator.rawYieldStarSync` | Raw sync `yield*` (no Op, no async driver) |
+| `compose.rawSyncYieldStar` | Raw sync `yield*` (no Op, no async driver) |
 
 Filter to one scenario:
 
 ```bash
-pnpm --filter @prodkit/benchmarks run profile -- --scenario=compose.yieldChain
+pnpm --filter @prodkit/benchmarks run profile -- --scenario=overhead.timeout.ratio
 ```
 
 For flame graphs and allocation profiles:
 
 ```bash
-pnpm --filter @prodkit/benchmarks run profile:cpu -- --scenario=compose.yieldChain
-pnpm --filter @prodkit/benchmarks run profile:heap -- --scenario=compose.yieldChain
+pnpm --filter @prodkit/benchmarks run profile:cpu -- --scenario=compose.opYieldChain
+pnpm --filter @prodkit/benchmarks run profile:heap -- --scenario=all.opAll
 ```
 
 Node writes `CPU.*.cpuprofile` or `Heap.*.heapprofile` under `.profiles/op/`.
