@@ -34,11 +34,13 @@ async function driveFanOutPlans<T, E>(
 ): Promise<Array<Result<T, E | UnhandledException> | undefined>> {
   const children = createFanOutChildren(outerContext);
   const results: Array<Result<T, E | UnhandledException> | undefined> = Array(plans.length);
-  const runningByIndex = new Map<number, { abort(): void }>();
+  const runningByIndex: Array<{ abort(): void } | undefined> = Array(plans.length);
 
   const abortSiblingsExcept = (keepIndex: number) => {
-    for (const [index, child] of runningByIndex) {
-      if (index !== keepIndex) child.abort();
+    for (let index = 0; index < runningByIndex.length; index += 1) {
+      if (index === keepIndex) continue;
+      const child = runningByIndex[index];
+      if (child !== undefined) child.abort();
     }
   };
 
@@ -52,7 +54,7 @@ async function driveFanOutPlans<T, E>(
     index: number,
     slot: { release(): void },
   ) => {
-    runningByIndex.delete(index);
+    runningByIndex[index] = undefined;
     slot.release();
     results[index] = res;
     config.onChildSettled?.(res, index, controls);
@@ -62,7 +64,7 @@ async function driveFanOutPlans<T, E>(
     if (config.poolSize >= plans.length) {
       const runs = plans.map((plan, index) => {
         const child = children.spawn();
-        runningByIndex.set(index, child);
+        runningByIndex[index] = child;
         return config.executeChild(plan, child.context).then((result) => {
           // SAFETY: ExecuteChildPlan types results as unknown; every plan here is Plan<T, E, ...> at this site.
           const res: Result<T, E | UnhandledException> = unsafeCoerce(result);
@@ -85,7 +87,7 @@ async function driveFanOutPlans<T, E>(
         if (plan === undefined) return;
 
         const child = children.spawn();
-        runningByIndex.set(i, child);
+        runningByIndex[i] = child;
         // SAFETY: ExecuteChildPlan types results as unknown; every plan here is Plan<T, E, ...> at this site.
         const res: Result<T, E | UnhandledException> = unsafeCoerce(
           await config.executeChild(plan, child.context),
@@ -126,7 +128,8 @@ export function collectAllOk<T, E>(
 ): Result<T[], E | UnhandledException> {
   const values: T[] = [];
 
-  for (const [index, result] of results.entries()) {
+  for (let index = 0; index < results.length; index += 1) {
+    const result = results[index];
     if (result === undefined) return Result.err(missingResultError(index));
     if (result.isErr()) return result;
     values.push(result.value);
@@ -201,7 +204,8 @@ export function collectAllSettled<T, E>(
 ): Result<Result<T, E | UnhandledException>[], UnhandledException> {
   const settled: Result<T, E | UnhandledException>[] = [];
 
-  for (const [index, result] of results.entries()) {
+  for (let index = 0; index < results.length; index += 1) {
+    const result = results[index];
     if (result === undefined) return Result.err(missingResultError(index));
     settled.push(result);
   }
@@ -292,8 +296,10 @@ export async function driveAnyPlans<T, E>(
 
   if (winner !== undefined) return Result.ok(winner.value);
 
-  const errors = results.flatMap((result) =>
-    result !== undefined && Result.isError(result) ? [result.error] : [],
-  );
+  const errors: Array<E | UnhandledException> = [];
+  for (let index = 0; index < results.length; index += 1) {
+    const result = results[index];
+    if (result !== undefined && Result.isError(result)) errors.push(result.error);
+  }
   return Result.err(new ErrorGroup(errors, "Op.any failed because all operations failed"));
 }
