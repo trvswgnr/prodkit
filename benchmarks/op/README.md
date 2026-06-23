@@ -101,6 +101,25 @@ To add another competitor column, extend `IMPLEMENTATION_COLUMNS` and each scena
 
 `compare --pair=op,effect` prints a direct head-to-head table (winner + margin) and stores the same data under `pair` in `op/.artifacts/comparison-report.json`.
 
+### Official report and diff
+
+`compare` and `profile` also write official report metadata into their JSON output. The official
+fields include the schema version, run id, runner identity, commit metadata, package version,
+dependency fingerprint, benchmark options, scenario-level statistics, variance fields, and artifact
+references. The legacy comparison fields remain in `comparison-report.json` so
+`performance:sync` can keep reading the same shape.
+
+Compare two compatible official reports with:
+
+```bash
+pnpm --filter @prodkit/benchmarks run report:diff -- base-report.json candidate-report.json
+pnpm --filter @prodkit/benchmarks run report:diff -- base-report.json candidate-report.json --implementation=op
+```
+
+Diff verdicts use throughput deltas plus each scenario's relative margin of error. Small movements
+inside the noise threshold are reported as inconclusive instead of being treated as regressions or
+improvements.
+
 ### Bundle size
 
 The CI `bundle-size` job uses [`preactjs/compressed-size-action`](https://github.com/preactjs/compressed-size-action) to build the PR branch and target branch, bundle and minify lower and upper bound artifacts with esbuild (`better-result` external), and compare gzip sizes. Lower bound is the main entry; upper bound is a fixture that imports consumer subpaths (`di`, `policy`, `hkt`), excluding `@prodkit/op/internal`. It comments on pull requests automatically.
