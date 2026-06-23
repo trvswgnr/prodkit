@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { measureOpBundleSizes, type BundleSizeBounds } from "./measure-bundle-size.ts";
 import {
@@ -32,6 +31,14 @@ import {
   type RepeatedTinybenchRecord,
   type ResolvedBenchRunOptions,
 } from "./harness.ts";
+import {
+  comparisonScenariosToOfficialResults,
+  createOfficialBenchmarkReportFields,
+  createPackageMetadata,
+  readGitCommitMetadata,
+  type ComparisonScenarioOfficialInput,
+  type OfficialBenchmarkReport,
+} from "./official-report.ts";
 import { Op } from "@prodkit/op";
 import { Policy } from "@prodkit/op/policy";
 
@@ -42,7 +49,7 @@ type LibraryPair = {
   right: ImplementationId;
 };
 
-type ComparisonReport = {
+type ComparisonReport = OfficialBenchmarkReport & {
   generatedAt: string;
   environment: ReturnType<typeof readEnvironmentReport>;
   benchOptions: ResolvedBenchRunOptions;
@@ -73,26 +80,6 @@ type ComparisonReport = {
 };
 
 const logger = console;
-
-function runGit(repoRoot: string, args: readonly string[]): string {
-  const result = spawnSync("git", args, {
-    cwd: repoRoot,
-    encoding: "utf8",
-  });
-  if (result.status !== 0) {
-    throw new Error(`git ${args.join(" ")} failed: ${result.stderr || result.stdout}`);
-  }
-  return result.stdout.trim();
-}
-
-function readCurrentFingerprint(repoRoot: string): { headSha: string; dirty: boolean } {
-  const headSha = runGit(repoRoot, ["rev-parse", "HEAD"]).toLowerCase();
-  if (!headSha.match(/^[0-9a-f]{40}$/)) {
-    throw new Error(`Unable to resolve HEAD SHA: ${headSha}`);
-  }
-  const dirty = runGit(repoRoot, ["status", "--porcelain"]).length > 0;
-  return { headSha, dirty };
-}
 
 function printBundleSize(bundleSize: BundleSizeBounds): void {
   logger.info("");
@@ -292,8 +279,11 @@ async function main(): Promise<void> {
   const repoRoot = getRepoRoot();
   const reportPath = resolveReportPath(argv, "comparison-report.json");
   const packageDir = resolveOpPackageDir(repoRoot);
-  const fingerprint = readCurrentFingerprint(repoRoot);
+  const commit = readGitCommitMetadata(repoRoot);
   const packageVersion = await readPackageVersion(packageDir);
+  const environment = readEnvironmentReport();
+  const resolvedBenchOptions = resolveBenchRunOptions(benchOptions);
+  const generatedAt = new Date().toISOString();
   const comparisonScenarios = createComparisonScenarios({
     Op: asComparisonOp(Op),
     Policy: asComparisonPolicy(Policy),
@@ -305,6 +295,7 @@ async function main(): Promise<void> {
   logger.info(`Benchmark timing: ${benchRunOptionSummary(benchOptions)}`);
 
   const scenarios: ComparisonReport["scenarios"] = [];
+  const officialScenarioInputs: ComparisonScenarioOfficialInput[] = [];
   for (const scenario of comparisonScenarios) {
     logger.info(`Benchmarking ${scenario.label}...`);
     const runtime: Record<ImplementationId, RuntimeCell> = Object.create(null);
@@ -325,18 +316,36 @@ async function main(): Promise<void> {
       runtime,
       vsBaseline: computeVsBaseline(runtime),
     });
+    officialScenarioInputs.push({
+      key: scenario.key,
+      label: scenario.label,
+      implementations: scenario.implementations,
+      runtime,
+    });
   }
 
   const bundleSize = await measureOpBundleSizes(packageDir);
   const implementations = [...IMPLEMENTATION_COLUMNS];
+  const officialFields = createOfficialBenchmarkReportFields({
+    kind: "comparison",
+    generatedAt,
+    repoRoot,
+    reportPath,
+    environment,
+    benchOptions: resolvedBenchOptions,
+    commit,
+    packages: [createPackageMetadata(repoRoot, "@prodkit/op", packageVersion, packageDir)],
+    scenarioResults: comparisonScenariosToOfficialResults(officialScenarioInputs, implementations),
+  });
 
   const report: ComparisonReport = {
-    generatedAt: new Date().toISOString(),
-    environment: readEnvironmentReport(),
-    benchOptions: resolveBenchRunOptions(benchOptions),
+    ...officialFields,
+    generatedAt,
+    environment,
+    benchOptions: resolvedBenchOptions,
     current: {
-      headSha: fingerprint.headSha,
-      dirty: fingerprint.dirty,
+      headSha: commit.headSha,
+      dirty: commit.dirty,
       packageVersion,
     },
     baselineId: BASELINE_IMPLEMENTATION_ID,

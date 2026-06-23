@@ -6,6 +6,7 @@
   "scripts": {
     "build:size": "node ./op/measure-bundle-size.ts --write",
     "compare": "node ./op/compare.ts",
+    "report:diff": "node ./op/official-report.ts diff",
     "codspeed:bench": "vitest bench --run",
     "codspeed:bench:sync": "vitest bench --run op/codspeed.sync.bench.ts",
     "codspeed:bench:walltime": "vitest bench --run op/codspeed.walltime.bench.ts op-lint/codspeed.walltime.bench.ts",

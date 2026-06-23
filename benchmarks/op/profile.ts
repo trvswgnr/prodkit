@@ -35,6 +35,14 @@ import {
   type RepeatedTinybenchRecord,
   type ResolvedBenchRunOptions,
 } from "./harness.ts";
+import {
+  createOfficialBenchmarkReportFields,
+  createPackageMetadata,
+  profileScenariosToOfficialResults,
+  readGitCommitMetadata,
+  type OfficialBenchmarkReport,
+  type ProfileScenarioOfficialInput,
+} from "./official-report.ts";
 import type { BenchOp } from "./scenarios.ts";
 import {
   runAsyncChain,
@@ -85,7 +93,7 @@ type ScenarioRecord = RepeatedTinybenchRecord & {
   ratioToBaseline: number | null;
 };
 
-type ProfileReport = {
+type ProfileReport = OfficialBenchmarkReport & {
   generatedAt: string;
   environment: ReturnType<typeof readEnvironmentReport>;
   target: {
@@ -444,6 +452,10 @@ async function main(): Promise<void> {
   const steps = parseStepsArg(argv);
   const reportPath = parseReportPath(argv) ?? resolveProfileArtifact("profile.json");
   const iterationsArg = parseArgValue(argv, "--iterations=");
+  const commit = readGitCommitMetadata(repoRoot);
+  const environment = readEnvironmentReport();
+  const resolvedBenchOptions = resolveBenchRunOptions(benchOptions);
+  const generatedAt = new Date().toISOString();
 
   const { Op: opModule } = await importOpModule(packageDir);
   const { Policy: policyModule } = await importOpPolicyModule(packageDir);
@@ -539,6 +551,36 @@ async function main(): Promise<void> {
   printInterpretationGuide();
 
   if (reportPath !== undefined) {
+    const officialProfileScenarios: ProfileScenarioOfficialInput[] = [
+      ...asyncRows.map((row) => ({
+        name: row.name,
+        hz: row.hz,
+        latencyMs: row.latencyMs,
+        latencyMinMs: row.latencyMinMs,
+        latencyMaxMs: row.latencyMaxMs,
+        semMs: row.semMs,
+        rme: row.rme,
+        sampleCount: row.sampleCount,
+        repeats: row.repeats,
+        description: row.description,
+        group: row.group,
+        aliases: row.aliases,
+      })),
+      ...syncRows.map((row) => ({
+        name: row.name,
+        hz: row.hz,
+        latencyMs: row.latencyMs,
+        latencyMinMs: row.latencyMinMs,
+        latencyMaxMs: row.latencyMaxMs,
+        semMs: row.semMs,
+        rme: row.rme,
+        sampleCount: row.sampleCount,
+        repeats: row.repeats,
+        description: row.description,
+        group: "syncReference",
+        aliases: row.aliases,
+      })),
+    ];
     const asyncScenarios: ProfileReport["asyncScenarios"] = Object.create(null);
     for (const row of asyncRows) {
       asyncScenarios[row.name] = {
@@ -574,14 +616,27 @@ async function main(): Promise<void> {
       };
     }
 
+    const officialFields = createOfficialBenchmarkReportFields({
+      kind: "profile",
+      generatedAt,
+      repoRoot,
+      reportPath,
+      environment,
+      benchOptions: resolvedBenchOptions,
+      commit,
+      packages: [createPackageMetadata(repoRoot, "@prodkit/op", packageVersion, packageDir)],
+      scenarioResults: profileScenariosToOfficialResults(officialProfileScenarios),
+    });
+
     const report: ProfileReport = {
-      generatedAt: new Date().toISOString(),
-      environment: readEnvironmentReport(),
+      ...officialFields,
+      generatedAt,
+      environment,
       target: {
         packageDir,
         packageVersion,
       },
-      benchOptions: resolveBenchRunOptions(benchOptions),
+      benchOptions: resolvedBenchOptions,
       steps,
       asyncScenarios,
       syncReference,
