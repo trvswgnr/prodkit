@@ -61,6 +61,7 @@ pnpm --filter @prodkit/benchmarks run compare -- --time=1000 --repeats=5
 pnpm --filter @prodkit/benchmarks run compare -- --pair=op,effect
 pnpm --filter @prodkit/benchmarks run calibrate:runner
 pnpm --filter @prodkit/benchmarks run compare:refs -- --base=main --candidate=HEAD
+pnpm --filter @prodkit/benchmarks run publish:artifacts -- --report=op/.artifacts/comparison-report.json --dry-run
 pnpm --filter @prodkit/tools run performance:sync -- --write
 ```
 
@@ -122,6 +123,63 @@ pnpm --filter @prodkit/benchmarks run report:diff -- base-report.json candidate-
 Diff verdicts use throughput deltas plus each scenario's relative margin of error. Small movements
 inside the noise threshold are reported as inconclusive instead of being treated as regressions or
 improvements.
+
+### Publishing official artifacts
+
+`publish:artifacts` uploads official benchmark reports and referenced profile artifacts to
+Cloudflare R2. The command is explicit: `compare`, `profile`, and `compare:refs` never publish by
+themselves. Run it only from trusted maintainer workflows or local sessions that already produced an
+official report.
+
+Dry-run mode validates the report, derives object keys, prints the planned manifest, and makes no
+Cloudflare request:
+
+```bash
+pnpm --filter @prodkit/benchmarks run publish:artifacts -- --report=op/.artifacts/comparison-report.json --dry-run
+pnpm --filter @prodkit/benchmarks run publish:artifacts -- --report=op/.artifacts/trusted-ref-comparison-report.json --dry-run
+```
+
+Upload mode writes `op/.artifacts/benchmark-publish-manifest.json` only after every object upload
+succeeds. Failed uploads leave no completed manifest, so later index work can treat the manifest as
+the "fully published" marker.
+
+```bash
+pnpm --filter @prodkit/benchmarks run publish:artifacts -- --report=op/.artifacts/comparison-report.json
+```
+
+The publisher reads these environment variables:
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `PRODKIT_BENCHMARK_R2_BUCKET` | Yes | Destination R2 bucket |
+| `PRODKIT_BENCHMARK_R2_ACCOUNT_ID` | Yes, unless `PRODKIT_BENCHMARK_R2_ENDPOINT` is set | Builds the default R2 S3 endpoint |
+| `PRODKIT_BENCHMARK_R2_ENDPOINT` | Optional | Overrides the default `https://<account>.r2.cloudflarestorage.com` endpoint |
+| `PRODKIT_BENCHMARK_R2_PREFIX` | Optional | Prefix prepended to every object key |
+| `PRODKIT_BENCHMARK_R2_ACCESS_KEY_ID` | Upload only | R2 S3 access key id |
+| `PRODKIT_BENCHMARK_R2_SECRET_ACCESS_KEY` | Upload only | R2 S3 secret access key |
+
+Dry-run mode requires the bucket and endpoint inputs, but not the access key or secret.
+
+Use an R2 token scoped to the benchmark bucket and configured prefix with object write permission.
+Do not expose the token to untrusted pull request code. In GitHub Actions, keep publish steps on
+protected scheduled, manual, or protected-branch workflows rather than `pull_request` jobs that run
+contributor code.
+
+Object keys are derived from official run metadata:
+
+```text
+<prefix>/official/<run-kind>/<run-id>/run/report/<filename>
+<prefix>/official/<run-kind>/<run-id>/scenario/<scenario-key>/<implementation-id>/<artifact-kind>/<filename>
+```
+
+Additional profile files can be attached when they are not already referenced by a report:
+
+```bash
+pnpm --filter @prodkit/benchmarks run publish:artifacts -- \
+  --report=.profiles/op/profile.json \
+  --artifact=kind=cpu-profile,path=.profiles/op/CPU.example.cpuprofile,scenario=compose.opYieldChain,implementation=op \
+  --dry-run
+```
 
 ### Runner calibration
 

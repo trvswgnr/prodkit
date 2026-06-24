@@ -36,6 +36,7 @@ export type BenchmarkArtifactRef = {
   kind: string;
   path: string;
   contentType: string;
+  objectKey?: string;
   scenarioKey?: string;
   implementationId?: string;
 };
@@ -555,6 +556,9 @@ function readArtifactRef(value: unknown, location: string): BenchmarkArtifactRef
     path: readString(record.path, `${location}.path`),
     contentType: readString(record.contentType, `${location}.contentType`),
   };
+  if (record.objectKey !== undefined) {
+    artifact.objectKey = readString(record.objectKey, `${location}.objectKey`);
+  }
   if (record.scenarioKey !== undefined) {
     artifact.scenarioKey = readString(record.scenarioKey, `${location}.scenarioKey`);
   }
