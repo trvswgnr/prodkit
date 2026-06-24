@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { cpus, release as osRelease, totalmem, type as osType } from "node:os";
 import path from "node:path";
 import type { ImplementationColumn } from "./comparison-matrix.ts";
 import type {
@@ -11,6 +12,7 @@ import type {
 } from "./harness.ts";
 
 export const OFFICIAL_BENCHMARK_REPORT_VERSION = "prodkit.benchmark-report.v1" as const;
+export const BENCHMARK_CALIBRATION_REPORT_VERSION = "prodkit.benchmark-calibration.v1" as const;
 export const DEFAULT_REPORT_DIFF_IMPLEMENTATION_ID = "op";
 export const DEFAULT_MIN_MEANINGFUL_CHANGE_RATIO = 0.02;
 
@@ -45,8 +47,33 @@ export type BenchmarkRunIdentity = {
   artifacts: BenchmarkArtifactRef[];
 };
 
+export type BenchmarkCpuMetadata = {
+  model: string;
+  logicalCores: number;
+};
+
+export type BenchmarkMemoryMetadata = {
+  totalBytes: number;
+};
+
+export type BenchmarkOperatingSystemMetadata = {
+  type: string;
+  release: string;
+  platform: NodeJS.Platform;
+  arch: string;
+};
+
+export type BenchmarkPackageManagerMetadata = {
+  name: string;
+  version: string;
+};
+
 export type BenchmarkRunnerIdentity = EnvironmentReport & {
   id: string;
+  cpu: BenchmarkCpuMetadata;
+  memory: BenchmarkMemoryMetadata;
+  os: BenchmarkOperatingSystemMetadata;
+  packageManager: BenchmarkPackageManagerMetadata;
 };
 
 export type BenchmarkCommitMetadata = {
@@ -88,6 +115,7 @@ export type OfficialBenchmarkReport = {
   environment: EnvironmentReport;
   benchOptions: ResolvedBenchRunOptions;
   scenarioResults: OfficialScenarioResult[];
+  calibration?: BenchmarkCalibrationAttachment;
 };
 
 export type OfficialReportFieldsInput = {
@@ -100,6 +128,7 @@ export type OfficialReportFieldsInput = {
   commit: BenchmarkCommitMetadata;
   packages: BenchmarkPackageMetadata[];
   scenarioResults: OfficialScenarioResult[];
+  calibration?: BenchmarkCalibrationAttachment;
 };
 
 export type ComparisonScenarioOfficialInput = {
@@ -144,6 +173,74 @@ export type BenchmarkDiff = {
   candidateRun: BenchmarkRunIdentity;
   scenarios: ScenarioDiff[];
   summary: Record<BenchmarkDiffVerdict, number>;
+};
+
+export type BenchmarkCalibrationDecision = "acceptable" | "noisy";
+
+export type BenchmarkCalibrationThresholds = {
+  microbenchmarkNoiseRatio: number;
+  workflowNoiseRatio: number;
+};
+
+export type BenchmarkCalibrationRecommendation = {
+  decision: BenchmarkCalibrationDecision;
+  thresholdRatio: number;
+  worstNoiseBandRatio: number;
+  worstScenarioKey: string;
+  reason: string;
+};
+
+export type BenchmarkCalibrationSampleSummary = {
+  sampleIndex: number;
+  first: "left" | "right";
+  leftHz: number;
+  rightHz: number;
+  deltaRatio: number;
+  absoluteDeltaRatio: number;
+  combinedNoiseRatio: number;
+};
+
+export type BenchmarkCalibrationScenarioSummary = {
+  key: string;
+  label: string;
+  benchName: string;
+  sampleCount: number;
+  medianAbsoluteDeltaRatio: number;
+  p95AbsoluteDeltaRatio: number;
+  maxAbsoluteDeltaRatio: number;
+  averageCombinedNoiseRatio: number;
+  noiseBandRatio: number;
+  samples: BenchmarkCalibrationSampleSummary[];
+};
+
+export type BenchmarkCalibrationRecommendations = {
+  microbenchmark: BenchmarkCalibrationRecommendation;
+  workflow: BenchmarkCalibrationRecommendation;
+};
+
+export type BenchmarkCalibrationAttachment = {
+  schemaVersion: typeof BENCHMARK_CALIBRATION_REPORT_VERSION;
+  generatedAt: string;
+  runnerId: string;
+  sampleCount: number;
+  thresholds: BenchmarkCalibrationThresholds;
+  recommendations: BenchmarkCalibrationRecommendations;
+  scenarioSummaries: BenchmarkCalibrationScenarioSummary[];
+  artifact: BenchmarkArtifactRef;
+};
+
+export type BenchmarkCalibrationReport = {
+  schemaVersion: typeof BENCHMARK_CALIBRATION_REPORT_VERSION;
+  generatedAt: string;
+  runner: BenchmarkRunnerIdentity;
+  commit: BenchmarkCommitMetadata;
+  packages: BenchmarkPackageMetadata[];
+  dependencyFingerprint: DependencyFingerprint;
+  benchOptions: ResolvedBenchRunOptions;
+  sampleCount: number;
+  thresholds: BenchmarkCalibrationThresholds;
+  recommendations: BenchmarkCalibrationRecommendations;
+  scenarioSummaries: BenchmarkCalibrationScenarioSummary[];
 };
 
 export class BenchmarkReportValidationError extends Error {
@@ -209,17 +306,79 @@ export function createBenchmarkRunId(
   return `${kind}-${commit.headSha.slice(0, 12)}-${timestamp}`;
 }
 
+function parsePackageManagerReference(
+  reference: string | undefined,
+): BenchmarkPackageManagerMetadata {
+  const trimmed = reference?.trim();
+  if (!trimmed) return { name: "unknown", version: "unknown" };
+
+  const firstToken = trimmed.split(/\s+/)[0] ?? trimmed;
+  const slashIndex = firstToken.indexOf("/");
+  if (slashIndex > 0) {
+    return {
+      name: firstToken.slice(0, slashIndex),
+      version: firstToken.slice(slashIndex + 1) || "unknown",
+    };
+  }
+
+  const atIndex = firstToken.lastIndexOf("@");
+  if (atIndex > 0) {
+    return {
+      name: firstToken.slice(0, atIndex),
+      version: firstToken.slice(atIndex + 1) || "unknown",
+    };
+  }
+
+  return { name: firstToken, version: "unknown" };
+}
+
+function readConfiguredPackageManager(repoRoot: string | undefined): string | undefined {
+  if (repoRoot === undefined) return undefined;
+  try {
+    const packageJson: unknown = JSON.parse(
+      readFileSync(path.join(repoRoot, "package.json"), "utf8"),
+    );
+    if (!isRecord(packageJson)) return undefined;
+    return typeof packageJson.packageManager === "string" ? packageJson.packageManager : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function createCpuMetadata(): BenchmarkCpuMetadata {
+  const cpuList = cpus();
+  return {
+    model: cpuList[0]?.model ?? "unknown",
+    logicalCores: cpuList.length,
+  };
+}
+
 export function createRunnerIdentity(
   environment: EnvironmentReport,
   env: NodeJS.ProcessEnv = process.env,
+  repoRoot?: string,
 ): BenchmarkRunnerIdentity {
   const configuredId = env.PRODKIT_BENCHMARK_RUNNER_ID?.trim();
+  const packageManager = parsePackageManagerReference(
+    readConfiguredPackageManager(repoRoot) ?? env.npm_config_user_agent,
+  );
   return {
     id:
       configuredId && configuredId.length > 0
         ? configuredId
         : `${environment.platform}-${environment.arch}-${environment.node}`,
     ...environment,
+    cpu: createCpuMetadata(),
+    memory: {
+      totalBytes: totalmem(),
+    },
+    os: {
+      type: osType(),
+      release: osRelease(),
+      platform: environment.platform,
+      arch: environment.arch,
+    },
+    packageManager,
   };
 }
 
@@ -271,13 +430,14 @@ export function createOfficialBenchmarkReportFields(
       generatedAt: input.generatedAt,
       artifacts: [artifact],
     },
-    runner: createRunnerIdentity(input.environment),
+    runner: createRunnerIdentity(input.environment, process.env, input.repoRoot),
     commit: input.commit,
     packages: input.packages,
     dependencyFingerprint: createDependencyFingerprint(input.repoRoot),
     environment: input.environment,
     benchOptions: input.benchOptions,
     scenarioResults: input.scenarioResults,
+    calibration: input.calibration,
   };
 }
 
@@ -431,6 +591,73 @@ function readEnvironment(value: unknown, location: string): EnvironmentReport {
   };
 }
 
+function readOptionalCpuMetadata(value: unknown, location: string): BenchmarkCpuMetadata {
+  if (value === undefined) return { model: "unknown", logicalCores: 0 };
+  const record = readRecord(value, location);
+  return {
+    model: readString(record.model, `${location}.model`),
+    logicalCores: readNonNegativeNumber(record.logicalCores, `${location}.logicalCores`),
+  };
+}
+
+function readOptionalMemoryMetadata(value: unknown, location: string): BenchmarkMemoryMetadata {
+  if (value === undefined) return { totalBytes: 0 };
+  const record = readRecord(value, location);
+  return {
+    totalBytes: readNonNegativeNumber(record.totalBytes, `${location}.totalBytes`),
+  };
+}
+
+function readOptionalOperatingSystemMetadata(
+  value: unknown,
+  environment: EnvironmentReport,
+  location: string,
+): BenchmarkOperatingSystemMetadata {
+  if (value === undefined) {
+    return {
+      type: "unknown",
+      release: "unknown",
+      platform: environment.platform,
+      arch: environment.arch,
+    };
+  }
+  const record = readRecord(value, location);
+  return {
+    type: readString(record.type, `${location}.type`),
+    release: readString(record.release, `${location}.release`),
+    platform: readPlatform(record.platform, `${location}.platform`),
+    arch: readString(record.arch, `${location}.arch`),
+  };
+}
+
+function readOptionalPackageManagerMetadata(
+  value: unknown,
+  location: string,
+): BenchmarkPackageManagerMetadata {
+  if (value === undefined) return { name: "unknown", version: "unknown" };
+  const record = readRecord(value, location);
+  return {
+    name: readString(record.name, `${location}.name`),
+    version: readString(record.version, `${location}.version`),
+  };
+}
+
+function readRunnerIdentity(value: unknown, location: string): BenchmarkRunnerIdentity {
+  const runnerRecord = readRecord(value, location);
+  const runnerEnvironment = readEnvironment(runnerRecord, location);
+  return {
+    id: readString(runnerRecord.id, `${location}.id`),
+    ...runnerEnvironment,
+    cpu: readOptionalCpuMetadata(runnerRecord.cpu, `${location}.cpu`),
+    memory: readOptionalMemoryMetadata(runnerRecord.memory, `${location}.memory`),
+    os: readOptionalOperatingSystemMetadata(runnerRecord.os, runnerEnvironment, `${location}.os`),
+    packageManager: readOptionalPackageManagerMetadata(
+      runnerRecord.packageManager,
+      `${location}.packageManager`,
+    ),
+  };
+}
+
 function readPlatform(value: unknown, location: string): NodeJS.Platform {
   const platform = readString(value, location);
   if (
@@ -486,6 +713,189 @@ function readScenarioResult(value: unknown, location: string): OfficialScenarioR
   };
 }
 
+function readPackages(value: unknown, location: string): BenchmarkPackageMetadata[] {
+  if (!Array.isArray(value)) validationError(location, "expected array");
+  return value.map((item, index) => {
+    const packageRecord = readRecord(item, `${location}[${index}]`);
+    const packageMetadata: BenchmarkPackageMetadata = {
+      name: readString(packageRecord.name, `${location}[${index}].name`),
+      version: readString(packageRecord.version, `${location}[${index}].version`),
+    };
+    if (packageRecord.packageDir !== undefined) {
+      packageMetadata.packageDir = readString(
+        packageRecord.packageDir,
+        `${location}[${index}].packageDir`,
+      );
+    }
+    return packageMetadata;
+  });
+}
+
+function readDependencyFingerprint(value: unknown, location: string): DependencyFingerprint {
+  const fingerprintRecord = readRecord(value, location);
+  return {
+    algorithm:
+      fingerprintRecord.algorithm === "sha256"
+        ? "sha256"
+        : validationError(`${location}.algorithm`, "expected sha256"),
+    digest: readString(fingerprintRecord.digest, `${location}.digest`),
+    sources: readStringArray(fingerprintRecord.sources, `${location}.sources`),
+  };
+}
+
+function readCalibrationDecision(value: unknown, location: string): BenchmarkCalibrationDecision {
+  const decision = readString(value, location);
+  if (decision === "acceptable" || decision === "noisy") return decision;
+  validationError(location, "expected acceptable or noisy");
+}
+
+function readCalibrationThresholds(
+  value: unknown,
+  location: string,
+): BenchmarkCalibrationThresholds {
+  const record = readRecord(value, location);
+  return {
+    microbenchmarkNoiseRatio: readNonNegativeNumber(
+      record.microbenchmarkNoiseRatio,
+      `${location}.microbenchmarkNoiseRatio`,
+    ),
+    workflowNoiseRatio: readNonNegativeNumber(
+      record.workflowNoiseRatio,
+      `${location}.workflowNoiseRatio`,
+    ),
+  };
+}
+
+function readCalibrationRecommendation(
+  value: unknown,
+  location: string,
+): BenchmarkCalibrationRecommendation {
+  const record = readRecord(value, location);
+  return {
+    decision: readCalibrationDecision(record.decision, `${location}.decision`),
+    thresholdRatio: readNonNegativeNumber(record.thresholdRatio, `${location}.thresholdRatio`),
+    worstNoiseBandRatio: readNonNegativeNumber(
+      record.worstNoiseBandRatio,
+      `${location}.worstNoiseBandRatio`,
+    ),
+    worstScenarioKey: readString(record.worstScenarioKey, `${location}.worstScenarioKey`),
+    reason: readString(record.reason, `${location}.reason`),
+  };
+}
+
+function readCalibrationRecommendations(
+  value: unknown,
+  location: string,
+): BenchmarkCalibrationRecommendations {
+  const record = readRecord(value, location);
+  return {
+    microbenchmark: readCalibrationRecommendation(
+      record.microbenchmark,
+      `${location}.microbenchmark`,
+    ),
+    workflow: readCalibrationRecommendation(record.workflow, `${location}.workflow`),
+  };
+}
+
+function readCalibrationSampleSummary(
+  value: unknown,
+  location: string,
+): BenchmarkCalibrationSampleSummary {
+  const record = readRecord(value, location);
+  const first = readString(record.first, `${location}.first`);
+  if (first !== "left" && first !== "right") {
+    validationError(`${location}.first`, "expected left or right");
+  }
+  return {
+    sampleIndex: readNonNegativeNumber(record.sampleIndex, `${location}.sampleIndex`),
+    first,
+    leftHz: readNonNegativeNumber(record.leftHz, `${location}.leftHz`),
+    rightHz: readNonNegativeNumber(record.rightHz, `${location}.rightHz`),
+    deltaRatio: readFiniteNumber(record.deltaRatio, `${location}.deltaRatio`),
+    absoluteDeltaRatio: readNonNegativeNumber(
+      record.absoluteDeltaRatio,
+      `${location}.absoluteDeltaRatio`,
+    ),
+    combinedNoiseRatio: readNonNegativeNumber(
+      record.combinedNoiseRatio,
+      `${location}.combinedNoiseRatio`,
+    ),
+  };
+}
+
+function readCalibrationScenarioSummary(
+  value: unknown,
+  location: string,
+): BenchmarkCalibrationScenarioSummary {
+  const record = readRecord(value, location);
+  const samples = record.samples;
+  if (!Array.isArray(samples)) validationError(`${location}.samples`, "expected array");
+  return {
+    key: readString(record.key, `${location}.key`),
+    label: readString(record.label, `${location}.label`),
+    benchName: readString(record.benchName, `${location}.benchName`),
+    sampleCount: readNonNegativeNumber(record.sampleCount, `${location}.sampleCount`),
+    medianAbsoluteDeltaRatio: readNonNegativeNumber(
+      record.medianAbsoluteDeltaRatio,
+      `${location}.medianAbsoluteDeltaRatio`,
+    ),
+    p95AbsoluteDeltaRatio: readNonNegativeNumber(
+      record.p95AbsoluteDeltaRatio,
+      `${location}.p95AbsoluteDeltaRatio`,
+    ),
+    maxAbsoluteDeltaRatio: readNonNegativeNumber(
+      record.maxAbsoluteDeltaRatio,
+      `${location}.maxAbsoluteDeltaRatio`,
+    ),
+    averageCombinedNoiseRatio: readNonNegativeNumber(
+      record.averageCombinedNoiseRatio,
+      `${location}.averageCombinedNoiseRatio`,
+    ),
+    noiseBandRatio: readNonNegativeNumber(record.noiseBandRatio, `${location}.noiseBandRatio`),
+    samples: samples.map((sample, index) =>
+      readCalibrationSampleSummary(sample, `${location}.samples[${index}]`),
+    ),
+  };
+}
+
+function readCalibrationScenarioSummaries(
+  value: unknown,
+  location: string,
+): BenchmarkCalibrationScenarioSummary[] {
+  if (!Array.isArray(value)) validationError(location, "expected array");
+  if (value.length === 0) validationError(location, "expected at least one scenario summary");
+  return value.map((item, index) => readCalibrationScenarioSummary(item, `${location}[${index}]`));
+}
+
+function readCalibrationAttachment(
+  value: unknown,
+  location: string,
+): BenchmarkCalibrationAttachment {
+  const record = readRecord(value, location);
+  if (record.schemaVersion !== BENCHMARK_CALIBRATION_REPORT_VERSION) {
+    validationError(
+      `${location}.schemaVersion`,
+      `expected ${BENCHMARK_CALIBRATION_REPORT_VERSION}`,
+    );
+  }
+  return {
+    schemaVersion: BENCHMARK_CALIBRATION_REPORT_VERSION,
+    generatedAt: readString(record.generatedAt, `${location}.generatedAt`),
+    runnerId: readString(record.runnerId, `${location}.runnerId`),
+    sampleCount: readNonNegativeNumber(record.sampleCount, `${location}.sampleCount`),
+    thresholds: readCalibrationThresholds(record.thresholds, `${location}.thresholds`),
+    recommendations: readCalibrationRecommendations(
+      record.recommendations,
+      `${location}.recommendations`,
+    ),
+    scenarioSummaries: readCalibrationScenarioSummaries(
+      record.scenarioSummaries,
+      `${location}.scenarioSummaries`,
+    ),
+    artifact: readArtifactRef(record.artifact, `${location}.artifact`),
+  };
+}
+
 export function validateOfficialBenchmarkReport(input: unknown): OfficialBenchmarkReport {
   const record = readRecord(input, "report");
   if (record.schemaVersion !== OFFICIAL_BENCHMARK_REPORT_VERSION) {
@@ -498,34 +908,8 @@ export function validateOfficialBenchmarkReport(input: unknown): OfficialBenchma
     validationError("report.run.kind", "expected comparison or profile");
   }
 
-  const runnerRecord = readRecord(record.runner, "report.runner");
-  const runner: BenchmarkRunnerIdentity = {
-    id: readString(runnerRecord.id, "report.runner.id"),
-    ...readEnvironment(runnerRecord, "report.runner"),
-  };
-
   const commitRecord = readRecord(record.commit, "report.commit");
-  const packagesValue = record.packages;
-  if (!Array.isArray(packagesValue)) validationError("report.packages", "expected array");
-  const packages = packagesValue.map((item, index) => {
-    const packageRecord = readRecord(item, `report.packages[${index}]`);
-    const packageMetadata: BenchmarkPackageMetadata = {
-      name: readString(packageRecord.name, `report.packages[${index}].name`),
-      version: readString(packageRecord.version, `report.packages[${index}].version`),
-    };
-    if (packageRecord.packageDir !== undefined) {
-      packageMetadata.packageDir = readString(
-        packageRecord.packageDir,
-        `report.packages[${index}].packageDir`,
-      );
-    }
-    return packageMetadata;
-  });
-
-  const fingerprintRecord = readRecord(
-    record.dependencyFingerprint,
-    "report.dependencyFingerprint",
-  );
+  const packages = readPackages(record.packages, "report.packages");
   const scenarioResults = record.scenarioResults;
   if (!Array.isArray(scenarioResults)) {
     validationError("report.scenarioResults", "expected array");
@@ -542,25 +926,82 @@ export function validateOfficialBenchmarkReport(input: unknown): OfficialBenchma
       generatedAt: readString(runRecord.generatedAt, "report.run.generatedAt"),
       artifacts: readArtifacts(runRecord.artifacts, "report.run.artifacts"),
     },
-    runner,
+    runner: readRunnerIdentity(record.runner, "report.runner"),
     commit: {
       headSha: readString(commitRecord.headSha, "report.commit.headSha"),
       dirty: readBoolean(commitRecord.dirty, "report.commit.dirty"),
     },
     packages,
-    dependencyFingerprint: {
-      algorithm:
-        fingerprintRecord.algorithm === "sha256"
-          ? "sha256"
-          : validationError("report.dependencyFingerprint.algorithm", "expected sha256"),
-      digest: readString(fingerprintRecord.digest, "report.dependencyFingerprint.digest"),
-      sources: readStringArray(fingerprintRecord.sources, "report.dependencyFingerprint.sources"),
-    },
+    dependencyFingerprint: readDependencyFingerprint(
+      record.dependencyFingerprint,
+      "report.dependencyFingerprint",
+    ),
     environment: readEnvironment(record.environment, "report.environment"),
     benchOptions: readBenchOptions(record.benchOptions, "report.benchOptions"),
     scenarioResults: scenarioResults.map((item, index) =>
       readScenarioResult(item, `report.scenarioResults[${index}]`),
     ),
+    calibration:
+      record.calibration === undefined
+        ? undefined
+        : readCalibrationAttachment(record.calibration, "report.calibration"),
+  };
+}
+
+export function validateBenchmarkCalibrationReport(input: unknown): BenchmarkCalibrationReport {
+  const record = readRecord(input, "calibration");
+  if (record.schemaVersion !== BENCHMARK_CALIBRATION_REPORT_VERSION) {
+    validationError(
+      "calibration.schemaVersion",
+      `expected ${BENCHMARK_CALIBRATION_REPORT_VERSION}`,
+    );
+  }
+
+  return {
+    schemaVersion: BENCHMARK_CALIBRATION_REPORT_VERSION,
+    generatedAt: readString(record.generatedAt, "calibration.generatedAt"),
+    runner: readRunnerIdentity(record.runner, "calibration.runner"),
+    commit: (() => {
+      const commitRecord = readRecord(record.commit, "calibration.commit");
+      return {
+        headSha: readString(commitRecord.headSha, "calibration.commit.headSha"),
+        dirty: readBoolean(commitRecord.dirty, "calibration.commit.dirty"),
+      };
+    })(),
+    packages: readPackages(record.packages, "calibration.packages"),
+    dependencyFingerprint: readDependencyFingerprint(
+      record.dependencyFingerprint,
+      "calibration.dependencyFingerprint",
+    ),
+    benchOptions: readBenchOptions(record.benchOptions, "calibration.benchOptions"),
+    sampleCount: readNonNegativeNumber(record.sampleCount, "calibration.sampleCount"),
+    thresholds: readCalibrationThresholds(record.thresholds, "calibration.thresholds"),
+    recommendations: readCalibrationRecommendations(
+      record.recommendations,
+      "calibration.recommendations",
+    ),
+    scenarioSummaries: readCalibrationScenarioSummaries(
+      record.scenarioSummaries,
+      "calibration.scenarioSummaries",
+    ),
+  };
+}
+
+export async function readBenchmarkCalibrationAttachment(
+  repoRoot: string,
+  calibrationPath: string | undefined,
+): Promise<BenchmarkCalibrationAttachment | undefined> {
+  if (calibrationPath === undefined) return undefined;
+  const report = validateBenchmarkCalibrationReport(await readJsonFile(calibrationPath));
+  return {
+    schemaVersion: BENCHMARK_CALIBRATION_REPORT_VERSION,
+    generatedAt: report.generatedAt,
+    runnerId: report.runner.id,
+    sampleCount: report.sampleCount,
+    thresholds: report.thresholds,
+    recommendations: report.recommendations,
+    scenarioSummaries: report.scenarioSummaries,
+    artifact: reportArtifactRef(repoRoot, calibrationPath),
   };
 }
 

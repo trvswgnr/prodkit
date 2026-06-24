@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RepeatedTinybenchRecord } from "../harness.ts";
 import {
   OFFICIAL_BENCHMARK_REPORT_VERSION,
+  type BenchmarkRunnerIdentity,
   type OfficialBenchmarkReport,
 } from "../official-report.ts";
 import {
@@ -36,6 +37,32 @@ function stats(hz: number): RepeatedTinybenchRecord {
   };
 }
 
+function runner(): BenchmarkRunnerIdentity {
+  return {
+    id: "test-runner",
+    node: "v24.14.0",
+    platform: "darwin",
+    arch: "arm64",
+    cpu: {
+      model: "test cpu",
+      logicalCores: 8,
+    },
+    memory: {
+      totalBytes: 17_179_869_184,
+    },
+    os: {
+      type: "Darwin",
+      release: "25.0.0",
+      platform: "darwin",
+      arch: "arm64",
+    },
+    packageManager: {
+      name: "pnpm",
+      version: "11.5.0",
+    },
+  };
+}
+
 function officialReport(input: {
   runId: string;
   sha: string;
@@ -56,12 +83,7 @@ function officialReport(input: {
         },
       ],
     },
-    runner: {
-      id: "test-runner",
-      node: "v24.14.0",
-      platform: "darwin",
-      arch: "arm64",
-    },
+    runner: runner(),
     commit: {
       headSha: input.sha,
       dirty: false,
@@ -104,6 +126,7 @@ describe("parseTrustedRefComparisonArgs", () => {
       parseTrustedRefComparisonArgs([
         "--base=main",
         "--candidate=HEAD",
+        "--calibration=op/.artifacts/runner-calibration-report.json",
         "--time=1000",
         "--repeats=3",
         "--min-change=0.05",
@@ -112,6 +135,7 @@ describe("parseTrustedRefComparisonArgs", () => {
       baseRef: "main",
       candidateRef: "HEAD",
       reportPath: "op/.artifacts/trusted-ref-comparison-report.json",
+      calibrationPath: "op/.artifacts/runner-calibration-report.json",
       benchOptions: {
         time: 1000,
         warmupTime: undefined,

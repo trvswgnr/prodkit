@@ -35,6 +35,7 @@ import {
   comparisonScenariosToOfficialResults,
   createOfficialBenchmarkReportFields,
   createPackageMetadata,
+  readBenchmarkCalibrationAttachment,
   readGitCommitMetadata,
   type ComparisonScenarioOfficialInput,
   type OfficialBenchmarkReport,
@@ -275,6 +276,7 @@ function formatBytes(bytes: number): string {
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const pair = parseLibraryPairArg(argv);
+  const calibrationPath = parseArgValue(argv, "--calibration=");
   const benchOptions = parseBenchRunOptions(argv);
   const repoRoot = getRepoRoot();
   const reportPath = resolveReportPath(argv, "comparison-report.json");
@@ -283,6 +285,7 @@ async function main(): Promise<void> {
   const packageVersion = await readPackageVersion(packageDir);
   const environment = readEnvironmentReport();
   const resolvedBenchOptions = resolveBenchRunOptions(benchOptions);
+  const calibration = await readBenchmarkCalibrationAttachment(repoRoot, calibrationPath);
   const generatedAt = new Date().toISOString();
   const comparisonScenarios = createComparisonScenarios({
     Op: asComparisonOp(Op),
@@ -336,6 +339,7 @@ async function main(): Promise<void> {
     commit,
     packages: [createPackageMetadata(repoRoot, "@prodkit/op", packageVersion, packageDir)],
     scenarioResults: comparisonScenariosToOfficialResults(officialScenarioInputs, implementations),
+    calibration,
   });
 
   const report: ComparisonReport = {

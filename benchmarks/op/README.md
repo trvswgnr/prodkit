@@ -59,6 +59,7 @@ pnpm --filter @prodkit/benchmarks run codspeed:bench
 pnpm --filter @prodkit/benchmarks run compare
 pnpm --filter @prodkit/benchmarks run compare -- --time=1000 --repeats=5
 pnpm --filter @prodkit/benchmarks run compare -- --pair=op,effect
+pnpm --filter @prodkit/benchmarks run calibrate:runner
 pnpm --filter @prodkit/benchmarks run compare:refs -- --base=main --candidate=HEAD
 pnpm --filter @prodkit/tools run performance:sync -- --write
 ```
@@ -107,8 +108,9 @@ To add another competitor column, extend `IMPLEMENTATION_COLUMNS` and each scena
 `compare` and `profile` also write official report metadata into their JSON output. The official
 fields include the schema version, run id, runner identity, commit metadata, package version,
 dependency fingerprint, benchmark options, scenario-level statistics, variance fields, and artifact
-references. The legacy comparison fields remain in `comparison-report.json` so
-`performance:sync` can keep reading the same shape.
+references. Runner identity includes CPU model and logical cores, memory total, operating system
+release, Node version, package manager, and the configured runner id. The legacy comparison fields
+remain in `comparison-report.json` so `performance:sync` can keep reading the same shape.
 
 Compare two compatible official reports with:
 
@@ -120,6 +122,31 @@ pnpm --filter @prodkit/benchmarks run report:diff -- base-report.json candidate-
 Diff verdicts use throughput deltas plus each scenario's relative margin of error. Small movements
 inside the noise threshold are reported as inconclusive instead of being treated as regressions or
 improvements.
+
+### Runner calibration
+
+Calibrate an official runner before trusting optimization decisions from it:
+
+```bash
+pnpm --filter @prodkit/benchmarks run calibrate:runner
+pnpm --filter @prodkit/benchmarks run calibrate:runner -- --samples=5 --time=1000 --repeats=3
+```
+
+Calibration runs equivalent left/right measurements of the Op comparison scenarios on the same
+package build. It alternates which side runs first, summarizes the observed per-scenario noise band,
+and recommends whether the runner is stable enough for microbenchmark and workflow benchmark
+decisions. The default thresholds are 5% for microbenchmarks and 10% for workflow decisions. Treat a
+`noisy` recommendation as a runner problem first: stop other heavy processes, use power and thermal
+settings that keep CPU frequency stable, rerun calibration, and avoid publishing official verdicts
+from that machine until the relevant recommendation is `acceptable`.
+
+Attach the latest calibration summary to official reports with `--calibration`:
+
+```bash
+pnpm --filter @prodkit/benchmarks run compare -- --calibration=op/.artifacts/runner-calibration-report.json
+pnpm --filter @prodkit/benchmarks run profile -- --calibration=op/.artifacts/runner-calibration-report.json
+pnpm --filter @prodkit/benchmarks run compare:refs -- --base=main --candidate=HEAD --calibration=op/.artifacts/runner-calibration-report.json
+```
 
 For trusted base/candidate decisions, run both refs on the same machine in one session:
 

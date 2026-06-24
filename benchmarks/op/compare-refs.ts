@@ -39,8 +39,10 @@ import {
   createRunnerIdentity,
   diffOfficialBenchmarkReports,
   formatBenchmarkDiff,
+  readBenchmarkCalibrationAttachment,
   readGitCommitMetadata,
   reportArtifactRef,
+  type BenchmarkCalibrationAttachment,
   type BenchmarkCommitMetadata,
   type BenchmarkDiff,
   type OfficialBenchmarkReport,
@@ -64,6 +66,7 @@ export type TrustedRefComparisonCliArgs = {
   baseRef: string;
   candidateRef: string;
   reportPath: string;
+  calibrationPath?: string;
   benchOptions: BenchRunOptions;
   minMeaningfulChangeRatio: number;
 };
@@ -120,12 +123,14 @@ type BuildOfficialReportInput = {
   benchOptions: ResolvedBenchRunOptions;
   commit: BenchmarkCommitMetadata;
   scenarioResults: OfficialScenarioResult[];
+  calibration?: BenchmarkCalibrationAttachment;
 };
 
 function usage(): string {
   return [
     "usage: node ./op/compare-refs.ts --base=<ref> --candidate=<ref>",
     "  [--report=op/.artifacts/trusted-ref-comparison-report.json]",
+    "  [--calibration=op/.artifacts/runner-calibration-report.json]",
     "  [--time=300] [--warmup-time=150] [--warmup-iterations=5] [--repeats=1]",
     "  [--min-change=0.02]",
   ].join("\n");
@@ -149,11 +154,13 @@ export function parseTrustedRefComparisonArgs(
   if (baseRef === undefined || candidateRef === undefined) {
     throw new Error(usage());
   }
+  const calibrationPath = parseArgValue(argv, "--calibration=");
 
   return {
     baseRef,
     candidateRef,
     reportPath: resolveReportPath(argv, "trusted-ref-comparison-report.json"),
+    ...(calibrationPath === undefined ? {} : { calibrationPath }),
     benchOptions: parseBenchRunOptions(argv),
     minMeaningfulChangeRatio: parseMinMeaningfulChangeRatio(argv),
   };
@@ -333,7 +340,7 @@ function createOfficialReportForRef(input: BuildOfficialReportInput): OfficialBe
       generatedAt: input.generatedAt,
       artifacts: [reportArtifactRef(input.artifactRepoRoot, input.reportPath)],
     },
-    runner: createRunnerIdentity(input.environment),
+    runner: createRunnerIdentity(input.environment, process.env, input.worktreeRoot),
     commit: input.commit,
     packages: [
       createPackageMetadata(
@@ -347,6 +354,7 @@ function createOfficialReportForRef(input: BuildOfficialReportInput): OfficialBe
     environment: input.environment,
     benchOptions: input.benchOptions,
     scenarioResults: input.scenarioResults,
+    calibration: input.calibration,
   };
 }
 
@@ -477,6 +485,7 @@ export async function runTrustedRefComparison(
   const generatedAt = new Date().toISOString();
   const environment = readEnvironmentReport();
   const resolvedBenchOptions = resolveBenchRunOptions(args.benchOptions);
+  const calibration = await readBenchmarkCalibrationAttachment(repoRoot, args.calibrationPath);
   const tempRoot = await mkdtemp(path.join(tmpdir(), "prodkit-benchmark-refs-"));
   const worktrees: string[] = [];
 
@@ -536,6 +545,7 @@ export async function runTrustedRefComparison(
       benchOptions: resolvedBenchOptions,
       commit: base.commit,
       scenarioResults: createOpOnlyOfficialResults(base.scenarios, baseStats),
+      calibration,
     });
     const candidateReport = createOfficialReportForRef({
       ref: args.candidateRef,
@@ -550,6 +560,7 @@ export async function runTrustedRefComparison(
       benchOptions: resolvedBenchOptions,
       commit: candidate.commit,
       scenarioResults: createOpOnlyOfficialResults(candidate.scenarios, candidateStats),
+      calibration,
     });
     const report = createTrustedRefComparisonReport({
       generatedAt,

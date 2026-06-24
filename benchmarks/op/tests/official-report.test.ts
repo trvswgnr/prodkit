@@ -1,15 +1,22 @@
 import { describe, expect, it } from "vitest";
 import type { ImplementationColumn } from "../comparison-matrix.ts";
-import type { RepeatedTinybenchRecord } from "../harness.ts";
+import { getRepoRoot, type RepeatedTinybenchRecord } from "../harness.ts";
 import {
+  BENCHMARK_CALIBRATION_REPORT_VERSION,
   BenchmarkReportCompatibilityError,
   BenchmarkReportValidationError,
   OFFICIAL_BENCHMARK_REPORT_VERSION,
   comparisonScenariosToOfficialResults,
+  createOfficialBenchmarkReportFields,
+  createRunnerIdentity,
   diffOfficialBenchmarkReports,
   profileScenariosToOfficialResults,
   scenarioDiffVerdict,
+  validateBenchmarkCalibrationReport,
   validateOfficialBenchmarkReport,
+  type BenchmarkCalibrationAttachment,
+  type BenchmarkCalibrationReport,
+  type BenchmarkRunnerIdentity,
   type OfficialBenchmarkReport,
 } from "../official-report.ts";
 
@@ -29,6 +36,120 @@ function stats(hz: number, rme = 1): RepeatedTinybenchRecord {
     semMs: 0.01,
     rme,
     sampleCount: 100,
+  };
+}
+
+function runner(): BenchmarkRunnerIdentity {
+  return {
+    id: "test-runner",
+    node: "v24.14.0",
+    platform: "darwin",
+    arch: "arm64",
+    cpu: {
+      model: "test cpu",
+      logicalCores: 8,
+    },
+    memory: {
+      totalBytes: 17_179_869_184,
+    },
+    os: {
+      type: "Darwin",
+      release: "25.0.0",
+      platform: "darwin",
+      arch: "arm64",
+    },
+    packageManager: {
+      name: "pnpm",
+      version: "11.5.0",
+    },
+  };
+}
+
+function calibrationAttachment(): BenchmarkCalibrationAttachment {
+  return {
+    schemaVersion: BENCHMARK_CALIBRATION_REPORT_VERSION,
+    generatedAt: "2026-06-23T11:00:00.000Z",
+    runnerId: "test-runner",
+    sampleCount: 3,
+    thresholds: {
+      microbenchmarkNoiseRatio: 0.05,
+      workflowNoiseRatio: 0.1,
+    },
+    recommendations: {
+      microbenchmark: {
+        decision: "acceptable",
+        thresholdRatio: 0.05,
+        worstNoiseBandRatio: 0.02,
+        worstScenarioKey: "singleValue",
+        reason: "Worst observed noise band 2.00% is within the 5.00% threshold.",
+      },
+      workflow: {
+        decision: "acceptable",
+        thresholdRatio: 0.1,
+        worstNoiseBandRatio: 0.02,
+        worstScenarioKey: "singleValue",
+        reason: "Worst observed noise band 2.00% is within the 10.00% threshold.",
+      },
+    },
+    scenarioSummaries: [
+      {
+        key: "singleValue",
+        label: "Single value",
+        benchName: "singleValue.opRun",
+        sampleCount: 3,
+        medianAbsoluteDeltaRatio: 0.01,
+        p95AbsoluteDeltaRatio: 0.02,
+        maxAbsoluteDeltaRatio: 0.02,
+        averageCombinedNoiseRatio: 0.01,
+        noiseBandRatio: 0.02,
+        samples: [
+          {
+            sampleIndex: 0,
+            first: "left",
+            leftHz: 100,
+            rightHz: 101,
+            deltaRatio: 0.01,
+            absoluteDeltaRatio: 0.01,
+            combinedNoiseRatio: 0.01,
+          },
+        ],
+      },
+    ],
+    artifact: {
+      kind: "report",
+      path: "op/.artifacts/runner-calibration-report.json",
+      contentType: "application/json",
+    },
+  };
+}
+
+function calibrationReport(): BenchmarkCalibrationReport {
+  const attachment = calibrationAttachment();
+  return {
+    schemaVersion: BENCHMARK_CALIBRATION_REPORT_VERSION,
+    generatedAt: attachment.generatedAt,
+    runner: runner(),
+    commit: {
+      headSha: "a".repeat(40),
+      dirty: false,
+    },
+    packages: [
+      {
+        name: "@prodkit/op",
+        version: "0.2.2",
+        packageDir: "packages/op",
+      },
+    ],
+    dependencyFingerprint: {
+      algorithm: "sha256",
+      digest: "b".repeat(64),
+      sources: ["pnpm-lock.yaml"],
+    },
+    benchOptions,
+    sampleCount: attachment.sampleCount,
+    thresholds: attachment.thresholds,
+    recommendations: attachment.recommendations,
+    scenarioSummaries: attachment.scenarioSummaries,
   };
 }
 
@@ -55,12 +176,7 @@ function report(
         },
       ],
     },
-    runner: {
-      id: "test-runner",
-      node: "v24.14.0",
-      platform: "darwin",
-      arch: "arm64",
-    },
+    runner: runner(),
     commit: {
       headSha: "a".repeat(40),
       dirty: false,
@@ -113,6 +229,73 @@ describe("official benchmark report validation", () => {
     expect(validateOfficialBenchmarkReport(report()).run.id).toBe("comparison-run");
   });
 
+  it("creates official reports with runner metadata", () => {
+    const created = createOfficialBenchmarkReportFields({
+      kind: "comparison",
+      generatedAt: "2026-06-23T12:00:00.000Z",
+      repoRoot: getRepoRoot(),
+      reportPath: "op/.artifacts/report.json",
+      environment: {
+        node: "v24.14.0",
+        platform: "darwin",
+        arch: "arm64",
+      },
+      benchOptions,
+      commit: {
+        headSha: "a".repeat(40),
+        dirty: false,
+      },
+      packages: [
+        {
+          name: "@prodkit/op",
+          version: "0.2.2",
+          packageDir: "packages/op",
+        },
+      ],
+      scenarioResults: report().scenarioResults,
+      calibration: calibrationAttachment(),
+    });
+
+    expect(created.runner.cpu.logicalCores).toBeGreaterThan(0);
+    expect(created.runner.memory.totalBytes).toBeGreaterThan(0);
+    expect(created.runner.os.release).not.toBe("");
+    expect(created.runner.packageManager).toEqual({ name: "pnpm", version: "11.5.0" });
+    expect(created.calibration?.runnerId).toBe("test-runner");
+  });
+
+  it("derives runner id and package manager from environment fallbacks", () => {
+    const created = createRunnerIdentity(
+      {
+        node: "v24.14.0",
+        platform: "darwin",
+        arch: "arm64",
+      },
+      {
+        PRODKIT_BENCHMARK_RUNNER_ID: "  official-mac-mini  ",
+        npm_config_user_agent: "pnpm/11.5.0 npm/? node/v24.14.0 darwin arm64",
+      },
+    );
+
+    expect(created.id).toBe("official-mac-mini");
+    expect(created.packageManager).toEqual({ name: "pnpm", version: "11.5.0" });
+  });
+
+  it("accepts older official reports that do not have expanded runner metadata", () => {
+    const legacy = report();
+    const parsed = validateOfficialBenchmarkReport({
+      ...legacy,
+      runner: {
+        id: "legacy-runner",
+        node: "v24.14.0",
+        platform: "darwin",
+        arch: "arm64",
+      },
+    });
+
+    expect(parsed.runner.cpu).toEqual({ model: "unknown", logicalCores: 0 });
+    expect(parsed.runner.packageManager).toEqual({ name: "unknown", version: "unknown" });
+  });
+
   it("rejects unsupported schema versions", () => {
     expect(() =>
       validateOfficialBenchmarkReport({
@@ -139,6 +322,40 @@ describe("official benchmark report validation", () => {
     };
 
     expect(() => validateOfficialBenchmarkReport(invalid)).toThrow("stats.hz");
+  });
+
+  it("validates attached runner calibration summaries", () => {
+    const parsed = validateOfficialBenchmarkReport({
+      ...report(),
+      calibration: calibrationAttachment(),
+    });
+
+    expect(parsed.calibration?.recommendations.microbenchmark.decision).toBe("acceptable");
+  });
+});
+
+describe("runner calibration report validation", () => {
+  it("accepts a complete calibration report", () => {
+    const parsed = validateBenchmarkCalibrationReport(calibrationReport());
+
+    expect(parsed.schemaVersion).toBe(BENCHMARK_CALIBRATION_REPORT_VERSION);
+    expect(parsed.runner.id).toBe("test-runner");
+    expect(parsed.recommendations.workflow.decision).toBe("acceptable");
+  });
+
+  it("rejects invalid calibration recommendations", () => {
+    expect(() =>
+      validateBenchmarkCalibrationReport({
+        ...calibrationReport(),
+        recommendations: {
+          ...calibrationReport().recommendations,
+          microbenchmark: {
+            ...calibrationReport().recommendations.microbenchmark,
+            decision: "maybe",
+          },
+        },
+      }),
+    ).toThrow(BenchmarkReportValidationError);
   });
 });
 

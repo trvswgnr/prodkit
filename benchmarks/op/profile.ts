@@ -39,6 +39,7 @@ import {
   createOfficialBenchmarkReportFields,
   createPackageMetadata,
   profileScenariosToOfficialResults,
+  readBenchmarkCalibrationAttachment,
   readGitCommitMetadata,
   type OfficialBenchmarkReport,
   type ProfileScenarioOfficialInput,
@@ -451,10 +452,12 @@ async function main(): Promise<void> {
   const benchOptions = parseBenchRunOptions(argv);
   const steps = parseStepsArg(argv);
   const reportPath = parseReportPath(argv) ?? resolveProfileArtifact("profile.json");
+  const calibrationPath = parseArgValue(argv, "--calibration=");
   const iterationsArg = parseArgValue(argv, "--iterations=");
   const commit = readGitCommitMetadata(repoRoot);
   const environment = readEnvironmentReport();
   const resolvedBenchOptions = resolveBenchRunOptions(benchOptions);
+  const calibration = await readBenchmarkCalibrationAttachment(repoRoot, calibrationPath);
   const generatedAt = new Date().toISOString();
 
   const { Op: opModule } = await importOpModule(packageDir);
@@ -626,6 +629,7 @@ async function main(): Promise<void> {
       commit,
       packages: [createPackageMetadata(repoRoot, "@prodkit/op", packageVersion, packageDir)],
       scenarioResults: profileScenariosToOfficialResults(officialProfileScenarios),
+      calibration,
     });
 
     const report: ProfileReport = {
