@@ -181,6 +181,55 @@ pnpm --filter @prodkit/benchmarks run publish:artifacts -- \
   --dry-run
 ```
 
+### Benchmark history API
+
+`benchmark-history-api.ts` is a Cloudflare Worker entry for indexing official benchmark metadata
+after artifacts are uploaded. Raw reports and profiles remain the durable source in R2. The API
+stores only compact query data for latest runs, run details, scenario history, comparison summaries,
+and published artifact object keys.
+
+Configure the Worker with:
+
+| Binding or secret | Required | Purpose |
+| --- | --- | --- |
+| `PRODKIT_BENCHMARK_HISTORY` | Yes | Cloudflare KV namespace for the compact metadata index |
+| `PRODKIT_BENCHMARK_HISTORY_WRITE_TOKEN` | Yes for writes | Shared secret accepted from trusted runner workflows only |
+
+The trusted runner posts an uploaded manifest and the report it just published:
+
+```bash
+curl -X POST "$PRODKIT_BENCHMARK_HISTORY_API/api/benchmarks/index" \
+  -H "authorization: Bearer $PRODKIT_BENCHMARK_HISTORY_WRITE_TOKEN" \
+  -H "content-type: application/json" \
+  --data @payload.json
+```
+
+`payload.json` has this shape:
+
+```json
+{
+  "manifest": "<benchmark-publish-manifest.json contents>",
+  "report": "<official or trusted comparison report contents>"
+}
+```
+
+Only upload manifests are accepted. Dry-run manifests are rejected so the index cannot point at
+artifacts that were never published. Reposting the same run is idempotent because run and comparison
+ids replace existing index entries.
+
+Read endpoints:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/benchmarks/latest?kind=comparison` | Latest indexed official run summary |
+| `GET /api/benchmarks/runs/<run-id>` | Run metadata, scenarios, benchmark options, and artifact object keys |
+| `GET /api/benchmarks/scenarios/<scenario-key>/history?implementation=op&limit=20` | Recent scenario trend data |
+| `GET /api/benchmarks/comparisons?limit=20` | Trusted base/candidate comparison summaries and delta verdicts |
+
+Keep the write token out of pull request jobs that run untrusted code. The token belongs only in
+protected scheduled, manual, or protected-branch workflows that already have permission to publish
+official artifacts.
+
 ### Runner calibration
 
 Calibrate an official runner before trusting optimization decisions from it:
