@@ -59,6 +59,7 @@ pnpm --filter @prodkit/benchmarks run codspeed:bench
 pnpm --filter @prodkit/benchmarks run compare
 pnpm --filter @prodkit/benchmarks run compare -- --time=1000 --repeats=5
 pnpm --filter @prodkit/benchmarks run compare -- --pair=op,effect
+pnpm --filter @prodkit/benchmarks run compare:refs -- --base=main --candidate=HEAD
 pnpm --filter @prodkit/tools run performance:sync -- --write
 ```
 
@@ -119,6 +120,19 @@ pnpm --filter @prodkit/benchmarks run report:diff -- base-report.json candidate-
 Diff verdicts use throughput deltas plus each scenario's relative margin of error. Small movements
 inside the noise threshold are reported as inconclusive instead of being treated as regressions or
 improvements.
+
+For trusted base/candidate decisions, run both refs on the same machine in one session:
+
+```bash
+pnpm --filter @prodkit/benchmarks run compare:refs -- --base=main --candidate=HEAD
+pnpm --filter @prodkit/benchmarks run compare:refs -- --base=op-v0.2.2 --candidate=my-branch --time=1000 --repeats=5
+```
+
+`compare:refs` requires a clean worktree, resolves both refs to detached Git worktrees, installs
+dependencies, builds `@prodkit/op` for each ref, and benchmarks the built package entrypoints. It
+alternates base-first and candidate-first scenario execution to reduce ordering bias, writes a
+single trusted comparison report under `op/.artifacts/`, and prints the same verdict summary used
+by `report:diff`.
 
 ### Bundle size
 
