@@ -19,6 +19,10 @@ import {
   type BenchmarkPublishManifest,
   type BenchmarkPublishedArtifact,
 } from "./publish-artifacts.ts";
+import {
+  benchmarkHistoryDashboardResponse,
+  isBenchmarkHistoryDashboardRoute,
+} from "./benchmark-history-dashboard.ts";
 
 export const BENCHMARK_HISTORY_API_VERSION = "prodkit.benchmark-history-api.v1" as const;
 
@@ -37,6 +41,7 @@ export type BenchmarkHistoryKvNamespace = {
 export type BenchmarkHistoryApiEnv = {
   PRODKIT_BENCHMARK_HISTORY: BenchmarkHistoryKvNamespace;
   PRODKIT_BENCHMARK_HISTORY_WRITE_TOKEN?: string;
+  PRODKIT_BENCHMARK_ARTIFACT_BASE_URL?: string;
 };
 
 export type BenchmarkHistoryArtifact = BenchmarkArtifactRef & {
@@ -554,7 +559,11 @@ function limitedQueryLimit(value: string | null): number {
 }
 
 export class KvBenchmarkHistoryIndex {
-  constructor(private readonly kv: BenchmarkHistoryKvNamespace) {}
+  private readonly kv: BenchmarkHistoryKvNamespace;
+
+  constructor(kv: BenchmarkHistoryKvNamespace) {
+    this.kv = kv;
+  }
 
   async upsertRun(detail: BenchmarkHistoryRunDetail): Promise<void> {
     await writeJson(this.kv, runKey(detail.id), detail);
@@ -788,6 +797,12 @@ export async function handleBenchmarkHistoryRequest(
         limitedQueryLimit(url.searchParams.get("limit")),
       );
       return jsonResponse({ comparisons: summaries });
+    }
+
+    if (isBenchmarkHistoryDashboardRoute(request)) {
+      return benchmarkHistoryDashboardResponse(request, {
+        artifactBaseUrl: env.PRODKIT_BENCHMARK_ARTIFACT_BASE_URL,
+      });
     }
 
     return errorResponse(404, "benchmark history route not found");

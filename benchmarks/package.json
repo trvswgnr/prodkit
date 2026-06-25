@@ -9,6 +9,7 @@
     "compare:refs": "node ./op/compare-refs.ts",
     "calibrate:runner": "node ./op/calibrate-runner.ts",
     "official": "node ./op/official-runner.ts",
+    "dashboard:mock": "node ./op/benchmark-history-dashboard-local.ts",
     "publish:artifacts": "node ./op/publish-artifacts.ts",
     "report:diff": "node ./op/official-report.ts diff",
     "codspeed:bench": "vitest bench --run",

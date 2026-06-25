@@ -414,6 +414,17 @@ describe("benchmark history API", () => {
     });
   });
 
+  it("serves the dashboard shell from the history Worker", async () => {
+    const response = await handleBenchmarkHistoryRequest(
+      new Request("https://benchmarks.example.com/"),
+      env(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    await expect(response.text()).resolves.toContain("prodkit benchmark history");
+  });
+
   it("rejects dry-run manifests because no artifacts were published", async () => {
     const apiEnv = env();
     const report = officialReport();

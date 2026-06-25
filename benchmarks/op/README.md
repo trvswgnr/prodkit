@@ -216,6 +216,7 @@ Configure the Worker with:
 | --- | --- | --- |
 | `PRODKIT_BENCHMARK_HISTORY` | Yes | Cloudflare KV namespace for the compact metadata index |
 | `PRODKIT_BENCHMARK_HISTORY_WRITE_TOKEN` | Yes for writes | Shared secret accepted from trusted runner workflows only |
+| `PRODKIT_BENCHMARK_ARTIFACT_BASE_URL` | Optional | Public base URL used by the dashboard to link published R2 artifact object keys |
 
 The trusted runner posts an uploaded manifest and the report it just published:
 
@@ -252,6 +253,18 @@ Keep the write token out of pull request jobs that run untrusted code. The token
 protected scheduled, manual, or protected-branch workflows that already have permission to publish
 official artifacts.
 
+The same Worker also serves the benchmark history dashboard from `/`, `/runs/<run-id>`, and
+`/scenarios/<scenario-key>`. The dashboard reads the API routes above, shows the latest official
+run, trusted base/candidate verdicts, run metadata, scenario trends, calibration context, and raw
+artifact links when `PRODKIT_BENCHMARK_ARTIFACT_BASE_URL` is configured.
+
+Run the dashboard locally with seeded mock data:
+
+```bash
+pnpm --filter @prodkit/benchmarks run dashboard:mock
+pnpm --filter @prodkit/benchmarks run dashboard:mock -- --port=4176
+```
+
 ### Trusted official runner
 
 The official runner workflow lives in
@@ -282,6 +295,7 @@ Required repository configuration:
 | `PRODKIT_BENCHMARK_R2_ENDPOINT` | Variable, optional | Overrides the default R2 endpoint |
 | `PRODKIT_BENCHMARK_R2_PREFIX` | Variable, optional | Prefix prepended to uploaded object keys |
 | `PRODKIT_BENCHMARK_HISTORY_API` | Variable | Base URL of the benchmark history Worker |
+| `PRODKIT_BENCHMARK_ARTIFACT_BASE_URL` | Variable, optional | Public origin for dashboard raw artifact links |
 | `PRODKIT_BENCHMARK_RUNNER_ID` | Variable, optional | Runner id recorded in official reports |
 | `PRODKIT_BENCHMARK_R2_ACCESS_KEY_ID` | Secret | R2 S3 access key id |
 | `PRODKIT_BENCHMARK_R2_SECRET_ACCESS_KEY` | Secret | R2 S3 secret access key |
