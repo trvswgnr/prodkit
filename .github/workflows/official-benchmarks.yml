@@ -1,0 +1,147 @@
+name: Official Benchmarks
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+    inputs:
+      run_kind:
+        description: "Official run kind"
+        required: true
+        type: choice
+        default: baseline
+        options:
+          - baseline
+          - candidate-comparison
+      base_ref:
+        description: "Base ref for baseline or comparison runs"
+        required: true
+        type: string
+        default: main
+      candidate_ref:
+        description: "Candidate ref for candidate-comparison runs"
+        required: false
+        type: string
+      approval:
+        description: "Maintainer approval recorded for the official run"
+        required: true
+        type: choice
+        default: manual-baseline
+        options:
+          - manual-baseline
+          - manual-candidate-comparison
+
+permissions:
+  contents: read
+
+concurrency:
+  group: official-benchmarks
+  cancel-in-progress: false
+
+jobs:
+  benchmark:
+    name: benchmark report
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      OFFICIAL_RUN_KIND: ${{ github.event_name == 'schedule' && 'baseline' || github.event.inputs.run_kind }}
+      OFFICIAL_BASE_REF: ${{ github.event_name == 'schedule' && 'main' || github.event.inputs.base_ref }}
+      OFFICIAL_CANDIDATE_REF: ${{ github.event_name == 'schedule' && '' || github.event.inputs.candidate_ref }}
+      OFFICIAL_APPROVAL: ${{ github.event_name == 'schedule' && 'scheduled-baseline' || github.event.inputs.approval }}
+      OFFICIAL_RUNNER_SOURCE_REF: ${{ github.event_name == 'schedule' && 'main' || (github.event.inputs.run_kind == 'baseline' && github.event.inputs.base_ref || 'main') }}
+    steps:
+      - name: Checkout trusted runner source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          ref: ${{ env.OFFICIAL_RUNNER_SOURCE_REF }}
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+        with:
+          version: 11.5.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24.14.0"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run official benchmark report
+        run: |
+          set -euo pipefail
+          args=(
+            run
+            "--kind=${OFFICIAL_RUN_KIND}"
+            "--approval=${OFFICIAL_APPROVAL}"
+            "--event=${GITHUB_EVENT_NAME}"
+            "--base=${OFFICIAL_BASE_REF}"
+          )
+          if [[ -n "${OFFICIAL_CANDIDATE_REF}" ]]; then
+            args+=("--candidate=${OFFICIAL_CANDIDATE_REF}")
+          fi
+          pnpm --filter @prodkit/benchmarks run official -- "${args[@]}"
+
+      - name: Upload official benchmark report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: official-benchmark-report
+          path: benchmarks/op/.artifacts/*.json
+          if-no-files-found: error
+
+  publish:
+    name: publish and index
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: benchmark
+    environment: official-benchmarks
+    steps:
+      - name: Checkout trusted publisher source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          ref: main
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+        with:
+          version: 11.5.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24.14.0"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download official benchmark report
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: official-benchmark-report
+          path: benchmarks/op/.artifacts
+
+      - name: Publish artifacts and update history index
+        env:
+          PRODKIT_BENCHMARK_R2_BUCKET: ${{ vars.PRODKIT_BENCHMARK_R2_BUCKET }}
+          PRODKIT_BENCHMARK_R2_ACCOUNT_ID: ${{ vars.PRODKIT_BENCHMARK_R2_ACCOUNT_ID }}
+          PRODKIT_BENCHMARK_R2_ENDPOINT: ${{ vars.PRODKIT_BENCHMARK_R2_ENDPOINT }}
+          PRODKIT_BENCHMARK_R2_PREFIX: ${{ vars.PRODKIT_BENCHMARK_R2_PREFIX }}
+          PRODKIT_BENCHMARK_R2_ACCESS_KEY_ID: ${{ secrets.PRODKIT_BENCHMARK_R2_ACCESS_KEY_ID }}
+          PRODKIT_BENCHMARK_R2_SECRET_ACCESS_KEY: ${{ secrets.PRODKIT_BENCHMARK_R2_SECRET_ACCESS_KEY }}
+          PRODKIT_BENCHMARK_HISTORY_API: ${{ vars.PRODKIT_BENCHMARK_HISTORY_API }}
+          PRODKIT_BENCHMARK_HISTORY_WRITE_TOKEN: ${{ secrets.PRODKIT_BENCHMARK_HISTORY_WRITE_TOKEN }}
+          PRODKIT_BENCHMARK_RUNNER_ID: ${{ vars.PRODKIT_BENCHMARK_RUNNER_ID || 'github-official-benchmarks' }}
+        run: pnpm --filter @prodkit/benchmarks run official -- publish
+
+      - name: Upload publish manifest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: official-benchmark-publish-manifest
+          path: benchmarks/op/.artifacts/benchmark-publish-manifest.json
+          if-no-files-found: error

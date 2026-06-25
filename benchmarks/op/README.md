@@ -230,6 +230,60 @@ Keep the write token out of pull request jobs that run untrusted code. The token
 protected scheduled, manual, or protected-branch workflows that already have permission to publish
 official artifacts.
 
+### Trusted official runner
+
+The official runner workflow lives in
+[`.github/workflows/official-benchmarks.yml`](../../.github/workflows/official-benchmarks.yml). It
+uses `official-runner.ts` to apply the trusted-run policy, create the report, publish artifacts, and
+update the history index.
+
+Trusted-run policy:
+
+| Run kind | Trigger | Allowed refs | Approval value |
+| --- | --- | --- | --- |
+| Scheduled baseline | `schedule` | `main` only | `scheduled-baseline` |
+| Manual baseline | `workflow_dispatch` | Maintainer-selected base ref | `manual-baseline` |
+| Manual candidate comparison | `workflow_dispatch` | Maintainer-selected base and candidate refs | `manual-candidate-comparison` |
+
+Pull request events are not accepted for official publishing. Candidate comparison code runs in the
+benchmark job without Cloudflare credentials. The publish job downloads the report artifact, receives
+the R2 and history API secrets, uploads the completed report, and posts it to the history index. The
+workflow has one concurrency group with `cancel-in-progress: false`, so official runs execute one at
+a time.
+
+Required repository configuration:
+
+| Name | Kind | Purpose |
+| --- | --- | --- |
+| `PRODKIT_BENCHMARK_R2_BUCKET` | Variable | Destination R2 bucket |
+| `PRODKIT_BENCHMARK_R2_ACCOUNT_ID` | Variable | Builds the default R2 endpoint when no endpoint override is set |
+| `PRODKIT_BENCHMARK_R2_ENDPOINT` | Variable, optional | Overrides the default R2 endpoint |
+| `PRODKIT_BENCHMARK_R2_PREFIX` | Variable, optional | Prefix prepended to uploaded object keys |
+| `PRODKIT_BENCHMARK_HISTORY_API` | Variable | Base URL of the benchmark history Worker |
+| `PRODKIT_BENCHMARK_RUNNER_ID` | Variable, optional | Runner id recorded in official reports |
+| `PRODKIT_BENCHMARK_R2_ACCESS_KEY_ID` | Secret | R2 S3 access key id |
+| `PRODKIT_BENCHMARK_R2_SECRET_ACCESS_KEY` | Secret | R2 S3 secret access key |
+| `PRODKIT_BENCHMARK_HISTORY_WRITE_TOKEN` | Secret | Bearer token for history index writes |
+
+The same runner can be exercised locally, but local publish mode uses real Cloudflare credentials:
+
+```bash
+pnpm --filter @prodkit/benchmarks run official -- run --kind=baseline --approval=manual-baseline --event=workflow_dispatch --base=main
+pnpm --filter @prodkit/benchmarks run official -- publish
+```
+
+Failure recovery:
+
+- If the benchmark job fails, no official data was published. Fix the runner or ref selection and
+  dispatch the workflow again.
+- If publish fails before the manifest is written, rerun the workflow or rerun the `publish` stage
+  with the saved report artifact after fixing credentials, bucket policy, or network configuration.
+- If R2 upload succeeds but history indexing fails, keep the uploaded report as the source of truth
+  and rerun the `publish` stage with the same report artifact after fixing
+  `PRODKIT_BENCHMARK_HISTORY_API` or `PRODKIT_BENCHMARK_HISTORY_WRITE_TOKEN`.
+- If a candidate comparison used the wrong refs, dispatch a new manual candidate comparison. Do not
+  edit indexed run data by hand.
+
 ### Runner calibration
 
 Calibrate an official runner before trusting optimization decisions from it:
