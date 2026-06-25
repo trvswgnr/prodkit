@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -106,7 +107,14 @@ export type TrustedRefComparisonSideReport = {
   ref: string;
   sha: string;
   packageVersion: string;
+  targetFingerprint: TrustedRefComparisonTargetFingerprint;
   report: OfficialBenchmarkReport;
+};
+
+export type TrustedRefComparisonTargetFingerprint = {
+  algorithm: "sha256";
+  digest: string;
+  sources: string[];
 };
 
 export type TrustedRefComparisonReport = {
@@ -140,6 +148,7 @@ type PreparedRefWorktree = {
   root: string;
   packageDir: string;
   packageVersion: string;
+  targetFingerprint: TrustedRefComparisonTargetFingerprint;
   scenarios: readonly ComparisonScenario[];
   commit: BenchmarkCommitMetadata;
 };
@@ -522,17 +531,25 @@ export function createTrustedRefComparisonReport(input: {
   baseRef: string;
   baseSha: string;
   basePackageVersion: string;
+  baseTargetFingerprint: TrustedRefComparisonTargetFingerprint;
   baseReport: OfficialBenchmarkReport;
   candidateRef: string;
   candidateSha: string;
   candidatePackageVersion: string;
+  candidateTargetFingerprint: TrustedRefComparisonTargetFingerprint;
   candidateReport: OfficialBenchmarkReport;
   minMeaningfulChangeRatio?: number;
 }): TrustedRefComparisonReport {
-  const diff = diffOfficialBenchmarkReports(input.baseReport, input.candidateReport, {
+  const measuredDiff = diffOfficialBenchmarkReports(input.baseReport, input.candidateReport, {
     implementationId: TRUSTED_REF_COMPARISON_IMPLEMENTATION_ID,
     minMeaningfulChangeRatio: input.minMeaningfulChangeRatio,
   });
+  const diff = targetFingerprintsEqual(
+    input.baseTargetFingerprint,
+    input.candidateTargetFingerprint,
+  )
+    ? suppressDirectionalVerdicts(measuredDiff)
+    : measuredDiff;
 
   return {
     schemaVersion: TRUSTED_REF_COMPARISON_REPORT_VERSION,
@@ -544,12 +561,14 @@ export function createTrustedRefComparisonReport(input: {
       ref: input.baseRef,
       sha: input.baseSha,
       packageVersion: input.basePackageVersion,
+      targetFingerprint: input.baseTargetFingerprint,
       report: input.baseReport,
     },
     candidate: {
       ref: input.candidateRef,
       sha: input.candidateSha,
       packageVersion: input.candidatePackageVersion,
+      targetFingerprint: input.candidateTargetFingerprint,
       report: input.candidateReport,
     },
     diff,
@@ -559,6 +578,29 @@ export function createTrustedRefComparisonReport(input: {
       limit: 1,
       selections: [],
       artifacts: [],
+    },
+  };
+}
+
+function targetFingerprintsEqual(
+  base: TrustedRefComparisonTargetFingerprint,
+  candidate: TrustedRefComparisonTargetFingerprint,
+): boolean {
+  return base.algorithm === candidate.algorithm && base.digest === candidate.digest;
+}
+
+function suppressDirectionalVerdicts(diff: BenchmarkDiff): BenchmarkDiff {
+  const scenarios: ScenarioDiff[] = diff.scenarios.map((scenario) => ({
+    ...scenario,
+    verdict: "inconclusive",
+  }));
+  return {
+    ...diff,
+    scenarios,
+    summary: {
+      improvement: 0,
+      regression: 0,
+      inconclusive: scenarios.length,
     },
   };
 }
@@ -579,6 +621,9 @@ export function formatTrustedRefComparisonSummary(report: TrustedRefComparisonRe
     `Trusted ref comparison (${report.implementationId})`,
     `Base: ${report.base.ref} (${shortSha(report.base.sha)})`,
     `Candidate: ${report.candidate.ref} (${shortSha(report.candidate.sha)})`,
+    ...(targetFingerprintsEqual(report.base.targetFingerprint, report.candidate.targetFingerprint)
+      ? ["Target fingerprint: identical; directional verdicts suppressed."]
+      : []),
     `Benchmark timing: ${benchRunOptionSummary(report.benchOptions)}`,
     `Scenario order: alternated by scenario (${countFirstRuns(
       report.scenarioOrder,
@@ -588,6 +633,47 @@ export function formatTrustedRefComparisonSummary(report: TrustedRefComparisonRe
     formatBenchmarkDiff(report.diff),
   ];
   return lines.join("\n");
+}
+
+function runtimeTargetFingerprintSources(packageDir: string): string[] {
+  const distDir = path.join(packageDir, "dist");
+  const sources: string[] = [];
+
+  function visit(relativeDir: string): void {
+    const absoluteDir = path.join(packageDir, relativeDir);
+    for (const entry of readdirSync(absoluteDir, { withFileTypes: true })) {
+      const relativePath = path.join(relativeDir, entry.name);
+      if (entry.isDirectory()) {
+        visit(relativePath);
+      } else if (entry.isFile() && relativePath.endsWith(".mjs")) {
+        sources.push(relativePath.replaceAll(path.sep, "/"));
+      }
+    }
+  }
+
+  visit(path.relative(packageDir, distDir));
+  return sources.sort();
+}
+
+function createRuntimeTargetFingerprint(packageDir: string): TrustedRefComparisonTargetFingerprint {
+  const sources = runtimeTargetFingerprintSources(packageDir);
+  if (sources.length === 0) {
+    throw new Error(`No built runtime files found under ${path.join(packageDir, "dist")}.`);
+  }
+
+  const hash = createHash("sha256");
+  for (const source of sources) {
+    hash.update(source);
+    hash.update("\0");
+    hash.update(readFileSync(path.join(packageDir, source)));
+    hash.update("\0");
+  }
+
+  return {
+    algorithm: "sha256",
+    digest: hash.digest("hex"),
+    sources,
+  };
 }
 
 async function prepareRefWorktree(input: {
@@ -611,6 +697,7 @@ async function prepareRefWorktree(input: {
 
   const packageDir = resolveOpPackageDir(worktreeRoot);
   const packageVersion = await readPackageVersion(packageDir);
+  const targetFingerprint = createRuntimeTargetFingerprint(packageDir);
   const opModule = await importOpModule(packageDir);
   const policyModule = await importOpPolicyModule(packageDir);
   const scenarios = createComparisonScenarios({
@@ -624,6 +711,7 @@ async function prepareRefWorktree(input: {
     root: worktreeRoot,
     packageDir,
     packageVersion,
+    targetFingerprint,
     scenarios,
     commit: readGitCommitMetadata(worktreeRoot),
   };
@@ -887,10 +975,12 @@ export async function runTrustedRefComparison(
       baseRef: args.baseRef,
       baseSha,
       basePackageVersion: base.packageVersion,
+      baseTargetFingerprint: base.targetFingerprint,
       baseReport,
       candidateRef: args.candidateRef,
       candidateSha,
       candidatePackageVersion: candidate.packageVersion,
+      candidateTargetFingerprint: candidate.targetFingerprint,
       candidateReport,
       minMeaningfulChangeRatio: args.minMeaningfulChangeRatio,
     });

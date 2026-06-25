@@ -719,7 +719,12 @@ function dashboardHtml(config: string): string {
         if (!comparison || !Array.isArray(comparison.scenarios) || comparison.scenarios.length === 0) {
           return '<div class="empty">No comparison verdicts are indexed yet.</div>';
         }
+        var targetNotice =
+          comparison.targetFingerprintChanged === false
+            ? '<div class="empty">Target runtime fingerprint is identical; directional verdicts are suppressed.</div>'
+            : "";
         return (
+          targetNotice +
           '<div class="table-wrap"><table><thead><tr><th>Scenario</th><th>Verdict</th><th>Base</th><th>Candidate</th><th>Delta</th><th>Threshold</th></tr></thead><tbody>' +
           comparison.scenarios
             .map(function (scenario) {

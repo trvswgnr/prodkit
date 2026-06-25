@@ -308,6 +308,10 @@ summary in the official report, and run the trusted comparison with `--time=1000
 This keeps public verdicts tied to the runner's observed same-code noise band instead of a single
 short Tinybench sample.
 
+Trusted ref reports also record a SHA-256 fingerprint of the built `@prodkit/op` runtime files. When
+base and candidate runtime fingerprints are identical, directional verdicts are suppressed and every
+scenario is reported as inconclusive, while the measured deltas remain in the report for diagnostics.
+
 Required repository configuration:
 
 | Name | Kind | Purpose |

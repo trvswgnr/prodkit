@@ -181,6 +181,14 @@ function officialManifest(report: OfficialBenchmarkReport): BenchmarkPublishMani
   };
 }
 
+function targetFingerprint(digest: string) {
+  return {
+    algorithm: "sha256",
+    digest,
+    sources: ["dist/index.mjs"],
+  };
+}
+
 function trustedComparisonReport(
   base: OfficialBenchmarkReport,
   candidate: OfficialBenchmarkReport,
@@ -216,11 +224,13 @@ function trustedComparisonReport(
     base: {
       ref: "main",
       sha: base.commit.headSha,
+      targetFingerprint: targetFingerprint("1".repeat(64)),
       report: base,
     },
     candidate: {
       ref: "feature/perf",
       sha: candidate.commit.headSha,
+      targetFingerprint: targetFingerprint("2".repeat(64)),
       report: candidate,
     },
     diff,
@@ -398,6 +408,7 @@ describe("benchmark history API", () => {
           summary: {
             improvement: 1,
           },
+          targetFingerprintChanged: true,
           scenarios: [
             {
               deltaRatio: 0.25,

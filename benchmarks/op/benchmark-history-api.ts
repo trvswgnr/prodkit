@@ -103,6 +103,7 @@ export type BenchmarkHistoryComparisonSummary = {
     sha: string;
     runId: string;
   };
+  targetFingerprintChanged?: boolean;
   summary: BenchmarkDiff["summary"];
   scenarios: ScenarioDiff[];
   artifacts: BenchmarkHistoryArtifact[];
@@ -132,14 +133,22 @@ type TrustedRefComparisonReport = {
   base: {
     ref: string;
     sha: string;
+    targetFingerprint?: TrustedRefComparisonTargetFingerprint;
     report: OfficialBenchmarkReport;
   };
   candidate: {
     ref: string;
     sha: string;
+    targetFingerprint?: TrustedRefComparisonTargetFingerprint;
     report: OfficialBenchmarkReport;
   };
   diff: BenchmarkDiff;
+};
+
+type TrustedRefComparisonTargetFingerprint = {
+  algorithm: string;
+  digest: string;
+  sources: string[];
 };
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -339,6 +348,22 @@ function readBenchmarkRunIdentity(value: unknown, location: string): BenchmarkRu
   };
 }
 
+function readTrustedRefComparisonTargetFingerprint(
+  value: unknown,
+  location: string,
+): TrustedRefComparisonTargetFingerprint {
+  const record = readRecord(value, location);
+  const sources = record.sources;
+  if (!Array.isArray(sources)) {
+    throw new Error(`${location}.sources: expected array`);
+  }
+  return {
+    algorithm: readString(record.algorithm, `${location}.algorithm`),
+    digest: readString(record.digest, `${location}.digest`),
+    sources: sources.map((item, index) => readString(item, `${location}.sources[${index}]`)),
+  };
+}
+
 function readTrustedRefComparisonReport(input: unknown): TrustedRefComparisonReport {
   const record = readRecord(input, "report");
   if (record.schemaVersion !== TRUSTED_REF_COMPARISON_REPORT_VERSION) {
@@ -353,11 +378,27 @@ function readTrustedRefComparisonReport(input: unknown): TrustedRefComparisonRep
     base: {
       ref: readString(base.ref, "report.base.ref"),
       sha: readString(base.sha, "report.base.sha"),
+      ...(base.targetFingerprint === undefined
+        ? {}
+        : {
+            targetFingerprint: readTrustedRefComparisonTargetFingerprint(
+              base.targetFingerprint,
+              "report.base.targetFingerprint",
+            ),
+          }),
       report: validateOfficialBenchmarkReport(base.report),
     },
     candidate: {
       ref: readString(candidate.ref, "report.candidate.ref"),
       sha: readString(candidate.sha, "report.candidate.sha"),
+      ...(candidate.targetFingerprint === undefined
+        ? {}
+        : {
+            targetFingerprint: readTrustedRefComparisonTargetFingerprint(
+              candidate.targetFingerprint,
+              "report.candidate.targetFingerprint",
+            ),
+          }),
       report: validateOfficialBenchmarkReport(candidate.report),
     },
     diff: readBenchmarkDiff(record.diff, "report.diff"),
@@ -502,6 +543,11 @@ function comparisonSummary(
   manifest: BenchmarkPublishManifest,
 ): BenchmarkHistoryComparisonSummary {
   const id = `${report.base.report.run.id}__${report.candidate.report.run.id}`;
+  const targetFingerprintChanged =
+    report.base.targetFingerprint === undefined || report.candidate.targetFingerprint === undefined
+      ? undefined
+      : report.base.targetFingerprint.algorithm !== report.candidate.targetFingerprint.algorithm ||
+        report.base.targetFingerprint.digest !== report.candidate.targetFingerprint.digest;
   return {
     id,
     generatedAt: report.generatedAt,
@@ -516,6 +562,7 @@ function comparisonSummary(
       sha: report.candidate.sha,
       runId: report.candidate.report.run.id,
     },
+    ...(targetFingerprintChanged === undefined ? {} : { targetFingerprintChanged }),
     summary: report.diff.summary,
     scenarios: report.diff.scenarios,
     artifacts: comparisonArtifact(report, manifest),

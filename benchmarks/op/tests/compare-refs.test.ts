@@ -21,6 +21,7 @@ import {
   refComparisonRunOrder,
   selectTrustedRefComparisonProfileScenarios,
   type TrustedRefComparisonCapturedProfileArtifact,
+  type TrustedRefComparisonTargetFingerprint,
 } from "../compare-refs.ts";
 
 const benchOptions = {
@@ -65,6 +66,14 @@ function runner(): BenchmarkRunnerIdentity {
       name: "pnpm",
       version: "11.5.0",
     },
+  };
+}
+
+function targetFingerprint(digest: string): TrustedRefComparisonTargetFingerprint {
+  return {
+    algorithm: "sha256",
+    digest,
+    sources: ["dist/index.mjs"],
   };
 }
 
@@ -288,6 +297,7 @@ describe("trusted ref comparison report", () => {
       baseRef: "main",
       baseSha: "a".repeat(40),
       basePackageVersion: "0.2.2",
+      baseTargetFingerprint: targetFingerprint("1".repeat(64)),
       baseReport: officialReport({
         runId: "comparison-base",
         sha: "a".repeat(40),
@@ -296,6 +306,7 @@ describe("trusted ref comparison report", () => {
       candidateRef: "HEAD",
       candidateSha: "b".repeat(40),
       candidatePackageVersion: "0.2.2",
+      candidateTargetFingerprint: targetFingerprint("2".repeat(64)),
       candidateReport: officialReport({
         runId: "comparison-candidate",
         sha: "b".repeat(40),
@@ -313,6 +324,52 @@ describe("trusted ref comparison report", () => {
     });
   });
 
+  it("suppresses directional verdicts when target fingerprints are identical", () => {
+    const unchangedTargetFingerprint = targetFingerprint("1".repeat(64));
+    const report = createTrustedRefComparisonReport({
+      generatedAt: "2026-06-23T12:00:00.000Z",
+      benchOptions,
+      scenarioOrder: [
+        { scenarioKey: "singleValue", first: "base" },
+        { scenarioKey: "all", first: "candidate" },
+        { scenarioKey: "compose", first: "base" },
+      ],
+      baseRef: "main",
+      baseSha: "a".repeat(40),
+      basePackageVersion: "0.2.2",
+      baseTargetFingerprint: unchangedTargetFingerprint,
+      baseReport: officialReport({
+        runId: "comparison-base",
+        sha: "a".repeat(40),
+        hz: [100, 100, 100],
+      }),
+      candidateRef: "HEAD",
+      candidateSha: "b".repeat(40),
+      candidatePackageVersion: "0.2.2",
+      candidateTargetFingerprint: unchangedTargetFingerprint,
+      candidateReport: officialReport({
+        runId: "comparison-candidate",
+        sha: "b".repeat(40),
+        hz: [120, 80, 101],
+      }),
+    });
+
+    expect(report.diff.summary).toEqual({
+      improvement: 0,
+      regression: 0,
+      inconclusive: 3,
+    });
+    expect(report.diff.scenarios.map((scenario) => scenario.verdict)).toEqual([
+      "inconclusive",
+      "inconclusive",
+      "inconclusive",
+    ]);
+    expect(report.diff.scenarios[0]?.deltaRatio).toBeCloseTo(0.2);
+    expect(formatTrustedRefComparisonSummary(report)).toContain(
+      "Target fingerprint: identical; directional verdicts suppressed.",
+    );
+  });
+
   it("prints refs, ordering, and verdict totals", () => {
     const report = createTrustedRefComparisonReport({
       generatedAt: "2026-06-23T12:00:00.000Z",
@@ -324,6 +381,7 @@ describe("trusted ref comparison report", () => {
       baseRef: "main",
       baseSha: "a".repeat(40),
       basePackageVersion: "0.2.2",
+      baseTargetFingerprint: targetFingerprint("1".repeat(64)),
       baseReport: officialReport({
         runId: "comparison-base",
         sha: "a".repeat(40),
@@ -332,6 +390,7 @@ describe("trusted ref comparison report", () => {
       candidateRef: "feature",
       candidateSha: "b".repeat(40),
       candidatePackageVersion: "0.2.2",
+      candidateTargetFingerprint: targetFingerprint("2".repeat(64)),
       candidateReport: officialReport({
         runId: "comparison-candidate",
         sha: "b".repeat(40),
@@ -360,6 +419,7 @@ describe("trusted ref comparison report", () => {
       baseRef: "main",
       baseSha: "a".repeat(40),
       basePackageVersion: "0.2.2",
+      baseTargetFingerprint: targetFingerprint("1".repeat(64)),
       baseReport: officialReport({
         runId: "comparison-base",
         sha: "a".repeat(40),
@@ -368,6 +428,7 @@ describe("trusted ref comparison report", () => {
       candidateRef: "HEAD",
       candidateSha: "b".repeat(40),
       candidatePackageVersion: "0.2.2",
+      candidateTargetFingerprint: targetFingerprint("2".repeat(64)),
       candidateReport: officialReport({
         runId: "comparison-candidate",
         sha: "b".repeat(40),
@@ -405,6 +466,7 @@ describe("trusted ref comparison report", () => {
       baseRef: "main",
       baseSha: "a".repeat(40),
       basePackageVersion: "0.2.2",
+      baseTargetFingerprint: targetFingerprint("1".repeat(64)),
       baseReport: officialReport({
         runId: "comparison-base",
         sha: "a".repeat(40),
@@ -413,6 +475,7 @@ describe("trusted ref comparison report", () => {
       candidateRef: "HEAD",
       candidateSha: "b".repeat(40),
       candidatePackageVersion: "0.2.2",
+      candidateTargetFingerprint: targetFingerprint("2".repeat(64)),
       candidateReport: officialReport({
         runId: "comparison-candidate",
         sha: "b".repeat(40),
@@ -451,6 +514,7 @@ describe("trusted ref comparison report", () => {
       baseRef: "main",
       baseSha: "a".repeat(40),
       basePackageVersion: "0.2.2",
+      baseTargetFingerprint: targetFingerprint("1".repeat(64)),
       baseReport: officialReport({
         runId: "comparison-base",
         sha: "a".repeat(40),
@@ -459,6 +523,7 @@ describe("trusted ref comparison report", () => {
       candidateRef: "HEAD",
       candidateSha: "b".repeat(40),
       candidatePackageVersion: "0.2.2",
+      candidateTargetFingerprint: targetFingerprint("2".repeat(64)),
       candidateReport: officialReport({
         runId: "comparison-candidate",
         sha: "b".repeat(40),
