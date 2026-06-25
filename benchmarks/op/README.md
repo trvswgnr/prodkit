@@ -265,6 +265,22 @@ pnpm --filter @prodkit/benchmarks run dashboard:mock
 pnpm --filter @prodkit/benchmarks run dashboard:mock -- --port=4176
 ```
 
+Deploy the same dashboard and API as a public Cloudflare Worker:
+
+```bash
+pnpm --filter @prodkit/benchmarks exec wrangler kv namespace create PRODKIT_BENCHMARK_HISTORY
+pnpm --filter @prodkit/benchmarks run dashboard:deploy -- --dry-run --kv-namespace-id=<namespace-id>
+pnpm --filter @prodkit/benchmarks exec wrangler secret put PRODKIT_BENCHMARK_HISTORY_WRITE_TOKEN --config op/.artifacts/wrangler.json
+pnpm --filter @prodkit/benchmarks run dashboard:deploy -- --kv-namespace-id=<namespace-id>
+```
+
+The deploy script writes an account-specific Wrangler config under `benchmarks/op/.artifacts/`
+before invoking Wrangler, so Cloudflare namespace ids stay out of git. The Worker is published on a
+`workers.dev` URL by default. Use that URL as `PRODKIT_BENCHMARK_HISTORY_API` for the official
+runner. Set `PRODKIT_BENCHMARK_ARTIFACT_BASE_URL` before deploy when the R2 bucket has a public
+artifact origin. The generated config enables Cloudflare `nodejs_compat` because the history API
+shares schema modules with Node-maintainer scripts.
+
 ### Trusted official runner
 
 The official runner workflow lives in
