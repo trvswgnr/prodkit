@@ -11,12 +11,12 @@ import {
   publishOfficialBenchmarkRun,
   type OfficialBenchmarkRunArgs,
   type OfficialBenchmarkRunContext,
-} from "../official-runner.ts";
+} from "../cli/official-runner.ts";
 import {
   BENCHMARK_PUBLISH_MANIFEST_VERSION,
   type BenchmarkPublishManifest,
-} from "../publish-artifacts.ts";
-import type { TrustedRefComparisonProfileArgs } from "../compare-refs.ts";
+} from "../cli/publish-artifacts.ts";
+import type { TrustedRefComparisonProfileArgs } from "../cli/compare-refs.ts";
 
 let tempRoots: string[] = [];
 

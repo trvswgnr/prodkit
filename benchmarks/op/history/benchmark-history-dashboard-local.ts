@@ -14,7 +14,7 @@ import {
   BENCHMARK_CALIBRATION_REPORT_VERSION,
   OFFICIAL_BENCHMARK_REPORT_VERSION,
   type BenchmarkRunnerIdentity,
-} from "./official-report.ts";
+} from "../reports/official-report.ts";
 
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 4175;

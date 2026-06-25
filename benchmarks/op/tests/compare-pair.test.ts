@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { libraryPairOutcome } from "../comparison-matrix.ts";
-import { parseLibraryPairArg } from "../compare.ts";
-import { benchRunOptionSummary, parseBenchRunOptions, resolveBenchRunOptions } from "../harness.ts";
+import { libraryPairOutcome } from "../runtime/comparison-matrix.ts";
+import { parseLibraryPairArg } from "../cli/compare.ts";
+import {
+  benchRunOptionSummary,
+  parseBenchRunOptions,
+  resolveBenchRunOptions,
+} from "../runtime/harness.ts";
 
 describe("parseLibraryPairArg", () => {
   it("parses a valid library pair", () => {

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { handleBenchmarkHistoryRequest } from "../benchmark-history-api.ts";
+import { handleBenchmarkHistoryRequest } from "../history/benchmark-history-api.ts";
 import {
   createMockBenchmarkHistoryEnv,
   startBenchmarkHistoryDashboardMockServer,
-} from "../benchmark-history-dashboard-local.ts";
+} from "../history/benchmark-history-dashboard-local.ts";
 
 const quietLogger = {
   error() {},

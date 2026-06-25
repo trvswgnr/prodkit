@@ -7,12 +7,12 @@ import {
   parseBenchRunOptions,
   resolveBenchmarkArtifact,
   type BenchRunOptions,
-} from "./harness.ts";
+} from "../runtime/harness.ts";
 import {
   parseTrustedRefComparisonProfileArgs,
   type TrustedRefComparisonProfileArgs,
 } from "./compare-refs.ts";
-import { DEFAULT_MIN_MEANINGFUL_CHANGE_RATIO } from "./official-report.ts";
+import { DEFAULT_MIN_MEANINGFUL_CHANGE_RATIO } from "../reports/official-report.ts";
 import {
   publishBenchmarkArtifacts,
   type BenchmarkPublishManifest,
@@ -24,7 +24,7 @@ import {
   parseRecord,
   parseString,
   parseStringArray,
-} from "./json-parse.ts";
+} from "../reports/json-parse.ts";
 
 export const OFFICIAL_BENCHMARK_RUN_CONTEXT_VERSION = "prodkit.official-benchmark-run.v1" as const;
 
@@ -109,11 +109,11 @@ export type PublishOfficialBenchmarkRunInput = {
 
 function usage(): string {
   return [
-    "usage: node ./op/official-runner.ts run --kind=<baseline|candidate-comparison> --approval=<approval> --event=<event>",
+    "usage: node ./op/cli/official-runner.ts run --kind=<baseline|candidate-comparison> --approval=<approval> --event=<event>",
     "  [--base=main] [--candidate=<ref>] [--report=<path>] [--context=<path>] [--manifest=<path>]",
     "  [--calibration=<path>] [--time=300] [--warmup-time=150] [--warmup-iterations=5] [--repeats=1] [--min-change=0.02]",
     "  [--profile-capture=auto|off] [--profile-mode=both|cpu|heap] [--profile-scenario=<scenario>] [--profile-limit=1]",
-    "usage: node ./op/official-runner.ts publish [--context=op/.artifacts/official-benchmark-run-context.json]",
+    "usage: node ./op/cli/official-runner.ts publish [--context=op/.artifacts/official-benchmark-run-context.json]",
   ].join("\n");
 }
 

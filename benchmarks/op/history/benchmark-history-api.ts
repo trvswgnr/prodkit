@@ -11,19 +11,19 @@ import {
   type OfficialBenchmarkReport,
   type OfficialScenarioResult,
   type ScenarioDiff,
-} from "./official-report.ts";
-import { parseNonNegativeNumber, parseRecord, parseString } from "./json-parse.ts";
+} from "../reports/official-report.ts";
+import { parseNonNegativeNumber, parseRecord, parseString } from "../reports/json-parse.ts";
 import {
   BENCHMARK_PUBLISH_MANIFEST_VERSION,
   type BenchmarkPublishMode,
   type BenchmarkPublishManifest,
   type BenchmarkPublishedArtifact,
-} from "./publish-artifacts.ts";
+} from "../cli/publish-artifacts.ts";
 import {
   TRUSTED_REF_COMPARISON_REPORT_VERSION,
   parseTrustedRefComparisonReport,
   type TrustedRefComparisonReport,
-} from "./trusted-ref-comparison-report.ts";
+} from "../reports/trusted-ref-comparison-report.ts";
 import {
   benchmarkHistoryDashboardResponse,
   isBenchmarkHistoryDashboardRoute,

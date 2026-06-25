@@ -5,11 +5,11 @@ import {
   asComparisonPolicy,
   createComparisonScenarios,
   runOverheadRatioBench,
-} from "./comparison-matrix.ts";
-import { asBenchOp } from "./harness.ts";
+} from "./runtime/comparison-matrix.ts";
+import { asBenchOp } from "./runtime/harness.ts";
 import { Op } from "@prodkit/op";
 import { Policy } from "@prodkit/op/policy";
-import { runOpFlatLoop, runOpSequentialRuns } from "./scenarios.ts";
+import { runOpFlatLoop, runOpSequentialRuns } from "./runtime/scenarios.ts";
 
 const op = asBenchOp(Op);
 const comparisonScenarios = createComparisonScenarios({

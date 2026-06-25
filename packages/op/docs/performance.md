@@ -10,7 +10,7 @@ usually dominated by I/O, so relative overhead matters less once network or data
 in the picture.
 
 The harness in [`benchmarks/op`](https://github.com/trvswgnr/prodkit/blob/main/benchmarks/op)
-uses a shared [`comparison-matrix.ts`](https://github.com/trvswgnr/prodkit/blob/main/benchmarks/op/comparison-matrix.ts)
+uses a shared [`comparison-matrix.ts`](https://github.com/trvswgnr/prodkit/blob/main/benchmarks/op/runtime/comparison-matrix.ts)
 for native baselines, `@prodkit/op`, and comparison libraries. Scenario definitions and
 contributor commands live in
 [`benchmarks/op/README.md`](https://github.com/trvswgnr/prodkit/blob/main/benchmarks/op/README.md).
@@ -22,7 +22,7 @@ contributor commands live in
 Captured on **2026-06-20** at commit [`7677cf2`](https://github.com/trvswgnr/prodkit/commit/7677cf282dde949d1e03dbb0b7ecde1041aee8f9) (`@prodkit/op@0.2.2`).
 Environment: v24.14.1, darwin/arm64.
 Versus-native ratios use native ops/sec divided by library ops/sec (values above 1x mean slower than native).
-Add library columns by extending `IMPLEMENTATION_COLUMNS` and scenario implementations in `benchmarks/op/comparison-matrix.ts`.
+Add library columns by extending `IMPLEMENTATION_COLUMNS` and scenario implementations in `benchmarks/op/runtime/comparison-matrix.ts`.
 
 ### Runtime overhead
 

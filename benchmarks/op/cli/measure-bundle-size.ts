@@ -3,7 +3,7 @@ import path from "node:path";
 import process from "node:process";
 import { gzipSync } from "node:zlib";
 import { build } from "esbuild";
-import { getRepoRoot, resolveOpPackageDir } from "./harness.ts";
+import { getRepoRoot, resolveOpPackageDir } from "../runtime/harness.ts";
 
 export type BundleSizeSample = {
   minBytes: number;

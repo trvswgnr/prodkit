@@ -2,18 +2,18 @@ import { createHash, createHmac } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { getRepoRoot, parseArgValue, resolveBenchmarkArtifact } from "./harness.ts";
-import { parseJsonFile, parseRecord, parseString } from "./json-parse.ts";
+import { getRepoRoot, parseArgValue, resolveBenchmarkArtifact } from "../runtime/harness.ts";
+import { parseJsonFile, parseRecord, parseString } from "../reports/json-parse.ts";
 import {
   OFFICIAL_BENCHMARK_REPORT_VERSION,
   parseOfficialBenchmarkReport,
   type BenchmarkArtifactRef,
   type OfficialBenchmarkReport,
-} from "./official-report.ts";
+} from "../reports/official-report.ts";
 import {
   TRUSTED_REF_COMPARISON_REPORT_VERSION,
   parseTrustedRefComparisonReport,
-} from "./trusted-ref-comparison-report.ts";
+} from "../reports/trusted-ref-comparison-report.ts";
 
 export const BENCHMARK_PUBLISH_MANIFEST_VERSION = "prodkit.benchmark-publish.v1" as const;
 
@@ -84,7 +84,7 @@ export type PublishBenchmarkArtifactsInput = {
 
 function usage(): string {
   return [
-    "usage: node ./op/publish-artifacts.ts --report=<report.json> [--dry-run]",
+    "usage: node ./op/cli/publish-artifacts.ts --report=<report.json> [--dry-run]",
     "  [--manifest=op/.artifacts/benchmark-publish-manifest.json]",
     "  [--prefix=<object-key-prefix>]",
     "  [--artifact=kind=<kind>,path=<path>[,contentType=<content-type>][,scenario=<scenario-key>][,implementation=<implementation-id>]]",

@@ -11,7 +11,7 @@ import {
   createComparisonScenarios,
   type ComparisonScenario,
   type ImplementationColumn,
-} from "./comparison-matrix.ts";
+} from "../runtime/comparison-matrix.ts";
 import {
   BENCHMARK_PROFILE_DIR,
   benchRunOptionSummary,
@@ -33,7 +33,7 @@ import {
   type EnvironmentReport,
   type RepeatedTinybenchRecord,
   type ResolvedBenchRunOptions,
-} from "./harness.ts";
+} from "../runtime/harness.ts";
 import {
   DEFAULT_MIN_MEANINGFUL_CHANGE_RATIO,
   OFFICIAL_BENCHMARK_REPORT_VERSION,
@@ -54,11 +54,11 @@ import {
   type OfficialBenchmarkReport,
   type OfficialScenarioResult,
   type ScenarioDiff,
-} from "./official-report.ts";
+} from "../reports/official-report.ts";
 import {
   TRUSTED_REF_COMPARISON_IMPLEMENTATION_ID,
   TRUSTED_REF_COMPARISON_REPORT_VERSION,
-} from "./trusted-ref-comparison-report.ts";
+} from "../reports/trusted-ref-comparison-report.ts";
 import type {
   RefComparisonSide,
   ScenarioExecutionOrderEntry,
@@ -71,12 +71,12 @@ import type {
   TrustedRefComparisonReport,
   TrustedRefComparisonSideReport,
   TrustedRefComparisonTargetFingerprint,
-} from "./trusted-ref-comparison-report.ts";
+} from "../reports/trusted-ref-comparison-report.ts";
 
 export {
   TRUSTED_REF_COMPARISON_IMPLEMENTATION_ID,
   TRUSTED_REF_COMPARISON_REPORT_VERSION,
-} from "./trusted-ref-comparison-report.ts";
+} from "../reports/trusted-ref-comparison-report.ts";
 export type {
   RefComparisonSide,
   ScenarioExecutionOrderEntry,
@@ -89,7 +89,7 @@ export type {
   TrustedRefComparisonReport,
   TrustedRefComparisonSideReport,
   TrustedRefComparisonTargetFingerprint,
-} from "./trusted-ref-comparison-report.ts";
+} from "../reports/trusted-ref-comparison-report.ts";
 
 const logger = console;
 const GIT_COMMIT_PATTERN = /^[0-9a-f]{40}$/;
@@ -144,7 +144,7 @@ type BuildOfficialReportInput = {
 
 function usage(): string {
   return [
-    "usage: node ./op/compare-refs.ts --base=<ref> --candidate=<ref>",
+    "usage: node ./op/cli/compare-refs.ts --base=<ref> --candidate=<ref>",
     "  [--report=op/.artifacts/trusted-ref-comparison-report.json]",
     "  [--calibration=op/.artifacts/runner-calibration-report.json]",
     "  [--time=300] [--warmup-time=150] [--warmup-iterations=5] [--repeats=1]",

@@ -13,7 +13,7 @@ import {
   runTinybenchVariant,
   writeJsonReport,
   type TinybenchRecord,
-} from "../op/harness.ts";
+} from "../op/runtime/harness.ts";
 import {
   ensureOpLintProfileDir,
   OP_LINT_PROFILE_DIR,

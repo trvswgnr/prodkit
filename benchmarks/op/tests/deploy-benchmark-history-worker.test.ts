@@ -8,21 +8,21 @@ import {
   createBenchmarkHistoryWorkerWranglerConfig,
   deployBenchmarkHistoryWorker,
   parseBenchmarkHistoryWorkerDeployArgs,
-} from "../deploy-benchmark-history-worker.ts";
+} from "../history/deploy-benchmark-history-worker.ts";
 
 describe("deploy benchmark history Worker", () => {
   it("builds a Wrangler config for the public dashboard Worker", () => {
     expect(
       createBenchmarkHistoryWorkerWranglerConfig({
         name: "prodkit-benchmarks",
-        main: "../benchmark-history-api.ts",
+        main: "../history/benchmark-history-api.ts",
         compatibilityDate: "2026-06-25",
         kvNamespaceId: "kv-namespace-id",
         artifactBaseUrl: "https://benchmarks.example.com/artifacts",
       }),
     ).toMatchObject({
       name: "prodkit-benchmarks",
-      main: "../benchmark-history-api.ts",
+      main: "../history/benchmark-history-api.ts",
       compatibility_date: "2026-06-25",
       compatibility_flags: ["nodejs_compat"],
       workers_dev: true,
@@ -78,7 +78,7 @@ describe("deploy benchmark history Worker", () => {
       );
 
       await expect(readFile(configPath, "utf8").then(JSON.parse)).resolves.toMatchObject({
-        main: "../benchmark-history-api.ts",
+        main: "../history/benchmark-history-api.ts",
         kv_namespaces: [
           {
             id: "kv-namespace-id",

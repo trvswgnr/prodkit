@@ -4,15 +4,15 @@ import {
   asComparisonPolicy,
   createComparisonScenarios,
   type ComparisonRuntime,
-} from "../comparison-matrix.ts";
+} from "../runtime/comparison-matrix.ts";
 import {
   asBenchOp,
   getRepoRoot,
   importOpModule,
   resolveOpPackageDir,
   type BenchOp,
-} from "../harness.ts";
-import { createProfileScenarios } from "../profile.ts";
+} from "../runtime/harness.ts";
+import { createProfileScenarios } from "../cli/profile.ts";
 import {
   COMPOSE_STEPS,
   runAsyncChain,
@@ -22,7 +22,7 @@ import {
   runOpYieldChain,
   runRawSyncYieldStarChain,
   runSingleOpRun,
-} from "../scenarios.ts";
+} from "../runtime/scenarios.ts";
 import {
   runEffectAll,
   runEffectFirstSuccess,
@@ -31,7 +31,7 @@ import {
   runEffectSingleValue,
   runEffectTimeout,
   runEffectYieldChain,
-} from "../effect-scenarios.ts";
+} from "../runtime/effect-scenarios.ts";
 import { Op as WorkspaceOp } from "@prodkit/op";
 import { Policy as WorkspacePolicy } from "@prodkit/op/policy";
 

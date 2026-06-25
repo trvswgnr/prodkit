@@ -4,12 +4,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { cpus, release as osRelease, totalmem, type as osType } from "node:os";
 import path from "node:path";
 import { isRecordLike } from "@prodkit/shared/runtime";
-import type { ImplementationColumn } from "./comparison-matrix.ts";
+import type { ImplementationColumn } from "../runtime/comparison-matrix.ts";
 import type {
   EnvironmentReport,
   RepeatedTinybenchRecord,
   ResolvedBenchRunOptions,
-} from "./harness.ts";
+} from "../runtime/harness.ts";
 import {
   parseBoolean,
   parseError,
@@ -1168,7 +1168,7 @@ function parseDiffCliArgs(argv: readonly string[]): {
   const [basePath, candidatePath] = positional;
   if (positional.length !== 2 || basePath === undefined || candidatePath === undefined) {
     throw new Error(
-      "usage: node ./op/official-report.ts diff <base-report.json> <candidate-report.json> [--implementation=op] [--min-change=0.02]",
+      "usage: node ./op/reports/official-report.ts diff <base-report.json> <candidate-report.json> [--implementation=op] [--min-change=0.02]",
     );
   }
   const implementationId =
@@ -1192,7 +1192,7 @@ export async function runOfficialReportCli(argv: readonly string[] = process.arg
   const [command, ...rest] = argv;
   if (command !== "diff") {
     throw new Error(
-      "usage: node ./op/official-report.ts diff <base-report.json> <candidate-report.json>",
+      "usage: node ./op/reports/official-report.ts diff <base-report.json> <candidate-report.json>",
     );
   }
 

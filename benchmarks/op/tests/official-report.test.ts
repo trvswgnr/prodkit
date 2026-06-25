@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ImplementationColumn } from "../comparison-matrix.ts";
-import { getRepoRoot, type RepeatedTinybenchRecord } from "../harness.ts";
+import type { ImplementationColumn } from "../runtime/comparison-matrix.ts";
+import { getRepoRoot, type RepeatedTinybenchRecord } from "../runtime/harness.ts";
 import {
   BENCHMARK_CALIBRATION_REPORT_VERSION,
   BenchmarkReportCompatibilityError,
@@ -17,8 +17,8 @@ import {
   type BenchmarkCalibrationReport,
   type BenchmarkRunnerIdentity,
   type OfficialBenchmarkReport,
-} from "../official-report.ts";
-import { BenchmarkParseError } from "../json-parse.ts";
+} from "../reports/official-report.ts";
+import { BenchmarkParseError } from "../reports/json-parse.ts";
 
 const benchOptions = {
   time: 300,

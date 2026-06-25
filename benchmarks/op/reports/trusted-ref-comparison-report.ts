@@ -8,7 +8,7 @@ import {
   parseArtifactRef,
   type OfficialBenchmarkReport,
 } from "./official-report.ts";
-import type { ResolvedBenchRunOptions } from "./harness.ts";
+import type { ResolvedBenchRunOptions } from "../runtime/harness.ts";
 import {
   parseError,
   parseFiniteNumber,

@@ -55,7 +55,7 @@ type BenchmarkHistoryWorkerDeployOptions = {
 
 function usage(): string {
   return [
-    "usage: node ./op/deploy-benchmark-history-worker.ts [--dry-run] [--config=<path>]",
+    "usage: node ./op/history/deploy-benchmark-history-worker.ts [--dry-run] [--config=<path>]",
     "  [--name=<worker-name>] --kv-namespace-id=<cloudflare-kv-namespace-id>",
     "  [--artifact-base-url=<public-r2-base-url>] [--compatibility-date=YYYY-MM-DD]",
     "",
@@ -85,7 +85,12 @@ function normalizeBenchmarkHistoryWorkerDeployArgv(argv: readonly string[]): rea
 }
 
 function defaultConfigPath(): string {
-  return path.join(path.dirname(fileURLToPath(import.meta.url)), ".artifacts", "wrangler.json");
+  return path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "..",
+    ".artifacts",
+    "wrangler.json",
+  );
 }
 
 export function createBenchmarkHistoryWorkerWranglerConfig(
@@ -128,7 +133,7 @@ export function parseBenchmarkHistoryWorkerDeployArgs(
       optionalNonEmpty(argValue(normalizedArgv, "--name=")) ??
       optionalNonEmpty(env.PRODKIT_BENCHMARK_HISTORY_WORKER_NAME) ??
       DEFAULT_BENCHMARK_HISTORY_WORKER_NAME,
-    main: "../benchmark-history-api.ts",
+    main: "../history/benchmark-history-api.ts",
     compatibilityDate:
       optionalNonEmpty(argValue(normalizedArgv, "--compatibility-date=")) ??
       DEFAULT_BENCHMARK_HISTORY_COMPATIBILITY_DATE,

@@ -13,7 +13,7 @@ import {
   type ImplementationId,
   type LibraryPairOutcome,
   type VsBaselineRatios,
-} from "./comparison-matrix.ts";
+} from "../runtime/comparison-matrix.ts";
 import {
   benchRunOptionSummary,
   formatNumber,
@@ -30,7 +30,7 @@ import {
   writeJsonReport,
   type RepeatedTinybenchRecord,
   type ResolvedBenchRunOptions,
-} from "./harness.ts";
+} from "../runtime/harness.ts";
 import {
   comparisonScenariosToOfficialResults,
   createOfficialBenchmarkReportFields,
@@ -39,7 +39,7 @@ import {
   readGitCommitMetadata,
   type ComparisonScenarioOfficialInput,
   type OfficialBenchmarkReport,
-} from "./official-report.ts";
+} from "../reports/official-report.ts";
 import { Op } from "@prodkit/op";
 import { Policy } from "@prodkit/op/policy";
 

@@ -4,7 +4,7 @@ import {
   asComparisonPolicy,
   createComparisonScenarios,
   type ComparisonScenario,
-} from "./comparison-matrix.ts";
+} from "../runtime/comparison-matrix.ts";
 import {
   benchRunOptionSummary,
   getRepoRoot,
@@ -20,7 +20,7 @@ import {
   writeJsonReport,
   type BenchRunOptions,
   type RepeatedTinybenchRecord,
-} from "./harness.ts";
+} from "../runtime/harness.ts";
 import {
   BENCHMARK_CALIBRATION_REPORT_VERSION,
   createDependencyFingerprint,
@@ -32,7 +32,7 @@ import {
   type BenchmarkCalibrationSampleSummary,
   type BenchmarkCalibrationScenarioSummary,
   type BenchmarkCalibrationThresholds,
-} from "./official-report.ts";
+} from "../reports/official-report.ts";
 import { Op } from "@prodkit/op";
 import { Policy } from "@prodkit/op/policy";
 
@@ -67,7 +67,7 @@ export type CalibrationScenarioSummaryInput = {
 
 function usage(): string {
   return [
-    "usage: node ./op/calibrate-runner.ts",
+    "usage: node ./op/cli/calibrate-runner.ts",
     "  [--report=op/.artifacts/runner-calibration-report.json]",
     "  [--samples=3]",
     "  [--micro-threshold=0.05] [--workflow-threshold=0.1]",

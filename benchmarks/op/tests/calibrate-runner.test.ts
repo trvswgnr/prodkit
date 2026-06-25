@@ -7,8 +7,8 @@ import {
   createCalibrationRecommendation,
   parseRunnerCalibrationArgs,
   summarizeCalibrationScenario,
-} from "../calibrate-runner.ts";
-import type { RepeatedTinybenchRecord } from "../harness.ts";
+} from "../cli/calibrate-runner.ts";
+import type { RepeatedTinybenchRecord } from "../runtime/harness.ts";
 
 function stats(hz: number, rme = 1): RepeatedTinybenchRecord {
   return {

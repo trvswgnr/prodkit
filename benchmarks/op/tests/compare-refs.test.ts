@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { ComparisonScenario } from "../comparison-matrix.ts";
-import type { RepeatedTinybenchRecord } from "../harness.ts";
+import type { ComparisonScenario } from "../runtime/comparison-matrix.ts";
+import type { RepeatedTinybenchRecord } from "../runtime/harness.ts";
 import {
   OFFICIAL_BENCHMARK_REPORT_VERSION,
   type BenchmarkArtifactRef,
   type BenchmarkRunnerIdentity,
   type OfficialBenchmarkReport,
-} from "../official-report.ts";
+} from "../reports/official-report.ts";
 import {
   TRUSTED_REF_COMPARISON_IMPLEMENTATION_ID,
   TRUSTED_REF_COMPARISON_REPORT_VERSION,
@@ -22,7 +22,7 @@ import {
   selectTrustedRefComparisonProfileScenarios,
   type TrustedRefComparisonCapturedProfileArtifact,
   type TrustedRefComparisonTargetFingerprint,
-} from "../compare-refs.ts";
+} from "../cli/compare-refs.ts";
 
 const benchOptions = {
   time: 300,

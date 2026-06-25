@@ -7,7 +7,7 @@ import {
   OFFICIAL_BENCHMARK_REPORT_VERSION,
   type BenchmarkDiff,
   type OfficialBenchmarkReport,
-} from "../official-report.ts";
+} from "../reports/official-report.ts";
 import {
   createBenchmarkPublishPlan,
   parsePublishArtifactArg,
@@ -15,8 +15,8 @@ import {
   resolveCloudflareR2PublishTarget,
   type BenchmarkPublishCliArgs,
   type CloudflareR2PublishTarget,
-} from "../publish-artifacts.ts";
-import { TRUSTED_REF_COMPARISON_REPORT_VERSION } from "../trusted-ref-comparison-report.ts";
+} from "../cli/publish-artifacts.ts";
+import { TRUSTED_REF_COMPARISON_REPORT_VERSION } from "../reports/trusted-ref-comparison-report.ts";
 
 const benchOptions = {
   time: 300,

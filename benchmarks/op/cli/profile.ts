@@ -7,7 +7,7 @@ import {
   createComparisonScenarios,
   runOverheadRatioBench,
   type ComparisonRuntime,
-} from "./comparison-matrix.ts";
+} from "../runtime/comparison-matrix.ts";
 import {
   asBenchOp,
   BENCHMARK_PROFILE_DIR,
@@ -34,7 +34,7 @@ import {
   type BenchRunOptions,
   type RepeatedTinybenchRecord,
   type ResolvedBenchRunOptions,
-} from "./harness.ts";
+} from "../runtime/harness.ts";
 import {
   createOfficialBenchmarkReportFields,
   createPackageMetadata,
@@ -43,8 +43,8 @@ import {
   readGitCommitMetadata,
   type OfficialBenchmarkReport,
   type ProfileScenarioOfficialInput,
-} from "./official-report.ts";
-import type { BenchOp } from "./scenarios.ts";
+} from "../reports/official-report.ts";
+import type { BenchOp } from "../runtime/scenarios.ts";
 import {
   runAsyncChain,
   runAsyncFnChain,
@@ -53,7 +53,7 @@ import {
   runOpYieldChain,
   runRawSyncYieldStarChain,
   runSingleOpRun,
-} from "./scenarios.ts";
+} from "../runtime/scenarios.ts";
 
 type ScenarioName = string;
 

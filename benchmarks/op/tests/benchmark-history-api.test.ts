@@ -5,17 +5,17 @@ import {
   KvBenchmarkHistoryIndex,
   type BenchmarkHistoryApiEnv,
   type BenchmarkHistoryKvNamespace,
-} from "../benchmark-history-api.ts";
+} from "../history/benchmark-history-api.ts";
 import {
   OFFICIAL_BENCHMARK_REPORT_VERSION,
   type BenchmarkDiff,
   type OfficialBenchmarkReport,
-} from "../official-report.ts";
+} from "../reports/official-report.ts";
 import {
   BENCHMARK_PUBLISH_MANIFEST_VERSION,
   type BenchmarkPublishManifest,
-} from "../publish-artifacts.ts";
-import { TRUSTED_REF_COMPARISON_REPORT_VERSION } from "../trusted-ref-comparison-report.ts";
+} from "../cli/publish-artifacts.ts";
+import { TRUSTED_REF_COMPARISON_REPORT_VERSION } from "../reports/trusted-ref-comparison-report.ts";
 
 const scenarioKey = "compose.opYieldChain";
 
