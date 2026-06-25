@@ -51,15 +51,17 @@ describe("deploy benchmark history Worker", () => {
     });
   });
 
-  it("writes config during dry run without invoking Wrangler", async () => {
+  it("writes config during dry run and asks Wrangler to validate it", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "prodkit-benchmark-worker-"));
     const configPath = path.join(dir, "wrangler.json");
+    const invocations: Array<{ configPath: string; cwd: string; mode: "deploy" | "dry-run" }> = [];
     try {
       const status = await deployBenchmarkHistoryWorker(
         ["--dry-run", `--config=${configPath}`, "--kv-namespace-id=kv-namespace-id"],
         {
-          runWrangler() {
-            throw new Error("wrangler should not run during dry run");
+          runWrangler(input) {
+            invocations.push(input);
+            return 0;
           },
         },
       );
@@ -72,6 +74,7 @@ describe("deploy benchmark history Worker", () => {
           },
         ],
       });
+      expect(invocations).toMatchObject([{ configPath, mode: "dry-run" }]);
       expect(status).toBe(0);
     } finally {
       await rm(dir, { recursive: true, force: true });

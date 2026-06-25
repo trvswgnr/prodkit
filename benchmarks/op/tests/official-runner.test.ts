@@ -154,6 +154,25 @@ describe("parseOfficialBenchmarkRunCliArgs", () => {
     });
   });
 
+  it("accepts a leading pnpm separator before the run stage", () => {
+    expect(
+      parseOfficialBenchmarkRunCliArgs([
+        "--",
+        "run",
+        "--kind=baseline",
+        "--approval=manual-baseline",
+        "--event=workflow_dispatch",
+        "--base=main",
+        "--profile-capture=off",
+      ]).run,
+    ).toMatchObject({
+      runKind: "baseline",
+      approval: "manual-baseline",
+      eventName: "workflow_dispatch",
+      baseRef: "main",
+    });
+  });
+
   it("defaults candidate comparisons to automatic profile capture", () => {
     expect(
       parseOfficialBenchmarkRunCliArgs([
@@ -175,6 +194,13 @@ describe("parseOfficialBenchmarkRunCliArgs", () => {
 
   it("parses publish with the default context path", () => {
     expect(parseOfficialBenchmarkRunCliArgs(["publish"])).toEqual({
+      stage: "publish",
+      contextPath: "op/.artifacts/official-benchmark-run-context.json",
+    });
+  });
+
+  it("accepts a leading pnpm separator before the publish stage", () => {
+    expect(parseOfficialBenchmarkRunCliArgs(["--", "publish"])).toEqual({
       stage: "publish",
       contextPath: "op/.artifacts/official-benchmark-run-context.json",
     });

@@ -275,7 +275,8 @@ pnpm --filter @prodkit/benchmarks run dashboard:deploy -- --kv-namespace-id=<nam
 ```
 
 The deploy script writes an account-specific Wrangler config under `benchmarks/op/.artifacts/`
-before invoking Wrangler, so Cloudflare namespace ids stay out of git. The Worker is published on a
+before invoking Wrangler, so Cloudflare namespace ids stay out of git. The `--dry-run` path asks
+Wrangler to bundle and validate the Worker without publishing it. The Worker is published on a
 `workers.dev` URL by default. Use that URL as `PRODKIT_BENCHMARK_HISTORY_API` for the official
 runner. Set `PRODKIT_BENCHMARK_ARTIFACT_BASE_URL` before deploy when the R2 bucket has a public
 artifact origin. The generated config enables Cloudflare `nodejs_compat` because the history API

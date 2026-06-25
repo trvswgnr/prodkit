@@ -110,6 +110,10 @@ function usage(): string {
   ].join("\n");
 }
 
+function normalizeOfficialBenchmarkCliArgv(argv: readonly string[]): readonly string[] {
+  return argv[0] === "--" ? argv.slice(1) : argv;
+}
+
 function isOfficialBenchmarkRunKind(value: string): value is OfficialBenchmarkRunKind {
   return value === "baseline" || value === "candidate-comparison";
 }
@@ -187,7 +191,7 @@ export function parseOfficialBenchmarkRunCliArgs(
   argv: readonly string[],
   env: NodeJS.ProcessEnv = process.env,
 ): OfficialBenchmarkRunCliArgs {
-  const [stage, ...rest] = argv;
+  const [stage, ...rest] = normalizeOfficialBenchmarkCliArgv(argv);
   if (stage !== "run" && stage !== "publish") {
     throw new Error(usage());
   }

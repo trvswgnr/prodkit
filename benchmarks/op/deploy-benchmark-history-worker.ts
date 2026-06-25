@@ -39,10 +39,18 @@ export type BenchmarkHistoryWorkerDeployArgs = BenchmarkHistoryWorkerConfigInput
   dryRun: boolean;
 };
 
+type BenchmarkHistoryWorkerDeployMode = "deploy" | "dry-run";
+
+type BenchmarkHistoryWorkerWranglerInvocation = {
+  configPath: string;
+  cwd: string;
+  mode: BenchmarkHistoryWorkerDeployMode;
+};
+
 type BenchmarkHistoryWorkerDeployOptions = {
   env?: NodeJS.ProcessEnv;
   cwd?: string;
-  runWrangler?: (configPath: string, cwd: string) => number;
+  runWrangler?: (input: BenchmarkHistoryWorkerWranglerInvocation) => number;
 };
 
 function usage(): string {
@@ -137,9 +145,11 @@ async function writeWranglerConfig(args: BenchmarkHistoryWorkerDeployArgs): Prom
   await writeFile(args.configPath, `${JSON.stringify(config, null, 2)}\n`);
 }
 
-function runWrangler(configPath: string, cwd: string): number {
-  const result = spawnSync("wrangler", ["deploy", "--config", configPath], {
-    cwd,
+function runWrangler(input: BenchmarkHistoryWorkerWranglerInvocation): number {
+  const argv = ["deploy", "--config", input.configPath];
+  if (input.mode === "dry-run") argv.push("--dry-run");
+  const result = spawnSync("wrangler", argv, {
+    cwd: input.cwd,
     stdio: "inherit",
   });
   return result.status ?? 1;
@@ -153,11 +163,15 @@ export async function deployBenchmarkHistoryWorker(
   const args = parseBenchmarkHistoryWorkerDeployArgs(argv, options.env);
   await writeWranglerConfig(args);
   logger.info(`Wrote benchmark history Worker config to ${args.configPath}`);
-  if (args.dryRun) {
-    logger.info("Dry run only. No Cloudflare deployment was attempted.");
-    return 0;
+  const status = (options.runWrangler ?? runWrangler)({
+    configPath: args.configPath,
+    cwd,
+    mode: args.dryRun ? "dry-run" : "deploy",
+  });
+  if (args.dryRun && status === 0) {
+    logger.info("Dry run only. Wrangler validated the Worker bundle without deploying.");
   }
-  return (options.runWrangler ?? runWrangler)(args.configPath, cwd);
+  return status;
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
