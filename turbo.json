@@ -7,31 +7,89 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**"],
-      "inputs": ["src/**/*.ts", "tsdown.config.ts", "tsconfig.json", "package.json"],
+      "inputs": [
+        "src/**/*.ts",
+        "tsdown.config.ts",
+        "tsconfig.json",
+        "package.json",
+        "$TURBO_ROOT$/packages/shared/runtime/**/*.ts",
+        "$TURBO_ROOT$/packages/shared/types/**/*.ts",
+        "$TURBO_ROOT$/packages/shared/types/**/*.d.ts",
+        "$TURBO_ROOT$/packages/shared/config/tsconfig.publishable.json",
+        "$TURBO_ROOT$/packages/shared/config/tsdown.publishable.ts"
+      ],
+      "outputLogs": "new-only"
+    },
+    "@prodkit/shared#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"],
+      "inputs": [
+        "runtime/**/*.ts",
+        "types/**/*.ts",
+        "types/**/*.d.ts",
+        "config/**/*.ts",
+        "config/**/*.json",
+        "tsconfig.json",
+        "package.json"
+      ],
       "outputLogs": "new-only"
     },
     "test": {
       "dependsOn": ["^build", "build"],
-      "inputs": ["**/*.ts", "vitest.config.ts", "tsconfig.json", "package.json"],
+      "inputs": [
+        "**/*.ts",
+        "vitest.config.ts",
+        "tsconfig.json",
+        "package.json",
+        "$TURBO_ROOT$/packages/shared/runtime/**/*.ts",
+        "$TURBO_ROOT$/packages/shared/types/**/*.ts",
+        "$TURBO_ROOT$/packages/shared/types/**/*.d.ts",
+        "$TURBO_ROOT$/packages/shared/config/tsconfig.publishable.json",
+        "$TURBO_ROOT$/packages/shared/config/vitest.publishable.ts"
+      ],
       "outputLogs": "new-only"
     },
     "@prodkit/benchmarks#test": {
       "dependsOn": ["@prodkit/op-lint#test", "^build", "build"],
-      "inputs": ["**/*.ts", "vitest.config.ts", "tsconfig.json", "package.json"],
+      "inputs": [
+        "**/*.ts",
+        "vitest.config.ts",
+        "tsconfig.json",
+        "package.json",
+        "$TURBO_ROOT$/packages/shared/runtime/**/*.ts"
+      ],
       "outputLogs": "new-only"
     },
     "typecheck": {
       "dependsOn": ["^build"],
-      "inputs": ["**/*.ts", "tsconfig.json"],
+      "inputs": [
+        "**/*.ts",
+        "tsconfig.json",
+        "$TURBO_ROOT$/packages/shared/runtime/**/*.ts",
+        "$TURBO_ROOT$/packages/shared/types/**/*.ts",
+        "$TURBO_ROOT$/packages/shared/types/**/*.d.ts",
+        "$TURBO_ROOT$/packages/shared/config/tsconfig.publishable.json"
+      ],
       "outputLogs": "new-only"
     },
     "@prodkit/benchmarks#typecheck": {
       "dependsOn": ["@prodkit/op-lint#test", "^build"],
-      "inputs": ["**/*.ts", "tsconfig.json"],
+      "inputs": [
+        "**/*.ts",
+        "tsconfig.json",
+        "$TURBO_ROOT$/packages/shared/runtime/**/*.ts"
+      ],
       "outputLogs": "new-only"
     },
     "lint": {
-      "inputs": ["**/*.ts", "tsconfig.json", "package.json"],
+      "inputs": [
+        "**/*.ts",
+        "tsconfig.json",
+        "package.json",
+        "$TURBO_ROOT$/packages/shared/runtime/**/*.ts",
+        "$TURBO_ROOT$/packages/shared/types/**/*.ts",
+        "$TURBO_ROOT$/packages/shared/types/**/*.d.ts"
+      ],
       "outputLogs": "new-only"
     },
     "fmt": {
@@ -39,7 +97,13 @@
       "outputLogs": "new-only"
     },
     "fmt:check": {
-      "inputs": ["**/*.ts"],
+      "inputs": [
+        "**/*.ts",
+        "$TURBO_ROOT$/packages/shared/runtime/**/*.ts",
+        "$TURBO_ROOT$/packages/shared/types/**/*.ts",
+        "$TURBO_ROOT$/packages/shared/types/**/*.d.ts",
+        "$TURBO_ROOT$/packages/shared/config/**/*.ts"
+      ],
       "outputLogs": "new-only"
     },
     "smoke": {

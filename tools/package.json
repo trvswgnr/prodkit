@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "gate": "TURBO_PRINT_VERSION_DISABLED=1 pnpm -w exec turbo run build typecheck test lint fmt:check --log-order=grouped && pnpm run gate:checks && TURBO_PRINT_VERSION_DISABLED=1 pnpm -w exec turbo run smoke --filter=@prodkit/tools --log-order=grouped",
-    "gate:checks": "pnpm run adr:check && pnpm run changelog:api:check && pnpm run release:check && pnpm run api:manifest:check && pnpm run invariants:check && pnpm run architecture:check && pnpm run runnable-gating:check && pnpm run docs:check",
+    "gate:checks": "pnpm run adr:check && pnpm run changelog:api:check && pnpm run release:check && pnpm run api:manifest:check && pnpm run invariants:check && pnpm run architecture:check && pnpm run runnable-gating:check && pnpm run turbo-inputs:check && pnpm run docs:check",
     "examples:smoke:pack": "node ./smoke/run-examples-smoke.ts pack",
     "examples:smoke:github": "node ./smoke/run-examples-smoke.ts github",
     "examples:smoke:npm": "node ./smoke/run-examples-smoke.ts npm",
@@ -24,6 +24,7 @@
     "invariants:check": "node ./checks/check-op-invariants-md.ts",
     "architecture:check": "node --test ./checks/check-runtime-architecture.test.ts && node ./checks/check-runtime-architecture.ts",
     "runnable-gating:check": "node --test ./checks/check-runnable-gating-contract.test.ts && node ./checks/check-runnable-gating-contract.ts",
+    "turbo-inputs:check": "node ./checks/check-turbo-shared-inputs.ts",
     "docs:check": "node --test ./checks/check-public-docs.test.ts && node ./checks/check-public-docs.ts",
     "adr:sync": "node ./checks/sync-adr-index.ts --write",
     "changelog:check": "node ./release/check-changelog-version.ts",
