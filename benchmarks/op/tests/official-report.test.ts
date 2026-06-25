@@ -4,21 +4,21 @@ import { getRepoRoot, type RepeatedTinybenchRecord } from "../harness.ts";
 import {
   BENCHMARK_CALIBRATION_REPORT_VERSION,
   BenchmarkReportCompatibilityError,
-  BenchmarkReportValidationError,
   OFFICIAL_BENCHMARK_REPORT_VERSION,
   comparisonScenariosToOfficialResults,
   createOfficialBenchmarkReportFields,
   createRunnerIdentity,
   diffOfficialBenchmarkReports,
+  parseBenchmarkCalibrationReport,
+  parseOfficialBenchmarkReport,
   profileScenariosToOfficialResults,
   scenarioDiffVerdict,
-  validateBenchmarkCalibrationReport,
-  validateOfficialBenchmarkReport,
   type BenchmarkCalibrationAttachment,
   type BenchmarkCalibrationReport,
   type BenchmarkRunnerIdentity,
   type OfficialBenchmarkReport,
 } from "../official-report.ts";
+import { BenchmarkParseError } from "../json-parse.ts";
 
 const benchOptions = {
   time: 300,
@@ -228,9 +228,9 @@ function firstScenario(input: OfficialBenchmarkReport) {
   return first;
 }
 
-describe("official benchmark report validation", () => {
+describe("official benchmark report parsing", () => {
   it("accepts a complete official report", () => {
-    expect(validateOfficialBenchmarkReport(report()).run.id).toBe("comparison-run");
+    expect(parseOfficialBenchmarkReport(report()).run.id).toBe("comparison-run");
   });
 
   it("creates official reports with runner metadata", () => {
@@ -286,7 +286,7 @@ describe("official benchmark report validation", () => {
 
   it("accepts older official reports that do not have expanded runner metadata", () => {
     const legacy = report();
-    const parsed = validateOfficialBenchmarkReport({
+    const parsed = parseOfficialBenchmarkReport({
       ...legacy,
       runner: {
         id: "legacy-runner",
@@ -302,11 +302,11 @@ describe("official benchmark report validation", () => {
 
   it("rejects unsupported schema versions", () => {
     expect(() =>
-      validateOfficialBenchmarkReport({
+      parseOfficialBenchmarkReport({
         ...report(),
         schemaVersion: "prodkit.benchmark-report.v0",
       }),
-    ).toThrow(BenchmarkReportValidationError);
+    ).toThrow(BenchmarkParseError);
   });
 
   it("reports invalid scenario statistics", () => {
@@ -325,11 +325,11 @@ describe("official benchmark report validation", () => {
       ],
     };
 
-    expect(() => validateOfficialBenchmarkReport(invalid)).toThrow("stats.hz");
+    expect(() => parseOfficialBenchmarkReport(invalid)).toThrow("stats.hz");
   });
 
   it("validates attached runner calibration summaries", () => {
-    const parsed = validateOfficialBenchmarkReport({
+    const parsed = parseOfficialBenchmarkReport({
       ...report(),
       calibration: calibrationAttachment(),
     });
@@ -338,9 +338,9 @@ describe("official benchmark report validation", () => {
   });
 });
 
-describe("runner calibration report validation", () => {
+describe("runner calibration report parsing", () => {
   it("accepts a complete calibration report", () => {
-    const parsed = validateBenchmarkCalibrationReport(calibrationReport());
+    const parsed = parseBenchmarkCalibrationReport(calibrationReport());
 
     expect(parsed.schemaVersion).toBe(BENCHMARK_CALIBRATION_REPORT_VERSION);
     expect(parsed.runner.id).toBe("test-runner");
@@ -349,7 +349,7 @@ describe("runner calibration report validation", () => {
 
   it("rejects invalid calibration recommendations", () => {
     expect(() =>
-      validateBenchmarkCalibrationReport({
+      parseBenchmarkCalibrationReport({
         ...calibrationReport(),
         recommendations: {
           ...calibrationReport().recommendations,
@@ -359,7 +359,7 @@ describe("runner calibration report validation", () => {
           },
         },
       }),
-    ).toThrow(BenchmarkReportValidationError);
+    ).toThrow(BenchmarkParseError);
   });
 });
 

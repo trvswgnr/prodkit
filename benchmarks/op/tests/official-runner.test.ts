@@ -7,8 +7,8 @@ import {
   assertTrustedRunPolicy,
   createOfficialBenchmarkRunPlan,
   parseOfficialBenchmarkRunCliArgs,
+  parseOfficialBenchmarkRunContext,
   publishOfficialBenchmarkRun,
-  validateOfficialBenchmarkRunContext,
   type OfficialBenchmarkRunArgs,
   type OfficialBenchmarkRunContext,
 } from "../official-runner.ts";
@@ -310,14 +310,14 @@ describe("official benchmark run plan", () => {
   });
 });
 
-describe("validateOfficialBenchmarkRunContext", () => {
-  it("validates the persisted run context", () => {
+describe("parseOfficialBenchmarkRunContext", () => {
+  it("parses the persisted run context", () => {
     const value = context({
       reportPath: "op/.artifacts/comparison-report.json",
       manifestPath: "op/.artifacts/benchmark-publish-manifest.json",
     });
 
-    expect(validateOfficialBenchmarkRunContext(value)).toEqual(value);
+    expect(parseOfficialBenchmarkRunContext(value)).toEqual(value);
   });
 });
 

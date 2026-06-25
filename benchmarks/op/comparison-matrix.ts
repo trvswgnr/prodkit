@@ -7,7 +7,7 @@ import {
   runEffectTimeout,
   runEffectYieldChain,
 } from "./effect-scenarios.ts";
-import { asBenchOp, isRecord } from "./harness.ts";
+import { asBenchOp } from "./harness.ts";
 import {
   CONCURRENCY_CHILDREN,
   RETRY_ATTEMPTS,
@@ -16,7 +16,7 @@ import {
   TIMEOUT_BUDGET_MS,
   type RunResult,
 } from "./scenarios.ts";
-import { unsafeCoerce } from "@prodkit/shared/runtime";
+import { isRecordLike, unsafeCoerce } from "@prodkit/shared/runtime";
 
 export { CONCURRENCY_CHILDREN, RETRY_ATTEMPTS, TIMEOUT_BUDGET_MS } from "./scenarios.ts";
 
@@ -101,7 +101,7 @@ function hasFunctionField(input: object, key: PropertyKey): boolean {
 export function asComparisonOp(input: unknown): ComparisonOp {
   asBenchOp(input);
   if (
-    !isRecord(input) ||
+    !isRecordLike(input) ||
     !hasFunctionField(input, "all") ||
     !hasFunctionField(input, "any") ||
     !hasFunctionField(input, "race") ||
@@ -115,7 +115,7 @@ export function asComparisonOp(input: unknown): ComparisonOp {
 
 export function asComparisonPolicy(input: unknown): ComparisonPolicy {
   if (
-    !isRecord(input) ||
+    !isRecordLike(input) ||
     !hasFunctionField(input, "retry") ||
     !hasFunctionField(input, "timeout")
   ) {

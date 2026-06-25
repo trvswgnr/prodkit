@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   OFFICIAL_BENCHMARK_REPORT_VERSION,
+  type BenchmarkDiff,
   type OfficialBenchmarkReport,
 } from "../official-report.ts";
 import {
@@ -12,10 +13,10 @@ import {
   parsePublishArtifactArg,
   publishBenchmarkArtifacts,
   resolveCloudflareR2PublishTarget,
-  TRUSTED_REF_COMPARISON_REPORT_VERSION,
   type BenchmarkPublishCliArgs,
   type CloudflareR2PublishTarget,
 } from "../publish-artifacts.ts";
+import { TRUSTED_REF_COMPARISON_REPORT_VERSION } from "../trusted-ref-comparison-report.ts";
 
 const benchOptions = {
   time: 300,
@@ -169,13 +170,65 @@ async function writeTrustedRefComparisonReportFixture(repoRoot: string): Promise
     ".artifacts",
     "trusted-ref-comparison-report.json",
   );
+  const diff: BenchmarkDiff = {
+    kind: "comparison",
+    implementationId: "op",
+    baseRun: baseReport.run,
+    candidateRun: candidateReport.run,
+    scenarios: [
+      {
+        key: "compose.opYieldChain",
+        label: "compose.opYieldChain",
+        implementationId: "op",
+        baseHz: 100,
+        candidateHz: 125,
+        deltaRatio: 0.25,
+        combinedNoiseRatio: 0.01,
+        noiseThresholdRatio: 0.02,
+        verdict: "improvement",
+      },
+    ],
+    summary: {
+      improvement: 1,
+      regression: 0,
+      inconclusive: 0,
+    },
+  };
   const trustedReport = {
     schemaVersion: TRUSTED_REF_COMPARISON_REPORT_VERSION,
+    generatedAt: "2026-06-23T12:02:00.000Z",
+    implementationId: "op",
+    benchOptions,
+    scenarioOrder: [{ scenarioKey: "compose.opYieldChain", first: "base" }],
     base: {
+      ref: "main",
+      sha: baseReport.commit.headSha,
+      packageVersion: "0.2.2",
+      targetFingerprint: {
+        algorithm: "sha256",
+        digest: "1".repeat(64),
+        sources: ["dist/index.mjs"],
+      },
       report: baseReport,
     },
     candidate: {
+      ref: "feature/perf",
+      sha: candidateReport.commit.headSha,
+      packageVersion: "0.2.2",
+      targetFingerprint: {
+        algorithm: "sha256",
+        digest: "2".repeat(64),
+        sources: ["dist/index.mjs"],
+      },
       report: candidateReport,
+    },
+    diff,
+    profile: {
+      capture: "off",
+      mode: "both",
+      limit: 1,
+      selections: [],
+      artifacts: [],
     },
   };
   await writeFile(trustedReportPath, JSON.stringify(trustedReport, null, 2) + "\n", "utf8");

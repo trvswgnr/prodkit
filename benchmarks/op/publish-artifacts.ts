@@ -3,22 +3,24 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getRepoRoot, parseArgValue, resolveBenchmarkArtifact } from "./harness.ts";
+import { parseJsonFile, parseRecord, parseString } from "./json-parse.ts";
 import {
   OFFICIAL_BENCHMARK_REPORT_VERSION,
-  validateOfficialBenchmarkReport,
+  parseOfficialBenchmarkReport,
   type BenchmarkArtifactRef,
   type OfficialBenchmarkReport,
 } from "./official-report.ts";
+import {
+  TRUSTED_REF_COMPARISON_REPORT_VERSION,
+  parseTrustedRefComparisonReport,
+} from "./trusted-ref-comparison-report.ts";
 
 export const BENCHMARK_PUBLISH_MANIFEST_VERSION = "prodkit.benchmark-publish.v1" as const;
-export const TRUSTED_REF_COMPARISON_REPORT_VERSION = "prodkit.benchmark-ref-comparison.v1" as const;
 
 const DEFAULT_MANIFEST_NAME = "benchmark-publish-manifest.json";
 const R2_REGION = "auto";
 const R2_SERVICE = "s3";
 const logger = console;
-
-type JsonRecord = Record<PropertyKey, unknown>;
 
 export type BenchmarkPublishMode = "dry-run" | "upload";
 
@@ -87,28 +89,6 @@ function usage(): string {
     "  [--prefix=<object-key-prefix>]",
     "  [--artifact=kind=<kind>,path=<path>[,contentType=<content-type>][,scenario=<scenario-key>][,implementation=<implementation-id>]]",
   ].join("\n");
-}
-
-function isRecord(value: unknown): value is JsonRecord {
-  return (typeof value === "object" || typeof value === "function") && value !== null;
-}
-
-function readRecord(value: unknown, location: string): JsonRecord {
-  if (!isRecord(value)) {
-    throw new Error(`${location}: expected object`);
-  }
-  return value;
-}
-
-function readString(value: unknown, location: string): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new Error(`${location}: expected non-empty string`);
-  }
-  return value;
-}
-
-function readJsonFile(filePath: string): Promise<unknown> {
-  return readFile(filePath, "utf8").then((raw) => JSON.parse(raw));
 }
 
 function normalizeEndpoint(endpoint: string): string {
@@ -333,24 +313,6 @@ function trustedReportObjectKey(input: {
   ]);
 }
 
-function readTrustedRefComparisonReport(input: unknown): {
-  schemaVersion: typeof TRUSTED_REF_COMPARISON_REPORT_VERSION;
-  baseReport: OfficialBenchmarkReport;
-  candidateReport: OfficialBenchmarkReport;
-} {
-  const record = readRecord(input, "report");
-  if (record.schemaVersion !== TRUSTED_REF_COMPARISON_REPORT_VERSION) {
-    throw new Error(`report.schemaVersion: expected ${TRUSTED_REF_COMPARISON_REPORT_VERSION}`);
-  }
-  const base = readRecord(record.base, "report.base");
-  const candidate = readRecord(record.candidate, "report.candidate");
-  return {
-    schemaVersion: TRUSTED_REF_COMPARISON_REPORT_VERSION,
-    baseReport: validateOfficialBenchmarkReport(base.report),
-    candidateReport: validateOfficialBenchmarkReport(candidate.report),
-  };
-}
-
 function withObjectKey(
   artifact: BenchmarkArtifactRef,
   objectKey: string,
@@ -467,14 +429,14 @@ export async function createBenchmarkPublishPlan(input: {
   extraArtifacts: readonly BenchmarkArtifactRef[];
   now: Date;
 }): Promise<BenchmarkPublishPlan> {
-  const rawReport = await readJsonFile(input.reportPath);
-  const record = readRecord(rawReport, "report");
-  const reportSchemaVersion = readString(record.schemaVersion, "report.schemaVersion");
+  const rawReport = await parseJsonFile(input.reportPath);
+  const record = parseRecord(rawReport, "report");
+  const reportSchemaVersion = parseString(record.schemaVersion, "report.schemaVersion");
   let uploads: BenchmarkPublishPlan["uploads"];
   let runIds: string[];
 
   if (reportSchemaVersion === OFFICIAL_BENCHMARK_REPORT_VERSION) {
-    const officialReport = validateOfficialBenchmarkReport(rawReport);
+    const officialReport = parseOfficialBenchmarkReport(rawReport);
     uploads = await officialReportUploads({
       repoRoot: input.repoRoot,
       reportPath: input.reportPath,
@@ -484,15 +446,18 @@ export async function createBenchmarkPublishPlan(input: {
     });
     runIds = [officialReport.run.id];
   } else if (reportSchemaVersion === TRUSTED_REF_COMPARISON_REPORT_VERSION) {
-    const trustedReport = readTrustedRefComparisonReport(rawReport);
+    const trustedReport = parseTrustedRefComparisonReport(rawReport);
     uploads = await trustedRefComparisonUploads({
       repoRoot: input.repoRoot,
       reportPath: input.reportPath,
-      report: trustedReport,
+      report: {
+        baseReport: trustedReport.base.report,
+        candidateReport: trustedReport.candidate.report,
+      },
       target: input.target,
       extraArtifacts: input.extraArtifacts,
     });
-    runIds = [trustedReport.baseReport.run.id, trustedReport.candidateReport.run.id];
+    runIds = [trustedReport.base.report.run.id, trustedReport.candidate.report.run.id];
   } else {
     throw new Error(
       `Unsupported benchmark report schema "${reportSchemaVersion}". Expected ${OFFICIAL_BENCHMARK_REPORT_VERSION} or ${TRUSTED_REF_COMPARISON_REPORT_VERSION}.`,

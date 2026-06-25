@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   getRepoRoot,
@@ -18,6 +18,13 @@ import {
   type BenchmarkPublishManifest,
   type PublishBenchmarkArtifactsInput,
 } from "./publish-artifacts.ts";
+import {
+  parseJsonFile,
+  parsePositiveInteger,
+  parseRecord,
+  parseString,
+  parseStringArray,
+} from "./json-parse.ts";
 
 export const OFFICIAL_BENCHMARK_RUN_CONTEXT_VERSION = "prodkit.official-benchmark-run.v1" as const;
 
@@ -391,71 +398,39 @@ export async function runOfficialBenchmarkReport(args: OfficialBenchmarkRunArgs)
   logger.info(`Wrote official benchmark run context: ${path.resolve(args.contextPath)}`);
 }
 
-function readString(value: unknown, location: string): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new Error(`${location}: expected non-empty string`);
-  }
-  return value;
-}
-
-function readStringArray(value: unknown, location: string): string[] {
-  if (!Array.isArray(value)) {
-    throw new Error(`${location}: expected array`);
-  }
-  return value.map((item, index) => readString(item, `${location}[${index}]`));
-}
-
-function readPositiveInteger(value: unknown, location: string): number {
-  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
-    throw new Error(`${location}: expected positive integer`);
-  }
-  return value;
-}
-
-function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
-  return (typeof value === "object" || typeof value === "function") && value !== null;
-}
-
-function readRecord(value: unknown, location: string): Record<PropertyKey, unknown> {
-  if (!isRecord(value)) {
-    throw new Error(`${location}: expected object`);
-  }
-  return value;
-}
-
-function readRunKind(value: unknown, location: string): OfficialBenchmarkRunKind {
-  const runKind = readString(value, location);
+function parseRunKindValue(value: unknown, location: string): OfficialBenchmarkRunKind {
+  const runKind = parseString(value, location);
   if (isOfficialBenchmarkRunKind(runKind)) return runKind;
   throw new Error(`${location}: expected baseline or candidate-comparison`);
 }
 
-function readApproval(value: unknown, location: string): OfficialBenchmarkApproval {
-  const approval = readString(value, location);
+function parseApprovalValue(value: unknown, location: string): OfficialBenchmarkApproval {
+  const approval = parseString(value, location);
   if (isOfficialBenchmarkApproval(approval)) return approval;
   throw new Error(
     `${location}: expected scheduled-baseline, manual-baseline, or manual-candidate-comparison`,
   );
 }
 
-function readProfileCapture(
+function parseProfileCaptureValue(
   value: unknown,
   location: string,
 ): TrustedRefComparisonProfileArgs["capture"] {
-  const capture = readString(value, location);
+  const capture = parseString(value, location);
   if (capture === "off" || capture === "auto") return capture;
   throw new Error(`${location}: expected off or auto`);
 }
 
-function readProfileMode(
+function parseProfileModeValue(
   value: unknown,
   location: string,
 ): TrustedRefComparisonProfileArgs["mode"] {
-  const mode = readString(value, location);
+  const mode = parseString(value, location);
   if (mode === "both" || mode === "cpu" || mode === "heap") return mode;
   throw new Error(`${location}: expected both, cpu, or heap`);
 }
 
-function readProfileArgs(value: unknown): TrustedRefComparisonProfileArgs {
+function parseProfileArgs(value: unknown): TrustedRefComparisonProfileArgs {
   if (value === undefined) {
     return {
       capture: "off",
@@ -463,42 +438,42 @@ function readProfileArgs(value: unknown): TrustedRefComparisonProfileArgs {
       limit: 1,
     };
   }
-  const record = readRecord(value, "context.profile");
+  const record = parseRecord(value, "context.profile");
   return {
-    capture: readProfileCapture(record.capture, "context.profile.capture"),
-    mode: readProfileMode(record.mode, "context.profile.mode"),
+    capture: parseProfileCaptureValue(record.capture, "context.profile.capture"),
+    mode: parseProfileModeValue(record.mode, "context.profile.mode"),
     ...(record.scenario === undefined
       ? {}
-      : { scenario: readString(record.scenario, "context.profile.scenario") }),
-    limit: readPositiveInteger(record.limit, "context.profile.limit"),
+      : { scenario: parseString(record.scenario, "context.profile.scenario") }),
+    limit: parsePositiveInteger(record.limit, "context.profile.limit"),
   };
 }
 
-export function validateOfficialBenchmarkRunContext(input: unknown): OfficialBenchmarkRunContext {
-  const record = readRecord(input, "context");
+export function parseOfficialBenchmarkRunContext(input: unknown): OfficialBenchmarkRunContext {
+  const record = parseRecord(input, "context");
   if (record.schemaVersion !== OFFICIAL_BENCHMARK_RUN_CONTEXT_VERSION) {
     throw new Error(`context.schemaVersion: expected ${OFFICIAL_BENCHMARK_RUN_CONTEXT_VERSION}`);
   }
-  const policy = readRecord(record.policy, "context.policy");
+  const policy = parseRecord(record.policy, "context.policy");
   return {
     schemaVersion: OFFICIAL_BENCHMARK_RUN_CONTEXT_VERSION,
-    generatedAt: readString(record.generatedAt, "context.generatedAt"),
-    runKind: readRunKind(record.runKind, "context.runKind"),
-    approval: readApproval(record.approval, "context.approval"),
-    eventName: readString(record.eventName, "context.eventName"),
-    baseRef: readString(record.baseRef, "context.baseRef"),
+    generatedAt: parseString(record.generatedAt, "context.generatedAt"),
+    runKind: parseRunKindValue(record.runKind, "context.runKind"),
+    approval: parseApprovalValue(record.approval, "context.approval"),
+    eventName: parseString(record.eventName, "context.eventName"),
+    baseRef: parseString(record.baseRef, "context.baseRef"),
     ...(record.candidateRef === undefined
       ? {}
-      : { candidateRef: readString(record.candidateRef, "context.candidateRef") }),
-    reportPath: readString(record.reportPath, "context.reportPath"),
-    manifestPath: readString(record.manifestPath, "context.manifestPath"),
+      : { candidateRef: parseString(record.candidateRef, "context.candidateRef") }),
+    reportPath: parseString(record.reportPath, "context.reportPath"),
+    manifestPath: parseString(record.manifestPath, "context.manifestPath"),
     ...(record.calibrationPath === undefined
       ? {}
-      : { calibrationPath: readString(record.calibrationPath, "context.calibrationPath") }),
-    benchArgs: readStringArray(record.benchArgs, "context.benchArgs"),
-    profile: readProfileArgs(record.profile),
+      : { calibrationPath: parseString(record.calibrationPath, "context.calibrationPath") }),
+    benchArgs: parseStringArray(record.benchArgs, "context.benchArgs"),
+    profile: parseProfileArgs(record.profile),
     policy: {
-      automaticBaselineRefs: readStringArray(
+      automaticBaselineRefs: parseStringArray(
         policy.automaticBaselineRefs,
         "context.policy.automaticBaselineRefs",
       ),
@@ -512,12 +487,6 @@ export function validateOfficialBenchmarkRunContext(input: unknown): OfficialBen
             })(),
     },
   };
-}
-
-async function readJsonFile(filePath: string): Promise<unknown> {
-  const raw = await readFile(filePath, "utf8");
-  const parsed: unknown = JSON.parse(raw);
-  return parsed;
 }
 
 function historyApiUrl(env: NodeJS.ProcessEnv): string {
@@ -567,7 +536,7 @@ export async function publishOfficialBenchmarkRun(
   input: PublishOfficialBenchmarkRunInput,
 ): Promise<BenchmarkPublishManifest> {
   const env = input.env ?? process.env;
-  const context = validateOfficialBenchmarkRunContext(await readJsonFile(input.contextPath));
+  const context = parseOfficialBenchmarkRunContext(await parseJsonFile(input.contextPath));
   const publishArtifacts = input.publishArtifacts ?? publishBenchmarkArtifacts;
   const manifest = await publishArtifacts({
     repoRoot: input.repoRoot,
@@ -580,7 +549,7 @@ export async function publishOfficialBenchmarkRun(
       extraArtifacts: [],
     },
   });
-  const report = await readJsonFile(context.reportPath);
+  const report = await parseJsonFile(context.reportPath);
   const postHistory =
     input.postHistory ??
     ((post) =>

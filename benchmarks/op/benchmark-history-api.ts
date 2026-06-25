@@ -1,6 +1,6 @@
 import {
   OFFICIAL_BENCHMARK_REPORT_VERSION,
-  validateOfficialBenchmarkReport,
+  parseOfficialBenchmarkReport,
   type BenchmarkArtifactRef,
   type BenchmarkDiff,
   type BenchmarkRunnerIdentity,
@@ -12,13 +12,18 @@ import {
   type OfficialScenarioResult,
   type ScenarioDiff,
 } from "./official-report.ts";
+import { parseNonNegativeNumber, parseRecord, parseString } from "./json-parse.ts";
 import {
   BENCHMARK_PUBLISH_MANIFEST_VERSION,
-  TRUSTED_REF_COMPARISON_REPORT_VERSION,
   type BenchmarkPublishMode,
   type BenchmarkPublishManifest,
   type BenchmarkPublishedArtifact,
 } from "./publish-artifacts.ts";
+import {
+  TRUSTED_REF_COMPARISON_REPORT_VERSION,
+  parseTrustedRefComparisonReport,
+  type TrustedRefComparisonReport,
+} from "./trusted-ref-comparison-report.ts";
 import {
   benchmarkHistoryDashboardResponse,
   isBenchmarkHistoryDashboardRoute,
@@ -30,8 +35,6 @@ const RUN_INDEX_KEY = "benchmark-history:v1:runs:index";
 const COMPARISON_INDEX_KEY = "benchmark-history:v1:comparisons:index";
 const MAX_QUERY_LIMIT = 100;
 const DEFAULT_QUERY_LIMIT = 20;
-
-type JsonRecord = Record<PropertyKey, unknown>;
 
 export type BenchmarkHistoryKvNamespace = {
   get(key: string): Promise<string | null>;
@@ -126,97 +129,36 @@ type ComparisonIndexEntry = {
   generatedAt: string;
 };
 
-type TrustedRefComparisonReport = {
-  schemaVersion: typeof TRUSTED_REF_COMPARISON_REPORT_VERSION;
-  generatedAt: string;
-  implementationId: string;
-  base: {
-    ref: string;
-    sha: string;
-    targetFingerprint?: TrustedRefComparisonTargetFingerprint;
-    report: OfficialBenchmarkReport;
-  };
-  candidate: {
-    ref: string;
-    sha: string;
-    targetFingerprint?: TrustedRefComparisonTargetFingerprint;
-    report: OfficialBenchmarkReport;
-  };
-  diff: BenchmarkDiff;
-};
-
-type TrustedRefComparisonTargetFingerprint = {
-  algorithm: string;
-  digest: string;
-  sources: string[];
-};
-
-function isRecord(value: unknown): value is JsonRecord {
-  return (typeof value === "object" || typeof value === "function") && value !== null;
-}
-
-function readRecord(value: unknown, location: string): JsonRecord {
-  if (!isRecord(value)) {
-    throw new Error(`${location}: expected object`);
-  }
-  return value;
-}
-
-function readString(value: unknown, location: string): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new Error(`${location}: expected non-empty string`);
-  }
-  return value;
-}
-
-function readNonNegativeNumber(value: unknown, location: string): number {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-    throw new Error(`${location}: expected non-negative number`);
-  }
-  return value;
-}
-
-function readFiniteNumber(value: unknown, location: string): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    throw new Error(`${location}: expected finite number`);
-  }
-  return value;
-}
-
-function readArtifact(value: unknown, location: string): BenchmarkHistoryArtifact {
-  const record = readRecord(value, location);
+function parseArtifact(value: unknown, location: string): BenchmarkHistoryArtifact {
+  const record = parseRecord(value, location);
   const artifact: BenchmarkHistoryArtifact = {
-    kind: readString(record.kind, `${location}.kind`),
-    path: readString(record.path, `${location}.path`),
-    contentType: readString(record.contentType, `${location}.contentType`),
+    kind: parseString(record.kind, `${location}.kind`),
+    path: parseString(record.path, `${location}.path`),
+    contentType: parseString(record.contentType, `${location}.contentType`),
   };
   if (record.objectKey !== undefined) {
-    artifact.objectKey = readString(record.objectKey, `${location}.objectKey`);
+    artifact.objectKey = parseString(record.objectKey, `${location}.objectKey`);
   }
   if (record.scenarioKey !== undefined) {
-    artifact.scenarioKey = readString(record.scenarioKey, `${location}.scenarioKey`);
+    artifact.scenarioKey = parseString(record.scenarioKey, `${location}.scenarioKey`);
   }
   if (record.implementationId !== undefined) {
-    artifact.implementationId = readString(record.implementationId, `${location}.implementationId`);
+    artifact.implementationId = parseString(
+      record.implementationId,
+      `${location}.implementationId`,
+    );
   }
   if (record.sizeBytes !== undefined) {
-    artifact.sizeBytes = readNonNegativeNumber(record.sizeBytes, `${location}.sizeBytes`);
+    artifact.sizeBytes = parseNonNegativeNumber(record.sizeBytes, `${location}.sizeBytes`);
   }
   if (record.sha256 !== undefined) {
-    artifact.sha256 = readString(record.sha256, `${location}.sha256`);
+    artifact.sha256 = parseString(record.sha256, `${location}.sha256`);
   }
   return artifact;
 }
 
-function readArtifactRefs(value: unknown, location: string): BenchmarkArtifactRef[] {
-  if (!Array.isArray(value)) {
-    throw new Error(`${location}: expected array`);
-  }
-  return value.map((item, index) => readArtifact(item, `${location}[${index}]`));
-}
-
-function readPublishedArtifact(value: unknown, location: string): BenchmarkPublishedArtifact {
-  const artifact = readArtifact(value, location);
+function parsePublishedArtifact(value: unknown, location: string): BenchmarkPublishedArtifact {
+  const artifact = parseArtifact(value, location);
   if (artifact.objectKey === undefined) {
     throw new Error(`${location}.objectKey: expected non-empty string`);
   }
@@ -235,24 +177,18 @@ function readPublishedArtifact(value: unknown, location: string): BenchmarkPubli
   return publishedArtifact;
 }
 
-function readPublishMode(value: unknown, location: string): BenchmarkPublishMode {
-  const mode = readString(value, location);
+function parsePublishMode(value: unknown, location: string): BenchmarkPublishMode {
+  const mode = parseString(value, location);
   if (mode === "dry-run" || mode === "upload") return mode;
   throw new Error(`${location}: expected dry-run or upload`);
 }
 
-function readBenchmarkRunKind(value: unknown, location: string): BenchmarkRunKind {
-  const kind = readString(value, location);
-  if (kind === "comparison" || kind === "profile") return kind;
-  throw new Error(`${location}: expected comparison or profile`);
-}
-
-export function validateBenchmarkPublishManifest(input: unknown): BenchmarkPublishManifest {
-  const record = readRecord(input, "manifest");
+export function parseBenchmarkPublishManifest(input: unknown): BenchmarkPublishManifest {
+  const record = parseRecord(input, "manifest");
   if (record.schemaVersion !== BENCHMARK_PUBLISH_MANIFEST_VERSION) {
     throw new Error(`manifest.schemaVersion: expected ${BENCHMARK_PUBLISH_MANIFEST_VERSION}`);
   }
-  const source = readRecord(record.source, "manifest.source");
+  const source = parseRecord(record.source, "manifest.source");
   const runIds = source.runIds;
   if (!Array.isArray(runIds)) {
     throw new Error("manifest.source.runIds: expected array");
@@ -263,145 +199,30 @@ export function validateBenchmarkPublishManifest(input: unknown): BenchmarkPubli
   }
   return {
     schemaVersion: BENCHMARK_PUBLISH_MANIFEST_VERSION,
-    generatedAt: readString(record.generatedAt, "manifest.generatedAt"),
-    mode: readPublishMode(record.mode, "manifest.mode"),
+    generatedAt: parseString(record.generatedAt, "manifest.generatedAt"),
+    mode: parsePublishMode(record.mode, "manifest.mode"),
     provider:
       record.provider === "cloudflare-r2"
         ? "cloudflare-r2"
         : (() => {
             throw new Error("manifest.provider: expected cloudflare-r2");
           })(),
-    bucket: readString(record.bucket, "manifest.bucket"),
-    endpoint: readString(record.endpoint, "manifest.endpoint"),
+    bucket: parseString(record.bucket, "manifest.bucket"),
+    endpoint: parseString(record.endpoint, "manifest.endpoint"),
     ...(record.prefix === undefined
       ? {}
-      : { prefix: readString(record.prefix, "manifest.prefix") }),
+      : { prefix: parseString(record.prefix, "manifest.prefix") }),
     source: {
-      reportPath: readString(source.reportPath, "manifest.source.reportPath"),
-      reportSchemaVersion: readString(
+      reportPath: parseString(source.reportPath, "manifest.source.reportPath"),
+      reportSchemaVersion: parseString(
         source.reportSchemaVersion,
         "manifest.source.reportSchemaVersion",
       ),
-      runIds: runIds.map((item, index) => readString(item, `manifest.source.runIds[${index}]`)),
+      runIds: runIds.map((item, index) => parseString(item, `manifest.source.runIds[${index}]`)),
     },
     artifacts: artifacts.map((item, index) =>
-      readPublishedArtifact(item, `manifest.artifacts[${index}]`),
+      parsePublishedArtifact(item, `manifest.artifacts[${index}]`),
     ),
-  };
-}
-
-function readScenarioDiff(value: unknown, location: string): ScenarioDiff {
-  const record = readRecord(value, location);
-  const verdict = readString(record.verdict, `${location}.verdict`);
-  if (verdict !== "improvement" && verdict !== "regression" && verdict !== "inconclusive") {
-    throw new Error(`${location}.verdict: expected improvement, regression, or inconclusive`);
-  }
-  return {
-    key: readString(record.key, `${location}.key`),
-    label: readString(record.label, `${location}.label`),
-    implementationId: readString(record.implementationId, `${location}.implementationId`),
-    baseHz: readNonNegativeNumber(record.baseHz, `${location}.baseHz`),
-    candidateHz: readNonNegativeNumber(record.candidateHz, `${location}.candidateHz`),
-    deltaRatio: readFiniteNumber(record.deltaRatio, `${location}.deltaRatio`),
-    combinedNoiseRatio: readNonNegativeNumber(
-      record.combinedNoiseRatio,
-      `${location}.combinedNoiseRatio`,
-    ),
-    noiseThresholdRatio: readNonNegativeNumber(
-      record.noiseThresholdRatio,
-      `${location}.noiseThresholdRatio`,
-    ),
-    verdict,
-  };
-}
-
-function readBenchmarkDiff(value: unknown, location: string): BenchmarkDiff {
-  const record = readRecord(value, location);
-  const summary = readRecord(record.summary, `${location}.summary`);
-  const scenarios = record.scenarios;
-  if (!Array.isArray(scenarios)) {
-    throw new Error(`${location}.scenarios: expected array`);
-  }
-  return {
-    kind: readBenchmarkRunKind(record.kind, `${location}.kind`),
-    implementationId: readString(record.implementationId, `${location}.implementationId`),
-    baseRun: readBenchmarkRunIdentity(record.baseRun, `${location}.baseRun`),
-    candidateRun: readBenchmarkRunIdentity(record.candidateRun, `${location}.candidateRun`),
-    scenarios: scenarios.map((item, index) =>
-      readScenarioDiff(item, `${location}.scenarios[${index}]`),
-    ),
-    summary: {
-      improvement: readNonNegativeNumber(summary.improvement, `${location}.summary.improvement`),
-      regression: readNonNegativeNumber(summary.regression, `${location}.summary.regression`),
-      inconclusive: readNonNegativeNumber(summary.inconclusive, `${location}.summary.inconclusive`),
-    },
-  };
-}
-
-function readBenchmarkRunIdentity(value: unknown, location: string): BenchmarkRunIdentity {
-  const record = readRecord(value, location);
-  return {
-    id: readString(record.id, `${location}.id`),
-    kind: readBenchmarkRunKind(record.kind, `${location}.kind`),
-    generatedAt: readString(record.generatedAt, `${location}.generatedAt`),
-    artifacts: readArtifactRefs(record.artifacts, `${location}.artifacts`),
-  };
-}
-
-function readTrustedRefComparisonTargetFingerprint(
-  value: unknown,
-  location: string,
-): TrustedRefComparisonTargetFingerprint {
-  const record = readRecord(value, location);
-  const sources = record.sources;
-  if (!Array.isArray(sources)) {
-    throw new Error(`${location}.sources: expected array`);
-  }
-  return {
-    algorithm: readString(record.algorithm, `${location}.algorithm`),
-    digest: readString(record.digest, `${location}.digest`),
-    sources: sources.map((item, index) => readString(item, `${location}.sources[${index}]`)),
-  };
-}
-
-function readTrustedRefComparisonReport(input: unknown): TrustedRefComparisonReport {
-  const record = readRecord(input, "report");
-  if (record.schemaVersion !== TRUSTED_REF_COMPARISON_REPORT_VERSION) {
-    throw new Error(`report.schemaVersion: expected ${TRUSTED_REF_COMPARISON_REPORT_VERSION}`);
-  }
-  const base = readRecord(record.base, "report.base");
-  const candidate = readRecord(record.candidate, "report.candidate");
-  return {
-    schemaVersion: TRUSTED_REF_COMPARISON_REPORT_VERSION,
-    generatedAt: readString(record.generatedAt, "report.generatedAt"),
-    implementationId: readString(record.implementationId, "report.implementationId"),
-    base: {
-      ref: readString(base.ref, "report.base.ref"),
-      sha: readString(base.sha, "report.base.sha"),
-      ...(base.targetFingerprint === undefined
-        ? {}
-        : {
-            targetFingerprint: readTrustedRefComparisonTargetFingerprint(
-              base.targetFingerprint,
-              "report.base.targetFingerprint",
-            ),
-          }),
-      report: validateOfficialBenchmarkReport(base.report),
-    },
-    candidate: {
-      ref: readString(candidate.ref, "report.candidate.ref"),
-      sha: readString(candidate.sha, "report.candidate.sha"),
-      ...(candidate.targetFingerprint === undefined
-        ? {}
-        : {
-            targetFingerprint: readTrustedRefComparisonTargetFingerprint(
-              candidate.targetFingerprint,
-              "report.candidate.targetFingerprint",
-            ),
-          }),
-      report: validateOfficialBenchmarkReport(candidate.report),
-    },
-    diff: readBenchmarkDiff(record.diff, "report.diff"),
   };
 }
 
@@ -702,12 +523,12 @@ export async function indexBenchmarkHistory(input: {
   manifest: unknown;
   report: unknown;
 }): Promise<BenchmarkHistoryIndexResult> {
-  const manifest = validateBenchmarkPublishManifest(input.manifest);
-  const reportRecord = readRecord(input.report, "report");
-  const schemaVersion = readString(reportRecord.schemaVersion, "report.schemaVersion");
+  const manifest = parseBenchmarkPublishManifest(input.manifest);
+  const reportRecord = parseRecord(input.report, "report");
+  const schemaVersion = parseString(reportRecord.schemaVersion, "report.schemaVersion");
 
   if (schemaVersion === OFFICIAL_BENCHMARK_REPORT_VERSION) {
-    const report = validateOfficialBenchmarkReport(input.report);
+    const report = parseOfficialBenchmarkReport(input.report);
     assertManifestMatchesReport(manifest, OFFICIAL_BENCHMARK_REPORT_VERSION, [report.run.id]);
     await input.index.upsertRun(runDetail(report, manifest));
     return {
@@ -718,7 +539,7 @@ export async function indexBenchmarkHistory(input: {
   }
 
   if (schemaVersion === TRUSTED_REF_COMPARISON_REPORT_VERSION) {
-    const report = readTrustedRefComparisonReport(input.report);
+    const report = parseTrustedRefComparisonReport(input.report);
     assertManifestMatchesReport(manifest, TRUSTED_REF_COMPARISON_REPORT_VERSION, [
       report.base.report.run.id,
       report.candidate.report.run.id,
@@ -763,7 +584,7 @@ async function parseIndexRequestBody(request: Request): Promise<{
   manifest: unknown;
   report: unknown;
 }> {
-  const body = readRecord(await request.json(), "body");
+  const body = parseRecord(await request.json(), "body");
   return {
     manifest: body.manifest,
     report: body.report,

@@ -12,6 +12,7 @@ import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { isRecordLike } from "@prodkit/shared/runtime";
 import { Linter } from "eslint";
 import opLintPlugin from "@prodkit/op-lint";
 
@@ -324,24 +325,20 @@ function countOxlintRuleDiagnostics(stdout: string): number {
   if (!Array.isArray(parsed.diagnostics)) return 0;
 
   return parsed.diagnostics.filter((diagnostic) => {
-    if (!isRecord(diagnostic)) return false;
+    if (!isRecordLike(diagnostic)) return false;
     return diagnostic["code"] === "prodkit-op(require-yield-star)";
   }).length;
 }
 
 function isParsedOxlintOutput(value: unknown): value is ParsedOxlintOutput {
-  return isRecord(value);
-}
-
-function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
-  return (typeof value === "object" || typeof value === "function") && value !== null;
+  return isRecordLike(value);
 }
 
 export function readPackageVersion(packageDir: string): string {
   const packageJsonPath = path.join(packageDir, "package.json");
   const packageJsonRaw = readFileSync(packageJsonPath, "utf8");
   const parsed: unknown = JSON.parse(packageJsonRaw);
-  if (!isRecord(parsed) || typeof parsed["version"] !== "string") {
+  if (!isRecordLike(parsed) || typeof parsed["version"] !== "string") {
     throw new Error(`Could not read package version from ${packageJsonPath}.`);
   }
   return parsed["version"];

@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { isRecordLike } from "@prodkit/shared/runtime";
 import { Bench } from "tinybench";
 import { COMPOSE_STEPS, type BenchOp, type RunResult } from "./scenarios.ts";
 
@@ -51,10 +52,6 @@ export type EnvironmentReport = {
   platform: NodeJS.Platform;
   arch: string;
 };
-
-export function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
-  return (typeof value === "object" || typeof value === "function") && value !== null;
-}
 
 function readPackageJsonIfPresent(dir: string): unknown {
   const packageJsonPath = path.join(dir, "package.json");
@@ -120,7 +117,7 @@ function relativeSafePath(pkgRoot: string, candidate: string): string {
 
 function readRuntimeEntryFromExportTarget(entry: unknown): string | undefined {
   if (typeof entry === "string") return entry;
-  if (!isRecord(entry)) return undefined;
+  if (!isRecordLike(entry)) return undefined;
 
   const runtimeEntry = entry.import;
   if (typeof runtimeEntry === "string") return runtimeEntry;
@@ -132,7 +129,7 @@ function readRuntimeEntryFromExportTarget(entry: unknown): string | undefined {
 
 function readRuntimeEntryFromExports(exportsField: unknown, subpath: string): string | undefined {
   if (subpath === "." && typeof exportsField === "string") return exportsField;
-  if (!isRecord(exportsField)) return undefined;
+  if (!isRecordLike(exportsField)) return undefined;
   return readRuntimeEntryFromExportTarget(exportsField[subpath]);
 }
 
@@ -144,7 +141,7 @@ export async function resolveBundleEntry(
   const packageJsonRaw = readFileSync(packageJsonPath, "utf8");
   const packageJson: unknown = JSON.parse(packageJsonRaw);
 
-  if (!isRecord(packageJson)) {
+  if (!isRecordLike(packageJson)) {
     throw new Error("Could not parse package.json.");
   }
 
@@ -165,7 +162,7 @@ export async function readPackageVersion(packageDir: string): Promise<string> {
   const packageJsonPath = path.join(packageDir, "package.json");
   const packageJsonRaw = readFileSync(packageJsonPath, "utf8");
   const packageJson: unknown = JSON.parse(packageJsonRaw);
-  if (!isRecord(packageJson)) {
+  if (!isRecordLike(packageJson)) {
     throw new Error("Could not parse package.json.");
   }
   const version = packageJson.version;
@@ -183,7 +180,7 @@ export async function importOpModule(packageDir: string): Promise<{ Op: unknown 
     );
   }
   const mod: unknown = await import(pathToFileURL(modulePath).href);
-  if (!isRecord(mod) || !mod.Op) {
+  if (!isRecordLike(mod) || !mod.Op) {
     throw new Error(`Unable to import Op from ${modulePath}.`);
   }
   return { Op: mod.Op };
@@ -197,14 +194,14 @@ export async function importOpPolicyModule(packageDir: string): Promise<{ Policy
     );
   }
   const mod: unknown = await import(pathToFileURL(modulePath).href);
-  if (!isRecord(mod) || !mod.Policy) {
+  if (!isRecordLike(mod) || !mod.Policy) {
     throw new Error(`Unable to import Policy from ${modulePath}.`);
   }
   return { Policy: mod.Policy };
 }
 
 export function asBenchOp(input: unknown): BenchOp {
-  if (!isRecord(input)) {
+  if (!isRecordLike(input)) {
     throw new Error("Imported Op value is invalid.");
   }
   if (typeof input.of !== "function" || typeof input !== "function") {

@@ -55,19 +55,44 @@ import {
   type OfficialScenarioResult,
   type ScenarioDiff,
 } from "./official-report.ts";
+import {
+  TRUSTED_REF_COMPARISON_IMPLEMENTATION_ID,
+  TRUSTED_REF_COMPARISON_REPORT_VERSION,
+} from "./trusted-ref-comparison-report.ts";
+import type {
+  RefComparisonSide,
+  ScenarioExecutionOrderEntry,
+  TrustedRefComparisonProfileArgs,
+  TrustedRefComparisonProfileCapture,
+  TrustedRefComparisonProfileMode,
+  TrustedRefComparisonProfileModeOption,
+  TrustedRefComparisonProfileSelection,
+  TrustedRefComparisonProfileSelectionSource,
+  TrustedRefComparisonReport,
+  TrustedRefComparisonSideReport,
+  TrustedRefComparisonTargetFingerprint,
+} from "./trusted-ref-comparison-report.ts";
 
-export const TRUSTED_REF_COMPARISON_REPORT_VERSION = "prodkit.benchmark-ref-comparison.v1" as const;
-export const TRUSTED_REF_COMPARISON_IMPLEMENTATION_ID = "op" as const;
+export {
+  TRUSTED_REF_COMPARISON_IMPLEMENTATION_ID,
+  TRUSTED_REF_COMPARISON_REPORT_VERSION,
+} from "./trusted-ref-comparison-report.ts";
+export type {
+  RefComparisonSide,
+  ScenarioExecutionOrderEntry,
+  TrustedRefComparisonProfileArgs,
+  TrustedRefComparisonProfileCapture,
+  TrustedRefComparisonProfileMode,
+  TrustedRefComparisonProfileModeOption,
+  TrustedRefComparisonProfileSelection,
+  TrustedRefComparisonProfileSelectionSource,
+  TrustedRefComparisonReport,
+  TrustedRefComparisonSideReport,
+  TrustedRefComparisonTargetFingerprint,
+} from "./trusted-ref-comparison-report.ts";
 
 const logger = console;
 const GIT_COMMIT_PATTERN = /^[0-9a-f]{40}$/;
-
-export type RefComparisonSide = "base" | "candidate";
-
-export type ScenarioExecutionOrderEntry = {
-  scenarioKey: string;
-  first: RefComparisonSide;
-};
 
 export type TrustedRefComparisonCliArgs = {
   baseRef: string;
@@ -77,63 +102,6 @@ export type TrustedRefComparisonCliArgs = {
   benchOptions: BenchRunOptions;
   minMeaningfulChangeRatio: number;
   profile: TrustedRefComparisonProfileArgs;
-};
-
-export type TrustedRefComparisonProfileCapture = "off" | "auto";
-
-export type TrustedRefComparisonProfileMode = "cpu" | "heap";
-
-export type TrustedRefComparisonProfileModeOption = TrustedRefComparisonProfileMode | "both";
-
-export type TrustedRefComparisonProfileArgs = {
-  capture: TrustedRefComparisonProfileCapture;
-  mode: TrustedRefComparisonProfileModeOption;
-  scenario?: string;
-  limit: number;
-};
-
-export type TrustedRefComparisonProfileSelectionSource = "meaningful-delta" | "manual";
-
-export type TrustedRefComparisonProfileSelection = {
-  source: TrustedRefComparisonProfileSelectionSource;
-  scenarioKey: string;
-  label: string;
-  profileScenario: string;
-  verdict?: ScenarioDiff["verdict"];
-  deltaRatio?: number;
-};
-
-export type TrustedRefComparisonSideReport = {
-  ref: string;
-  sha: string;
-  packageVersion: string;
-  targetFingerprint: TrustedRefComparisonTargetFingerprint;
-  report: OfficialBenchmarkReport;
-};
-
-export type TrustedRefComparisonTargetFingerprint = {
-  algorithm: "sha256";
-  digest: string;
-  sources: string[];
-};
-
-export type TrustedRefComparisonReport = {
-  schemaVersion: typeof TRUSTED_REF_COMPARISON_REPORT_VERSION;
-  generatedAt: string;
-  implementationId: typeof TRUSTED_REF_COMPARISON_IMPLEMENTATION_ID;
-  benchOptions: ResolvedBenchRunOptions;
-  scenarioOrder: ScenarioExecutionOrderEntry[];
-  base: TrustedRefComparisonSideReport;
-  candidate: TrustedRefComparisonSideReport;
-  diff: BenchmarkDiff;
-  profile: {
-    capture: TrustedRefComparisonProfileCapture;
-    mode: TrustedRefComparisonProfileModeOption;
-    limit: number;
-    scenario?: string;
-    selections: TrustedRefComparisonProfileSelection[];
-    artifacts: BenchmarkArtifactRef[];
-  };
 };
 
 type CommandResult = {

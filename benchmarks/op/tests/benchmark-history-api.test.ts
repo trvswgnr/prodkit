@@ -13,9 +13,9 @@ import {
 } from "../official-report.ts";
 import {
   BENCHMARK_PUBLISH_MANIFEST_VERSION,
-  TRUSTED_REF_COMPARISON_REPORT_VERSION,
   type BenchmarkPublishManifest,
 } from "../publish-artifacts.ts";
+import { TRUSTED_REF_COMPARISON_REPORT_VERSION } from "../trusted-ref-comparison-report.ts";
 
 const scenarioKey = "compose.opYieldChain";
 
@@ -221,19 +221,30 @@ function trustedComparisonReport(
     schemaVersion: TRUSTED_REF_COMPARISON_REPORT_VERSION,
     generatedAt: "2026-06-23T12:02:00.000Z",
     implementationId: "op",
+    benchOptions,
+    scenarioOrder: [{ scenarioKey, first: "base" }],
     base: {
       ref: "main",
       sha: base.commit.headSha,
+      packageVersion: "0.2.2",
       targetFingerprint: targetFingerprint("1".repeat(64)),
       report: base,
     },
     candidate: {
       ref: "feature/perf",
       sha: candidate.commit.headSha,
+      packageVersion: "0.2.2",
       targetFingerprint: targetFingerprint("2".repeat(64)),
       report: candidate,
     },
     diff,
+    profile: {
+      capture: "off",
+      mode: "both",
+      limit: 1,
+      selections: [],
+      artifacts: [],
+    },
   };
 }
 

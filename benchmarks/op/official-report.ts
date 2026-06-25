@@ -1,15 +1,25 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 import { cpus, release as osRelease, totalmem, type as osType } from "node:os";
 import path from "node:path";
+import { isRecordLike } from "@prodkit/shared/runtime";
 import type { ImplementationColumn } from "./comparison-matrix.ts";
 import type {
   EnvironmentReport,
   RepeatedTinybenchRecord,
   ResolvedBenchRunOptions,
 } from "./harness.ts";
+import {
+  parseBoolean,
+  parseError,
+  parseFiniteNumber,
+  parseJsonFile,
+  parseNonNegativeNumber,
+  parseRecord,
+  parseString,
+  parseStringArray,
+} from "./json-parse.ts";
 
 export const OFFICIAL_BENCHMARK_REPORT_VERSION = "prodkit.benchmark-report.v1" as const;
 export const BENCHMARK_CALIBRATION_REPORT_VERSION = "prodkit.benchmark-calibration.v1" as const;
@@ -27,8 +37,6 @@ const DEFAULT_DEPENDENCY_FINGERPRINT_SOURCES = [
 ] as const;
 
 const logger = console;
-
-type JsonRecord = Record<PropertyKey, unknown>;
 
 export type BenchmarkRunKind = "comparison" | "profile";
 
@@ -244,13 +252,6 @@ export type BenchmarkCalibrationReport = {
   scenarioSummaries: BenchmarkCalibrationScenarioSummary[];
 };
 
-export class BenchmarkReportValidationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "BenchmarkReportValidationError";
-  }
-}
-
 export class BenchmarkReportCompatibilityError extends Error {
   constructor(message: string) {
     super(message);
@@ -339,7 +340,7 @@ function readConfiguredPackageManager(repoRoot: string | undefined): string | un
     const packageJson: unknown = JSON.parse(
       readFileSync(path.join(repoRoot, "package.json"), "utf8"),
     );
-    if (!isRecord(packageJson)) return undefined;
+    if (!isRecordLike(packageJson)) return undefined;
     return typeof packageJson.packageManager === "string" ? packageJson.packageManager : undefined;
   } catch {
     return undefined;
@@ -506,113 +507,73 @@ export function profileScenariosToOfficialResults(
   });
 }
 
-function isRecord(value: unknown): value is JsonRecord {
-  return (typeof value === "object" || typeof value === "function") && value !== null;
-}
-
-function validationError(location: string, message: string): never {
-  throw new BenchmarkReportValidationError(`${location}: ${message}`);
-}
-
-function readRecord(value: unknown, location: string): JsonRecord {
-  if (!isRecord(value)) validationError(location, "expected object");
-  return value;
-}
-
-function readString(value: unknown, location: string): string {
-  if (typeof value !== "string" || value.length === 0) {
-    validationError(location, "expected non-empty string");
-  }
-  return value;
-}
-
-function readBoolean(value: unknown, location: string): boolean {
-  if (typeof value !== "boolean") validationError(location, "expected boolean");
-  return value;
-}
-
-function readFiniteNumber(value: unknown, location: string): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    validationError(location, "expected finite number");
-  }
-  return value;
-}
-
-function readNonNegativeNumber(value: unknown, location: string): number {
-  const number = readFiniteNumber(value, location);
-  if (number < 0) validationError(location, "expected non-negative number");
-  return number;
-}
-
-function readStringArray(value: unknown, location: string): string[] {
-  if (!Array.isArray(value)) validationError(location, "expected array");
-  return value.map((item, index) => readString(item, `${location}[${index}]`));
-}
-
-function readArtifactRef(value: unknown, location: string): BenchmarkArtifactRef {
-  const record = readRecord(value, location);
+export function parseArtifactRef(value: unknown, location: string): BenchmarkArtifactRef {
+  const record = parseRecord(value, location);
   const artifact: BenchmarkArtifactRef = {
-    kind: readString(record.kind, `${location}.kind`),
-    path: readString(record.path, `${location}.path`),
-    contentType: readString(record.contentType, `${location}.contentType`),
+    kind: parseString(record.kind, `${location}.kind`),
+    path: parseString(record.path, `${location}.path`),
+    contentType: parseString(record.contentType, `${location}.contentType`),
   };
   if (record.objectKey !== undefined) {
-    artifact.objectKey = readString(record.objectKey, `${location}.objectKey`);
+    artifact.objectKey = parseString(record.objectKey, `${location}.objectKey`);
   }
   if (record.scenarioKey !== undefined) {
-    artifact.scenarioKey = readString(record.scenarioKey, `${location}.scenarioKey`);
+    artifact.scenarioKey = parseString(record.scenarioKey, `${location}.scenarioKey`);
   }
   if (record.implementationId !== undefined) {
-    artifact.implementationId = readString(record.implementationId, `${location}.implementationId`);
+    artifact.implementationId = parseString(
+      record.implementationId,
+      `${location}.implementationId`,
+    );
   }
   return artifact;
 }
 
-function readArtifacts(value: unknown, location: string): BenchmarkArtifactRef[] {
-  if (!Array.isArray(value)) validationError(location, "expected array");
-  return value.map((item, index) => readArtifactRef(item, `${location}[${index}]`));
+function parseArtifacts(value: unknown, location: string): BenchmarkArtifactRef[] {
+  if (!Array.isArray(value)) parseError(location, "expected array");
+  return value.map((item, index) => parseArtifactRef(item, `${location}[${index}]`));
 }
 
-function readBenchOptions(value: unknown, location: string): ResolvedBenchRunOptions {
-  const record = readRecord(value, location);
+function parseBenchOptions(value: unknown, location: string): ResolvedBenchRunOptions {
+  const record = parseRecord(value, location);
   return {
-    time: readNonNegativeNumber(record.time, `${location}.time`),
-    warmupTime: readNonNegativeNumber(record.warmupTime, `${location}.warmupTime`),
-    warmupIterations: readNonNegativeNumber(
+    time: parseNonNegativeNumber(record.time, `${location}.time`),
+    warmupTime: parseNonNegativeNumber(record.warmupTime, `${location}.warmupTime`),
+    warmupIterations: parseNonNegativeNumber(
       record.warmupIterations,
       `${location}.warmupIterations`,
     ),
-    repeats: readNonNegativeNumber(record.repeats, `${location}.repeats`),
+    repeats: parseNonNegativeNumber(record.repeats, `${location}.repeats`),
   };
 }
 
-function readEnvironment(value: unknown, location: string): EnvironmentReport {
-  const record = readRecord(value, location);
+function parseEnvironment(value: unknown, location: string): EnvironmentReport {
+  const record = parseRecord(value, location);
   return {
-    node: readString(record.node, `${location}.node`),
-    platform: readPlatform(record.platform, `${location}.platform`),
-    arch: readString(record.arch, `${location}.arch`),
+    node: parseString(record.node, `${location}.node`),
+    platform: parsePlatform(record.platform, `${location}.platform`),
+    arch: parseString(record.arch, `${location}.arch`),
   };
 }
 
-function readOptionalCpuMetadata(value: unknown, location: string): BenchmarkCpuMetadata {
+function parseOptionalCpuMetadata(value: unknown, location: string): BenchmarkCpuMetadata {
   if (value === undefined) return { model: "unknown", logicalCores: 0 };
-  const record = readRecord(value, location);
+  const record = parseRecord(value, location);
   return {
-    model: readString(record.model, `${location}.model`),
-    logicalCores: readNonNegativeNumber(record.logicalCores, `${location}.logicalCores`),
+    model: parseString(record.model, `${location}.model`),
+    logicalCores: parseNonNegativeNumber(record.logicalCores, `${location}.logicalCores`),
   };
 }
 
-function readOptionalMemoryMetadata(value: unknown, location: string): BenchmarkMemoryMetadata {
+function parseOptionalMemoryMetadata(value: unknown, location: string): BenchmarkMemoryMetadata {
   if (value === undefined) return { totalBytes: 0 };
-  const record = readRecord(value, location);
+  const record = parseRecord(value, location);
   return {
-    totalBytes: readNonNegativeNumber(record.totalBytes, `${location}.totalBytes`),
+    totalBytes: parseNonNegativeNumber(record.totalBytes, `${location}.totalBytes`),
   };
 }
 
-function readOptionalOperatingSystemMetadata(
+function parseOptionalOperatingSystemMetadata(
   value: unknown,
   environment: EnvironmentReport,
   location: string,
@@ -625,45 +586,45 @@ function readOptionalOperatingSystemMetadata(
       arch: environment.arch,
     };
   }
-  const record = readRecord(value, location);
+  const record = parseRecord(value, location);
   return {
-    type: readString(record.type, `${location}.type`),
-    release: readString(record.release, `${location}.release`),
-    platform: readPlatform(record.platform, `${location}.platform`),
-    arch: readString(record.arch, `${location}.arch`),
+    type: parseString(record.type, `${location}.type`),
+    release: parseString(record.release, `${location}.release`),
+    platform: parsePlatform(record.platform, `${location}.platform`),
+    arch: parseString(record.arch, `${location}.arch`),
   };
 }
 
-function readOptionalPackageManagerMetadata(
+function parseOptionalPackageManagerMetadata(
   value: unknown,
   location: string,
 ): BenchmarkPackageManagerMetadata {
   if (value === undefined) return { name: "unknown", version: "unknown" };
-  const record = readRecord(value, location);
+  const record = parseRecord(value, location);
   return {
-    name: readString(record.name, `${location}.name`),
-    version: readString(record.version, `${location}.version`),
+    name: parseString(record.name, `${location}.name`),
+    version: parseString(record.version, `${location}.version`),
   };
 }
 
-function readRunnerIdentity(value: unknown, location: string): BenchmarkRunnerIdentity {
-  const runnerRecord = readRecord(value, location);
-  const runnerEnvironment = readEnvironment(runnerRecord, location);
+function parseRunnerIdentity(value: unknown, location: string): BenchmarkRunnerIdentity {
+  const runnerRecord = parseRecord(value, location);
+  const runnerEnvironment = parseEnvironment(runnerRecord, location);
   return {
-    id: readString(runnerRecord.id, `${location}.id`),
+    id: parseString(runnerRecord.id, `${location}.id`),
     ...runnerEnvironment,
-    cpu: readOptionalCpuMetadata(runnerRecord.cpu, `${location}.cpu`),
-    memory: readOptionalMemoryMetadata(runnerRecord.memory, `${location}.memory`),
-    os: readOptionalOperatingSystemMetadata(runnerRecord.os, runnerEnvironment, `${location}.os`),
-    packageManager: readOptionalPackageManagerMetadata(
+    cpu: parseOptionalCpuMetadata(runnerRecord.cpu, `${location}.cpu`),
+    memory: parseOptionalMemoryMetadata(runnerRecord.memory, `${location}.memory`),
+    os: parseOptionalOperatingSystemMetadata(runnerRecord.os, runnerEnvironment, `${location}.os`),
+    packageManager: parseOptionalPackageManagerMetadata(
       runnerRecord.packageManager,
       `${location}.packageManager`,
     ),
   };
 }
 
-function readPlatform(value: unknown, location: string): NodeJS.Platform {
-  const platform = readString(value, location);
+function parsePlatform(value: unknown, location: string): NodeJS.Platform {
+  const platform = parseString(value, location);
   if (
     platform === "aix" ||
     platform === "android" ||
@@ -679,54 +640,54 @@ function readPlatform(value: unknown, location: string): NodeJS.Platform {
   ) {
     return platform;
   }
-  validationError(location, "expected Node platform id");
+  parseError(location, "expected Node platform id");
 }
 
-function readRepeatedStats(value: unknown, location: string): RepeatedTinybenchRecord {
-  const record = readRecord(value, location);
+function parseRepeatedStats(value: unknown, location: string): RepeatedTinybenchRecord {
+  const record = parseRecord(value, location);
   const stats: RepeatedTinybenchRecord = {
-    hz: readNonNegativeNumber(record.hz, `${location}.hz`),
-    latencyMs: readNonNegativeNumber(record.latencyMs, `${location}.latencyMs`),
-    latencyMinMs: readNonNegativeNumber(record.latencyMinMs, `${location}.latencyMinMs`),
-    latencyMaxMs: readNonNegativeNumber(record.latencyMaxMs, `${location}.latencyMaxMs`),
-    semMs: readNonNegativeNumber(record.semMs, `${location}.semMs`),
-    rme: readNonNegativeNumber(record.rme, `${location}.rme`),
-    sampleCount: readNonNegativeNumber(record.sampleCount, `${location}.sampleCount`),
+    hz: parseNonNegativeNumber(record.hz, `${location}.hz`),
+    latencyMs: parseNonNegativeNumber(record.latencyMs, `${location}.latencyMs`),
+    latencyMinMs: parseNonNegativeNumber(record.latencyMinMs, `${location}.latencyMinMs`),
+    latencyMaxMs: parseNonNegativeNumber(record.latencyMaxMs, `${location}.latencyMaxMs`),
+    semMs: parseNonNegativeNumber(record.semMs, `${location}.semMs`),
+    rme: parseNonNegativeNumber(record.rme, `${location}.rme`),
+    sampleCount: parseNonNegativeNumber(record.sampleCount, `${location}.sampleCount`),
   };
   if (record.repeats !== undefined) {
-    if (!Array.isArray(record.repeats)) validationError(`${location}.repeats`, "expected array");
+    if (!Array.isArray(record.repeats)) parseError(`${location}.repeats`, "expected array");
     stats.repeats = record.repeats.map((repeat, index) =>
-      readRepeatedStats(repeat, `${location}.repeats[${index}]`),
+      parseRepeatedStats(repeat, `${location}.repeats[${index}]`),
     );
   }
   return stats;
 }
 
-function readScenarioResult(value: unknown, location: string): OfficialScenarioResult {
-  const record = readRecord(value, location);
+function parseScenarioResult(value: unknown, location: string): OfficialScenarioResult {
+  const record = parseRecord(value, location);
   return {
-    key: readString(record.key, `${location}.key`),
-    label: readString(record.label, `${location}.label`),
-    group: readString(record.group, `${location}.group`),
-    implementationId: readString(record.implementationId, `${location}.implementationId`),
-    implementationLabel: readString(record.implementationLabel, `${location}.implementationLabel`),
-    benchName: readString(record.benchName, `${location}.benchName`),
-    description: readString(record.description, `${location}.description`),
-    stats: readRepeatedStats(record.stats, `${location}.stats`),
-    artifacts: readArtifacts(record.artifacts, `${location}.artifacts`),
+    key: parseString(record.key, `${location}.key`),
+    label: parseString(record.label, `${location}.label`),
+    group: parseString(record.group, `${location}.group`),
+    implementationId: parseString(record.implementationId, `${location}.implementationId`),
+    implementationLabel: parseString(record.implementationLabel, `${location}.implementationLabel`),
+    benchName: parseString(record.benchName, `${location}.benchName`),
+    description: parseString(record.description, `${location}.description`),
+    stats: parseRepeatedStats(record.stats, `${location}.stats`),
+    artifacts: parseArtifacts(record.artifacts, `${location}.artifacts`),
   };
 }
 
-function readPackages(value: unknown, location: string): BenchmarkPackageMetadata[] {
-  if (!Array.isArray(value)) validationError(location, "expected array");
+function parsePackages(value: unknown, location: string): BenchmarkPackageMetadata[] {
+  if (!Array.isArray(value)) parseError(location, "expected array");
   return value.map((item, index) => {
-    const packageRecord = readRecord(item, `${location}[${index}]`);
+    const packageRecord = parseRecord(item, `${location}[${index}]`);
     const packageMetadata: BenchmarkPackageMetadata = {
-      name: readString(packageRecord.name, `${location}[${index}].name`),
-      version: readString(packageRecord.version, `${location}[${index}].version`),
+      name: parseString(packageRecord.name, `${location}[${index}].name`),
+      version: parseString(packageRecord.version, `${location}[${index}].version`),
     };
     if (packageRecord.packageDir !== undefined) {
-      packageMetadata.packageDir = readString(
+      packageMetadata.packageDir = parseString(
         packageRecord.packageDir,
         `${location}[${index}].packageDir`,
       );
@@ -735,256 +696,250 @@ function readPackages(value: unknown, location: string): BenchmarkPackageMetadat
   });
 }
 
-function readDependencyFingerprint(value: unknown, location: string): DependencyFingerprint {
-  const fingerprintRecord = readRecord(value, location);
+function parseDependencyFingerprint(value: unknown, location: string): DependencyFingerprint {
+  const fingerprintRecord = parseRecord(value, location);
   return {
     algorithm:
       fingerprintRecord.algorithm === "sha256"
         ? "sha256"
-        : validationError(`${location}.algorithm`, "expected sha256"),
-    digest: readString(fingerprintRecord.digest, `${location}.digest`),
-    sources: readStringArray(fingerprintRecord.sources, `${location}.sources`),
+        : parseError(`${location}.algorithm`, "expected sha256"),
+    digest: parseString(fingerprintRecord.digest, `${location}.digest`),
+    sources: parseStringArray(fingerprintRecord.sources, `${location}.sources`),
   };
 }
 
-function readCalibrationDecision(value: unknown, location: string): BenchmarkCalibrationDecision {
-  const decision = readString(value, location);
+function parseCalibrationDecision(value: unknown, location: string): BenchmarkCalibrationDecision {
+  const decision = parseString(value, location);
   if (decision === "acceptable" || decision === "noisy") return decision;
-  validationError(location, "expected acceptable or noisy");
+  parseError(location, "expected acceptable or noisy");
 }
 
-function readCalibrationThresholds(
+function parseCalibrationThresholds(
   value: unknown,
   location: string,
 ): BenchmarkCalibrationThresholds {
-  const record = readRecord(value, location);
+  const record = parseRecord(value, location);
   return {
-    microbenchmarkNoiseRatio: readNonNegativeNumber(
+    microbenchmarkNoiseRatio: parseNonNegativeNumber(
       record.microbenchmarkNoiseRatio,
       `${location}.microbenchmarkNoiseRatio`,
     ),
-    workflowNoiseRatio: readNonNegativeNumber(
+    workflowNoiseRatio: parseNonNegativeNumber(
       record.workflowNoiseRatio,
       `${location}.workflowNoiseRatio`,
     ),
   };
 }
 
-function readCalibrationRecommendation(
+function parseCalibrationRecommendation(
   value: unknown,
   location: string,
 ): BenchmarkCalibrationRecommendation {
-  const record = readRecord(value, location);
+  const record = parseRecord(value, location);
   return {
-    decision: readCalibrationDecision(record.decision, `${location}.decision`),
-    thresholdRatio: readNonNegativeNumber(record.thresholdRatio, `${location}.thresholdRatio`),
-    worstNoiseBandRatio: readNonNegativeNumber(
+    decision: parseCalibrationDecision(record.decision, `${location}.decision`),
+    thresholdRatio: parseNonNegativeNumber(record.thresholdRatio, `${location}.thresholdRatio`),
+    worstNoiseBandRatio: parseNonNegativeNumber(
       record.worstNoiseBandRatio,
       `${location}.worstNoiseBandRatio`,
     ),
-    worstScenarioKey: readString(record.worstScenarioKey, `${location}.worstScenarioKey`),
-    reason: readString(record.reason, `${location}.reason`),
+    worstScenarioKey: parseString(record.worstScenarioKey, `${location}.worstScenarioKey`),
+    reason: parseString(record.reason, `${location}.reason`),
   };
 }
 
-function readCalibrationRecommendations(
+function parseCalibrationRecommendations(
   value: unknown,
   location: string,
 ): BenchmarkCalibrationRecommendations {
-  const record = readRecord(value, location);
+  const record = parseRecord(value, location);
   return {
-    microbenchmark: readCalibrationRecommendation(
+    microbenchmark: parseCalibrationRecommendation(
       record.microbenchmark,
       `${location}.microbenchmark`,
     ),
-    workflow: readCalibrationRecommendation(record.workflow, `${location}.workflow`),
+    workflow: parseCalibrationRecommendation(record.workflow, `${location}.workflow`),
   };
 }
 
-function readCalibrationSampleSummary(
+function parseCalibrationSampleSummary(
   value: unknown,
   location: string,
 ): BenchmarkCalibrationSampleSummary {
-  const record = readRecord(value, location);
-  const first = readString(record.first, `${location}.first`);
+  const record = parseRecord(value, location);
+  const first = parseString(record.first, `${location}.first`);
   if (first !== "left" && first !== "right") {
-    validationError(`${location}.first`, "expected left or right");
+    parseError(`${location}.first`, "expected left or right");
   }
   return {
-    sampleIndex: readNonNegativeNumber(record.sampleIndex, `${location}.sampleIndex`),
+    sampleIndex: parseNonNegativeNumber(record.sampleIndex, `${location}.sampleIndex`),
     first,
-    leftHz: readNonNegativeNumber(record.leftHz, `${location}.leftHz`),
-    rightHz: readNonNegativeNumber(record.rightHz, `${location}.rightHz`),
-    deltaRatio: readFiniteNumber(record.deltaRatio, `${location}.deltaRatio`),
-    absoluteDeltaRatio: readNonNegativeNumber(
+    leftHz: parseNonNegativeNumber(record.leftHz, `${location}.leftHz`),
+    rightHz: parseNonNegativeNumber(record.rightHz, `${location}.rightHz`),
+    deltaRatio: parseFiniteNumber(record.deltaRatio, `${location}.deltaRatio`),
+    absoluteDeltaRatio: parseNonNegativeNumber(
       record.absoluteDeltaRatio,
       `${location}.absoluteDeltaRatio`,
     ),
-    combinedNoiseRatio: readNonNegativeNumber(
+    combinedNoiseRatio: parseNonNegativeNumber(
       record.combinedNoiseRatio,
       `${location}.combinedNoiseRatio`,
     ),
   };
 }
 
-function readCalibrationScenarioSummary(
+function parseCalibrationScenarioSummary(
   value: unknown,
   location: string,
 ): BenchmarkCalibrationScenarioSummary {
-  const record = readRecord(value, location);
+  const record = parseRecord(value, location);
   const samples = record.samples;
-  if (!Array.isArray(samples)) validationError(`${location}.samples`, "expected array");
+  if (!Array.isArray(samples)) parseError(`${location}.samples`, "expected array");
   return {
-    key: readString(record.key, `${location}.key`),
-    label: readString(record.label, `${location}.label`),
-    benchName: readString(record.benchName, `${location}.benchName`),
-    sampleCount: readNonNegativeNumber(record.sampleCount, `${location}.sampleCount`),
-    medianAbsoluteDeltaRatio: readNonNegativeNumber(
+    key: parseString(record.key, `${location}.key`),
+    label: parseString(record.label, `${location}.label`),
+    benchName: parseString(record.benchName, `${location}.benchName`),
+    sampleCount: parseNonNegativeNumber(record.sampleCount, `${location}.sampleCount`),
+    medianAbsoluteDeltaRatio: parseNonNegativeNumber(
       record.medianAbsoluteDeltaRatio,
       `${location}.medianAbsoluteDeltaRatio`,
     ),
-    p95AbsoluteDeltaRatio: readNonNegativeNumber(
+    p95AbsoluteDeltaRatio: parseNonNegativeNumber(
       record.p95AbsoluteDeltaRatio,
       `${location}.p95AbsoluteDeltaRatio`,
     ),
-    maxAbsoluteDeltaRatio: readNonNegativeNumber(
+    maxAbsoluteDeltaRatio: parseNonNegativeNumber(
       record.maxAbsoluteDeltaRatio,
       `${location}.maxAbsoluteDeltaRatio`,
     ),
-    averageCombinedNoiseRatio: readNonNegativeNumber(
+    averageCombinedNoiseRatio: parseNonNegativeNumber(
       record.averageCombinedNoiseRatio,
       `${location}.averageCombinedNoiseRatio`,
     ),
-    noiseBandRatio: readNonNegativeNumber(record.noiseBandRatio, `${location}.noiseBandRatio`),
+    noiseBandRatio: parseNonNegativeNumber(record.noiseBandRatio, `${location}.noiseBandRatio`),
     samples: samples.map((sample, index) =>
-      readCalibrationSampleSummary(sample, `${location}.samples[${index}]`),
+      parseCalibrationSampleSummary(sample, `${location}.samples[${index}]`),
     ),
   };
 }
 
-function readCalibrationScenarioSummaries(
+function parseCalibrationScenarioSummaries(
   value: unknown,
   location: string,
 ): BenchmarkCalibrationScenarioSummary[] {
-  if (!Array.isArray(value)) validationError(location, "expected array");
-  if (value.length === 0) validationError(location, "expected at least one scenario summary");
-  return value.map((item, index) => readCalibrationScenarioSummary(item, `${location}[${index}]`));
+  if (!Array.isArray(value)) parseError(location, "expected array");
+  if (value.length === 0) parseError(location, "expected at least one scenario summary");
+  return value.map((item, index) => parseCalibrationScenarioSummary(item, `${location}[${index}]`));
 }
 
-function readCalibrationAttachment(
+function parseCalibrationAttachment(
   value: unknown,
   location: string,
 ): BenchmarkCalibrationAttachment {
-  const record = readRecord(value, location);
+  const record = parseRecord(value, location);
   if (record.schemaVersion !== BENCHMARK_CALIBRATION_REPORT_VERSION) {
-    validationError(
-      `${location}.schemaVersion`,
-      `expected ${BENCHMARK_CALIBRATION_REPORT_VERSION}`,
-    );
+    parseError(`${location}.schemaVersion`, `expected ${BENCHMARK_CALIBRATION_REPORT_VERSION}`);
   }
   return {
     schemaVersion: BENCHMARK_CALIBRATION_REPORT_VERSION,
-    generatedAt: readString(record.generatedAt, `${location}.generatedAt`),
-    runnerId: readString(record.runnerId, `${location}.runnerId`),
-    sampleCount: readNonNegativeNumber(record.sampleCount, `${location}.sampleCount`),
-    thresholds: readCalibrationThresholds(record.thresholds, `${location}.thresholds`),
-    recommendations: readCalibrationRecommendations(
+    generatedAt: parseString(record.generatedAt, `${location}.generatedAt`),
+    runnerId: parseString(record.runnerId, `${location}.runnerId`),
+    sampleCount: parseNonNegativeNumber(record.sampleCount, `${location}.sampleCount`),
+    thresholds: parseCalibrationThresholds(record.thresholds, `${location}.thresholds`),
+    recommendations: parseCalibrationRecommendations(
       record.recommendations,
       `${location}.recommendations`,
     ),
-    scenarioSummaries: readCalibrationScenarioSummaries(
+    scenarioSummaries: parseCalibrationScenarioSummaries(
       record.scenarioSummaries,
       `${location}.scenarioSummaries`,
     ),
-    artifact: readArtifactRef(record.artifact, `${location}.artifact`),
+    artifact: parseArtifactRef(record.artifact, `${location}.artifact`),
   };
 }
 
-export function validateOfficialBenchmarkReport(input: unknown): OfficialBenchmarkReport {
-  const record = readRecord(input, "report");
+export function parseOfficialBenchmarkReport(input: unknown): OfficialBenchmarkReport {
+  const record = parseRecord(input, "report");
   if (record.schemaVersion !== OFFICIAL_BENCHMARK_REPORT_VERSION) {
-    validationError("report.schemaVersion", `expected ${OFFICIAL_BENCHMARK_REPORT_VERSION}`);
+    parseError("report.schemaVersion", `expected ${OFFICIAL_BENCHMARK_REPORT_VERSION}`);
   }
 
-  const runRecord = readRecord(record.run, "report.run");
-  const kind = readString(runRecord.kind, "report.run.kind");
+  const runRecord = parseRecord(record.run, "report.run");
+  const kind = parseString(runRecord.kind, "report.run.kind");
   if (kind !== "comparison" && kind !== "profile") {
-    validationError("report.run.kind", "expected comparison or profile");
+    parseError("report.run.kind", "expected comparison or profile");
   }
 
-  const commitRecord = readRecord(record.commit, "report.commit");
-  const packages = readPackages(record.packages, "report.packages");
+  const commitRecord = parseRecord(record.commit, "report.commit");
+  const packages = parsePackages(record.packages, "report.packages");
   const scenarioResults = record.scenarioResults;
   if (!Array.isArray(scenarioResults)) {
-    validationError("report.scenarioResults", "expected array");
+    parseError("report.scenarioResults", "expected array");
   }
   if (scenarioResults.length === 0) {
-    validationError("report.scenarioResults", "expected at least one scenario result");
+    parseError("report.scenarioResults", "expected at least one scenario result");
   }
 
   return {
     schemaVersion: OFFICIAL_BENCHMARK_REPORT_VERSION,
     run: {
-      id: readString(runRecord.id, "report.run.id"),
+      id: parseString(runRecord.id, "report.run.id"),
       kind,
-      generatedAt: readString(runRecord.generatedAt, "report.run.generatedAt"),
-      artifacts: readArtifacts(runRecord.artifacts, "report.run.artifacts"),
+      generatedAt: parseString(runRecord.generatedAt, "report.run.generatedAt"),
+      artifacts: parseArtifacts(runRecord.artifacts, "report.run.artifacts"),
     },
-    runner: readRunnerIdentity(record.runner, "report.runner"),
+    runner: parseRunnerIdentity(record.runner, "report.runner"),
     commit: {
-      headSha: readString(commitRecord.headSha, "report.commit.headSha"),
-      dirty: readBoolean(commitRecord.dirty, "report.commit.dirty"),
+      headSha: parseString(commitRecord.headSha, "report.commit.headSha"),
+      dirty: parseBoolean(commitRecord.dirty, "report.commit.dirty"),
     },
     packages,
-    dependencyFingerprint: readDependencyFingerprint(
+    dependencyFingerprint: parseDependencyFingerprint(
       record.dependencyFingerprint,
       "report.dependencyFingerprint",
     ),
-    environment: readEnvironment(record.environment, "report.environment"),
-    benchOptions: readBenchOptions(record.benchOptions, "report.benchOptions"),
+    environment: parseEnvironment(record.environment, "report.environment"),
+    benchOptions: parseBenchOptions(record.benchOptions, "report.benchOptions"),
     scenarioResults: scenarioResults.map((item, index) =>
-      readScenarioResult(item, `report.scenarioResults[${index}]`),
+      parseScenarioResult(item, `report.scenarioResults[${index}]`),
     ),
     calibration:
       record.calibration === undefined
         ? undefined
-        : readCalibrationAttachment(record.calibration, "report.calibration"),
+        : parseCalibrationAttachment(record.calibration, "report.calibration"),
   };
 }
 
-export function validateBenchmarkCalibrationReport(input: unknown): BenchmarkCalibrationReport {
-  const record = readRecord(input, "calibration");
+export function parseBenchmarkCalibrationReport(input: unknown): BenchmarkCalibrationReport {
+  const record = parseRecord(input, "calibration");
   if (record.schemaVersion !== BENCHMARK_CALIBRATION_REPORT_VERSION) {
-    validationError(
-      "calibration.schemaVersion",
-      `expected ${BENCHMARK_CALIBRATION_REPORT_VERSION}`,
-    );
+    parseError("calibration.schemaVersion", `expected ${BENCHMARK_CALIBRATION_REPORT_VERSION}`);
   }
 
   return {
     schemaVersion: BENCHMARK_CALIBRATION_REPORT_VERSION,
-    generatedAt: readString(record.generatedAt, "calibration.generatedAt"),
-    runner: readRunnerIdentity(record.runner, "calibration.runner"),
+    generatedAt: parseString(record.generatedAt, "calibration.generatedAt"),
+    runner: parseRunnerIdentity(record.runner, "calibration.runner"),
     commit: (() => {
-      const commitRecord = readRecord(record.commit, "calibration.commit");
+      const commitRecord = parseRecord(record.commit, "calibration.commit");
       return {
-        headSha: readString(commitRecord.headSha, "calibration.commit.headSha"),
-        dirty: readBoolean(commitRecord.dirty, "calibration.commit.dirty"),
+        headSha: parseString(commitRecord.headSha, "calibration.commit.headSha"),
+        dirty: parseBoolean(commitRecord.dirty, "calibration.commit.dirty"),
       };
     })(),
-    packages: readPackages(record.packages, "calibration.packages"),
-    dependencyFingerprint: readDependencyFingerprint(
+    packages: parsePackages(record.packages, "calibration.packages"),
+    dependencyFingerprint: parseDependencyFingerprint(
       record.dependencyFingerprint,
       "calibration.dependencyFingerprint",
     ),
-    benchOptions: readBenchOptions(record.benchOptions, "calibration.benchOptions"),
-    sampleCount: readNonNegativeNumber(record.sampleCount, "calibration.sampleCount"),
-    thresholds: readCalibrationThresholds(record.thresholds, "calibration.thresholds"),
-    recommendations: readCalibrationRecommendations(
+    benchOptions: parseBenchOptions(record.benchOptions, "calibration.benchOptions"),
+    sampleCount: parseNonNegativeNumber(record.sampleCount, "calibration.sampleCount"),
+    thresholds: parseCalibrationThresholds(record.thresholds, "calibration.thresholds"),
+    recommendations: parseCalibrationRecommendations(
       record.recommendations,
       "calibration.recommendations",
     ),
-    scenarioSummaries: readCalibrationScenarioSummaries(
+    scenarioSummaries: parseCalibrationScenarioSummaries(
       record.scenarioSummaries,
       "calibration.scenarioSummaries",
     ),
@@ -996,7 +951,7 @@ export async function readBenchmarkCalibrationAttachment(
   calibrationPath: string | undefined,
 ): Promise<BenchmarkCalibrationAttachment | undefined> {
   if (calibrationPath === undefined) return undefined;
-  const report = validateBenchmarkCalibrationReport(await readJsonFile(calibrationPath));
+  const report = parseBenchmarkCalibrationReport(await parseJsonFile(calibrationPath));
   return {
     schemaVersion: BENCHMARK_CALIBRATION_REPORT_VERSION,
     generatedAt: report.generatedAt,
@@ -1201,10 +1156,6 @@ export function formatBenchmarkDiff(diff: BenchmarkDiff): string {
   return lines.join("\n");
 }
 
-async function readJsonFile(filePath: string): Promise<unknown> {
-  return JSON.parse(await readFile(filePath, "utf8"));
-}
-
 function parseDiffCliArgs(argv: readonly string[]): {
   basePath: string;
   candidatePath: string;
@@ -1246,8 +1197,8 @@ export async function runOfficialReportCli(argv: readonly string[] = process.arg
   }
 
   const args = parseDiffCliArgs(rest);
-  const baseReport = validateOfficialBenchmarkReport(await readJsonFile(args.basePath));
-  const candidateReport = validateOfficialBenchmarkReport(await readJsonFile(args.candidatePath));
+  const baseReport = parseOfficialBenchmarkReport(await parseJsonFile(args.basePath));
+  const candidateReport = parseOfficialBenchmarkReport(await parseJsonFile(args.candidatePath));
   const diff = diffOfficialBenchmarkReports(baseReport, candidateReport, {
     implementationId: args.implementationId,
     minMeaningfulChangeRatio: args.minMeaningfulChangeRatio,
