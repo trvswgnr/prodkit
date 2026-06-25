@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
+import type { ComparisonScenario } from "../comparison-matrix.ts";
 import type { RepeatedTinybenchRecord } from "../harness.ts";
 import {
   OFFICIAL_BENCHMARK_REPORT_VERSION,
+  type BenchmarkArtifactRef,
   type BenchmarkRunnerIdentity,
   type OfficialBenchmarkReport,
 } from "../official-report.ts";
 import {
   TRUSTED_REF_COMPARISON_IMPLEMENTATION_ID,
   TRUSTED_REF_COMPARISON_REPORT_VERSION,
+  attachTrustedRefComparisonProfileArtifacts,
   assertCleanGitStatus,
   assertDistinctResolvedRefs,
   createScenarioExecutionOrder,
@@ -16,6 +19,8 @@ import {
   normalizeResolvedGitCommit,
   parseTrustedRefComparisonArgs,
   refComparisonRunOrder,
+  selectTrustedRefComparisonProfileScenarios,
+  type TrustedRefComparisonCapturedProfileArtifact,
 } from "../compare-refs.ts";
 
 const benchOptions = {
@@ -120,6 +125,54 @@ function officialReport(input: {
   };
 }
 
+function comparisonScenario(input: {
+  key: "singleValue" | "all" | "compose";
+  opBenchName: string;
+  overheadBench: string;
+}): ComparisonScenario {
+  return {
+    key: input.key,
+    label: input.key,
+    group: input.key,
+    overheadBench: input.overheadBench,
+    implementations: {
+      native: {
+        benchName: `${input.key}.native`,
+        description: "native",
+        run: () => undefined,
+      },
+      op: {
+        benchName: input.opBenchName,
+        description: "op",
+        run: () => undefined,
+      },
+      effect: {
+        benchName: `${input.key}.effect`,
+        description: "effect",
+        run: () => undefined,
+      },
+    },
+  };
+}
+
+const comparisonScenarios = [
+  comparisonScenario({
+    key: "singleValue",
+    opBenchName: "singleValue.opRun",
+    overheadBench: "overhead.singleValue.ratio",
+  }),
+  comparisonScenario({
+    key: "all",
+    opBenchName: "all.opAll",
+    overheadBench: "overhead.all.ratio",
+  }),
+  comparisonScenario({
+    key: "compose",
+    opBenchName: "compose.opYieldChain",
+    overheadBench: "overhead.compose.ratio",
+  }),
+] as const;
+
 describe("parseTrustedRefComparisonArgs", () => {
   it("requires named base and candidate refs", () => {
     expect(
@@ -130,6 +183,9 @@ describe("parseTrustedRefComparisonArgs", () => {
         "--time=1000",
         "--repeats=3",
         "--min-change=0.05",
+        "--profile-capture=auto",
+        "--profile-mode=cpu",
+        "--profile-limit=2",
       ]),
     ).toEqual({
       baseRef: "main",
@@ -143,6 +199,26 @@ describe("parseTrustedRefComparisonArgs", () => {
         repeats: 3,
       },
       minMeaningfulChangeRatio: 0.05,
+      profile: {
+        capture: "auto",
+        mode: "cpu",
+        limit: 2,
+      },
+    });
+  });
+
+  it("treats explicit profile scenarios as manual capture requests", () => {
+    expect(
+      parseTrustedRefComparisonArgs([
+        "--base=main",
+        "--candidate=HEAD",
+        "--profile-scenario=all.opAll",
+      ]).profile,
+    ).toEqual({
+      capture: "auto",
+      mode: "both",
+      scenario: "all.opAll",
+      limit: 1,
     });
   });
 
@@ -270,5 +346,167 @@ describe("trusted ref comparison report", () => {
     expect(formatTrustedRefComparisonSummary(report)).toContain(
       "Summary: 1 improvements, 1 regressions, 1 inconclusive",
     );
+  });
+
+  it("selects the largest meaningful deltas for automatic profile capture", () => {
+    const report = createTrustedRefComparisonReport({
+      generatedAt: "2026-06-23T12:00:00.000Z",
+      benchOptions,
+      scenarioOrder: [
+        { scenarioKey: "singleValue", first: "base" },
+        { scenarioKey: "all", first: "candidate" },
+        { scenarioKey: "compose", first: "base" },
+      ],
+      baseRef: "main",
+      baseSha: "a".repeat(40),
+      basePackageVersion: "0.2.2",
+      baseReport: officialReport({
+        runId: "comparison-base",
+        sha: "a".repeat(40),
+        hz: [100, 100, 100],
+      }),
+      candidateRef: "HEAD",
+      candidateSha: "b".repeat(40),
+      candidatePackageVersion: "0.2.2",
+      candidateReport: officialReport({
+        runId: "comparison-candidate",
+        sha: "b".repeat(40),
+        hz: [120, 60, 101],
+      }),
+    });
+
+    expect(
+      selectTrustedRefComparisonProfileScenarios({
+        report,
+        scenarios: comparisonScenarios,
+        profile: {
+          capture: "auto",
+          mode: "both",
+          limit: 1,
+        },
+      }),
+    ).toEqual([
+      {
+        source: "meaningful-delta",
+        scenarioKey: "all",
+        label: "all",
+        profileScenario: "all.opAll",
+        verdict: "regression",
+        deltaRatio: -0.4,
+      },
+    ]);
+  });
+
+  it("selects a manual overhead profile scenario by comparison row", () => {
+    const report = createTrustedRefComparisonReport({
+      generatedAt: "2026-06-23T12:00:00.000Z",
+      benchOptions,
+      scenarioOrder: [{ scenarioKey: "all", first: "base" }],
+      baseRef: "main",
+      baseSha: "a".repeat(40),
+      basePackageVersion: "0.2.2",
+      baseReport: officialReport({
+        runId: "comparison-base",
+        sha: "a".repeat(40),
+        hz: [100, 100, 100],
+      }),
+      candidateRef: "HEAD",
+      candidateSha: "b".repeat(40),
+      candidatePackageVersion: "0.2.2",
+      candidateReport: officialReport({
+        runId: "comparison-candidate",
+        sha: "b".repeat(40),
+        hz: [100, 80, 100],
+      }),
+    });
+
+    expect(
+      selectTrustedRefComparisonProfileScenarios({
+        report,
+        scenarios: comparisonScenarios,
+        profile: {
+          capture: "auto",
+          mode: "cpu",
+          scenario: "overhead.all.ratio",
+          limit: 1,
+        },
+      }),
+    ).toEqual([
+      {
+        source: "manual",
+        scenarioKey: "all",
+        label: "all",
+        profileScenario: "overhead.all.ratio",
+        verdict: "regression",
+        deltaRatio: -0.2,
+      },
+    ]);
+  });
+
+  it("attaches captured profile artifacts to the candidate scenario report", () => {
+    const report = createTrustedRefComparisonReport({
+      generatedAt: "2026-06-23T12:00:00.000Z",
+      benchOptions,
+      scenarioOrder: [{ scenarioKey: "all", first: "base" }],
+      baseRef: "main",
+      baseSha: "a".repeat(40),
+      basePackageVersion: "0.2.2",
+      baseReport: officialReport({
+        runId: "comparison-base",
+        sha: "a".repeat(40),
+        hz: [100, 100, 100],
+      }),
+      candidateRef: "HEAD",
+      candidateSha: "b".repeat(40),
+      candidatePackageVersion: "0.2.2",
+      candidateReport: officialReport({
+        runId: "comparison-candidate",
+        sha: "b".repeat(40),
+        hz: [100, 80, 100],
+      }),
+    });
+    const selection = {
+      source: "meaningful-delta",
+      scenarioKey: "all",
+      label: "all",
+      profileScenario: "all.opAll",
+      verdict: "regression",
+      deltaRatio: -0.2,
+    } as const;
+    const artifact: BenchmarkArtifactRef = {
+      kind: "cpu-profile",
+      path: "benchmarks/.profiles/op/CPU.test.cpuprofile",
+      contentType: "application/json",
+      scenarioKey: "all",
+      implementationId: "op",
+    };
+    const captures: TrustedRefComparisonCapturedProfileArtifact[] = [
+      {
+        selection,
+        mode: "cpu",
+        artifact,
+      },
+    ];
+
+    const withProfiles = attachTrustedRefComparisonProfileArtifacts({
+      report,
+      profile: {
+        capture: "auto",
+        mode: "cpu",
+        limit: 1,
+      },
+      selections: [selection],
+      captures,
+    });
+
+    expect(
+      withProfiles.candidate.report.scenarioResults.find((scenario) => scenario.key === "all")
+        ?.artifacts,
+    ).toEqual([artifact]);
+    expect(
+      withProfiles.base.report.scenarioResults.find((scenario) => scenario.key === "all")
+        ?.artifacts,
+    ).toEqual([]);
+    expect(withProfiles.profile.artifacts).toEqual([artifact]);
   });
 });

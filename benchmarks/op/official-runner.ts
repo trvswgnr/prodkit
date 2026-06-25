@@ -8,6 +8,10 @@ import {
   resolveBenchmarkArtifact,
   type BenchRunOptions,
 } from "./harness.ts";
+import {
+  parseTrustedRefComparisonProfileArgs,
+  type TrustedRefComparisonProfileArgs,
+} from "./compare-refs.ts";
 import { DEFAULT_MIN_MEANINGFUL_CHANGE_RATIO } from "./official-report.ts";
 import {
   publishBenchmarkArtifacts,
@@ -50,6 +54,7 @@ export type OfficialBenchmarkRunArgs = {
   calibrationPath?: string;
   benchOptions: BenchRunOptions;
   minMeaningfulChangeRatio?: number;
+  profile: TrustedRefComparisonProfileArgs;
 };
 
 export type OfficialBenchmarkRunContext = {
@@ -64,6 +69,7 @@ export type OfficialBenchmarkRunContext = {
   manifestPath: string;
   calibrationPath?: string;
   benchArgs: string[];
+  profile: TrustedRefComparisonProfileArgs;
   policy: {
     automaticBaselineRefs: string[];
     candidateApproval: Extract<OfficialBenchmarkApproval, "manual-candidate-comparison">;
@@ -99,6 +105,7 @@ function usage(): string {
     "usage: node ./op/official-runner.ts run --kind=<baseline|candidate-comparison> --approval=<approval> --event=<event>",
     "  [--base=main] [--candidate=<ref>] [--report=<path>] [--context=<path>] [--manifest=<path>]",
     "  [--calibration=<path>] [--time=300] [--warmup-time=150] [--warmup-iterations=5] [--repeats=1] [--min-change=0.02]",
+    "  [--profile-capture=auto|off] [--profile-mode=both|cpu|heap] [--profile-scenario=<scenario>] [--profile-limit=1]",
     "usage: node ./op/official-runner.ts publish [--context=op/.artifacts/official-benchmark-run-context.json]",
   ].join("\n");
 }
@@ -143,6 +150,23 @@ function parseMinMeaningfulChangeRatio(argv: readonly string[]): number | undefi
     throw new Error("Invalid --min-change value. Expected a non-negative ratio.");
   }
   return parsed;
+}
+
+function parseOfficialProfileArgs(
+  argv: readonly string[],
+  runKind: OfficialBenchmarkRunKind,
+): TrustedRefComparisonProfileArgs {
+  const profile = parseTrustedRefComparisonProfileArgs(argv);
+  const captureArg = parseArgValue(argv, "--profile-capture=");
+  const capture =
+    captureArg === undefined && runKind === "candidate-comparison" ? "auto" : profile.capture;
+  if (runKind === "baseline" && capture !== "off") {
+    throw new Error("Official profile capture is only supported for candidate comparisons.");
+  }
+  return {
+    ...profile,
+    capture,
+  };
 }
 
 function defaultReportPath(runKind: OfficialBenchmarkRunKind): string {
@@ -198,6 +222,7 @@ export function parseOfficialBenchmarkRunCliArgs(
       ...(parseMinMeaningfulChangeRatio(rest) === undefined
         ? {}
         : { minMeaningfulChangeRatio: parseMinMeaningfulChangeRatio(rest) }),
+      profile: parseOfficialProfileArgs(rest, runKind),
     },
   };
 }
@@ -252,6 +277,15 @@ function benchOptionArgs(options: BenchRunOptions): string[] {
   ];
 }
 
+function profileOptionArgs(profile: TrustedRefComparisonProfileArgs): string[] {
+  return [
+    `--profile-capture=${profile.capture}`,
+    `--profile-mode=${profile.mode}`,
+    `--profile-limit=${profile.limit}`,
+    ...(profile.scenario === undefined ? [] : [`--profile-scenario=${profile.scenario}`]),
+  ];
+}
+
 function reportCommandArgs(args: OfficialBenchmarkRunArgs): string[] {
   const common = [
     `--report=${args.reportPath}`,
@@ -268,6 +302,7 @@ function reportCommandArgs(args: OfficialBenchmarkRunArgs): string[] {
     `--candidate=${candidateRef}`,
     ...common,
     `--min-change=${args.minMeaningfulChangeRatio ?? DEFAULT_MIN_MEANINGFUL_CHANGE_RATIO}`,
+    ...profileOptionArgs(args.profile),
   ];
 }
 
@@ -309,6 +344,7 @@ export function createOfficialBenchmarkRunPlan(
       manifestPath: args.manifestPath,
       ...(args.calibrationPath === undefined ? {} : { calibrationPath: args.calibrationPath }),
       benchArgs,
+      profile: args.profile,
       policy: {
         automaticBaselineRefs: [...AUTOMATIC_BASELINE_REFS].sort(),
         candidateApproval: "manual-candidate-comparison",
@@ -362,6 +398,13 @@ function readStringArray(value: unknown, location: string): string[] {
   return value.map((item, index) => readString(item, `${location}[${index}]`));
 }
 
+function readPositiveInteger(value: unknown, location: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    throw new Error(`${location}: expected positive integer`);
+  }
+  return value;
+}
+
 function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
   return (typeof value === "object" || typeof value === "function") && value !== null;
 }
@@ -387,6 +430,43 @@ function readApproval(value: unknown, location: string): OfficialBenchmarkApprov
   );
 }
 
+function readProfileCapture(
+  value: unknown,
+  location: string,
+): TrustedRefComparisonProfileArgs["capture"] {
+  const capture = readString(value, location);
+  if (capture === "off" || capture === "auto") return capture;
+  throw new Error(`${location}: expected off or auto`);
+}
+
+function readProfileMode(
+  value: unknown,
+  location: string,
+): TrustedRefComparisonProfileArgs["mode"] {
+  const mode = readString(value, location);
+  if (mode === "both" || mode === "cpu" || mode === "heap") return mode;
+  throw new Error(`${location}: expected both, cpu, or heap`);
+}
+
+function readProfileArgs(value: unknown): TrustedRefComparisonProfileArgs {
+  if (value === undefined) {
+    return {
+      capture: "off",
+      mode: "both",
+      limit: 1,
+    };
+  }
+  const record = readRecord(value, "context.profile");
+  return {
+    capture: readProfileCapture(record.capture, "context.profile.capture"),
+    mode: readProfileMode(record.mode, "context.profile.mode"),
+    ...(record.scenario === undefined
+      ? {}
+      : { scenario: readString(record.scenario, "context.profile.scenario") }),
+    limit: readPositiveInteger(record.limit, "context.profile.limit"),
+  };
+}
+
 export function validateOfficialBenchmarkRunContext(input: unknown): OfficialBenchmarkRunContext {
   const record = readRecord(input, "context");
   if (record.schemaVersion !== OFFICIAL_BENCHMARK_RUN_CONTEXT_VERSION) {
@@ -409,6 +489,7 @@ export function validateOfficialBenchmarkRunContext(input: unknown): OfficialBen
       ? {}
       : { calibrationPath: readString(record.calibrationPath, "context.calibrationPath") }),
     benchArgs: readStringArray(record.benchArgs, "context.benchArgs"),
+    profile: readProfileArgs(record.profile),
     policy: {
       automaticBaselineRefs: readStringArray(
         policy.automaticBaselineRefs,

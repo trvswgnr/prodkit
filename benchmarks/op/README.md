@@ -61,6 +61,7 @@ pnpm --filter @prodkit/benchmarks run compare -- --time=1000 --repeats=5
 pnpm --filter @prodkit/benchmarks run compare -- --pair=op,effect
 pnpm --filter @prodkit/benchmarks run calibrate:runner
 pnpm --filter @prodkit/benchmarks run compare:refs -- --base=main --candidate=HEAD
+pnpm --filter @prodkit/benchmarks run compare:refs -- --base=main --candidate=HEAD --profile-capture=auto
 pnpm --filter @prodkit/benchmarks run publish:artifacts -- --report=op/.artifacts/comparison-report.json --dry-run
 pnpm --filter @prodkit/tools run performance:sync -- --write
 ```
@@ -123,6 +124,27 @@ pnpm --filter @prodkit/benchmarks run report:diff -- base-report.json candidate-
 Diff verdicts use throughput deltas plus each scenario's relative margin of error. Small movements
 inside the noise threshold are reported as inconclusive instead of being treated as regressions or
 improvements.
+
+`compare:refs` can capture V8 CPU and heap profiles for meaningful candidate deltas. Automatic
+selection uses non-inconclusive diff verdicts, ranks scenarios by absolute delta, and profiles one
+scenario by default:
+
+```bash
+pnpm --filter @prodkit/benchmarks run compare:refs -- \
+  --base=main \
+  --candidate=HEAD \
+  --profile-capture=auto
+```
+
+Use `--profile-limit=<count>` to profile more automatically selected scenarios. Use
+`--profile-mode=cpu`, `--profile-mode=heap`, or `--profile-mode=both` to choose which profile
+artifacts to capture. Use `--profile-scenario=<scenario>` to override automatic selection; the value
+can be a comparison key such as `all`, the Op profile scenario such as `all.opAll`, or an overhead
+profile scenario such as `overhead.all.ratio`.
+
+Captured profile files are attached to the candidate scenario results in the trusted comparison
+report. Publishing that report uploads the profile artifacts and the history API exposes their object
+keys from the candidate run detail and scenario history.
 
 ### Publishing official artifacts
 
@@ -271,6 +293,12 @@ The same runner can be exercised locally, but local publish mode uses real Cloud
 pnpm --filter @prodkit/benchmarks run official -- run --kind=baseline --approval=manual-baseline --event=workflow_dispatch --base=main
 pnpm --filter @prodkit/benchmarks run official -- publish
 ```
+
+Candidate comparison runs profile the largest meaningful delta by default. Maintainers can disable
+that with `--profile-capture=off`, limit the capture to one mode with `--profile-mode=cpu` or
+`--profile-mode=heap`, or force a specific scenario with `--profile-scenario=<scenario>`. The
+official workflow exposes the same inputs. Profile artifacts are uploaded with the report artifact
+from the benchmark job so the publish job can push them to R2 and index their object keys.
 
 Failure recovery:
 

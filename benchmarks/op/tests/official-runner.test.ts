@@ -16,6 +16,7 @@ import {
   BENCHMARK_PUBLISH_MANIFEST_VERSION,
   type BenchmarkPublishManifest,
 } from "../publish-artifacts.ts";
+import type { TrustedRefComparisonProfileArgs } from "../compare-refs.ts";
 
 let tempRoots: string[] = [];
 
@@ -31,6 +32,17 @@ async function createTempRepo(): Promise<string> {
   return tempRoot;
 }
 
+function profile(
+  input: Partial<TrustedRefComparisonProfileArgs> = {},
+): TrustedRefComparisonProfileArgs {
+  return {
+    capture: "off",
+    mode: "both",
+    limit: 1,
+    ...input,
+  };
+}
+
 function baselineArgs(input: Partial<OfficialBenchmarkRunArgs> = {}): OfficialBenchmarkRunArgs {
   return {
     runKind: "baseline",
@@ -41,6 +53,7 @@ function baselineArgs(input: Partial<OfficialBenchmarkRunArgs> = {}): OfficialBe
     manifestPath: "op/.artifacts/benchmark-publish-manifest.json",
     contextPath: "op/.artifacts/official-benchmark-run-context.json",
     benchOptions: {},
+    profile: profile(),
     ...input,
   };
 }
@@ -52,6 +65,7 @@ function candidateArgs(input: Partial<OfficialBenchmarkRunArgs> = {}): OfficialB
     eventName: "workflow_dispatch",
     candidateRef: "feature/perf",
     reportPath: "op/.artifacts/trusted-ref-comparison-report.json",
+    profile: profile({ capture: "auto" }),
     ...input,
   });
 }
@@ -94,6 +108,7 @@ function context(input: { reportPath: string; manifestPath: string }): OfficialB
     reportPath: input.reportPath,
     manifestPath: input.manifestPath,
     benchArgs: [`--report=${input.reportPath}`],
+    profile: profile(),
     policy: {
       automaticBaselineRefs: ["main", "refs/heads/main"],
       candidateApproval: "manual-candidate-comparison",
@@ -130,7 +145,31 @@ describe("parseOfficialBenchmarkRunCliArgs", () => {
           warmupIterations: undefined,
           repeats: 3,
         },
+        profile: {
+          capture: "off",
+          mode: "both",
+          limit: 1,
+        },
       },
+    });
+  });
+
+  it("defaults candidate comparisons to automatic profile capture", () => {
+    expect(
+      parseOfficialBenchmarkRunCliArgs([
+        "run",
+        "--kind=candidate-comparison",
+        "--approval=manual-candidate-comparison",
+        "--event=workflow_dispatch",
+        "--base=main",
+        "--candidate=feature/perf",
+        "--profile-scenario=all.opAll",
+      ]).run?.profile,
+    ).toEqual({
+      capture: "auto",
+      mode: "both",
+      scenario: "all.opAll",
+      limit: 1,
     });
   });
 
@@ -227,6 +266,9 @@ describe("official benchmark run plan", () => {
           "--candidate=feature/perf",
           "--report=op/.artifacts/trusted-ref-comparison-report.json",
           "--min-change=0.05",
+          "--profile-capture=auto",
+          "--profile-mode=both",
+          "--profile-limit=1",
         ],
       },
     ]);

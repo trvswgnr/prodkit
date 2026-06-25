@@ -30,6 +30,32 @@ on:
         options:
           - manual-baseline
           - manual-candidate-comparison
+      profile_capture:
+        description: "Profile meaningful candidate deltas"
+        required: true
+        type: choice
+        default: auto
+        options:
+          - auto
+          - off
+      profile_mode:
+        description: "Profile artifact modes"
+        required: true
+        type: choice
+        default: both
+        options:
+          - both
+          - cpu
+          - heap
+      profile_scenario:
+        description: "Specific comparison key or profile scenario to capture"
+        required: false
+        type: string
+      profile_limit:
+        description: "Maximum automatically selected meaningful-delta scenarios"
+        required: true
+        type: string
+        default: "1"
 
 permissions:
   contents: read
@@ -49,6 +75,10 @@ jobs:
       OFFICIAL_CANDIDATE_REF: ${{ github.event_name == 'schedule' && '' || github.event.inputs.candidate_ref }}
       OFFICIAL_APPROVAL: ${{ github.event_name == 'schedule' && 'scheduled-baseline' || github.event.inputs.approval }}
       OFFICIAL_RUNNER_SOURCE_REF: ${{ github.event_name == 'schedule' && 'main' || (github.event.inputs.run_kind == 'baseline' && github.event.inputs.base_ref || 'main') }}
+      OFFICIAL_PROFILE_CAPTURE: ${{ github.event_name == 'schedule' && 'off' || (github.event.inputs.run_kind == 'candidate-comparison' && github.event.inputs.profile_capture || 'off') }}
+      OFFICIAL_PROFILE_MODE: ${{ github.event_name == 'schedule' && 'both' || github.event.inputs.profile_mode }}
+      OFFICIAL_PROFILE_SCENARIO: ${{ github.event_name == 'schedule' && '' || github.event.inputs.profile_scenario }}
+      OFFICIAL_PROFILE_LIMIT: ${{ github.event_name == 'schedule' && '1' || github.event.inputs.profile_limit }}
     steps:
       - name: Checkout trusted runner source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -84,13 +114,25 @@ jobs:
           if [[ -n "${OFFICIAL_CANDIDATE_REF}" ]]; then
             args+=("--candidate=${OFFICIAL_CANDIDATE_REF}")
           fi
+          args+=(
+            "--profile-capture=${OFFICIAL_PROFILE_CAPTURE}"
+            "--profile-mode=${OFFICIAL_PROFILE_MODE}"
+            "--profile-limit=${OFFICIAL_PROFILE_LIMIT}"
+          )
+          if [[ -n "${OFFICIAL_PROFILE_SCENARIO}" ]]; then
+            args+=("--profile-scenario=${OFFICIAL_PROFILE_SCENARIO}")
+          fi
           pnpm --filter @prodkit/benchmarks run official -- "${args[@]}"
 
       - name: Upload official benchmark report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: official-benchmark-report
-          path: benchmarks/op/.artifacts/*.json
+          path: |
+            benchmarks/op/.artifacts/*.json
+            benchmarks/.profiles/op/*.cpuprofile
+            benchmarks/.profiles/op/*.heapprofile
+          include-hidden-files: true
           if-no-files-found: error
 
   publish:
@@ -124,7 +166,7 @@ jobs:
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: official-benchmark-report
-          path: benchmarks/op/.artifacts
+          path: benchmarks
 
       - name: Publish artifacts and update history index
         env:

@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { statSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -11,19 +12,22 @@ import {
   type ImplementationColumn,
 } from "./comparison-matrix.ts";
 import {
+  BENCHMARK_PROFILE_DIR,
   benchRunOptionSummary,
+  findNewestProfileArtifact,
   getRepoRoot,
   importOpModule,
   importOpPolicyModule,
   parseArgValue,
   parseBenchRunOptions,
+  parsePositiveInt,
   readEnvironmentReport,
   readPackageVersion,
   resolveBenchRunOptions,
   resolveOpPackageDir,
   resolveReportPath,
-  runTinybenchRepeatedVariant,
   writeJsonReport,
+  runTinybenchRepeatedVariant,
   type BenchRunOptions,
   type EnvironmentReport,
   type RepeatedTinybenchRecord,
@@ -43,10 +47,12 @@ import {
   readGitCommitMetadata,
   reportArtifactRef,
   type BenchmarkCalibrationAttachment,
+  type BenchmarkArtifactRef,
   type BenchmarkCommitMetadata,
   type BenchmarkDiff,
   type OfficialBenchmarkReport,
   type OfficialScenarioResult,
+  type ScenarioDiff,
 } from "./official-report.ts";
 
 export const TRUSTED_REF_COMPARISON_REPORT_VERSION = "prodkit.benchmark-ref-comparison.v1" as const;
@@ -69,6 +75,31 @@ export type TrustedRefComparisonCliArgs = {
   calibrationPath?: string;
   benchOptions: BenchRunOptions;
   minMeaningfulChangeRatio: number;
+  profile: TrustedRefComparisonProfileArgs;
+};
+
+export type TrustedRefComparisonProfileCapture = "off" | "auto";
+
+export type TrustedRefComparisonProfileMode = "cpu" | "heap";
+
+export type TrustedRefComparisonProfileModeOption = TrustedRefComparisonProfileMode | "both";
+
+export type TrustedRefComparisonProfileArgs = {
+  capture: TrustedRefComparisonProfileCapture;
+  mode: TrustedRefComparisonProfileModeOption;
+  scenario?: string;
+  limit: number;
+};
+
+export type TrustedRefComparisonProfileSelectionSource = "meaningful-delta" | "manual";
+
+export type TrustedRefComparisonProfileSelection = {
+  source: TrustedRefComparisonProfileSelectionSource;
+  scenarioKey: string;
+  label: string;
+  profileScenario: string;
+  verdict?: ScenarioDiff["verdict"];
+  deltaRatio?: number;
 };
 
 export type TrustedRefComparisonSideReport = {
@@ -87,6 +118,14 @@ export type TrustedRefComparisonReport = {
   base: TrustedRefComparisonSideReport;
   candidate: TrustedRefComparisonSideReport;
   diff: BenchmarkDiff;
+  profile: {
+    capture: TrustedRefComparisonProfileCapture;
+    mode: TrustedRefComparisonProfileModeOption;
+    limit: number;
+    scenario?: string;
+    selections: TrustedRefComparisonProfileSelection[];
+    artifacts: BenchmarkArtifactRef[];
+  };
 };
 
 type CommandResult = {
@@ -133,6 +172,8 @@ function usage(): string {
     "  [--calibration=op/.artifacts/runner-calibration-report.json]",
     "  [--time=300] [--warmup-time=150] [--warmup-iterations=5] [--repeats=1]",
     "  [--min-change=0.02]",
+    "  [--profile-capture=off|auto] [--profile-mode=both|cpu|heap]",
+    "  [--profile-scenario=<comparison-key-or-profile-scenario>] [--profile-limit=1]",
   ].join("\n");
 }
 
@@ -144,6 +185,41 @@ function parseMinMeaningfulChangeRatio(argv: readonly string[]): number {
     throw new Error("Invalid --min-change value. Expected a non-negative ratio.");
   }
   return parsed;
+}
+
+function parseProfileCapture(value: string | undefined): TrustedRefComparisonProfileCapture {
+  if (value === undefined) return "off";
+  if (value === "off" || value === "auto") return value;
+  throw new Error("Invalid --profile-capture value. Expected off or auto.");
+}
+
+function parseProfileMode(value: string | undefined): TrustedRefComparisonProfileModeOption {
+  if (value === undefined) return "both";
+  if (value === "both" || value === "cpu" || value === "heap") return value;
+  throw new Error("Invalid --profile-mode value. Expected both, cpu, or heap.");
+}
+
+function parseProfileLimit(value: string | undefined): number {
+  if (value === undefined) return 1;
+  return parsePositiveInt(value, "profile limit");
+}
+
+export function parseTrustedRefComparisonProfileArgs(
+  argv: readonly string[],
+): TrustedRefComparisonProfileArgs {
+  const scenario = parseArgValue(argv, "--profile-scenario=");
+  const captureArg = parseArgValue(argv, "--profile-capture=");
+  const capture =
+    captureArg === undefined && scenario !== undefined ? "auto" : parseProfileCapture(captureArg);
+  if (captureArg === "off" && scenario !== undefined) {
+    throw new Error("--profile-scenario requires --profile-capture=auto.");
+  }
+  return {
+    capture,
+    mode: parseProfileMode(parseArgValue(argv, "--profile-mode=")),
+    ...(scenario === undefined ? {} : { scenario }),
+    limit: parseProfileLimit(parseArgValue(argv, "--profile-limit=")),
+  };
 }
 
 export function parseTrustedRefComparisonArgs(
@@ -163,6 +239,7 @@ export function parseTrustedRefComparisonArgs(
     ...(calibrationPath === undefined ? {} : { calibrationPath }),
     benchOptions: parseBenchRunOptions(argv),
     minMeaningfulChangeRatio: parseMinMeaningfulChangeRatio(argv),
+    profile: parseTrustedRefComparisonProfileArgs(argv),
   };
 }
 
@@ -331,6 +408,86 @@ function createOpOnlyOfficialResults(
   );
 }
 
+function profileModes(
+  mode: TrustedRefComparisonProfileModeOption,
+): TrustedRefComparisonProfileMode[] {
+  if (mode === "both") return ["cpu", "heap"];
+  return [mode];
+}
+
+function profileScenarioTarget(
+  scenarios: readonly ComparisonScenario[],
+  value: string,
+): {
+  scenarioKey: string;
+  label: string;
+  profileScenario: string;
+} {
+  for (const scenario of scenarios) {
+    const opBenchName = scenarioCell(scenario).benchName;
+    if (value === scenario.key || value === opBenchName || value === scenario.overheadBench) {
+      return {
+        scenarioKey: scenario.key,
+        label: scenario.label,
+        profileScenario: value === scenario.overheadBench ? scenario.overheadBench : opBenchName,
+      };
+    }
+  }
+
+  const available = scenarios
+    .flatMap((scenario) => [scenario.key, scenarioCell(scenario).benchName, scenario.overheadBench])
+    .join(", ");
+  throw new Error(`Unknown profile scenario "${value}". Expected one of: ${available}`);
+}
+
+function meaningfulDeltaRank(left: ScenarioDiff, right: ScenarioDiff): number {
+  const absoluteDelta = Math.abs(right.deltaRatio) - Math.abs(left.deltaRatio);
+  if (absoluteDelta !== 0) return absoluteDelta;
+  if (left.verdict === right.verdict) return left.key.localeCompare(right.key);
+  return left.verdict === "regression" ? -1 : 1;
+}
+
+export function selectTrustedRefComparisonProfileScenarios(input: {
+  report: TrustedRefComparisonReport;
+  scenarios: readonly ComparisonScenario[];
+  profile: TrustedRefComparisonProfileArgs;
+}): TrustedRefComparisonProfileSelection[] {
+  if (input.profile.capture === "off") return [];
+
+  if (input.profile.scenario !== undefined) {
+    const target = profileScenarioTarget(input.scenarios, input.profile.scenario);
+    const diff = input.report.diff.scenarios.find(
+      (scenario) => scenario.key === target.scenarioKey,
+    );
+    return [
+      {
+        source: "manual",
+        ...target,
+        ...(diff === undefined
+          ? {}
+          : {
+              verdict: diff.verdict,
+              deltaRatio: diff.deltaRatio,
+            }),
+      },
+    ];
+  }
+
+  return input.report.diff.scenarios
+    .filter((scenario) => scenario.verdict !== "inconclusive")
+    .sort(meaningfulDeltaRank)
+    .slice(0, input.profile.limit)
+    .map((scenario) => {
+      const target = profileScenarioTarget(input.scenarios, scenario.key);
+      return {
+        source: "meaningful-delta",
+        ...target,
+        verdict: scenario.verdict,
+        deltaRatio: scenario.deltaRatio,
+      };
+    });
+}
+
 function createOfficialReportForRef(input: BuildOfficialReportInput): OfficialBenchmarkReport {
   return {
     schemaVersion: OFFICIAL_BENCHMARK_REPORT_VERSION,
@@ -396,6 +553,13 @@ export function createTrustedRefComparisonReport(input: {
       report: input.candidateReport,
     },
     diff,
+    profile: {
+      capture: "off",
+      mode: "both",
+      limit: 1,
+      selections: [],
+      artifacts: [],
+    },
   };
 }
 
@@ -470,6 +634,160 @@ async function removeWorktree(repoRoot: string, worktreeRoot: string): Promise<v
   if (result.status !== 0) {
     logger.warn(`Unable to remove worktree ${worktreeRoot}: ${result.stderr || result.stdout}`);
   }
+}
+
+function repoRelativeArtifactPath(repoRoot: string, artifactPath: string): string {
+  const relative = path.relative(repoRoot, artifactPath);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    return artifactPath.replace(/\\/g, "/");
+  }
+  return relative.replace(/\\/g, "/");
+}
+
+function profileArtifactIsFresh(artifactPath: string, startedAtMs: number): boolean {
+  try {
+    return statSync(artifactPath).mtimeMs >= startedAtMs - 1_000;
+  } catch {
+    return false;
+  }
+}
+
+function profileArtifactKind(
+  mode: TrustedRefComparisonProfileMode,
+): "cpu-profile" | "heap-profile" {
+  return mode === "cpu" ? "cpu-profile" : "heap-profile";
+}
+
+function profileArtifactPrefix(mode: TrustedRefComparisonProfileMode): "CPU" | "Heap" {
+  return mode === "cpu" ? "CPU" : "Heap";
+}
+
+function profileScriptName(mode: TrustedRefComparisonProfileMode): "profile:cpu" | "profile:heap" {
+  return mode === "cpu" ? "profile:cpu" : "profile:heap";
+}
+
+export type TrustedRefComparisonCapturedProfileArtifact = {
+  selection: TrustedRefComparisonProfileSelection;
+  mode: TrustedRefComparisonProfileMode;
+  artifact: BenchmarkArtifactRef;
+};
+
+async function captureTrustedRefComparisonProfiles(input: {
+  repoRoot: string;
+  packageDir: string;
+  profile: TrustedRefComparisonProfileArgs;
+  selections: readonly TrustedRefComparisonProfileSelection[];
+}): Promise<TrustedRefComparisonCapturedProfileArtifact[]> {
+  const captures: TrustedRefComparisonCapturedProfileArtifact[] = [];
+  for (const selection of input.selections) {
+    for (const mode of profileModes(input.profile.mode)) {
+      const startedAt = Date.now();
+      logger.info(
+        `Capturing ${mode} profile for ${selection.profileScenario} (${selection.source})...`,
+      );
+      runCommand(
+        "pnpm",
+        [
+          "--filter",
+          "@prodkit/benchmarks",
+          "run",
+          profileScriptName(mode),
+          "--",
+          `--package-dir=${input.packageDir}`,
+          `--scenario=${selection.profileScenario}`,
+        ],
+        input.repoRoot,
+      );
+
+      const artifactPrefix = profileArtifactPrefix(mode);
+      const artifactPath = findNewestProfileArtifact(
+        path.join(input.repoRoot, "benchmarks", BENCHMARK_PROFILE_DIR),
+        artifactPrefix,
+      );
+      if (artifactPath === undefined || !profileArtifactIsFresh(artifactPath, startedAt)) {
+        throw new Error(
+          `${artifactPrefix} profile was not written for ${selection.profileScenario}.`,
+        );
+      }
+
+      captures.push({
+        selection,
+        mode,
+        artifact: {
+          kind: profileArtifactKind(mode),
+          path: repoRelativeArtifactPath(input.repoRoot, artifactPath),
+          contentType: "application/json",
+          scenarioKey: selection.scenarioKey,
+          implementationId: TRUSTED_REF_COMPARISON_IMPLEMENTATION_ID,
+        },
+      });
+    }
+  }
+  return captures;
+}
+
+function artifactIdentity(artifact: BenchmarkArtifactRef): string {
+  return [
+    artifact.kind,
+    artifact.path,
+    artifact.scenarioKey ?? "",
+    artifact.implementationId ?? "",
+  ].join("\0");
+}
+
+function appendUniqueArtifacts(
+  existing: readonly BenchmarkArtifactRef[],
+  next: readonly BenchmarkArtifactRef[],
+): BenchmarkArtifactRef[] {
+  const artifacts = [...existing];
+  const seen = new Set(artifacts.map(artifactIdentity));
+  for (const artifact of next) {
+    const key = artifactIdentity(artifact);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    artifacts.push(artifact);
+  }
+  return artifacts;
+}
+
+export function attachTrustedRefComparisonProfileArtifacts(input: {
+  report: TrustedRefComparisonReport;
+  profile: TrustedRefComparisonProfileArgs;
+  selections: readonly TrustedRefComparisonProfileSelection[];
+  captures: readonly TrustedRefComparisonCapturedProfileArtifact[];
+}): TrustedRefComparisonReport {
+  const capturesByScenario = new Map<string, BenchmarkArtifactRef[]>();
+  for (const capture of input.captures) {
+    const existing = capturesByScenario.get(capture.selection.scenarioKey) ?? [];
+    existing.push(capture.artifact);
+    capturesByScenario.set(capture.selection.scenarioKey, existing);
+  }
+
+  return {
+    ...input.report,
+    candidate: {
+      ...input.report.candidate,
+      report: {
+        ...input.report.candidate.report,
+        scenarioResults: input.report.candidate.report.scenarioResults.map((scenario) => {
+          const artifacts = capturesByScenario.get(scenario.key);
+          if (artifacts === undefined) return scenario;
+          return {
+            ...scenario,
+            artifacts: appendUniqueArtifacts(scenario.artifacts, artifacts),
+          };
+        }),
+      },
+    },
+    profile: {
+      capture: input.profile.capture,
+      mode: input.profile.mode,
+      limit: input.profile.limit,
+      ...(input.profile.scenario === undefined ? {} : { scenario: input.profile.scenario }),
+      selections: [...input.selections],
+      artifacts: input.captures.map((capture) => capture.artifact),
+    },
+  };
 }
 
 export async function runTrustedRefComparison(
@@ -576,13 +894,30 @@ export async function runTrustedRefComparison(
       candidateReport,
       minMeaningfulChangeRatio: args.minMeaningfulChangeRatio,
     });
+    const profileSelections = selectTrustedRefComparisonProfileScenarios({
+      report,
+      scenarios: candidate.scenarios,
+      profile: args.profile,
+    });
+    const profileCaptures = await captureTrustedRefComparisonProfiles({
+      repoRoot,
+      packageDir: candidate.packageDir,
+      profile: args.profile,
+      selections: profileSelections,
+    });
+    const reportWithProfiles = attachTrustedRefComparisonProfileArtifacts({
+      report,
+      profile: args.profile,
+      selections: profileSelections,
+      captures: profileCaptures,
+    });
 
-    await writeJsonReport(args.reportPath, report);
+    await writeJsonReport(args.reportPath, reportWithProfiles);
     logger.info("");
-    logger.info(formatTrustedRefComparisonSummary(report));
+    logger.info(formatTrustedRefComparisonSummary(reportWithProfiles));
     logger.info("");
     logger.info(`Wrote trusted comparison report: ${path.resolve(args.reportPath)}`);
-    return report;
+    return reportWithProfiles;
   } finally {
     for (const worktreeRoot of worktrees.reverse()) {
       await removeWorktree(repoRoot, worktreeRoot);
