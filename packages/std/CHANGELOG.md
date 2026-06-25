@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Trimmed package README to a reserved placeholder until utility modules ship.
+- Trimmed package README to a reserved placeholder for the empty utility surface.
 
 ## [0.1.3] - 2026-05-30
 
@@ -49,7 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Documented `@prodkit/std` peer dependencies (`@prodkit/op`, `better-result`) and pointed to
   `@prodkit/op` for the shared `better-result` public API coupling notes.
-- Documented `@prodkit/std` scope in the package README: DI is the only shipped module today, with tracing and typed env/config called out as likely future directions.
+- Documented `@prodkit/std` scope in the package README when DI was the only shipped module, with
+  tracing and typed env/config as non-committed examples.
 - Renamed DI metadata key from `requirements` to `deps`.
 - Metadata keys on composed ops now display without per-key `readonly` modifiers (for example `{ deps: Blocking<...> }`).
 - Renamed `DI.require` to `DI.inject` for requesting dependency bindings.

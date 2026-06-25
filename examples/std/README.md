@@ -1,3 +1,3 @@
 # Reserved
 
-Future `@prodkit/std` consumer samples will live here.
+Reserved placeholder for `@prodkit/std` consumer samples.

@@ -30,7 +30,7 @@ mismatched copies. The peer plus split import is intentional.
 
 ## Who maintains this?
 
-`@prodkit/op` is led by a single maintainer today. The public API is intentionally bounded so the
+`@prodkit/op` is led by a single maintainer. The public API is intentionally bounded so the
 runtime stays understandable: a team can read the source, extend through documented subpaths, fork,
 or maintain a private line without inheriting platform-scale complexity.
 

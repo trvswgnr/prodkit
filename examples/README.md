@@ -12,7 +12,7 @@ examples/
   smoke.ts          root entry: op smoke, then di smoke
   op/               @prodkit/op samples (see op/README.md)
   op/di/            @prodkit/op/di samples (see op/di/README.md)
-  std/              reserved for future @prodkit/std samples
+  std/              reserved placeholder for @prodkit/std samples
 ```
 
 Each topic folder under `op/` or `op/di/` contains:

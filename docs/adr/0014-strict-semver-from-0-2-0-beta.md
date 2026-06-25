@@ -8,7 +8,7 @@ packages:
 # Strict SemVer from 0.2.0 beta
 
 Before beta, `@prodkit/op` shipped many `0.1.x` releases while the public surface was still
-moving. Consumers needed a clear signal that the library is entering a supported beta line and
+moving. Consumers needed a clear signal that the library had entered a supported beta line and
 that version numbers encode compatibility promises.
 
 ## Decision
@@ -32,11 +32,11 @@ long-term API stability.
 
 ## Considered options
 
-**Stay on `0.1.x` with informal breaking minors.** Rejected: does not match the beta milestone or
+**Stay on `0.1.x` with informal breaking minors.** Rejected: does not match the beta baseline or
 the need for an explicit compatibility contract.
 
-**Ship `1.0.0-beta.x` prereleases.** Rejected: implies a 1.0 stability promise the project is not
-making yet; `0.2.0` beta is a clearer staging label.
+**Ship `1.0.0-beta.x` prereleases.** Rejected: implies a 1.0 stability promise; `0.2.0` beta is a
+clearer staging label.
 
 ## Consequences
 

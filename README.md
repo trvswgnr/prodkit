@@ -10,7 +10,7 @@ Use each publishable package README under `packages/*/README.md` as the source o
 
 - [`@prodkit/op`](packages/op/README.md) (published to npm with the package)
 - [`@prodkit/op-lint`](packages/op-lint/README.md) (published to npm with the package)
-- [`@prodkit/std`](packages/std/README.md) (reserved; runtime-agnostic utilities planned)
+- [`@prodkit/std`](packages/std/README.md) (reserved package; entrypoint intentionally has no utility exports)
 
 Other workspace roots are maintainer- or CI-oriented: [`examples`](examples/) (`@prodkit/examples`, topic folders under `examples/op/` and `examples/op/di/`), [`tools`](tools/) (`@prodkit/tools`), and [`benchmarks`](benchmarks/) (`@prodkit/benchmarks`).
 
@@ -33,7 +33,7 @@ Changelogs: [`packages/op/CHANGELOG.md`](packages/op/CHANGELOG.md), [`packages/o
 ## workspace layout
 
 - `packages/`: library packages
-- `apps/*`: reserved pnpm workspace slot for runnable product/demo applications (no tree yet)
+- `apps/*`: reserved pnpm workspace slot for runnable product/demo applications (no app tree is checked in)
 - `examples`: consumer examples and smoke workspace (`@prodkit/examples`)
 - `benchmarks`: performance benchmark harnesses (`@prodkit/benchmarks`)
 - `tools`: maintainer tooling workspace (`@prodkit/tools`)
@@ -41,7 +41,7 @@ Changelogs: [`packages/op/CHANGELOG.md`](packages/op/CHANGELOG.md), [`packages/o
 
 ## development
 
-- Node: `>=24.14.0` on the 24.x Active LTS line (current LTS; see [nodejs/Release](https://github.com/nodejs/release)). `.nvmrc` pins `24.14.0`.
+- Node: `>=24.14.0` on the 24.x line; `.nvmrc` pins the local contributor version.
 - contributor guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 Primary quality gate:

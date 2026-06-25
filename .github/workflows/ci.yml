@@ -3,11 +3,9 @@ name: CI
 on:
   push:
     branches:
-      - beta/0.2.0
       - main
   pull_request:
     branches:
-      - beta/0.2.0
       - main
   workflow_dispatch:
 

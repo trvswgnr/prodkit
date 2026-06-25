@@ -2,7 +2,7 @@
 
 ## Setup
 
-- Use Node `>=24.14.0` on the 24.x Active LTS line (current LTS; codename Krypton) and `pnpm@11` (validated in CI on `11.5.0`). Install with `npm install -g pnpm@11.5.0` or enable corepack; `.nvmrc` pins `24.14.0`.
+- Use Node `>=24.14.0` on the 24.x line and `pnpm@11` (validated in CI on `11.5.0`). Install with `npm install -g pnpm@11.5.0` or enable corepack; `.nvmrc` pins `24.14.0`.
 - Dependency installs reject npm package versions published less than 24 hours ago (`minimumReleaseAge` in `pnpm-workspace.yaml`). Pin explicit versions or wait for maturity when adding fresh releases.
 - Run commands from the repo root unless noted otherwise.
 
@@ -14,17 +14,15 @@ pnpm install
 
 - This repository is a pnpm workspace monorepo orchestrated by Turborepo (`turbo`).
 - Root scripts (`pnpm run build|test|lint|typecheck|gate`) run across the workspace graph.
-- Publishable libraries today: **`@prodkit/op`**, **`@prodkit/op-lint`**, and **`@prodkit/std`** (see `packages/op`, `packages/op-lint`, `packages/std`).
+- Publishable libraries: **`@prodkit/op`**, **`@prodkit/op-lint`**, and **`@prodkit/std`** (see `packages/op`, `packages/op-lint`, `packages/std`).
 - Supporting workspaces: **`@prodkit/shared`** (`packages/shared`, private workspace types/config), **`@prodkit/examples`** (`examples/`), **`@prodkit/tools`** (`tools/`), **`@prodkit/benchmarks`** (`benchmarks/`).
 - `@prodkit/op` landed first historically; the repo is intentionally multi-package.
 - Package-scoped scripts stay in the owning workspace `package.json`; invoke them with `pnpm --filter <workspace> run <script>`.
 - When adding a feature, use the placement table in [`docs/CONTEXT.md`](docs/CONTEXT.md#where-new-code-lives) and [ADR 0008](docs/adr/0008-op-subpath-exports.md): op subpath for portable op-native code with only `better-result` beyond op; `@prodkit/std` for op-free utilities; new `packages/<name>/` for platform-specific or integration-SDK adapters.
 
-## Path to beta integration branch
+## Branch Targets
 
-GitHub issues in the **Path to Beta** milestone land on branch **`beta/0.2.0`** (integration branch
-for the 0.2.0 beta cut). Open PRs against `beta/0.2.0` unless the maintainer directs otherwise;
-merge `beta/0.2.0` into `main` when the milestone closes with the beta release.
+Open pull requests against `main` unless the maintainer directs otherwise.
 
 ## Security
 
@@ -45,8 +43,9 @@ auto-merge).
 
 `@prodkit/op` consumer docs (`packages/op/README.md`, `packages/op/docs/`) ship on npm. They cover
 installation, API usage, and runtime semantics for library users. `@prodkit/op-lint` consumer docs
-live in `packages/op-lint/README.md` and ship with the lint plugin package. Consumer docs do not
-link to monorepo-only material (ADRs, contributor guides, or `docs/CONTEXT.md`).
+live in `packages/op-lint/README.md` and ship with the lint plugin package. Consumer docs avoid
+monorepo-only design material such as ADRs and `docs/CONTEXT.md`; package READMEs may link to
+repo-level contributing and security docs for project participation.
 
 Contributor and architecture docs live in the repo only:
 
@@ -80,19 +79,16 @@ Gate orchestration lives in `@prodkit/tools` (`gate` runs turbo workspace tasks,
 `tools/` layout: `checks/` (gate doc and contract scripts), `smoke/` (pack, GitHub, npm, and alternate-runtime harnesses), `release/` (version cut and changelog checks), `lib/` (shared helpers). `update-op-performance-doc.ts` stays at the workspace root.
 
 The quality gate includes a consumer-level smoke test that installs `@prodkit/op` and `@prodkit/std`
-from `npm pack` tarballs via `examples/` in an isolated temp workspace. That harness still builds
-and packs `@prodkit/std` even though `packages/std/src/` is effectively empty today: it verifies
-tarball layout, `exports` wiring, and publish plumbing for the second npm package, not utility
-module coverage. When `@prodkit/std` subpaths ship real code, the same pack path exercises them
-without changing the gate shape.
+from `npm pack` tarballs via `examples/` in an isolated temp workspace. The `@prodkit/std`
+entrypoint intentionally exports no utilities; packing it verifies tarball layout, `exports` wiring,
+and publish plumbing for the second npm package.
 `@prodkit/op-lint` keeps its Oxlint JavaScript-plugin smoke coverage in package tests because it
 exercises lint loading rather than the runnable examples workspace.
 
-Pull requests and pushes to `main` and `beta/0.2.0` run the same gate in
-`.github/workflows/ci.yml`.
+Pull requests and pushes to `main` run the same gate in `.github/workflows/ci.yml`.
 CI also publishes a Vitest coverage report as a workflow artifact (`op-coverage`) so reviewers can
 audit unit, integration, type, and property-law coverage evidence from the run. `@prodkit/std`
-coverage is omitted until utility modules ship in `packages/std/src/`.
+coverage is omitted while `packages/std/src/` has no runtime utility modules.
 CI runs an `@prodkit/op` compatibility matrix against the lowest supported `better-result` version
 and the current highest version matching the peer range. That matrix changes only the transient CI
 install so the committed lockfile remains the normal development baseline.
@@ -120,9 +116,9 @@ A `changelog:api:check` gate step fails when `packages/op/src/index.ts`,
 `packages/op/src/di/index.ts`, `packages/op/src/policy/index.ts`, or `packages/op/src/hkt.ts`
 public export names change without an update to that package's `CHANGELOG.md` under
 `## [Unreleased]`. The check compares against an explicit base ref (`pull_request.base.sha` on pull
-requests via `CHANGELOG_API_BASE_REF`, the pre-push commit on pushes to `main` or `beta/0.2.0`,
-or `CHANGELOG_API_BASE_REF` locally) and fails
-closed when no base ref can be resolved. Internal re-export paths do not count as API changes.
+requests via `CHANGELOG_API_BASE_REF`, the pre-push commit on pushes to `main`, or
+`CHANGELOG_API_BASE_REF` locally) and fails closed when no base ref can be resolved. Internal
+re-export paths do not count as API changes.
 An `api:manifest:check` gate step fails when serialized public export signatures for the
 application-tier source entrypoints (`packages/op/src/index.ts`, `di/index.ts`, `policy/index.ts`,
 `hkt.ts`) drift from the committed manifest at `packages/op/public-api.manifest.json`.
@@ -140,7 +136,7 @@ examples/
   smoke.ts            runs op and di smoke suites
   op/                 topic folders (sample.ts + smoke.ts per sample; see examples/op/README.md)
   op/di/              @prodkit/op/di topic folders (see examples/op/di/README.md)
-  std/                reserved for future @prodkit/std utility samples
+  std/                reserved placeholder for @prodkit/std utility samples
 ```
 
 ## Benchmarking
@@ -244,8 +240,8 @@ which doc to open for a given question.
 
 ## Source layout (`@prodkit/std`)
 
-- Source under `packages/std/src/`; published entrypoint is `@prodkit/std` (utility subpaths such as
-  `@prodkit/std/array` are planned).
+- Source under `packages/std/src/`; published entrypoint is `@prodkit/std`. Utility subpaths belong
+  here only for runtime-agnostic helpers that do not import `@prodkit/op`.
 - **Not** the home for op-native features (DI, policies, circuit breakers, and similar): those belong on
   `@prodkit/op` subpaths when they depend on op and stay runtime-agnostic with only `better-result` as an
   extra dependency. See [ADR 0008](docs/adr/0008-op-subpath-exports.md) and

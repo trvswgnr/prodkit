@@ -53,8 +53,8 @@ aborted child plan to finish.
 
 ## Consequences
 
-- Performance-sensitive call sites cannot shorten `Op.any` / `Op.race` by configuration today; the
-  wait is part of the combinator contract (Invariant 3 in `op-invariants.md`).
+- Performance-sensitive call sites cannot shorten `Op.any` / `Op.race` by configuration; the wait is
+  part of the combinator contract (Invariant 3 in `op-invariants.md`).
 - New concurrent combinators that abort siblings should follow the shared fan-out settlement model
   unless there is a documented, narrower leak contract ([ADR 0013](0013-combinator-plan-nodes.md)).
 - `Op.all` uses the same interrupt-on-abort fan-out path. Fan-out and `DI.provide` suspends wrap

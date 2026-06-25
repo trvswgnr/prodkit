@@ -9,7 +9,7 @@ right doc before diving into code.
 | --- | --- |
 | `@prodkit/op` | Runtime-agnostic operation library: typed async composition, policies, combinators, DI subpath |
 | `@prodkit/op-lint` | Oxlint-loadable lint rules for `@prodkit/op` generator composition |
-| `@prodkit/std` | Reserved runtime-agnostic utilities (no `@prodkit/op` dependency); example subpath `@prodkit/std/array` |
+| `@prodkit/std` | Reserved runtime-agnostic utilities package with no `@prodkit/op` dependency |
 | `@prodkit/shared` | Private workspace globals, publishable tsconfig/vitest presets, and runtime primitives (not published) |
 | `@prodkit/examples` | Consumer smoke and sample apps |
 | `@prodkit/benchmarks` | Performance harnesses |
@@ -44,7 +44,7 @@ Use this table when adding a feature. Rationale and examples:
 | --- | --- |
 | Builds on `Op`, plans, policies, or DI; runtime-agnostic; depends only on `@prodkit/op` and `better-result` (existing op peer) | `@prodkit/op/<subpath>` (for example `@prodkit/op/policy` for a circuit-breaker policy) |
 | Lint rules or lint-plugin integration for Op usage | `@prodkit/op-lint` |
-| Runtime-agnostic utilities that do not import `@prodkit/op` | `@prodkit/std/<subpath>` (for example `@prodkit/std/array`) |
+| Runtime-agnostic utilities that do not import `@prodkit/op` | `@prodkit/std/<subpath>`; document the subpath before export |
 | Platform-specific (Node-only CLI adapter, DOM-only helper) | New `@prodkit/*` package under `packages/` |
 | Hard dependency on an integration SDK (OpenTelemetry, a validation stack, an HTTP framework) | New `@prodkit/*` package under `packages/` |
 | Workspace-only types, casts, or toolchain presets | `@prodkit/shared` (private; not published) |
@@ -130,6 +130,6 @@ Write docs so they stay useful after refactors, releases, and issue closure. Pre
 **ADRs:** state the decision and why alternatives were rejected; do not embed open worklists. When
 a decision changes, supersede with a new ADR per [`docs/adr/README.md`](adr/README.md).
 
-**Consumer docs:** describe what callers get today; put alpha or stability expectations in one clear
-notice (for example `packages/op/README.md`) instead of repeating release-phase language across
-guides.
+**Consumer docs:** describe current caller-visible behavior; put alpha or stability expectations in
+one clear notice (for example `packages/op/README.md`) instead of repeating release-phase language
+across guides.

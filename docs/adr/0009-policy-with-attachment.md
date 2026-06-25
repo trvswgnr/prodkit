@@ -42,9 +42,8 @@ parameter as `unknown`.
 
 ## Considered options
 
-**Keep dedicated fluent methods only.** Rejected: two parallel surfaces (methods plus future
-`.with(...)`) duplicate documentation and type work; policy ordering semantics must be maintained
-in both paths.
+**Keep dedicated fluent methods only.** Rejected: two parallel surfaces (methods plus `.with(...)`)
+duplicate documentation and type work; policy ordering semantics must be maintained in both paths.
 
 **Policy constructors on the root export.** Rejected: couples optional policy sugar to the default
 bundle; ADR 0008 subpath model keeps the main entry lean.

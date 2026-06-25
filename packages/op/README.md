@@ -34,7 +34,7 @@ time. The package is in beta and strictly follows SemVer from v0.2.0 onward.
 
 **Maintenance:** Small enough that your team can own it if the maintainer ever gets hit by a bus.
 The API surface is intentionally bounded so a team can understand, fork, or maintain the runtime
-without platform-scale complexity. Led by a single maintainer today; contributions welcome via
+without platform-scale complexity. Led by a single maintainer; contributions welcome via
 [`CONTRIBUTING.md`](https://github.com/trvswgnr/prodkit/blob/main/CONTRIBUTING.md); security
 reporting via
 [`SECURITY.md`](https://github.com/trvswgnr/prodkit/blob/main/SECURITY.md).

@@ -43,7 +43,7 @@ not re-export subpath modules.
 
 Examples:
 
-- **Op subpath:** DI, policy constructors, HKT; a future circuit-breaker policy that composes with
+- **Op subpath:** DI, policy constructors, HKT; a circuit-breaker policy that composes with
   `Policy` and the plan driver (runtime-agnostic, no integration SDK).
 - **Std subpath:** array, object, string, and encoding helpers that do not import `@prodkit/op`.
 - **Separate package:** OpenTelemetry telemetry bridge, a Node-specific CLI adapter, or any module
