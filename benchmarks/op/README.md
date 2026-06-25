@@ -303,6 +303,11 @@ the R2 and history API secrets, uploads the completed report, and posts it to th
 workflow has one concurrency group with `cancel-in-progress: false`, so official runs execute one at
 a time.
 
+Manual candidate comparisons calibrate the runner before measuring refs, require that calibration
+summary in the official report, and run the trusted comparison with `--time=1000 --repeats=5`.
+This keeps public verdicts tied to the runner's observed same-code noise band instead of a single
+short Tinybench sample.
+
 Required repository configuration:
 
 | Name | Kind | Purpose |

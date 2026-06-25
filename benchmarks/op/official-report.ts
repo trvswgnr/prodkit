@@ -1043,10 +1043,23 @@ function relativeNoiseRatio(stats: RepeatedTinybenchRecord): number {
   return stats.rme / 100;
 }
 
+function calibrationNoiseRatio(
+  report: OfficialBenchmarkReport,
+  scenario: OfficialScenarioResult,
+): number {
+  const calibration = report.calibration;
+  if (calibration === undefined) return 0;
+  const summary = calibration.scenarioSummaries.find(
+    (item) => item.key === scenario.key || item.benchName === scenario.benchName,
+  );
+  return summary?.noiseBandRatio ?? calibration.recommendations.microbenchmark.worstNoiseBandRatio;
+}
+
 export function scenarioDiffVerdict(
   baseStats: RepeatedTinybenchRecord,
   candidateStats: RepeatedTinybenchRecord,
   minMeaningfulChangeRatio: number = DEFAULT_MIN_MEANINGFUL_CHANGE_RATIO,
+  calibratedNoiseRatio = 0,
 ): Omit<ScenarioDiff, "key" | "label" | "implementationId"> {
   const deltaRatio =
     baseStats.hz === 0
@@ -1058,7 +1071,11 @@ export function scenarioDiffVerdict(
     relativeNoiseRatio(baseStats),
     relativeNoiseRatio(candidateStats),
   );
-  const noiseThresholdRatio = Math.max(minMeaningfulChangeRatio, combinedNoiseRatio);
+  const noiseThresholdRatio = Math.max(
+    minMeaningfulChangeRatio,
+    combinedNoiseRatio,
+    calibratedNoiseRatio,
+  );
   const verdict =
     Math.abs(deltaRatio) <= noiseThresholdRatio
       ? "inconclusive"
@@ -1115,6 +1132,10 @@ export function diffOfficialBenchmarkReports(
         baseScenario.stats,
         candidateScenario.stats,
         options.minMeaningfulChangeRatio,
+        Math.max(
+          calibrationNoiseRatio(baseReport, baseScenario),
+          calibrationNoiseRatio(candidateReport, candidateScenario),
+        ),
       ),
     });
   }

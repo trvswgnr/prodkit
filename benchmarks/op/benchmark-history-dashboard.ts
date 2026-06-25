@@ -720,7 +720,7 @@ function dashboardHtml(config: string): string {
           return '<div class="empty">No comparison verdicts are indexed yet.</div>';
         }
         return (
-          '<div class="table-wrap"><table><thead><tr><th>Scenario</th><th>Verdict</th><th>Base</th><th>Candidate</th><th>Delta</th><th>Noise</th></tr></thead><tbody>' +
+          '<div class="table-wrap"><table><thead><tr><th>Scenario</th><th>Verdict</th><th>Base</th><th>Candidate</th><th>Delta</th><th>Threshold</th></tr></thead><tbody>' +
           comparison.scenarios
             .map(function (scenario) {
               var scenarioPath =
@@ -742,7 +742,7 @@ function dashboardHtml(config: string): string {
                 "</td><td>" +
                 escapeHtml(formatPercent(scenario.deltaRatio)) +
                 "</td><td>" +
-                escapeHtml(formatPercent(scenario.combinedNoiseRatio)) +
+                escapeHtml(formatPercent(scenario.noiseThresholdRatio)) +
                 "</td></tr>"
               );
             })

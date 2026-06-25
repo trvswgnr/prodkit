@@ -64,6 +64,7 @@ function candidateArgs(input: Partial<OfficialBenchmarkRunArgs> = {}): OfficialB
     approval: "manual-candidate-comparison",
     eventName: "workflow_dispatch",
     candidateRef: "feature/perf",
+    calibrationPath: "op/.artifacts/runner-calibration-report.json",
     reportPath: "op/.artifacts/trusted-ref-comparison-report.json",
     profile: profile({ capture: "auto" }),
     ...input,
@@ -224,6 +225,12 @@ describe("trusted run policy", () => {
     );
   });
 
+  it("requires calibration for candidate comparisons", () => {
+    expect(() => assertTrustedRunPolicy(candidateArgs({ calibrationPath: undefined }))).toThrow(
+      "Candidate comparisons require --calibration.",
+    );
+  });
+
   it("rejects pull request events", () => {
     expect(() => assertTrustedRunPolicy(candidateArgs({ eventName: "pull_request" }))).toThrow(
       "not allowed from pull request events",
@@ -291,6 +298,7 @@ describe("official benchmark run plan", () => {
           "--base=main",
           "--candidate=feature/perf",
           "--report=op/.artifacts/trusted-ref-comparison-report.json",
+          "--calibration=op/.artifacts/runner-calibration-report.json",
           "--min-change=0.05",
           "--profile-capture=auto",
           "--profile-mode=both",

@@ -101,6 +101,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Calibrate candidate benchmark runner
+        if: env.OFFICIAL_RUN_KIND == 'candidate-comparison'
+        run: pnpm --filter @prodkit/benchmarks run calibrate:runner -- --samples=5 --time=1000 --repeats=3
+
       - name: Run official benchmark report
         run: |
           set -euo pipefail
@@ -113,6 +117,13 @@ jobs:
           )
           if [[ -n "${OFFICIAL_CANDIDATE_REF}" ]]; then
             args+=("--candidate=${OFFICIAL_CANDIDATE_REF}")
+          fi
+          if [[ "${OFFICIAL_RUN_KIND}" == "candidate-comparison" ]]; then
+            args+=(
+              "--calibration=op/.artifacts/runner-calibration-report.json"
+              "--time=1000"
+              "--repeats=5"
+            )
           fi
           args+=(
             "--profile-capture=${OFFICIAL_PROFILE_CAPTURE}"

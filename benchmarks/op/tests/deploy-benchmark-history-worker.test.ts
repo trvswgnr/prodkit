@@ -51,6 +51,17 @@ describe("deploy benchmark history Worker", () => {
     });
   });
 
+  it("accepts a leading pnpm separator before deploy options", () => {
+    expect(
+      parseBenchmarkHistoryWorkerDeployArgs(["--", "--dry-run"], {
+        PRODKIT_BENCHMARK_HISTORY_KV_NAMESPACE_ID: "kv-namespace-id",
+      }),
+    ).toMatchObject({
+      kvNamespaceId: "kv-namespace-id",
+      dryRun: true,
+    });
+  });
+
   it("writes config during dry run and asks Wrangler to validate it", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "prodkit-benchmark-worker-"));
     const configPath = path.join(dir, "wrangler.json");

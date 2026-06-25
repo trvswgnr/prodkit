@@ -268,6 +268,9 @@ export function assertTrustedRunPolicy(args: OfficialBenchmarkRunArgs): void {
   if (args.candidateRef === undefined) {
     throw new Error("Candidate comparisons require --candidate.");
   }
+  if (args.calibrationPath === undefined) {
+    throw new Error("Candidate comparisons require --calibration.");
+  }
 }
 
 function benchOptionArgs(options: BenchRunOptions): string[] {

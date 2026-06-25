@@ -160,6 +160,7 @@ function report(
     hz?: number;
     rme?: number;
     benchOptions?: typeof benchOptions;
+    calibration?: BenchmarkCalibrationAttachment;
   } = {},
 ): OfficialBenchmarkReport {
   const value: OfficialBenchmarkReport = {
@@ -213,6 +214,9 @@ function report(
       },
     ],
   };
+  if (overrides.calibration !== undefined) {
+    value.calibration = overrides.calibration;
+  }
   return value;
 }
 
@@ -441,6 +445,32 @@ describe("official report diff verdicts", () => {
     const verdict = scenarioDiffVerdict(stats(100, 10), stats(108, 10));
     expect(verdict.verdict).toBe("inconclusive");
     expect(verdict.noiseThresholdRatio).toBeGreaterThan(0.08);
+  });
+
+  it("uses attached runner calibration noise when diffing reports", () => {
+    const calibration = calibrationAttachment();
+    calibration.recommendations = {
+      ...calibration.recommendations,
+      microbenchmark: {
+        ...calibration.recommendations.microbenchmark,
+        worstNoiseBandRatio: 0.1,
+      },
+    };
+    calibration.scenarioSummaries = calibration.scenarioSummaries.map((summary) =>
+      summary.key === "singleValue" ? { ...summary, noiseBandRatio: 0.1 } : summary,
+    );
+
+    const diff = diffOfficialBenchmarkReports(
+      report({ hz: 100, calibration }),
+      report({ hz: 108, calibration }),
+    );
+
+    expect(diff.summary).toEqual({
+      improvement: 0,
+      regression: 0,
+      inconclusive: 1,
+    });
+    expect(diff.scenarios[0]?.noiseThresholdRatio).toBeCloseTo(0.1);
   });
 
   it("diffs compatible reports by implementation id", () => {

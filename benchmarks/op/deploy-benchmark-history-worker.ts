@@ -80,6 +80,10 @@ function optionalNonEmpty(value: string | undefined): string | undefined {
   return value.trim();
 }
 
+function normalizeBenchmarkHistoryWorkerDeployArgv(argv: readonly string[]): readonly string[] {
+  return argv[0] === "--" ? argv.slice(1) : argv;
+}
+
 function defaultConfigPath(): string {
   return path.join(path.dirname(fileURLToPath(import.meta.url)), ".artifacts", "wrangler.json");
 }
@@ -114,28 +118,30 @@ export function parseBenchmarkHistoryWorkerDeployArgs(
   argv: readonly string[],
   env: NodeJS.ProcessEnv = process.env,
 ): BenchmarkHistoryWorkerDeployArgs {
-  if (argv.includes("--help") || argv.includes("-h")) {
+  const normalizedArgv = normalizeBenchmarkHistoryWorkerDeployArgv(argv);
+  if (normalizedArgv.includes("--help") || normalizedArgv.includes("-h")) {
     throw new Error(usage());
   }
-  const configPath = path.resolve(argValue(argv, "--config=") ?? defaultConfigPath());
+  const configPath = path.resolve(argValue(normalizedArgv, "--config=") ?? defaultConfigPath());
   return {
     name:
-      optionalNonEmpty(argValue(argv, "--name=")) ??
+      optionalNonEmpty(argValue(normalizedArgv, "--name=")) ??
       optionalNonEmpty(env.PRODKIT_BENCHMARK_HISTORY_WORKER_NAME) ??
       DEFAULT_BENCHMARK_HISTORY_WORKER_NAME,
     main: "../benchmark-history-api.ts",
     compatibilityDate:
-      optionalNonEmpty(argValue(argv, "--compatibility-date=")) ??
+      optionalNonEmpty(argValue(normalizedArgv, "--compatibility-date=")) ??
       DEFAULT_BENCHMARK_HISTORY_COMPATIBILITY_DATE,
     kvNamespaceId: requiredNonEmpty(
-      argValue(argv, "--kv-namespace-id=") ?? env.PRODKIT_BENCHMARK_HISTORY_KV_NAMESPACE_ID,
+      argValue(normalizedArgv, "--kv-namespace-id=") ??
+        env.PRODKIT_BENCHMARK_HISTORY_KV_NAMESPACE_ID,
       "PRODKIT_BENCHMARK_HISTORY_KV_NAMESPACE_ID or --kv-namespace-id is required.",
     ),
     artifactBaseUrl: optionalNonEmpty(
-      argValue(argv, "--artifact-base-url=") ?? env.PRODKIT_BENCHMARK_ARTIFACT_BASE_URL,
+      argValue(normalizedArgv, "--artifact-base-url=") ?? env.PRODKIT_BENCHMARK_ARTIFACT_BASE_URL,
     ),
     configPath,
-    dryRun: argv.includes("--dry-run"),
+    dryRun: normalizedArgv.includes("--dry-run"),
   };
 }
 
