@@ -1,5 +1,7 @@
 import { execSync } from "node:child_process";
+import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 import { Op } from "@prodkit/op";
 import * as v from "valibot";
 import { TaggedError, matchErrorPartial } from "better-result";
@@ -22,13 +24,13 @@ import {
 
 const logger = createLogger();
 
-const NO_ENTRIES_PLACEHOLDER = "- No entries yet.";
-const UNRELEASED_HEADING = "## [Unreleased]";
+export const NO_ENTRIES_PLACEHOLDER = "- No entries yet.";
+export const UNRELEASED_HEADING = "## [Unreleased]";
 
 const BumpKind = v.union([v.literal("patch"), v.literal("minor"), v.literal("major")]);
 type BumpKind = v.InferOutput<typeof BumpKind>;
 
-class ChangelogError extends TaggedError("ChangelogError")<{ message: string }>() {}
+export class ChangelogError extends TaggedError("ChangelogError")<{ message: string }>() {}
 
 class CommandError extends TaggedError("CommandError")<{ cause: unknown; command: string }>() {}
 class ReleaseTagExistsError extends TaggedError("ReleaseTagExistsError")<{ tag: string }>() {}
@@ -38,6 +40,48 @@ const logReleaseAbort = (reason: string, nextStep?: string, details?: string) =>
   if (nextStep) logger.error(nextStep);
   if (details) logger.error(`\n${details}`);
 };
+
+export const promoteUnreleased = Op(function* (
+  changelog: string,
+  nextVersion: string,
+  releaseDate: string,
+) {
+  const unreleasedStart = changelog.indexOf(UNRELEASED_HEADING);
+  if (unreleasedStart === -1) {
+    return yield* new ChangelogError({ message: 'CHANGELOG.md is missing "## [Unreleased]"' });
+  }
+
+  const nextHeadingStart = changelog.indexOf("\n## [", unreleasedStart + UNRELEASED_HEADING.length);
+  if (nextHeadingStart === -1) {
+    return yield* new ChangelogError({
+      message: 'CHANGELOG.md must include at least one released section after "Unreleased"',
+    });
+  }
+
+  const preamble = changelog.slice(0, unreleasedStart).trimEnd();
+  const unreleasedBodyRaw = changelog
+    .slice(unreleasedStart + UNRELEASED_HEADING.length, nextHeadingStart)
+    .trim();
+  const releasedSections = changelog.slice(nextHeadingStart).trimStart();
+
+  const unreleasedBody = unreleasedBodyRaw
+    .split(/\r?\n/)
+    .filter((line) => line.trim() !== NO_ENTRIES_PLACEHOLDER)
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  if (!/- /m.test(unreleasedBody)) {
+    return yield* new ChangelogError({
+      message:
+        'CHANGELOG.md "## [Unreleased]" has no release notes. Add entries under Unreleased before cutting a release.',
+    });
+  }
+
+  const newUnreleased = `${UNRELEASED_HEADING}\n\n### Added\n\n${NO_ENTRIES_PLACEHOLDER}`;
+  const newReleaseSection = `## [${nextVersion}] - ${releaseDate}\n\n${unreleasedBody}`;
+
+  return `${preamble}\n\n${newUnreleased}\n\n${newReleaseSection}\n\n${releasedSections}\n`;
+});
 
 const main = Op(function* (packageIdArg: string | undefined, bumpKindArg: string | undefined) {
   if (!packageIdArg || !isReleasePackageId(packageIdArg)) {
@@ -130,46 +174,6 @@ const main = Op(function* (packageIdArg: string | undefined, bumpKindArg: string
 
   const getReleaseDate = Op.try(() => new Date().toISOString().slice(0, 10));
 
-  const promoteUnreleased = Op(function* (
-    changelog: string,
-    nextVersion: string,
-    releaseDate: string,
-  ) {
-    const unreleasedStart = changelog.indexOf(UNRELEASED_HEADING);
-    if (unreleasedStart === -1) {
-      return yield* new ChangelogError({ message: 'CHANGELOG.md is missing "## [Unreleased]"' });
-    }
-
-    const nextHeadingStart = changelog.indexOf(
-      "\n## [",
-      unreleasedStart + UNRELEASED_HEADING.length,
-    );
-    if (nextHeadingStart === -1) {
-      return yield* new ChangelogError({
-        message: 'CHANGELOG.md must include at least one released section after "Unreleased"',
-      });
-    }
-
-    const preamble = changelog.slice(0, unreleasedStart).trimEnd();
-    const unreleasedBodyRaw = changelog
-      .slice(unreleasedStart + UNRELEASED_HEADING.length, nextHeadingStart)
-      .trim();
-    const releasedSections = changelog.slice(nextHeadingStart).trimStart();
-
-    const unreleasedBody = unreleasedBodyRaw.replace(NO_ENTRIES_PLACEHOLDER, "").trim();
-    if (!/- /m.test(unreleasedBody)) {
-      return yield* new ChangelogError({
-        message:
-          'CHANGELOG.md "## [Unreleased]" has no release notes. Add entries under Unreleased before cutting a release.',
-      });
-    }
-
-    const newUnreleased = `${UNRELEASED_HEADING}\n\n### Added\n\n${NO_ENTRIES_PLACEHOLDER}`;
-    const newReleaseSection = `## [${nextVersion}] - ${releaseDate}\n\n${unreleasedBodyRaw}`;
-
-    return `${preamble}\n\n${newUnreleased}\n\n${newReleaseSection}\n\n${releasedSections}\n`;
-  });
-
   const run = Op(function* (command: string) {
     return yield* Op.try(
       () => execSync(command, { stdio: "inherit", cwd: repoRoot }),
@@ -229,54 +233,59 @@ const main = Op(function* (packageIdArg: string | undefined, bumpKindArg: string
   return { nextVersion, npmName: releasePackage.npmName, packageId, tag };
 });
 
-void main.run(process.argv[2], process.argv[3]).then((result) => {
-  result.match({
-    ok: ({ tag, npmName }) => {
-      logger.info(`release cut complete: ${tag}\n`);
-      logger.info(`next step: pnpm --filter ${npmName} run release:push\n`);
-    },
-    err: (error) => {
-      let handledKnownError = false;
-      matchErrorPartial(
-        error,
-        {
-          DirtyWorktreeError: (e) => {
-            handledKnownError = true;
-            logReleaseAbort(
-              "git worktree is not clean.",
-              "commit/stash/discard changes and rerun release:patch.",
-              `pending changes:\n${e.details || "unknown"}`,
-            );
+const isMain =
+  process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isMain) {
+  void main.run(process.argv[2], process.argv[3]).then((result) => {
+    result.match({
+      ok: ({ tag, npmName }) => {
+        logger.info(`release cut complete: ${tag}\n`);
+        logger.info(`next step: pnpm --filter ${npmName} run release:push\n`);
+      },
+      err: (error) => {
+        let handledKnownError = false;
+        matchErrorPartial(
+          error,
+          {
+            DirtyWorktreeError: (e) => {
+              handledKnownError = true;
+              logReleaseAbort(
+                "git worktree is not clean.",
+                "commit/stash/discard changes and rerun release:patch.",
+                `pending changes:\n${e.details || "unknown"}`,
+              );
+            },
+            ReleaseTagExistsError: (e) => {
+              handledKnownError = true;
+              logReleaseAbort(
+                `tag ${e.tag} already exists locally or on origin.`,
+                "pick the next version, or intentionally delete/move the existing tag before retrying.",
+              );
+            },
+            ParseError: (e) => {
+              handledKnownError = true;
+              logReleaseAbort(e.message ?? "invalid release arguments.", RELEASE_CUT_USAGE);
+            },
+            ChangelogError: (e) => {
+              handledKnownError = true;
+              logReleaseAbort(e.message);
+            },
+            CommandError: (e) => {
+              handledKnownError = true;
+              logReleaseAbort(`command failed: ${e.command}`);
+              if (e.cause instanceof Error && e.cause.message.length > 0) {
+                logger.error(e.cause.message);
+              }
+            },
           },
-          ReleaseTagExistsError: (e) => {
-            handledKnownError = true;
-            logReleaseAbort(
-              `tag ${e.tag} already exists locally or on origin.`,
-              "pick the next version, or intentionally delete/move the existing tag before retrying.",
-            );
+          (unknownError) => {
+            if (handledKnownError) return;
+            logReleaseAbort(String(unknownError));
           },
-          ParseError: (e) => {
-            handledKnownError = true;
-            logReleaseAbort(e.message ?? "invalid release arguments.", RELEASE_CUT_USAGE);
-          },
-          ChangelogError: (e) => {
-            handledKnownError = true;
-            logReleaseAbort(e.message);
-          },
-          CommandError: (e) => {
-            handledKnownError = true;
-            logReleaseAbort(`command failed: ${e.command}`);
-            if (e.cause instanceof Error && e.cause.message.length > 0) {
-              logger.error(e.cause.message);
-            }
-          },
-        },
-        (unknownError) => {
-          if (handledKnownError) return;
-          logReleaseAbort(String(unknownError));
-        },
-      );
-      process.exit(1);
-    },
+        );
+        process.exit(1);
+      },
+    });
   });
-});
+}
