@@ -22,6 +22,7 @@ Read these before guessing repo structure or conventions:
 - Run `pnpm install` outside the sandbox (request full permissions); it hangs or fails in the default sandbox.
 - Run `pnpm run gate` outside the sandbox by default; the pack smoke step needs network and a temp `pnpm install`.
 - If bare `pnpm` resolves to an incompatible user-level shim, put the active Node 24.x bin directory first on `PATH` so nested gate commands use pnpm 11.5.0.
+- Node-executed `.ts` scripts must avoid strip-only unsupported syntax such as parameter properties; use plain class fields and constructors.
 
 ## User preferences
 
