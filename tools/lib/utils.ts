@@ -10,24 +10,30 @@ import { readRepoRoot, RepoRootNotFoundError } from "./repo-root.ts";
 export { createLogger } from "./logger.ts";
 export { readRepoRoot };
 
-type OwnPropertyValue<T, K extends PropertyKey> =
-  // if it's not an object, we don't know anything about the type
-  T extends object
-    ? T extends (...args: never[]) => unknown // it could actually be a function which overlaps with `object` type
+type OwnPropertyValue<T, K extends PropertyKey> = T extends object
+  ? // it could actually be a function or class constructor, which overlaps with the `object` type
+    // in which case, we don't know what the property value is
+    T extends
+      | ((...args: readonly never[]) => unknown)
+      | (abstract new (...args: readonly never[]) => unknown)
+    ? unknown
+    : // it could be exactly the `object` type
+      // in which case, we don't know what the property value is
+      object extends T
       ? unknown
-      : object extends T // or it could literally be the `object` type
-        ? unknown
-        : K extends keyof T // best case: we know the object type, and the property exists
-          ? T[K] // exact match, we know the type of the value
-          : undefined // not a key of the object, so definitely undefined
-    : unknown;
+      : // best case: we know the object type, and the property exists
+        K extends keyof T
+        ? T[K] // exact match, we know the type of the value
+        : undefined // not a key of the object, so definitely undefined
+  : undefined; // not an object or function, so definitely undefined
 
 export const getOwnPropertyValue = <T, K extends PropertyKey>(
   value: T,
   key: K,
 ): OwnPropertyValue<T, K> => {
   return unsafeCoerce(
-    typeof value === "object" && value !== null && Object.hasOwn(value, key)
+    ((typeof value === "object" && value !== null) || typeof value === "function") &&
+      Object.hasOwn(value, key)
       ? Reflect.get(value, key)
       : undefined,
   );
