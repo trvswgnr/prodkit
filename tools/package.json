@@ -39,7 +39,7 @@
   "dependencies": {
     "@prodkit/op": "workspace:*",
     "better-result": "2.9.0",
-    "valibot": "^1.4.0"
+    "valibot": "^1.4.2"
   },
   "devDependencies": {
     "@prodkit/shared": "workspace:*",
