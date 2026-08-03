@@ -16,6 +16,10 @@ const SOURCE_SYMBOL = /`(packages\/op\/src\/[^`]+\.ts)`\s+\(`([^`]+)`\)/g;
 /** Test file plus Vitest title, e.g. `foo.test.ts` (`my test`). */
 const TEST_TITLE = /`(packages\/op\/tests\/[^`]+\.test\.ts)`\s+\(`([^`]+)`\)/g;
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function assertFileExists(repoRoot: string, relativePath: string): void {
   const absolute = path.join(repoRoot, relativePath);
   if (!existsSync(absolute)) {
@@ -25,7 +29,10 @@ function assertFileExists(repoRoot: string, relativePath: string): void {
 
 function assertSymbolInSource(repoRoot: string, relativePath: string, symbol: string): void {
   const source = readFileSync(path.join(repoRoot, relativePath), "utf8");
-  const pattern = new RegExp(`\\b(?:async\\s+)?function\\s+${symbol}\\b|\\bconst\\s+${symbol}\\b`);
+  const escaped = escapeRegex(symbol);
+  const pattern = new RegExp(
+    `\\b(?:async\\s+)?function\\s+${escaped}\\b|\\bconst\\s+${escaped}\\b`,
+  );
   if (!pattern.test(source)) {
     throw new Error(
       `${OP_INVARIANTS_MD}: \`${relativePath}\` does not define \`${symbol}\` (update doc or implementation)`,
@@ -35,7 +42,7 @@ function assertSymbolInSource(repoRoot: string, relativePath: string, symbol: st
 
 function assertTestTitle(repoRoot: string, relativePath: string, title: string): void {
   const source = readFileSync(path.join(repoRoot, relativePath), "utf8");
-  const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = escapeRegex(title);
   const pattern = new RegExp(`\\btest\\(\\s*["'\`]${escaped}["'\`]`);
   if (!pattern.test(source)) {
     throw new Error(
