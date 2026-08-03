@@ -35,7 +35,7 @@
     "@prodkit/op-lint": "workspace:*",
     "@prodkit/shared": "workspace:*",
     "@types/node": "^24.12.2",
-    "effect": "^3.21.2",
+    "effect": "^3.22.1",
     "esbuild": "^0.28.1",
     "eslint": "10.5.0",
     "oxfmt": "catalog:",
