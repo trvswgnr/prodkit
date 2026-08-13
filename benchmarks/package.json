@@ -43,7 +43,7 @@
     "tinybench": "^5.1.0",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "wrangler": "4.104.0"
+    "wrangler": "4.122.0"
   },
   "engines": {
     "node": ">=24.14.0"

@@ -9,7 +9,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { cp, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { Miniflare } from "miniflare";
+import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { createLogger } from "../lib/logger.ts";
 import { readRepoRoot } from "../lib/repo-root.ts";
 
@@ -230,13 +230,14 @@ async function smokeDeno(workspaceDir: string) {
   );
 }
 
-async function copyDistMjsFiles(sourceDir: string, targetDir: string): Promise<void> {
+async function copyDistMjsFiles(sourceDir: string, targetDir: string): Promise<string[]> {
   mkdirSync(targetDir, { recursive: true });
+  const modulePaths: string[] = [];
   for (const entry of await readdir(sourceDir, { withFileTypes: true })) {
     const sourcePath = path.join(sourceDir, entry.name);
     const targetPath = path.join(targetDir, entry.name);
     if (entry.isDirectory()) {
-      await copyDistMjsFiles(sourcePath, targetPath);
+      modulePaths.push(...(await copyDistMjsFiles(sourcePath, targetPath)));
       continue;
     }
     if (!entry.name.endsWith(".mjs")) continue;
@@ -246,7 +247,9 @@ async function copyDistMjsFiles(sourceDir: string, targetDir: string): Promise<v
       "$1./better-result.mjs$2",
     );
     await writeFile(targetPath, rewritten, "utf8");
+    modulePaths.push(targetPath);
   }
+  return modulePaths;
 }
 
 async function smokeEdge(workspaceDir: string) {
@@ -266,10 +269,12 @@ async function smokeEdge(workspaceDir: string) {
   if (!existsSync(resultEntryPath))
     throw new Error(`Missing better-result entry: ${resultEntryPath}`);
 
-  await copyDistMjsFiles(opDistDir, edgeDir);
-  await cp(resultEntryPath, path.join(edgeDir, "better-result.mjs"));
+  const opModulePaths = await copyDistMjsFiles(opDistDir, edgeDir);
+  const resultModulePath = path.join(edgeDir, "better-result.mjs");
+  const workerModulePath = path.join(edgeDir, "worker.mjs");
+  await cp(resultEntryPath, resultModulePath);
   await writeFile(
-    path.join(edgeDir, "worker.mjs"),
+    workerModulePath,
     `${smokeSource("./index.mjs", "./policy/index.mjs", "./better-result.mjs")}
 
 export default {
@@ -282,11 +287,15 @@ export default {
     "utf8",
   );
 
-  const mf = new Miniflare({
-    scriptPath: path.join(edgeDir, "worker.mjs"),
-    modules: true,
-    modulesRoot: edgeDir,
-  });
+  const mf = new Miniflare(
+    convertV4MiniflareOptions({
+      modules: [workerModulePath, ...opModulePaths, resultModulePath].map((modulePath) => ({
+        type: "ESModule",
+        path: modulePath,
+      })),
+      modulesRoot: edgeDir,
+    }),
+  );
   try {
     const response = await mf.dispatchFetch("https://runtime-smoke.test/");
     const body = await response.text();
