@@ -4,7 +4,7 @@ Typed async operations for TypeScript workflows that need predictable failure, c
 cancellation, retry, and timeout.
 
 ```bash
-npm i @prodkit/op better-result
+npm i @prodkit/op@^1.0.0 better-result@^3.0.1
 ```
 
 Use `Op` when async work needs typed failure and predictable execution, not just `await`.
@@ -69,7 +69,7 @@ answered in [docs/faq.md](docs/faq.md).
 import { Op } from "@prodkit/op";
 import { TaggedError } from "better-result";
 
-class DivisionByZeroError extends TaggedError("DivisionByZeroError")() {}
+class DivisionByZeroError extends TaggedError("DivisionByZeroError") {}
 
 const divide = Op(function* (a: number, b: number) {
   if (b === 0) return yield* new DivisionByZeroError();
@@ -98,7 +98,7 @@ if (result.isOk()) {
 ## Installation
 
 ```bash
-npm i @prodkit/op better-result
+npm i @prodkit/op@^1.0.0 better-result@^3.0.1
 ```
 
 **ESM only.** `@prodkit/op` ships ES modules only. There is no CommonJS entry; use `import` syntax
@@ -112,7 +112,9 @@ consumers, support follows current non-EOL LTS lines. Contributor tooling uses a
 
 `better-result` is a peer dependency. Import `Result`, `TaggedError`, `UnhandledException`, `Err`,
 `Ok`, and `InferErr` from `better-result`; import operation APIs from `@prodkit/op` and its
-subpaths. See [docs/better-result.md](docs/better-result.md) for the boundary and retry overlap.
+subpaths. `Result.tryPromise` can retry and cancel an individual async action; use Op when those
+actions need one ordered run contract for timeout, cancellation, cleanup, concurrency, or DI. See
+[docs/better-result.md](docs/better-result.md) for the retry and cancellation boundary.
 
 ## Core API
 
@@ -239,7 +241,7 @@ an op.
 ```ts
 import { TaggedError } from "better-result";
 
-class ValidationError extends TaggedError("ValidationError")<{ field: string }>() {}
+class ValidationError extends TaggedError("ValidationError")<{ field: string }> {}
 
 const validate = Op(function* (name: string) {
   if (name.trim().length === 0) {
@@ -302,7 +304,7 @@ extensions ship as subpath exports; the main `@prodkit/op` entry does not re-exp
 
 | Import or guide | Topic |
 | --- | --- |
-| [`docs/better-result.md`](docs/better-result.md) | Result boundary, split imports, retry overlap |
+| [`docs/better-result.md`](docs/better-result.md) | Result boundary, split imports, retry and cancellation overlap |
 | [`@prodkit/op/di`](docs/di.md) | DI tokens, provide/inject, token identity, runtime errors |
 | [`@prodkit/op/policy`](docs/policy.md) | Policy attachments, retry delays, custom policy shape |
 | [`@prodkit/op/hkt`](docs/hkt.md) | HKT helpers for custom policies |

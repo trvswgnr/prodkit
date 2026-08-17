@@ -1,9 +1,9 @@
 # `@prodkit/op` vs the usual options
 
-Most TypeScript async code starts with `Promise`, maybe adds a `Result` type, then slowly grows a
-private reliability framework around it. A retry helper here. A timeout race there. Some
-`AbortController` wiring that only works if every caller remembers the ceremony. A few `finally`
-blocks that look reassuring until cancellation and concurrent work get involved.
+Most TypeScript async code starts with `Promise`, then may add a `Result` type and local retry or
+cancellation helpers. That can be enough. The next boundary appears when several async steps need
+one ordered contract for retries, timeout, cancellation, cleanup, dependency scope, and concurrent
+work.
 
 `@prodkit/op` exists for the point where that stops being cute.
 
@@ -49,12 +49,33 @@ operation fails, times out, gets cancelled, or has sibling work still in flight.
 Use `Promise` for tiny local async code. Use `Op` when the thing is a real operation and production
 behavior matters.
 
+## Op vs `better-result` 3
+
+`better-result` 3 covers more than a synchronous result container. `Result.tryPromise` can run one
+promise-producing action with bounded retries, one-based attempt context, static or dynamic delay,
+retry predicates, jitter, and an `AbortSignal`. The signal interrupts pending retry delays and is
+available to each attempt, so forwarding it to `fetch` or another cancellation-aware API gives one
+action a complete local retry contract.
+
+Use that directly when one action is the whole boundary.
+
+Op adds value when actions become one runnable workflow. `.with(...)` attachment order decides
+whether timeout wraps each attempt or the complete retry loop. A run signal reaches child
+operations, and fail-fast combinators can interrupt and drain siblings. Finalizers complete before
+settlement, DI bindings can share the run scope, and lazy operations compose without starting work
+until `.run(...)`.
+
+`@prodkit/op` uses `better-result` for its result boundary, so this is not an either-or choice. Add Op
+when those run-level relationships are the behavior you need. Do not wrap the same action in both
+retry layers unless two nested budgets are intentional.
+
 ## Op vs neverthrow
 
 neverthrow is excellent at making success and failure explicit. That solves one important problem:
 the caller can see `Ok` or `Err` instead of guessing which exceptions might appear at runtime.
 
-But a result type is not an async runtime.
+neverthrow's `ResultAsync` keeps asynchronous success and failure typed, but it does not define the
+run-scoped lifecycle that Op targets.
 
 Once the work is asynchronous, the hard questions are not only "what error type comes back?" They
 are also "when does the work start?", "how is cancellation propagated?", "does cleanup wait before
@@ -75,8 +96,9 @@ const updateOrder = Op(function* (id: string) {
 });
 ```
 
-If you only need `Result<T, E>`, use a result library. If the work needs cancellation, cleanup,
-retry, timeout, and composition that still reads like TypeScript, `Op` is the missing layer.
+If you only need `Result<T, E>`, use a result library. If a workflow needs ordered policy,
+run-scoped cancellation, cleanup before settlement, and sibling interruption, Op supplies that
+operation contract.
 
 ## Op vs `ResultAsync`
 
@@ -170,15 +192,16 @@ The value is the combination:
 - registered cleanup that unwinds before the result settles
 - ordinary TypeScript at the edges
 
-That combination is the reason to use `Op`. Not because `Promise`, neverthrow, `fp-ts`, or Effect are
-bad. They each solve their own problem. `Op` solves the specific problem that shows up in production
-TypeScript services: async workflows need explicit failure and predictable execution, and teams
-should not have to invent that contract one call site at a time.
+That combination is the reason to use `Op`. Not because `Promise`, `better-result`, neverthrow,
+`fp-ts`, or Effect are bad. They each solve their own problem. `Op` solves the specific problem that
+shows up in production TypeScript services: composed async workflows need explicit failure and a
+predictable run contract, and teams should not have to invent that contract one call site at a time.
 
 ## References
 
 The comparison above is based on each project's public documentation:
 [`Promise`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise),
+[`better-result`](https://better-result.dev/core/async-and-retries),
 [`neverthrow`](https://github.com/supermacro/neverthrow),
 [`ResultAsync`](https://github.com/supermacro/neverthrow#asynchronous-api-resultasync),
 [`fp-ts` `TaskEither`](https://gcanti.github.io/fp-ts/modules/TaskEither.ts.html), and
