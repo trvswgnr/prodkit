@@ -22,7 +22,10 @@ pnpm install
 
 ## Branch Targets
 
-Open pull requests against `main` unless the maintainer directs otherwise.
+Open pull requests against `main` unless the maintainer establishes a temporary integration branch
+for a coordinated release. Pull requests for that release target the integration branch, which must
+run the same CI as `main`. Merge the completed integration branch into `main` through one final pull
+request. Create release tags only from commits on `main`.
 
 ## Security
 
