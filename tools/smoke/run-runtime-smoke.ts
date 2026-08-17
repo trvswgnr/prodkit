@@ -18,6 +18,8 @@ type Runtime = "bun" | "deno" | "edge" | "node";
 const REPO_ROOT = readRepoRoot();
 const RUNTIME_SMOKE_STATE_DIR = path.join(REPO_ROOT, "var", "runtime-smoke");
 const PNPM_RUNTIME_STORE_DIR = path.join(RUNTIME_SMOKE_STATE_DIR, "store");
+const BETTER_RESULT_VERSION_ENV = "BETTER_RESULT_VERSION";
+const DEFAULT_BETTER_RESULT_VERSION = "3.0.1";
 const PACK_OUTPUT_PREVIEW = 4000;
 const logger = createLogger(import.meta.url);
 
@@ -98,10 +100,18 @@ async function createPackTarball(): Promise<string> {
   return tarballPath;
 }
 
-function smokeSource(opImport: string, policyImport: string, resultImport: string): string {
-  return `import { Op, TimeoutError } from ${JSON.stringify(opImport)};
-import { Policy } from ${JSON.stringify(policyImport)};
-import { TaggedError, UnhandledException } from ${JSON.stringify(resultImport)};
+interface SmokeSourceOptions {
+  betterResultVersion: string;
+  diImport: string;
+  hktImport: string;
+  opImport: string;
+  policyImport: string;
+  resultImport: string;
+}
+
+function smokeSource(options: SmokeSourceOptions): string {
+  const smokeContext = `better-result@${options.betterResultVersion}`;
+  return `const SMOKE_CONTEXT = ${JSON.stringify(smokeContext)};
 
 class AssertionError extends Error {
   name = "AssertionError";
@@ -111,9 +121,40 @@ function assert(condition, message) {
   if (!condition) throw new AssertionError(message);
 }
 
-class TooSmallError extends TaggedError("TooSmallError") {}
+async function verify(label, run) {
+  try {
+    return await run();
+  } catch (cause) {
+    const error = new Error(SMOKE_CONTEXT + ": " + label + " failed");
+    error.cause = cause;
+    throw error;
+  }
+}
 
 async function runRuntimeSmoke() {
+  const opModule = await verify("@prodkit/op import", () => import(${JSON.stringify(options.opImport)}));
+  const policyModule = await verify("@prodkit/op/policy import", () => import(${JSON.stringify(options.policyImport)}));
+  await verify("@prodkit/op/di import", () => import(${JSON.stringify(options.diImport)}));
+  await verify("@prodkit/op/hkt import", () => import(${JSON.stringify(options.hktImport)}));
+  const resultModule = await verify("better-result import", () => import(${JSON.stringify(options.resultImport)}));
+
+  const { Op, TimeoutError } = opModule;
+  const { Policy } = policyModule;
+  const { TaggedError, UnhandledException } = resultModule;
+
+  class TooSmallError extends TaggedError("TooSmallError") {}
+
+  await verify("TimeoutError construction", () => {
+    const timeoutError = new TimeoutError({ timeoutMs: 25 });
+    assert(timeoutError._tag === "TimeoutError", "TimeoutError tag changed");
+    assert(
+      timeoutError.message === "Operation timed out after 25ms",
+      "TimeoutError message changed",
+    );
+    assert(timeoutError.timeoutMs === 25, "TimeoutError value changed");
+    assert(TimeoutError.is(timeoutError), "TimeoutError guard failed");
+  });
+
   const divide = Op(function* (a, b) {
     if (b === 0) return yield* new TooSmallError();
     return a / b;
@@ -125,38 +166,54 @@ async function runRuntimeSmoke() {
     return doubled;
   });
 
-  const result = await program.run();
-  assert(result.isOk() && result.value === 12, "composition failed");
+  await verify("successful Op run", async () => {
+    const result = await program.run();
+    assert(result.isOk() && result.value === 12, "composition failed");
+  });
 
-  const divideError = await divide.run(1, 0);
-  assert(divideError.isErr() && divideError.error instanceof TooSmallError, "typed failure failed");
+  await verify("typed tagged-error failure", async () => {
+    const divideError = await divide.run(1, 0);
+    assert(divideError.isErr() && TooSmallError.is(divideError.error), "typed failure failed");
+  });
 
-  const timeoutResult = await Op.try(
-    (signal) =>
-      new Promise((resolve, reject) => {
-        const timer = setTimeout(resolve, 50);
-        signal.addEventListener("abort", () => {
-          clearTimeout(timer);
-          reject(signal.reason ?? new Error("aborted"));
-        }, { once: true });
-      }),
-  )
-    .with(Policy.timeout(1))
-    .run();
-  assert(timeoutResult.isErr() && timeoutResult.error instanceof TimeoutError, "timeout failed");
+  await verify("timeout policy", async () => {
+    const timeoutResult = await Op.try(
+      (signal) =>
+        new Promise((resolve, reject) => {
+          const timer = setTimeout(resolve, 50);
+          signal.addEventListener("abort", () => {
+            clearTimeout(timer);
+            reject(signal.reason ?? new Error("aborted"));
+          }, { once: true });
+        }),
+    )
+      .with(Policy.timeout(1))
+      .run();
+    assert(timeoutResult.isErr() && TimeoutError.is(timeoutResult.error), "timeout failed");
+  });
 
-  const unexpectedResult = await Op.try(() => {
-    throw new Error("boom");
-  }).run();
-  assert(
-    unexpectedResult.isErr() && unexpectedResult.error instanceof UnhandledException,
-    "unexpected exception wrapping failed",
-  );
+  await verify("unexpected exception wrapping", async () => {
+    const unexpectedResult = await Op.try(() => {
+      throw new Error("boom");
+    }).run();
+    assert(
+      unexpectedResult.isErr() && UnhandledException.is(unexpectedResult.error),
+      "unexpected exception wrapping failed",
+    );
+  });
 }
 `;
 }
 
-async function createRuntimeWorkspace(tarballPath: string) {
+function readBetterResultVersion(): string {
+  const version = process.env[BETTER_RESULT_VERSION_ENV]?.trim() || DEFAULT_BETTER_RESULT_VERSION;
+  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version)) {
+    throw new Error(`${BETTER_RESULT_VERSION_ENV} must contain an exact semantic version`);
+  }
+  return version;
+}
+
+async function createRuntimeWorkspace(tarballPath: string, betterResultVersion: string) {
   const workspaceDir = await mkdtemp(path.join(os.tmpdir(), "op-runtime-smoke-"));
   await writeFile(
     path.join(workspaceDir, "package.json"),
@@ -166,7 +223,7 @@ async function createRuntimeWorkspace(tarballPath: string) {
         type: "module",
         dependencies: {
           "@prodkit/op": `file:${tarballPath}`,
-          "better-result": "3.0.1",
+          "better-result": betterResultVersion,
         },
       },
       null,
@@ -179,42 +236,69 @@ async function createRuntimeWorkspace(tarballPath: string) {
     ["install", "--ignore-scripts", `--store-dir=${PNPM_RUNTIME_STORE_DIR}`],
     workspaceDir,
   );
+
+  const installedPackageJson: unknown = JSON.parse(
+    await readFile(
+      path.join(workspaceDir, "node_modules", "better-result", "package.json"),
+      "utf8",
+    ),
+  );
+  const installedVersion =
+    typeof installedPackageJson === "object" && installedPackageJson !== null
+      ? Reflect.get(installedPackageJson, "version")
+      : undefined;
+  if (installedVersion !== betterResultVersion) {
+    throw new Error(
+      `better-result@${betterResultVersion}: installed ${String(installedVersion)} instead`,
+    );
+  }
   return workspaceDir;
 }
 
-async function writeSmokeScript(workspaceDir: string): Promise<void> {
+async function writeSmokeScript(workspaceDir: string, betterResultVersion: string): Promise<void> {
   await writeFile(
     path.join(workspaceDir, "runtime-smoke.mjs"),
-    `${smokeSource("@prodkit/op", "@prodkit/op/policy", "better-result")}\nawait runRuntimeSmoke();\n`,
+    `${smokeSource({
+      betterResultVersion,
+      diImport: "@prodkit/op/di",
+      hktImport: "@prodkit/op/hkt",
+      opImport: "@prodkit/op",
+      policyImport: "@prodkit/op/policy",
+      resultImport: "better-result",
+    })}\nawait runRuntimeSmoke();\n`,
     "utf8",
   );
 }
 
 async function smokeScriptedRuntime(
   workspaceDir: string,
+  betterResultVersion: string,
   command: string,
   args: readonly string[],
 ): Promise<void> {
-  await writeSmokeScript(workspaceDir);
+  await writeSmokeScript(workspaceDir, betterResultVersion);
   await run(command, args, workspaceDir);
 }
 
-async function smokeBun(workspaceDir: string) {
-  await smokeScriptedRuntime(workspaceDir, "bun", ["./runtime-smoke.mjs"]);
+async function smokeBun(workspaceDir: string, betterResultVersion: string) {
+  await smokeScriptedRuntime(workspaceDir, betterResultVersion, "bun", ["./runtime-smoke.mjs"]);
 }
 
-async function smokeNode(workspaceDir: string) {
-  await smokeScriptedRuntime(workspaceDir, "node", ["./runtime-smoke.mjs"]);
+async function smokeNode(workspaceDir: string, betterResultVersion: string) {
+  await smokeScriptedRuntime(workspaceDir, betterResultVersion, "node", ["./runtime-smoke.mjs"]);
 }
 
-async function smokeDeno(workspaceDir: string) {
-  await writeSmokeScript(workspaceDir);
+async function smokeDeno(workspaceDir: string, betterResultVersion: string) {
+  await writeSmokeScript(workspaceDir, betterResultVersion);
   await writeFile(
     path.join(workspaceDir, "import-map.json"),
     `${JSON.stringify(
       {
         imports: {
           "@prodkit/op": "./node_modules/@prodkit/op/dist/index.mjs",
+          "@prodkit/op/di": "./node_modules/@prodkit/op/dist/di/index.mjs",
+          "@prodkit/op/hkt": "./node_modules/@prodkit/op/dist/hkt.mjs",
+          "@prodkit/op/policy": "./node_modules/@prodkit/op/dist/policy/index.mjs",
           "better-result": "./node_modules/better-result/dist/index.mjs",
         },
       },
@@ -252,7 +336,7 @@ async function copyDistMjsFiles(sourceDir: string, targetDir: string): Promise<s
   return modulePaths;
 }
 
-async function smokeEdge(workspaceDir: string) {
+async function smokeEdge(workspaceDir: string, betterResultVersion: string) {
   const edgeDir = path.join(workspaceDir, "edge");
   mkdirSync(edgeDir);
 
@@ -275,7 +359,14 @@ async function smokeEdge(workspaceDir: string) {
   await cp(resultEntryPath, resultModulePath);
   await writeFile(
     workerModulePath,
-    `${smokeSource("./index.mjs", "./policy/index.mjs", "./better-result.mjs")}
+    `${smokeSource({
+      betterResultVersion,
+      diImport: "./di/index.mjs",
+      hktImport: "./hkt.mjs",
+      opImport: "./index.mjs",
+      policyImport: "./policy/index.mjs",
+      resultImport: "./better-result.mjs",
+    })}
 
 export default {
   async fetch() {
@@ -322,26 +413,28 @@ function parseRuntime(rawRuntime: string | undefined): Runtime[] {
 
 async function main() {
   const runtimes = parseRuntime(process.argv[2]);
+  const betterResultVersion = readBetterResultVersion();
+  logger.info(`testing packed @prodkit/op with better-result@${betterResultVersion}`);
   const tarballPath = await createPackTarball();
   try {
     for (const runtime of runtimes) {
-      const workspaceDir = await createRuntimeWorkspace(tarballPath);
+      const workspaceDir = await createRuntimeWorkspace(tarballPath, betterResultVersion);
       try {
         switch (runtime) {
           case "bun":
-            await smokeBun(workspaceDir);
+            await smokeBun(workspaceDir, betterResultVersion);
             break;
           case "node":
-            await smokeNode(workspaceDir);
+            await smokeNode(workspaceDir, betterResultVersion);
             break;
           case "deno":
-            await smokeDeno(workspaceDir);
+            await smokeDeno(workspaceDir, betterResultVersion);
             break;
           case "edge":
-            await smokeEdge(workspaceDir);
+            await smokeEdge(workspaceDir, betterResultVersion);
             break;
         }
-        logger.info(`${runtime} completed successfully`);
+        logger.info(`${runtime} completed successfully with better-result@${betterResultVersion}`);
       } finally {
         await rm(workspaceDir, { recursive: true, force: true });
       }
