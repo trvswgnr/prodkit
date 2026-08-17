@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@prodkit/op": "workspace:*",
-    "better-result": "2.9.0",
+    "better-result": "3.0.1",
     "valibot": "^1.4.2"
   },
   "devDependencies": {

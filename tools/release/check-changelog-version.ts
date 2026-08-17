@@ -24,7 +24,7 @@ function hasVersionHeading(changelog: string, version: string): boolean {
 class MissingVersionHeadingError extends TaggedError("MissingVersionHeadingError")<{
   version: string;
   message: string;
-}>() {
+}> {
   constructor(version: string) {
     const message = `CHANGELOG.md is missing a section heading for version ${version}.
 Add a heading like "## [${version}] - YYYY-MM-DD" before publishing.`;

@@ -32,8 +32,8 @@ const getTodo = (id: number): Effect.Effect<unknown, HttpClientError> =>
 
 {
   // with Op - error handling
-  class RequestFailed extends TaggedError("RequestFailed")() {}
-  class InvalidJson extends TaggedError("InvalidJson")() {}
+  class RequestFailed extends TaggedError("RequestFailed") {}
+  class InvalidJson extends TaggedError("InvalidJson") {}
 
   const getTodo = Op(function* (id: number) {
     const response = yield* Op.try(
@@ -102,8 +102,8 @@ const getTodo = (id: number): Effect.Effect<unknown, HttpClientError> =>
 
 {
   // with Op - error handling + retry
-  class RequestFailed extends TaggedError("RequestFailed")() {}
-  class InvalidJson extends TaggedError("InvalidJson")() {}
+  class RequestFailed extends TaggedError("RequestFailed") {}
+  class InvalidJson extends TaggedError("InvalidJson") {}
 
   const getTodo = Op(function* (id: number) {
     const response = yield* Op.try(
@@ -204,8 +204,8 @@ const getTodo = (id: number): Effect.Effect<unknown, HttpClientError | TimeoutEx
 
 {
   // with Op - error handling + retry + interruption
-  class RequestFailed extends TaggedError("RequestFailed")() {}
-  class InvalidJson extends TaggedError("InvalidJson")() {}
+  class RequestFailed extends TaggedError("RequestFailed") {}
+  class InvalidJson extends TaggedError("InvalidJson") {}
 
   const getTodo = Op(function* (id: number) {
     const response = yield* Op.try(
@@ -377,8 +377,8 @@ const getTodo = (id: number): Effect.Effect<unknown, HttpClientError | TimeoutEx
 
 {
   // with Op - error handling + retry + interruption + observability
-  class RequestFailed extends TaggedError("RequestFailed")() {}
-  class InvalidJson extends TaggedError("InvalidJson")() {}
+  class RequestFailed extends TaggedError("RequestFailed") {}
+  class InvalidJson extends TaggedError("InvalidJson") {}
 
   const getTodo = Op(function* (id: number) {
     const response = yield* Op.try(

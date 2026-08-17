@@ -116,11 +116,15 @@ export interface FluentOp<T, E, A, M = EmptyMeta> {
 
   /**
    * Recovers selected typed failures into a fallback value.
-   * Pass a type predicate such as `MyError.is` or `(error): error is MyError => MyError.is(error)`.
+   * Wrap methods such as `MyError.is` so the tagged-error guard keeps its class receiver.
    *
    * @example
-   * class NotFoundError extends TaggedError("NotFoundError")() {}
-   * const recovered = Op.fail(new NotFoundError()).recover(NotFoundError.is, () => ({ id: "fallback" }));
+   * class NotFoundError extends TaggedError("NotFoundError") {}
+   * const isNotFoundError = (error: unknown) => NotFoundError.is(error);
+   * const recovered = Op.fail(new NotFoundError()).recover(
+   *   isNotFoundError,
+   *   () => ({ id: "fallback" }),
+   * );
    */
   recover<ECaught extends TrackedErr<E>, R>(
     predicate: (error: TrackedErr<E>) => error is ECaught,

@@ -65,9 +65,9 @@ jobs:
       matrix:
         include:
           - label: lower bound
-            better_result: "2.9.0"
+            better_result: "3.0.1"
           - label: highest supported
-            better_result: "^2.9.0"
+            better_result: "^3.0.1"
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -93,8 +93,19 @@ jobs:
           BETTER_RESULT_RANGE: ${{ matrix.better_result }}
         run: |
           set -euo pipefail
-          version="$(pnpm view "better-result@${BETTER_RESULT_RANGE}" version)"
+          version="$(
+            pnpm view "better-result@${BETTER_RESULT_RANGE}" version --json |
+              node --input-type=module -e '
+                import fs from "node:fs";
+                const value = JSON.parse(fs.readFileSync(0, "utf8"));
+                const versions = Array.isArray(value) ? value : [value];
+                const selected = versions.at(-1);
+                if (typeof selected !== "string") process.exit(1);
+                process.stdout.write(selected);
+              '
+          )"
           echo "Resolved better-result@${BETTER_RESULT_RANGE} to ${version}"
+          echo "BETTER_RESULT_VERSION=${version}" >> "$GITHUB_ENV"
           pnpm --filter @prodkit/op add --save-dev "better-result@${version}"
 
       - name: Run op compatibility suite
@@ -102,6 +113,7 @@ jobs:
           pnpm --filter @prodkit/op run build
           pnpm --filter @prodkit/op run typecheck
           pnpm --filter @prodkit/op run test
+          pnpm --filter @prodkit/tools run runtime:smoke:node
 
   runtime-smoke:
     name: runtime smoke / ${{ matrix.label }}

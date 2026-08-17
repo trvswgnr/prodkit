@@ -42,7 +42,7 @@ export class ServiceCallError extends TaggedError("ServiceCallError")<{
   service: string;
   retryable: boolean;
   cause?: unknown;
-}>() {
+}> {
   static from(service: string, cause: unknown) {
     if (ServiceCallError.is(cause)) return cause;
     return new ServiceCallError({ service, retryable: isRetryable(cause), cause });

@@ -69,20 +69,20 @@ class SmokeExecError extends TaggedError("SmokeExecError")<{
     stdout?: string;
     stderr?: string;
   };
-}>() {}
+}> {}
 
-class SmokePackOutputError extends TaggedError("SmokePackOutputError")<{ message: string }>() {}
+class SmokePackOutputError extends TaggedError("SmokePackOutputError")<{ message: string }> {}
 
-class SmokeMissingDistError extends TaggedError("SmokeMissingDistError")<{ message: string }>() {}
+class SmokeMissingDistError extends TaggedError("SmokeMissingDistError")<{ message: string }> {}
 
 class SmokeGithubRefResolveError extends TaggedError("SmokeGithubRefResolveError")<{
   message: string;
-}>() {}
+}> {}
 
 class SmokeWorkspaceError extends TaggedError("SmokeWorkspaceError")<{
   message: string;
   cause?: unknown;
-}>() {}
+}> {}
 
 class SmokeCommandExitError extends TaggedError("SmokeCommandExitError")<{
   message: string;
@@ -90,9 +90,9 @@ class SmokeCommandExitError extends TaggedError("SmokeCommandExitError")<{
   signal: NodeJS.Signals | null;
   stdout: string;
   stderr?: string;
-}>() {}
+}> {}
 
-class OperationAbortedError extends TaggedError("OperationAbortedError")<{ message: string }>() {}
+class OperationAbortedError extends TaggedError("OperationAbortedError")<{ message: string }> {}
 
 function collectRuntimeEntryLeaves(value: unknown, target: Set<string>): void {
   if (typeof value === "string") {

@@ -31,16 +31,16 @@ type NonEmptyArray<T> = [T, ...T[]];
 
 export class InvalidRequestError extends TaggedError("InvalidRequestError")<{
   issues: NonEmptyArray<v.InferIssue<typeof GetUserRequest>>;
-}>() {}
+}> {}
 
-export class PoolCheckoutError extends TaggedError("PoolCheckoutError")<{ cause?: unknown }>() {}
+export class PoolCheckoutError extends TaggedError("PoolCheckoutError")<{ cause?: unknown }> {}
 
 export class UserLookupError extends TaggedError("UserLookupError")<{
   userId: string;
   cause?: unknown;
-}>() {}
+}> {}
 
-export class UserNotFoundError extends TaggedError("UserNotFoundError")<{ userId: string }>() {}
+export class UserNotFoundError extends TaggedError("UserNotFoundError")<{ userId: string }> {}
 
 export interface ConnectionPool {
   checkout(signal: AbortSignal): Promise<PoolConnection>;

@@ -30,11 +30,11 @@ export const UNRELEASED_HEADING = "## [Unreleased]";
 const BumpKind = v.union([v.literal("patch"), v.literal("minor"), v.literal("major")]);
 type BumpKind = v.InferOutput<typeof BumpKind>;
 
-export class ChangelogError extends TaggedError("ChangelogError")<{ message: string }>() {}
+export class ChangelogError extends TaggedError("ChangelogError")<{ message: string }> {}
 
-class CommandError extends TaggedError("CommandError")<{ cause: unknown; command: string }>() {}
-class ReleaseTagExistsError extends TaggedError("ReleaseTagExistsError")<{ tag: string }>() {}
-class DirtyWorktreeError extends TaggedError("DirtyWorktreeError")<{ details: string }>() {}
+class CommandError extends TaggedError("CommandError")<{ cause: unknown; command: string }> {}
+class ReleaseTagExistsError extends TaggedError("ReleaseTagExistsError")<{ tag: string }> {}
+class DirtyWorktreeError extends TaggedError("DirtyWorktreeError")<{ details: string }> {}
 const logReleaseAbort = (reason: string, nextStep?: string, details?: string) => {
   logger.error(`release cut aborted: ${reason}`);
   if (nextStep) logger.error(nextStep);

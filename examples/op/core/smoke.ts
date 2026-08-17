@@ -4,7 +4,7 @@ import { assert } from "../../support/assert.ts";
 import { Policy } from "@prodkit/op/policy";
 
 export async function runCoreApiSmoke() {
-  class TooSmallError extends TaggedError("TooSmallError")<{ message: string }>() {}
+  class TooSmallError extends TaggedError("TooSmallError")<{ message: string }> {}
 
   const localDivide = Op(function* (a: number, b: number) {
     if (b === 0) return yield* new TooSmallError({ message: "division by zero" });
