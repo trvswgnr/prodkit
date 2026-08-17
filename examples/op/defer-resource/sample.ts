@@ -14,11 +14,11 @@ export type DbDeps = {
   query: (conn: DbConnection, sql: string, signal: AbortSignal) => Promise<DbRow[]>;
 };
 
-export class ConnectionError extends TaggedError("ConnectionError")<{ cause?: unknown }>() {}
+export class ConnectionError extends TaggedError("ConnectionError")<{ cause?: unknown }> {}
 export class QueryFailedError extends TaggedError("QueryFailedError")<{
   sql: string;
   cause?: unknown;
-}>() {}
+}> {}
 
 export function createDbApp(deps: DbDeps) {
   const beginAuditSession = Op(function* (userId: string) {

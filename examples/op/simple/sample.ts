@@ -1,7 +1,7 @@
 import { Op } from "@prodkit/op";
 import { TaggedError } from "better-result";
 
-export class DivisionByZeroError extends TaggedError("DivisionByZeroError")() {}
+export class DivisionByZeroError extends TaggedError("DivisionByZeroError") {}
 
 // TaggedError is optional, any discriminated error can be used
 export class NegativeError extends Error {
@@ -30,9 +30,9 @@ export const mathComposeProgram = Op(function* () {
   return rooted * 2;
 });
 
-export class FetchError extends TaggedError("FetchError")() {}
-export class HttpError extends TaggedError("HttpError")<{ status: number; statusText: string }>() {}
-export class ParseError extends TaggedError("ParseError")<{ raw: unknown }>() {}
+export class FetchError extends TaggedError("FetchError") {}
+export class HttpError extends TaggedError("HttpError")<{ status: number; statusText: string }> {}
+export class ParseError extends TaggedError("ParseError")<{ raw: unknown }> {}
 
 export const parseUser = Op(function* (payload: unknown) {
   if (

@@ -111,7 +111,7 @@ function assert(condition, message) {
   if (!condition) throw new AssertionError(message);
 }
 
-class TooSmallError extends TaggedError("TooSmallError")() {}
+class TooSmallError extends TaggedError("TooSmallError") {}
 
 async function runRuntimeSmoke() {
   const divide = Op(function* (a, b) {
@@ -166,7 +166,7 @@ async function createRuntimeWorkspace(tarballPath: string) {
         type: "module",
         dependencies: {
           "@prodkit/op": `file:${tarballPath}`,
-          "better-result": "2.9.0",
+          "better-result": "3.0.1",
         },
       },
       null,

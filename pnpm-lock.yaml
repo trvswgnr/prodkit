@@ -99,8 +99,8 @@ importers:
         specifier: workspace:*
         version: link:../packages/op
       better-result:
-        specifier: 2.9.0
-        version: 2.9.0
+        specifier: 3.0.1
+        version: 3.0.1
       valibot:
         specifier: ^1.4.2
         version: 1.4.2(typescript@6.0.3)
@@ -229,8 +229,8 @@ importers:
         specifier: workspace:*
         version: link:../packages/op
       better-result:
-        specifier: 2.9.0
-        version: 2.9.0
+        specifier: 3.0.1
+        version: 3.0.1
       valibot:
         specifier: ^1.4.2
         version: 1.4.2(typescript@6.0.3)
@@ -1400,9 +1400,6 @@ packages:
   balanced-match@4.0.4:
     resolution: {integrity: sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==}
     engines: {node: 18 || 20 || >=22}
-
-  better-result@2.9.0:
-    resolution: {integrity: sha512-NHwGDGVbRlWDOce3CwcfGIrcNR9zY37ut3SVwQVfv57DZdVhxjhA4mfaHN1n8QwWnRAR4iErpW1X/eaiaUaFYg==}
 
   better-result@3.0.1:
     resolution: {integrity: sha512-rnCeqEXkKPHmz5MO5ZroPRDyHe4YvlNPyy7qj8cVcWs/GnvSvC3086G74/220W+wWcIWlXgzvcjskFV0A4blUQ==}
@@ -3099,8 +3096,6 @@ snapshots:
       - supports-color
 
   balanced-match@4.0.4: {}
-
-  better-result@2.9.0: {}
 
   better-result@3.0.1: {}
 
