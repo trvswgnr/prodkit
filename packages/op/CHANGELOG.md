@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- No entries yet.
+
+## [1.0.0] - 2026-08-17
+
 ### Changed
 
 - Required `better-result ^3.0.1` for `@prodkit/op` 1.x. Upgrade both packages together with
