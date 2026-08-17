@@ -22,7 +22,7 @@ export class LedgerConnectionService extends DI.Dependency(
 export class BalanceFetchError extends TaggedError("BalanceFetchError")<{
   accountId: string;
   cause?: unknown;
-}>() {}
+}> {}
 
 export type LedgerDeps = {
   connectLedger: (signal: AbortSignal) => Promise<LedgerConnection>;

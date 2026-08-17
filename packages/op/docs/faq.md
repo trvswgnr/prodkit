@@ -21,12 +21,25 @@ code you already write. Pick Effect when the platform is the product.
 already imports from `better-result`.
 
 Split imports keep ownership clear: `better-result` owns result primitives and their release
-surface; `@prodkit/op` owns the async runtime (combinators, policies, lifecycle, cancellation).
-`better-result` stays a required peer so your app installs one copy and TypeScript sees one type
-identity. See [better-result.md](better-result.md).
+surface, including attempt-aware retry and signal context for `Result.tryPromise`; `@prodkit/op`
+owns the lazy, run-scoped operation graph around those results. `better-result` stays a required
+peer so your app installs one copy and TypeScript sees one type identity. See
+[better-result.md](better-result.md).
 
 Re-exporting `better-result` from `@prodkit/op` would blur semver and encourage duplicate or
 mismatched copies. The peer plus split import is intentional.
+
+## Why use Op instead of `better-result` directly?
+
+For one async action with a local retry budget, use `Result.tryPromise`. In `better-result` 3 it can
+receive the attempt number and an `AbortSignal`, choose whether and when to retry, and stop a pending
+retry delay when the signal aborts.
+
+Use Op when several actions need one execution contract. Policy attachment order controls whether a
+timeout covers each attempt or the full retry loop. Nested operations share run cancellation.
+Concurrent combinators interrupt and drain sibling work. Registered finalizers finish before the
+result settles, and DI bindings can share the same run scope. Those relationships, rather than the
+existence of retry or cancellation alone, are the reason to add Op.
 
 ## Who maintains this?
 

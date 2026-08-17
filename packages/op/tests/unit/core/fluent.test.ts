@@ -444,9 +444,9 @@ describe("op.tapErr", () => {
 
 describe("op.recover", () => {
   test("recover narrows handled error type via type guard predicate", async () => {
-    class AErr extends TaggedError("AErr")() {}
-    class BErr extends TaggedError("BErr")() {}
-    class RecoveryErr extends TaggedError("RecoveryErr")() {}
+    class AErr extends TaggedError("AErr") {}
+    class BErr extends TaggedError("BErr") {}
+    class RecoveryErr extends TaggedError("RecoveryErr") {}
 
     const fallback = Op.fail(new RecoveryErr());
     const op = Op(function* (kind: "a" | "b") {
@@ -454,7 +454,10 @@ describe("op.recover", () => {
         return yield* new AErr();
       }
       return yield* new BErr();
-    }).recover(AErr.is, () => fallback);
+    }).recover(
+      (error): error is AErr => AErr.is(error),
+      () => fallback,
+    );
 
     const recovered = await op.run("a");
     assert(recovered.isOk(), "should be Ok");
@@ -466,11 +469,12 @@ describe("op.recover", () => {
   });
 
   test("recover can return a plain fallback value", async () => {
-    class MissingConfigError extends TaggedError("MissingConfigError")() {}
+    class MissingConfigError extends TaggedError("MissingConfigError") {}
+    const isMissingConfigError = (error: unknown) => MissingConfigError.is(error);
 
     const recovered = Op(function* () {
       return yield* new MissingConfigError();
-    }).recover(MissingConfigError.is, () => "fallback" as const);
+    }).recover(isMissingConfigError, () => "fallback" as const);
 
     const result = await recovered.run();
     assert(result.isOk(), "should be Ok");
@@ -478,12 +482,15 @@ describe("op.recover", () => {
   });
 
   test("recover treats returned Op values as plain fallback data", async () => {
-    class MissingConfigError extends TaggedError("MissingConfigError")() {}
+    class MissingConfigError extends TaggedError("MissingConfigError") {}
     const fallback = Op.of(69);
 
     const recovered = Op(function* () {
       return yield* new MissingConfigError();
-    }).recover(MissingConfigError.is, () => fallback);
+    }).recover(
+      (error): error is MissingConfigError => MissingConfigError.is(error),
+      () => fallback,
+    );
 
     const result = await recovered.run();
     assert(result.isOk(), "should be Ok");
@@ -491,14 +498,17 @@ describe("op.recover", () => {
   });
 
   test("recover treats generator factory handlers as plain fallback values", async () => {
-    class MissingConfigError extends TaggedError("MissingConfigError")() {}
+    class MissingConfigError extends TaggedError("MissingConfigError") {}
 
     const fallback = Op(function* () {
       return 69;
     });
     const recovered = Op(function* () {
       return yield* new MissingConfigError();
-    }).recover(MissingConfigError.is, () => fallback);
+    }).recover(
+      (error): error is MissingConfigError => MissingConfigError.is(error),
+      () => fallback,
+    );
 
     const result = await recovered.run();
     assert(result.isOk(), "should be Ok");
@@ -506,14 +516,17 @@ describe("op.recover", () => {
   });
 
   test("recover treats invoked Op(function*) handlers as plain fallback data", async () => {
-    class MissingConfigError extends TaggedError("MissingConfigError")() {}
+    class MissingConfigError extends TaggedError("MissingConfigError") {}
     const fallback = Op(function* () {
       return 69;
     })();
 
     const recovered = Op(function* () {
       return yield* new MissingConfigError();
-    }).recover(MissingConfigError.is, () => fallback);
+    }).recover(
+      (error): error is MissingConfigError => MissingConfigError.is(error),
+      () => fallback,
+    );
 
     const result = await recovered.run();
     assert(result.isOk(), "should be Ok");
@@ -521,15 +534,18 @@ describe("op.recover", () => {
   });
 
   test("recover does not drive failures from invoked Op(function*) handler returns", async () => {
-    class MissingConfigError extends TaggedError("MissingConfigError")() {}
-    class RecoveryErr extends TaggedError("RecoveryErr")() {}
+    class MissingConfigError extends TaggedError("MissingConfigError") {}
+    class RecoveryErr extends TaggedError("RecoveryErr") {}
     const fallback = Op(function* () {
       return yield* new RecoveryErr();
     })();
 
     const recovered = Op(function* () {
       return yield* new MissingConfigError();
-    }).recover(MissingConfigError.is, () => fallback);
+    }).recover(
+      (error): error is MissingConfigError => MissingConfigError.is(error),
+      () => fallback,
+    );
 
     const result = await recovered.run();
     assert(result.isOk(), "should be Ok");
@@ -550,13 +566,16 @@ describe("op.recover", () => {
   });
 
   test("recover can handle typed errors via TaggedError.is", async () => {
-    class TestError extends TaggedError("TestError")() {}
+    class TestError extends TaggedError("TestError") {}
     const recovered = Op(function* () {
       if (TRUE) {
         return yield* new TestError();
       }
       return 69;
-    }).recover(TestError.is, () => "fallback");
+    }).recover(
+      (error): error is TestError => TestError.is(error),
+      () => "fallback",
+    );
 
     const result = await recovered.run();
     assert(result.isOk(), "should be Ok");
@@ -564,13 +583,16 @@ describe("op.recover", () => {
   });
 
   test("recover with TaggedError.is preserves arity", async () => {
-    class TestError extends TaggedError("TestError")() {}
+    class TestError extends TaggedError("TestError") {}
     const recovered = Op(function* (n: number) {
       if (n < 0) {
         return yield* new TestError();
       }
       return n;
-    }).recover(TestError.is, () => "fallback");
+    }).recover(
+      (error): error is TestError => TestError.is(error),
+      () => "fallback",
+    );
 
     const result = await recovered.run(-1);
     assert(result.isOk(), "should be Ok");
@@ -578,9 +600,9 @@ describe("op.recover", () => {
   });
 
   test("recover with TaggedError.is allows only errors from the Op to be recovered", async () => {
-    class E1 extends TaggedError("E1")() {}
-    class E2 extends TaggedError("E2")() {}
-    class E3 extends TaggedError("E3")() {}
+    class E1 extends TaggedError("E1") {}
+    class E2 extends TaggedError("E2") {}
+    class E3 extends TaggedError("E3") {}
     const op = Op(function* () {
       if (TRUE) {
         return yield* new E1();
@@ -588,19 +610,28 @@ describe("op.recover", () => {
       return yield* new E2();
     });
 
-    const recovered1 = op.recover(E1.is, () => "fallback");
+    const recovered1 = op.recover(
+      (error): error is E1 => E1.is(error),
+      () => "fallback",
+    );
 
     const result1 = await recovered1.run();
     assert(result1.isOk(), "should be Ok");
     expect(result1.value).toBe("fallback");
 
-    const recovered2 = op.recover(E2.is, () => "fallback1");
+    const recovered2 = op.recover(
+      (error): error is E2 => E2.is(error),
+      () => "fallback1",
+    );
 
     const result2 = await recovered2.run();
     assert(result2.isErr(), "should be Err");
     expect(result2.error).toBeInstanceOf(E1);
 
-    // @ts-expect-error - E3 is not a valid error type for this op
-    void op.recover(E3.is, () => "fallback2");
+    void op.recover(
+      // @ts-expect-error - E3 is not a valid error type for this op
+      (error): error is E3 => E3.is(error),
+      () => "fallback2",
+    );
   });
 });

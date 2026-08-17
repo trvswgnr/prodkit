@@ -1,4 +1,4 @@
-import { describe, expectTypeOf, test } from "vitest";
+import { assert, describe, expectTypeOf, test } from "vitest";
 import {
   ErrorGroup,
   Op,
@@ -171,7 +171,7 @@ describe("type inference contracts", () => {
   });
 
   test("mapErr, tapErr, and recover callbacks exclude UnhandledException", () => {
-    class DomainError extends TaggedError("DomainError")() {}
+    class DomainError extends TaggedError("DomainError") {}
 
     const mapErrOp = Op.fail<DomainError | UnhandledException>(new DomainError()).mapErr(
       (error) => {
@@ -226,10 +226,10 @@ describe("type inference contracts", () => {
   });
 
   test("recover narrows handled errors and preserves unhandled variants", () => {
-    class AErr extends TaggedError("AErr")() {}
-    class BErr extends TaggedError("BErr")() {}
-    class RecoveryErr extends TaggedError("RecoveryErr")() {}
-    class E3 extends TaggedError("E3")() {}
+    class AErr extends TaggedError("AErr") {}
+    class BErr extends TaggedError("BErr") {}
+    class RecoveryErr extends TaggedError("RecoveryErr") {}
+    class E3 extends TaggedError("E3") {}
 
     const op = Op(function* (kind: "a" | "b") {
       if (kind === "a") {
@@ -248,13 +248,22 @@ describe("type inference contracts", () => {
       }
       return yield* new BErr();
     });
-    const recoveredA = base.recover(AErr.is, () => "fallback");
-    const recoveredB = base.recover(BErr.is, () => "fallback");
+    const recoveredA = base.recover(
+      (error) => AErr.is(error),
+      () => "fallback",
+    );
+    const recoveredB = base.recover(
+      (error) => BErr.is(error),
+      () => "fallback",
+    );
     expectTypeOf(recoveredA).toEqualTypeOf<Op<string, BErr, []>>();
     expectTypeOf(recoveredB).toEqualTypeOf<Op<string, AErr, []>>();
 
-    // @ts-expect-error - E3 is not a valid error type for this op
-    base.recover(E3.is, () => "fallback");
+    base.recover(
+      // @ts-expect-error - E3 is not a valid error type for this op
+      (error): error is E3 => E3.is(error),
+      () => "fallback",
+    );
   });
 
   test("combinators infer tuples and error unions", () => {
@@ -329,8 +338,20 @@ describe("type inference contracts", () => {
   test("public API typing contracts remain stable", () => {
     expectTypeOf(Op.empty).toEqualTypeOf<Op<void, never, []>>();
 
-    const SmokeError = TaggedError("SmokeError")<{ message: string }>();
+    class SmokeError extends TaggedError("SmokeError")<{ message: string }> {}
     const e = new SmokeError({ message: "x" });
-    expectTypeOf(e).toEqualTypeOf<TaggedErrorInstance<"SmokeError", { message: string }>>();
+    expectTypeOf(e).toMatchTypeOf<TaggedErrorInstance<"SmokeError", { message: string }>>();
+    expectTypeOf<TaggedErrorInstance<"SmokeError", { message: string }>>().toMatchTypeOf<
+      typeof e
+    >();
+
+    const timeoutFailure = Op(function* () {
+      return yield* new TimeoutError({ timeoutMs: 10 });
+    });
+    expectTypeOf(timeoutFailure).toEqualTypeOf<Op<never, TimeoutError, []>>();
+
+    const unknownError: unknown = new TimeoutError({ timeoutMs: 10 });
+    assert(TimeoutError.is(unknownError));
+    expectTypeOf(unknownError).toEqualTypeOf<TimeoutError>();
   });
 });

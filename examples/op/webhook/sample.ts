@@ -75,27 +75,27 @@ type NonEmptyArray<T> = [T, ...T[]];
 
 export class InvalidWebhookError extends TaggedError("InvalidWebhookError")<{
   issues: NonEmptyArray<v.InferIssue<typeof WebhookPayload>>;
-}>() {}
+}> {}
 export class DuplicateEventError extends TaggedError("DuplicateEventError")<{
   eventId: string;
-}>() {}
+}> {}
 export class FraudRiskTooHighError extends TaggedError("FraudRiskTooHighError")<{
   userId: string;
   score: number;
   threshold: number;
-}>() {}
+}> {}
 export class InventoryUnavailableError extends TaggedError("InventoryUnavailableError")<{
   orderId: string;
-}>() {}
+}> {}
 export class PaymentDeclinedError extends TaggedError("PaymentDeclinedError")<{
   orderId: string;
   message: string;
-}>() {}
+}> {}
 export class ServiceCallError extends TaggedError("ServiceCallError")<{
   service: string;
   retryable: boolean;
   cause?: unknown;
-}>() {
+}> {
   static from(service: string, cause: unknown) {
     if (cause instanceof ServiceCallError) return cause;
     const retryable =

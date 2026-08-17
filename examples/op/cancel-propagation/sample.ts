@@ -30,7 +30,7 @@ export type CatalogDeps = {
 export class CatalogFetchError extends TaggedError("CatalogFetchError")<{
   source: string;
   cause?: unknown;
-}>() {}
+}> {}
 
 export function createCatalogApp(deps: CatalogDeps) {
   const fetchMetadataFromCache = Op(function* (sku: string) {

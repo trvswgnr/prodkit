@@ -47,7 +47,7 @@ const raise: RaiseFn = (cause) => {
 export class InvalidJsonError extends TaggedError("InvalidJsonError")<{
   cause: SyntaxError;
   input: string;
-}>() {}
+}> {}
 
 export const parseJson = Op(function* (input: string) {
   return yield* Op.try(
@@ -86,7 +86,7 @@ export class ParseError extends TaggedError("ParseError")<{
   message?: string;
   issues: v.BaseIssue<unknown>[];
   input: unknown;
-}>() {}
+}> {}
 export const parse = <S extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>>(
   schema: S,
   input: unknown,
@@ -99,13 +99,13 @@ export const parse = <S extends v.BaseSchema<unknown, unknown, v.BaseIssue<unkno
     return result.output;
   });
 
-export class NoEntError extends TaggedError("NoEntError")<{ path: string }>() {}
+export class NoEntError extends TaggedError("NoEntError")<{ path: string }> {}
 
 export class FileError extends TaggedError("FileError")<{
   type: "read" | "write";
   cause: unknown;
   path: string;
-}>() {}
+}> {}
 
 export const readFile = Op(function* (filepath: string, encoding?: BufferEncoding) {
   encoding ??= "utf8";

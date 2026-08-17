@@ -4,16 +4,16 @@ import { TaggedError } from "better-result";
 
 export class DuplicateEmailError extends TaggedError("DuplicateEmailError")<{
   email: string;
-}>() {}
+}> {}
 
 export class DatabaseError extends TaggedError("DatabaseError")<{
   cause: unknown;
-}>() {}
+}> {}
 
 export class EmailDeliveryError extends TaggedError("EmailDeliveryError")<{
   email: string;
   cause: unknown;
-}>() {}
+}> {}
 
 export interface User {
   readonly id: string;

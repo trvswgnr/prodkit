@@ -109,12 +109,19 @@ describe("UnhandledException", () => {
 });
 
 describe("TaggedError", () => {
-  test("factory produces typed errors", () => {
-    const SmokeError = TaggedError("SmokeError")<{ message: string }>();
+  test("factory errors compose directly through Op", async () => {
+    class SmokeError extends TaggedError("SmokeError")<{ message: string }> {}
     const e = new SmokeError({ message: "x" });
     expect(e._tag).toBe("SmokeError");
     expect(e.name).toBe("SmokeError");
     expect(e.message).toBe("x");
+
+    const result = await Op(function* () {
+      return yield* e;
+    }).run();
+
+    assert(result.isErr(), "should be Err");
+    expect(result.error).toBe(e);
   });
 });
 

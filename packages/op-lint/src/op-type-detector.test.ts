@@ -501,7 +501,7 @@ describe("op-type-detector quick start returns", () => {
     'import { Op } from "@prodkit/op";',
     'import { TaggedError } from "better-result";',
     "",
-    'class DivisionByZeroError extends TaggedError("DivisionByZeroError")() {}',
+    'class DivisionByZeroError extends TaggedError("DivisionByZeroError") {}',
     "",
     "const divide = Op(function* (a: number, b: number) {",
     "  if (b === 0) return yield* new DivisionByZeroError();",
