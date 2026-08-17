@@ -48,8 +48,8 @@ describe("Op.all", () => {
   });
 
   test("union error type across children", async () => {
-    class AErr extends TaggedError("AErr")() {}
-    class BErr extends TaggedError("BErr")() {}
+    class AErr extends TaggedError("AErr") {}
+    class BErr extends TaggedError("BErr") {}
     const n: number = 1;
     const s: string = "x";
     const a = Op(function* () {

@@ -38,6 +38,20 @@ describe("TimeoutError", () => {
     expect(timeoutError).toBeInstanceOf(Error);
     expect(timeoutError).toBeInstanceOf(TimeoutError);
   });
+
+  test("static guard narrows only TimeoutError instances", () => {
+    const timeoutError = new TimeoutError({ timeoutMs: 10 });
+    expect(TimeoutError.is(timeoutError)).toBe(true);
+    expect(TimeoutError.is(new Error("x"))).toBe(false);
+  });
+
+  test("iterator yields an error result carrying the timeout", () => {
+    const timeoutError = new TimeoutError({ timeoutMs: 10 });
+    const first = timeoutError[Symbol.iterator]().next();
+    expect(first.done).toBe(false);
+    expect(first.value.status).toBe("error");
+    expect(first.value.error).toBe(timeoutError);
+  });
 });
 
 describe("ErrorGroup", () => {
@@ -81,7 +95,7 @@ describe("TaggedError factory", () => {
     class ValidationError extends TaggedError("ValidationError")<{
       message: string;
       field: string;
-    }>() {}
+    }> {}
 
     const validationError = new ValidationError({
       message: "invalid email",

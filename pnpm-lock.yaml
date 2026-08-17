@@ -119,10 +119,6 @@ importers:
         version: 6.0.3
 
   packages/op:
-    dependencies:
-      better-result:
-        specifier: ^2.9.0
-        version: 2.9.0
     devDependencies:
       '@prodkit/shared':
         specifier: workspace:*
@@ -130,6 +126,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: 'catalog:'
         version: 4.1.10(vitest@4.1.10)
+      better-result:
+        specifier: ^3.0.1
+        version: 3.0.1
       fast-check:
         specifier: 4.7.0
         version: 4.7.0
@@ -1404,6 +1403,9 @@ packages:
 
   better-result@2.9.0:
     resolution: {integrity: sha512-NHwGDGVbRlWDOce3CwcfGIrcNR9zY37ut3SVwQVfv57DZdVhxjhA4mfaHN1n8QwWnRAR4iErpW1X/eaiaUaFYg==}
+
+  better-result@3.0.1:
+    resolution: {integrity: sha512-rnCeqEXkKPHmz5MO5ZroPRDyHe4YvlNPyy7qj8cVcWs/GnvSvC3086G74/220W+wWcIWlXgzvcjskFV0A4blUQ==}
 
   birpc@4.0.0:
     resolution: {integrity: sha512-LShSxJP0KTmd101b6DRyGBj57LZxSDYWKitQNW/mi8GRMvZb078Uf9+pveax1DrVL89vm7mWe+TovdI/UDOuPw==}
@@ -3099,6 +3101,8 @@ snapshots:
   balanced-match@4.0.4: {}
 
   better-result@2.9.0: {}
+
+  better-result@3.0.1: {}
 
   birpc@4.0.0: {}
 

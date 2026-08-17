@@ -13,7 +13,7 @@ export const CLEANUP_FAILURE_MESSAGE = "Operation cleanup failed";
 export class TimeoutError extends TaggedError("TimeoutError")<{
   message: string;
   timeoutMs: number;
-}>() {
+}> {
   constructor({ timeoutMs }: { timeoutMs: number }) {
     super({ message: `Operation timed out after ${timeoutMs}ms`, timeoutMs });
   }
