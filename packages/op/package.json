@@ -69,6 +69,8 @@
     "release:prepare": "pnpm -w run gate && pnpm run changelog:check && npm pack --dry-run",
     "release:patch": "pnpm --filter @prodkit/tools run release:cut op patch",
     "release:minor": "pnpm --filter @prodkit/tools run release:cut op minor",
+    "release:major:dry-run": "pnpm --filter @prodkit/tools run release:dry-run op major && pnpm run release:prepare",
+    "release:major": "pnpm --filter @prodkit/tools run release:cut op major",
     "release:publish:manual": "npm publish --access public --provenance",
     "release:push": "git push && git push --tags",
     "coverage": "vitest run --coverage",

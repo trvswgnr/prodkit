@@ -9,9 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Required `better-result ^3.0.1`. This is a breaking peer migration: remove the trailing factory
-  call from 2.x `TaggedError("Name")<Props>()` declarations, and wrap subclass guards passed as
-  callbacks with a receiver-preserving predicate such as
+- Required `better-result ^3.0.1` for `@prodkit/op` 1.x. Upgrade both packages together with
+  `npm install @prodkit/op@^1.0.0 better-result@^3.0.1`. This is a breaking peer migration from
+  2.x: remove the trailing factory call from `TaggedError("Name")<Props>()` declarations, and wrap
+  subclass guards passed as callbacks with a receiver-preserving predicate such as
   `(error): error is MyError => MyError.is(error)`.
 
 ## [0.2.2] - 2026-06-19

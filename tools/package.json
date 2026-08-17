@@ -29,6 +29,7 @@
     "adr:sync": "node ./checks/sync-adr-index.ts --write",
     "changelog:check": "node ./release/check-changelog-version.ts",
     "release:check": "node --test ./release/release-cut.test.ts",
+    "release:dry-run": "node ./release/release-dry-run.ts",
     "release:cut": "node ./release/release-cut.ts",
     "fmt": "oxfmt \"**/*.ts\"",
     "fmt:check": "oxfmt --check \"**/*.ts\"",
