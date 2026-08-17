@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ChangelogError, promoteUnreleased } from "./release-cut.ts";
+import { bumpVersion, ChangelogError, planRelease, promoteUnreleased } from "./release-cut.ts";
 
-const NEXT_VERSION = "1.2.4";
+const CURRENT_VERSION = "0.2.2";
+const NEXT_VERSION = "1.0.0";
 const RELEASE_DATE = "2026-06-24";
 
 async function promote(changelog: string): Promise<string> {
@@ -26,7 +27,27 @@ function releasedSection(changelog: string): string {
   return changelog.slice(start, nextHeading === -1 ? undefined : nextHeading).trimEnd();
 }
 
-void test("promotes real notes and removes the unreleased placeholder", async () => {
+void test("calculates 0.2.2 -> 1.0.0 for a major release", async () => {
+  const result = await bumpVersion(CURRENT_VERSION, "major").run();
+
+  assert(result.isOk(), "major version calculation should succeed");
+  assert.equal(result.value, NEXT_VERSION);
+});
+
+void test("names the planned tag from the major release version", async () => {
+  const result = await planRelease("op", CURRENT_VERSION, "major").run();
+
+  assert(result.isOk(), "major release planning should succeed");
+  assert.deepEqual(result.value, {
+    currentVersion: CURRENT_VERSION,
+    nextVersion: NEXT_VERSION,
+    npmName: "@prodkit/op",
+    packageId: "op",
+    tag: "op-v1.0.0",
+  });
+});
+
+void test("promotes major release notes and removes the unreleased placeholder", async () => {
   const updated = await promote(`# Changelog
 
 ## [Unreleased]
@@ -39,7 +60,7 @@ void test("promotes real notes and removes the unreleased placeholder", async ()
 
 - Release notes survive.
 
-## [1.2.3] - 2026-06-01
+## [0.2.2] - 2026-06-01
 
 ### Changed
 
@@ -49,7 +70,7 @@ void test("promotes real notes and removes the unreleased placeholder", async ()
   const release = releasedSection(updated);
   assert.equal(
     release,
-    `## [1.2.4] - 2026-06-24
+    `## [1.0.0] - 2026-06-24
 
 ### Added
 
@@ -58,7 +79,7 @@ void test("promotes real notes and removes the unreleased placeholder", async ()
 - Release notes survive.`,
   );
   assert.match(updated, /## \[Unreleased\]\n\n### Added\n\n- No entries yet\./);
-  assert.match(updated, /## \[1\.2\.3\] - 2026-06-01/);
+  assert.match(updated, /## \[0\.2\.2\] - 2026-06-01/);
 });
 
 void test("rejects a placeholder-only unreleased section as empty", async () => {
@@ -70,7 +91,7 @@ void test("rejects a placeholder-only unreleased section as empty", async () => 
 
 - No entries yet.
 
-## [1.2.3] - 2026-06-01
+## [0.2.2] - 2026-06-01
 
 ### Changed
 
@@ -94,7 +115,7 @@ void test("promotes notes unchanged when the placeholder is absent", async () =>
 
 - Real fix.
 
-## [1.2.3] - 2026-06-01
+## [0.2.2] - 2026-06-01
 
 ### Changed
 
@@ -103,7 +124,7 @@ void test("promotes notes unchanged when the placeholder is absent", async () =>
 
   assert.equal(
     releasedSection(updated),
-    `## [1.2.4] - 2026-06-24
+    `## [1.0.0] - 2026-06-24
 
 ### Changed
 
@@ -118,7 +139,7 @@ void test("promotes notes unchanged when the placeholder is absent", async () =>
 void test("keeps malformed changelog failures for missing Unreleased", async () => {
   const error = await promoteFailure(`# Changelog
 
-## [1.2.3] - 2026-06-01
+## [0.2.2] - 2026-06-01
 
 ### Changed
 

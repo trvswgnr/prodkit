@@ -28,7 +28,7 @@ export const NO_ENTRIES_PLACEHOLDER = "- No entries yet.";
 export const UNRELEASED_HEADING = "## [Unreleased]";
 
 const BumpKind = v.union([v.literal("patch"), v.literal("minor"), v.literal("major")]);
-type BumpKind = v.InferOutput<typeof BumpKind>;
+export type BumpKind = v.InferOutput<typeof BumpKind>;
 
 export class ChangelogError extends TaggedError("ChangelogError")<{ message: string }> {}
 
@@ -40,6 +40,60 @@ const logReleaseAbort = (reason: string, nextStep?: string, details?: string) =>
   if (nextStep) logger.error(nextStep);
   if (details) logger.error(`\n${details}`);
 };
+
+export const parseBumpKind = Op(function* (arg: string | undefined, usage: string) {
+  const result = v.safeParse(BumpKind, arg);
+  if (!result.success) {
+    return yield* new ParseError({
+      message: usage,
+      issues: result.issues,
+      input: arg,
+    });
+  }
+  return result.output;
+});
+
+const parseVersion = Op(function* (value: string) {
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value);
+  if (!match) {
+    return yield* new ParseError({
+      message: `unsupported version format: "${value}"`,
+      issues: [],
+      input: value,
+    });
+  }
+
+  return [Number(match[1]), Number(match[2]), Number(match[3])] as const;
+});
+
+export const bumpVersion = Op(function* (current: string, kind: BumpKind) {
+  const [major, minor, patch] = yield* parseVersion(current);
+  if (kind === "major") {
+    return `${major + 1}.0.0`;
+  }
+
+  if (kind === "minor") {
+    return `${major}.${minor + 1}.0`;
+  }
+
+  return `${major}.${minor}.${patch + 1}`;
+});
+
+export const planRelease = Op(function* (
+  packageId: keyof typeof RELEASE_PACKAGES,
+  currentVersion: string,
+  bumpKind: BumpKind,
+) {
+  const nextVersion = yield* bumpVersion(currentVersion, bumpKind);
+
+  return {
+    currentVersion,
+    nextVersion,
+    npmName: RELEASE_PACKAGES[packageId].npmName,
+    packageId,
+    tag: releaseTag(packageId, nextVersion),
+  };
+});
 
 export const promoteUnreleased = Op(function* (
   changelog: string,
@@ -105,44 +159,6 @@ const main = Op(function* (packageIdArg: string | undefined, bumpKindArg: string
       encoding: "utf8",
     });
   });
-  const parseBumpKind = Op(function* (arg: string | undefined) {
-    const result = v.safeParse(BumpKind, arg);
-    if (!result.success) {
-      return yield* new ParseError({
-        message: RELEASE_CUT_USAGE,
-        issues: result.issues,
-        input: arg,
-      });
-    }
-    return result.output;
-  });
-
-  const parseVersion = Op(function* (value: string) {
-    const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value);
-    if (!match) {
-      return yield* new ParseError({
-        message: `unsupported version format: "${value}"`,
-        issues: [],
-        input: value,
-      });
-    }
-
-    return [Number(match[1]), Number(match[2]), Number(match[3])] as const;
-  });
-
-  const bumpVersion = Op(function* (current: string, kind: BumpKind) {
-    const [major, minor, patch] = yield* parseVersion(current);
-    if (kind === "major") {
-      return `${major + 1}.0.0`;
-    }
-
-    if (kind === "minor") {
-      return `${major}.${minor + 1}.0`;
-    }
-
-    return `${major}.${minor}.${patch + 1}`;
-  });
-
   const getCurrentVersion = Op(function* () {
     const raw = yield* readFile(packageJsonPath);
     const parsedJson = yield* parseJson(raw);
@@ -210,11 +226,11 @@ const main = Op(function* (packageIdArg: string | undefined, bumpKindArg: string
     }
   });
 
-  const bumpKind = yield* parseBumpKind(bumpKindArg);
+  const bumpKind = yield* parseBumpKind(bumpKindArg, RELEASE_CUT_USAGE);
   const currentVersion = yield* getCurrentVersion();
-  const nextVersion = yield* bumpVersion(currentVersion, bumpKind);
+  const releasePlan = yield* planRelease(packageId, currentVersion, bumpKind);
+  const { nextVersion, tag } = releasePlan;
   const releaseDate = yield* getReleaseDate();
-  const tag = releaseTag(packageId, nextVersion);
   yield* ensureWorktreeClean();
   yield* ensureTagDoesNotExist(tag);
 
@@ -252,7 +268,7 @@ if (isMain) {
               handledKnownError = true;
               logReleaseAbort(
                 "git worktree is not clean.",
-                "commit/stash/discard changes and rerun release:patch.",
+                "commit/stash/discard changes and rerun the release command.",
                 `pending changes:\n${e.details || "unknown"}`,
               );
             },
