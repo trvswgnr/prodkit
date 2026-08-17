@@ -470,13 +470,11 @@ describe("op.recover", () => {
 
   test("recover can return a plain fallback value", async () => {
     class MissingConfigError extends TaggedError("MissingConfigError") {}
+    const isMissingConfigError = (error: unknown) => MissingConfigError.is(error);
 
     const recovered = Op(function* () {
       return yield* new MissingConfigError();
-    }).recover(
-      (error): error is MissingConfigError => MissingConfigError.is(error),
-      () => "fallback" as const,
-    );
+    }).recover(isMissingConfigError, () => "fallback" as const);
 
     const result = await recovered.run();
     assert(result.isOk(), "should be Ok");

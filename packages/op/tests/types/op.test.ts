@@ -1,4 +1,4 @@
-import { describe, expectTypeOf, test } from "vitest";
+import { assert, describe, expectTypeOf, test } from "vitest";
 import {
   ErrorGroup,
   Op,
@@ -249,11 +249,11 @@ describe("type inference contracts", () => {
       return yield* new BErr();
     });
     const recoveredA = base.recover(
-      (error): error is AErr => AErr.is(error),
+      (error) => AErr.is(error),
       () => "fallback",
     );
     const recoveredB = base.recover(
-      (error): error is BErr => BErr.is(error),
+      (error) => BErr.is(error),
       () => "fallback",
     );
     expectTypeOf(recoveredA).toEqualTypeOf<Op<string, BErr, []>>();
@@ -351,8 +351,7 @@ describe("type inference contracts", () => {
     expectTypeOf(timeoutFailure).toEqualTypeOf<Op<never, TimeoutError, []>>();
 
     const unknownError: unknown = new TimeoutError({ timeoutMs: 10 });
-    if (TimeoutError.is(unknownError)) {
-      expectTypeOf(unknownError).toEqualTypeOf<TimeoutError>();
-    }
+    assert(TimeoutError.is(unknownError));
+    expectTypeOf(unknownError).toEqualTypeOf<TimeoutError>();
   });
 });
