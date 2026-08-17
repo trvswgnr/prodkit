@@ -331,12 +331,24 @@ are not used for new releases.
    - **Deprecations and breaking changes:** follow the [Deprecation Policy](#deprecation-policy) so
      the changelog includes caller-facing migration guidance.
 
-2. Cut a release (this promotes `Unreleased`, bumps npm version in the package
-   `package.json`, runs release checks, commits, and creates a package-scoped tag):
+2. Prepare the `@prodkit/op` major release without changing repository state:
+
+```bash
+pnpm --filter @prodkit/op run release:major:dry-run
+```
+
+The dry run computes the next major version and package-scoped tag, validates that `Unreleased`
+can be promoted, then runs `release:prepare`. Preparation runs the full gate, including the API
+manifest and packed consumer smoke checks, validates the current changelog version, and inspects
+the package contents with `npm pack --dry-run`. It does not change the package version or
+changelog, create a commit or tag, push, or publish.
+
+3. After preparation is reviewed and accepted, the maintainer cuts the release:
 
 ```bash
 pnpm --filter @prodkit/op run release:patch   # patch bump
 pnpm --filter @prodkit/op run release:minor   # minor bump (for example 0.1.x -> 0.2.0)
+pnpm --filter @prodkit/op run release:major   # major bump (for example 0.2.x -> 1.0.0)
 pnpm --filter @prodkit/op-lint run release:patch
 pnpm --filter @prodkit/op-lint run release:minor
 pnpm --filter @prodkit/std run release:patch
@@ -345,15 +357,17 @@ pnpm --filter @prodkit/std run release:patch
 Publishable `release:*` and `changelog:check` scripts delegate to `@prodkit/tools`; `@prodkit/op`
 `build:size` delegates to `@prodkit/benchmarks` after the package build.
 
-`release:major` will be added when needed. Bump kind must match the changelog classification
-under strict SemVer ([ADR 0014](docs/adr/0014-strict-semver-from-0-2-0-beta.md)).
+The maintainer-owned cut promotes `Unreleased`, bumps the package version, runs release checks,
+commits the changelog and package version, and creates the package-scoped tag. Bump kind must match
+the changelog classification under strict SemVer
+([ADR 0014](docs/adr/0014-strict-semver-from-0-2-0-beta.md)).
 
 If `Unreleased` has no changelog bullets, the cut script aborts. Add release notes
 before cutting.
 The changelog/version updates must be committed before tag creation because
 release validation runs against the tagged commit.
 
-3. Push commit and tag:
+4. The maintainer pushes the release commit and tag:
 
 ```bash
 pnpm --filter @prodkit/op run release:push
@@ -361,7 +375,7 @@ pnpm --filter @prodkit/op-lint run release:push
 pnpm --filter @prodkit/std run release:push
 ```
 
-4. The workflow (for tags like `op-v0.1.70`, `op-lint-v0.1.0`, or `std-v0.1.1`) then:
+5. The workflow (for tags like `op-v0.1.70`, `op-lint-v0.1.0`, or `std-v0.1.1`) then:
 
    - validates the tag is the latest package-scoped tag on `main`
    - verifies the `CI` workflow has passed for the tagged commit
