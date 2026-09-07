@@ -44,7 +44,7 @@
   },
   "devDependencies": {
     "@prodkit/shared": "workspace:*",
-    "@types/node": "^24.12.2",
+    "@types/node": "^24.13.3",
     "miniflare": "5.20260811.0-alpha",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
