@@ -17,7 +17,7 @@
     "valibot": "^1.4.2"
   },
   "devDependencies": {
-    "@types/node": "^24.12.2",
+    "@types/node": "^24.13.3",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "typescript": "catalog:"
