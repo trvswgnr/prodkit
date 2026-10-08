@@ -4,7 +4,7 @@ import { allPlan, allSettledPlan, anyPlan, racePlan, settlePlan } from "../plan/
 import { getPlan } from "../plan/bridge.js";
 import { makeBoundPlanOp } from "./shell.js";
 import { Result } from "../result.js";
-import type { EmptyMeta, MergeMeta } from "./metadata.js";
+import type { MergeMeta, MergeUnionMeta, StripEmpty } from "./metadata.js";
 import { unsafeCoerce } from "@prodkit/shared/runtime";
 import { ErrorGroup, UnhandledException } from "../errors.js";
 
@@ -13,7 +13,7 @@ type MergeOpsMeta<Ops extends readonly AnyNullaryOp[]> = Ops extends readonly [
   ...infer Tail extends readonly AnyNullaryOp[],
 ]
   ? MergeMeta<InferOpMeta<Head>, MergeOpsMeta<Tail>>
-  : EmptyMeta;
+  : MergeUnionMeta<StripEmpty<InferOpMeta<Ops[number]>>>;
 
 type AllOpOk<Ops extends readonly AnyNullaryOp[]> = { [K in keyof Ops]: InferOpOk<Ops[K]> };
 type AllOpErr<Ops extends readonly AnyNullaryOp[]> = InferOpErr<Ops[number]>;

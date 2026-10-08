@@ -178,6 +178,56 @@ describe("metadata type contracts", () => {
     });
     type _Outer = Assert<IsEqual<InferOpMeta<typeof outer>, { deps: "database" | "logger" }>>;
   });
+
+  test("array and variadic combinators preserve metadata from every element", () => {
+    const withDb = Op(function* () {
+      return yield* new TestInstruction<number, DatabaseReq>(1);
+    });
+    const withLogger = Op(function* () {
+      return yield* new TestInstruction<string, LoggerReq>("ok");
+    });
+    const plain = Op.of(true);
+    const mixed = [withDb, withLogger, plain];
+    const readonlyMixed: readonly (typeof withDb | typeof withLogger | typeof plain)[] = mixed;
+    const variadic: readonly [
+      typeof plain,
+      ...(typeof withDb | typeof withLogger | typeof plain)[],
+    ] = [plain, ...mixed];
+
+    const all = Op.all(mixed);
+    const allSettled = Op.allSettled(readonlyMixed);
+    const anyCombined = Op.any(variadic);
+    const race = Op.race(mixed);
+
+    type Expected = { deps: "database" | "logger" };
+    type _All = Assert<IsEqual<InferOpMeta<typeof all>, Expected>>;
+    type _AllSettled = Assert<IsEqual<InferOpMeta<typeof allSettled>, Expected>>;
+    type _Any = Assert<IsEqual<InferOpMeta<typeof anyCombined>, Expected>>;
+    type _Race = Assert<IsEqual<InferOpMeta<typeof race>, Expected>>;
+
+    const empty = Op.all([]);
+    const plainArray = Op.all([plain].map((op) => op));
+    type _Empty = Assert<IsEqual<InferOpMeta<typeof empty>, EmptyMeta>>;
+    type _PlainArray = Assert<IsEqual<InferOpMeta<typeof plainArray>, EmptyMeta>>;
+    expectTypeOf(empty.run).toBeFunction();
+    expectTypeOf(plainArray.run).toBeFunction();
+  });
+
+  test("array combinators preserve extension blocking payloads", () => {
+    const blocked = Op(function* () {
+      return yield* new TestInstruction<number, AuthMeta>(1);
+    });
+    const withDb = Op(function* () {
+      return yield* new TestInstruction<number, DiMeta>(1);
+    });
+    const ops = [blocked, withDb, Op.of(1)];
+    const combined = Op.all(ops);
+
+    type _Meta = Assert<IsEqual<InferOpMeta<typeof combined>, DiAndAuthMeta>>;
+    type _Blocked = Assert<IsEqual<IsRunnable<InferOpMeta<typeof combined>>, false>>;
+    // @ts-expect-error - both extension requirements remain unsatisfied
+    combined.run();
+  });
 });
 
 describe("Blocking type contracts", () => {

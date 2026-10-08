@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - No entries yet.
 
+### Changed
+
+- Array inputs to `Op.all`, `Op.allSettled`, `Op.any`, and `Op.race` now retain child dependency
+  requirements. Calls that previously compiled without a required binding now need `DI.provide`
+  before `.run()` or `Op.run(...)`. This corrects a type-level gap that otherwise surfaced as a
+  missing dependency at run time.
+
 ## [1.0.0] - 2026-08-17
 
 ### Changed
