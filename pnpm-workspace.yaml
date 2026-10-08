@@ -6,7 +6,7 @@ packages:
   - tools
 
 catalog:
-  "@vitest/coverage-v8": 4.1.10
+  "@vitest/coverage-v8": 4.1.11
   oxfmt: 0.48.0
   oxlint: 1.55.0
   oxlint-tsgolint: 0.23.0
@@ -23,7 +23,11 @@ allowBuilds:
   esbuild: true
 
 overrides:
-  brace-expansion: 5.0.9
-  sharp: 0.35.4
+  axios: 1.20.0
+  brace-expansion: 5.0.12
+  sharp: 0.35.5
+  source-map-js: 1.2.2
+  tinypool: 2.1.2
+  undici: 7.29.1
   vite: 8.0.16
   tsdown>unrun: 0.3.0
