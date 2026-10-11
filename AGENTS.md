@@ -42,6 +42,7 @@ Read these before guessing repo structure or conventions:
 
 ## Workflow defaults
 
+- Treat repo maintenance as dependency, security, CI, release, and backlog upkeep; reconcile existing maintenance PRs.
 - Run `pnpm run gate` after completing work, before considering anything "done".
 - Keep `packages/op/CHANGELOG.md` `Unreleased` updated for published API impact; omit monorepo/CI/ADR/internal-only work with no consumer-facing API change.
 - Prefer to handle version/tag/publish release steps personally unless explicitly delegated.
