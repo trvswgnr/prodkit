@@ -254,6 +254,68 @@ describe("DI type inference", () => {
     type _ = Assert<IsEqual<RequiredDeps<typeof runnable>, never>>;
   });
 
+  test("array combinators require and accept their child dependencies", () => {
+    const findUser = Op(function* (id: string) {
+      const db = yield* DI.inject(DatabaseDependency);
+      return yield* db.query("user", [id]);
+    });
+    const log = Op(function* () {
+      const logger = yield* DI.inject(LoggerDependency);
+      logger.log("ok");
+    });
+    const jobs = ["1", "2"].map((id) => findUser(id));
+    const mixed = [...jobs, log()];
+    const readonlyJobs: readonly ((typeof jobs)[number] | ReturnType<typeof log>)[] = mixed;
+    const variadic: readonly [ReturnType<typeof log>, ...(typeof jobs)[number][]] = [
+      log(),
+      ...jobs,
+    ];
+
+    const all = Op.all(mixed);
+    const allSettled = Op.allSettled(readonlyJobs);
+    const any = Op.any(variadic);
+    const race = Op.race(mixed);
+
+    type Required = DatabaseDependency | LoggerDependency;
+    type _All = Assert<IsEqual<RequiredDeps<typeof all>, Required>>;
+    type _AllSettled = Assert<IsEqual<RequiredDeps<typeof allSettled>, Required>>;
+    type _Any = Assert<IsEqual<RequiredDeps<typeof any>, Required>>;
+    type _Race = Assert<IsEqual<RequiredDeps<typeof race>, Required>>;
+
+    // @ts-expect-error - array child requirements block instance run
+    all.run();
+    // @ts-expect-error - array child requirements block static run
+    void Op.run(all);
+    // @ts-expect-error - readonly array child requirements block run
+    allSettled.run();
+    // @ts-expect-error - variadic tail requirements block run
+    any.run();
+    // @ts-expect-error - array child requirements block run
+    race.run();
+
+    const outer = Op(function* () {
+      return yield* all;
+    });
+    type _Outer = Assert<IsEqual<RequiredDeps<typeof outer>, Required>>;
+    // @ts-expect-error - the parent retains child requirements
+    outer.run();
+
+    const db = {
+      query: Op(function* (_sql: string, _params: unknown[]) {
+        return { id: "1" };
+      }).mapErr((error): DatabaseError => error),
+    } satisfies Database;
+    const partial = DI.provide(all, [DI.singleton(DatabaseDependency, db)]);
+    type _Partial = Assert<IsEqual<RequiredDeps<typeof partial>, LoggerDependency>>;
+    // @ts-expect-error - LoggerDependency remains unsatisfied
+    partial.run();
+
+    const complete = DI.provide(partial, [DI.singleton(LoggerDependency, { log: () => {} })]);
+    type _Complete = Assert<IsEqual<RequiredDeps<typeof complete>, never>>;
+    expectTypeOf(complete.run).toBeFunction();
+    expectTypeOf(Op.run(complete)).toMatchTypeOf<Promise<unknown>>();
+  });
+
   test("full DI provision clears deps while other blocking keys remain", () => {
     type WithAuth = WithDIMeta<EmptyMeta, DatabaseDependency> & { auth: Blocking<true> };
     type _StillBlocked = Assert<IsEqual<IsRunnable<WithAuth>, false>>;
