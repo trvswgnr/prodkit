@@ -628,8 +628,8 @@ const installFromNpm = Op(function* (examplesDir: string) {
   yield* installAndSmoke(
     examplesDir,
     {
-      "@prodkit/op": "@prodkit/op@latest",
-      "@prodkit/std": "@prodkit/std@latest",
+      "@prodkit/op": "latest",
+      "@prodkit/std": "latest",
     },
     "npm registry",
   );
