@@ -6,17 +6,26 @@ packages:
   - tools
 
 catalog:
-  "@vitest/coverage-v8": 4.1.11
+  "@vitest/coverage-v8": 4.1.12
   oxfmt: 0.48.0
   oxlint: 1.55.0
   oxlint-tsgolint: 0.23.0
   tsdown: 0.22.0
   typescript: 6.0.3
-  vitest: 4.1.11
+  vitest: 4.1.12
 
 minimumReleaseAge: 1440
 minimumReleaseAgeStrict: true
 minimumReleaseAgeIgnoreMissingTime: false
+
+# CVE-2026-111497: the Brotli-fixed workerd build and its platform binaries.
+minimumReleaseAgeExclude:
+  - workerd@1.20261027.1
+  - "@cloudflare/workerd-darwin-arm64@1.20261027.1"
+  - "@cloudflare/workerd-darwin-64@1.20261027.1"
+  - "@cloudflare/workerd-linux-arm64@1.20261027.1"
+  - "@cloudflare/workerd-linux-64@1.20261027.1"
+  - "@cloudflare/workerd-windows-64@1.20261027.1"
 
 ignoreScripts: true
 allowBuilds:
@@ -25,9 +34,11 @@ allowBuilds:
 overrides:
   axios: 1.20.0
   brace-expansion: 5.0.12
+  follow-redirects: 1.16.2
   sharp: 0.35.5
   source-map-js: 1.2.2
   tinypool: 2.1.2
-  undici: 7.29.1
-  vite: 8.0.16
+  undici: 7.30.1
+  vite: 8.1.6
+  workerd: 1.20261027.1
   tsdown>unrun: 0.3.1

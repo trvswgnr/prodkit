@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { ImplementationColumn } from "../runtime/comparison-matrix.ts";
 import { getRepoRoot, type RepeatedTinybenchRecord } from "../runtime/harness.ts";
@@ -263,7 +264,13 @@ describe("official benchmark report parsing", () => {
     expect(created.runner.cpu.logicalCores).toBeGreaterThan(0);
     expect(created.runner.memory.totalBytes).toBeGreaterThan(0);
     expect(created.runner.os.release).not.toBe("");
-    expect(created.runner.packageManager).toEqual({ name: "pnpm", version: "11.5.0" });
+    const packageJson: unknown = JSON.parse(
+      readFileSync(new URL("../../../package.json", import.meta.url), "utf8"),
+    );
+    expect(packageJson).toHaveProperty(
+      "packageManager",
+      `${created.runner.packageManager.name}@${created.runner.packageManager.version}`,
+    );
     expect(created.calibration?.runnerId).toBe("test-runner");
   });
 
