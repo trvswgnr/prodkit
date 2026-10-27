@@ -4,7 +4,7 @@ Typed async operations for TypeScript workflows that need predictable failure, c
 cancellation, retry, and timeout.
 
 ```bash
-npm i @prodkit/op@^1.0.0 better-result@^3.0.1
+npm i @prodkit/op@^2.0.0 better-result@^3.0.1
 ```
 
 Use `Op` when async work needs typed failure and predictable execution, not just `await`.
@@ -98,7 +98,7 @@ if (result.isOk()) {
 ## Installation
 
 ```bash
-npm i @prodkit/op@^1.0.0 better-result@^3.0.1
+npm i @prodkit/op@^2.0.0 better-result@^3.0.1
 ```
 
 **ESM only.** `@prodkit/op` ships ES modules only. There is no CommonJS entry; use `import` syntax

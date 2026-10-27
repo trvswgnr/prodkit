@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - No entries yet.
 
+## [0.1.5] - 2026-10-27
+
 ### Changed
 
 - Documented the TypeScript `>=5.9 <7` compiler API requirement and the TypeScript 6 compatibility
