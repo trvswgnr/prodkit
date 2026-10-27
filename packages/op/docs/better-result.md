@@ -5,7 +5,7 @@ boundary: `Result`, `TaggedError`, `UnhandledException`, typed error inference, 
 helpers. It keeps `better-result` as a peer dependency so your app installs one copy and TypeScript
 sees the same result types that `.run()` returns.
 
-`@prodkit/op` 1.x requires `better-result ^3.0.1`.
+`@prodkit/op` requires `better-result ^3.0.1`.
 
 Import result primitives from `better-result`. Import operation APIs from `@prodkit/op` and its
 subpaths.

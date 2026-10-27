@@ -11,12 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - No entries yet.
 
+## [2.0.0] - 2026-10-27
+
 ### Changed
 
-- Array inputs to `Op.all`, `Op.allSettled`, `Op.any`, and `Op.race` now retain child dependency
-  requirements. Calls that previously compiled without a required binding now need `DI.provide`
-  before `.run()` or `Op.run(...)`. This corrects a type-level gap that otherwise surfaced as a
-  missing dependency at run time.
+- **Breaking:** Array inputs and variadic tuple tails passed to `Op.all`, `Op.allSettled`,
+  `Op.any`, and `Op.race` now retain child dependency requirements. Calls that previously compiled
+  without a required binding now need `DI.provide` before `.run()` or `Op.run(...)`. This removes
+  an unsafe type-level gap that otherwise surfaced as a missing dependency at run time.
+  Upgrade with `npm install @prodkit/op@^2.0.0 better-result@^3.0.1`; the `better-result` peer
+  requirement is unchanged.
 
 ## [1.0.0] - 2026-08-17
 
