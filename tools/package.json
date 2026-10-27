@@ -45,12 +45,12 @@
   "devDependencies": {
     "@prodkit/shared": "workspace:*",
     "@types/node": "^24.13.3",
-    "miniflare": "5.20260811.0-alpha",
+    "miniflare": "5.20261023.0-beta",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "typescript": "catalog:"
   },
   "engines": {
-    "node": ">=24.14.0"
+    "node": ">=24.22.1"
   }
 }

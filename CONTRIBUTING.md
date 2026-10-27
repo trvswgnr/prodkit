@@ -2,7 +2,7 @@
 
 ## Setup
 
-- Use Node `>=24.14.0` on the 24.x line and `pnpm@11` (validated in CI on `11.5.0`). Install with `npm install -g pnpm@11.5.0` or enable corepack; `.nvmrc` pins `24.14.0`.
+- Use Node `>=24.22.1` on the 24.x line and `pnpm@11` (validated in CI on `11.28.8`). Install with `npm install -g pnpm@11.28.8` or enable corepack; `.nvmrc` pins `24.22.1`.
 - Dependency installs reject npm package versions published less than 24 hours ago (`minimumReleaseAge` in `pnpm-workspace.yaml`). Pin explicit versions or wait for maturity when adding fresh releases.
 - Run commands from the repo root unless noted otherwise.
 
@@ -40,7 +40,8 @@ Dependabot PRs are intentionally not enabled; the pnpm catalog and explicit pins
 in CI until the patched version ages. Retry or wait is expected.
 
 Maintainer flow: review the Dependabot security PR, run `pnpm run gate`, merge manually (no
-auto-merge).
+auto-merge). CI also runs `pnpm audit` against all workspace dependencies so advisories absent
+from the GitHub alert list still fail the dependency security check.
 
 ## Documentation
 
@@ -66,8 +67,31 @@ Evergreen style rules (what to avoid in durable docs): [`docs/CONTEXT.md`](docs/
 
 ## Contributor Runtime
 
-- Node `>=24.14.0` on 24.x Active LTS is required for local development and release tasks. Node 22.x is maintenance LTS; this repo standardizes on 24.x, not 22 or 20.
+- Use the Node 24.x release pinned in `.nvmrc` or a newer patched 24.x release for development and release tasks.
 - This requirement is for contributors/tooling only; the library API is runtime-agnostic for consumers.
+
+### Compatibility policy
+
+Consumer CI covers patched Node 22.x, 24.x, and 26.x releases, Bun 1.4.x, Deno 2.9.x,
+and the edge worker runtime provided by Miniflare. Node 26 coverage validates the next LTS
+transition without changing the contributor Node line. Exact tested versions live in the
+`runtime-smoke` matrix in `.github/workflows/ci.yml`.
+
+Keep supported runtime pins on releases containing upstream security fixes. Review runtime
+advisories as well as `pnpm audit`: the lockfile audit cannot check the Node, Bun, or Deno
+executable. Refresh `.nvmrc`, workspace tooling engines, and the runtime smoke matrix together.
+Development, benchmark, and release jobs read their Node version from `.nvmrc`.
+
+The workspace stays on TypeScript 6.0. `@prodkit/op-lint` supports TypeScript `>=5.9 <7`
+because it uses the JavaScript compiler API; TypeScript 7.0 does not expose that API. CI tests
+the peer range floor and the workspace version through the plugin's type detector, Oxlint,
+and ESLint integration suites. A TypeScript major requires an explicit compiler API migration
+and independent compatibility validation before widening the peer range.
+
+Apply security fixes together when they share dependency constraints. Validate compiler and
+linter upgrades separately from runtime changes so failures can be attributed to their source.
+Upgrade Oxlint and `oxlint-tsgolint` as a compatible pair; review newly enabled rules before
+adopting a new linter baseline.
 
 ## Local Quality Gate
 
@@ -99,8 +123,8 @@ CI runs `pnpm -r exec npm audit signatures` so dependency signature verification
 workspace package, not just the private root manifest.
 The alternate-runtime smoke runner avoids importing `@prodkit/op` before its package build, so clean
 CI jobs can run from install-only workspaces. CI runs the harness on Bun, Deno, an edge worker
-(Miniflare), and current non-EOL Node LTS lines (22.x and 24.x via the `runtime-smoke` matrix).
-Contributor Node `>=24.14.0` is separate from the consumer runtime claim exercised by that matrix.
+(Miniflare), and the Node lines listed in the compatibility policy via the `runtime-smoke` matrix.
+The contributor Node requirement is separate from the consumer runtime claim exercised by that matrix.
 An `invariants:check` gate step fails when `docs/contributor/op-invariants.md` references source symbols or test
 file paths that no longer exist in the repo.
 An `architecture:check` gate step fails when verified import contracts in

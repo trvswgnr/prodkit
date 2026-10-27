@@ -45,11 +45,19 @@ const valid = Op(function* () {
 ## Install
 
 ```bash
-pnpm add -D @prodkit/op-lint oxlint typescript
+pnpm add -D @prodkit/op-lint oxlint "typescript@>=5.9 <7"
 ```
 
 `typescript` is a peer dependency because the rule uses the TypeScript checker to recognize real
 `@prodkit/op` values.
+
+Use TypeScript `>=5.9 <7`. TypeScript 7.0 does not provide the JavaScript compiler API that this
+plugin needs. A project using the TypeScript 7 CLI can install the TypeScript 6 compatibility
+package as its `typescript` peer:
+
+```bash
+pnpm add -D typescript@npm:@typescript/typescript6@^6.0.2 @typescript/native@npm:typescript@^7.0.2
+```
 
 ## Use with Oxlint
 

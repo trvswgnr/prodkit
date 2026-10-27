@@ -107,8 +107,8 @@ or dynamic `import()` in ESM projects.
 Runtime support: any ESM JavaScript runtime with ES2022 plus `Promise`, `AbortController` /
 `AbortSignal.reason`, `queueMicrotask`, `setTimeout` / `clearTimeout`, `AggregateError`, and
 `Error.cause`. No Node-specific APIs are required by the public operation model. For Node
-consumers, support follows current non-EOL LTS lines. Contributor tooling uses a separate Node
-`>=24.14.0` requirement.
+consumers, support follows current non-EOL LTS lines. Contributor tooling has a separate Node
+requirement documented in [CONTRIBUTING.md](https://github.com/trvswgnr/prodkit/blob/main/CONTRIBUTING.md#contributor-runtime).
 
 `better-result` is a peer dependency. Import `Result`, `TaggedError`, `UnhandledException`, `Err`,
 `Ok`, and `InferErr` from `better-result`; import operation APIs from `@prodkit/op` and its
