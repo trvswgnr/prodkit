@@ -42,3 +42,6 @@ overrides:
   vite: 8.1.6
   workerd: 1.20261027.1
   tsdown>unrun: 0.3.1
+  # GHSA-g3hv-75wg-m249: ESLint still requests vulnerable minimatch 10.x.
+  eslint>minimatch: 11.0.3
+  "@eslint/config-array>minimatch": 11.0.3
